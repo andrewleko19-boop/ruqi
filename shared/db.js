@@ -291,9 +291,22 @@ async function getReportsForDirectorate(directorateId) {
 async function updateReportStatus(reportId, newStatus) {
   const allowed = ["open", "acknowledged", "resolved"];
   if (!allowed.includes(newStatus)) throw new Error(`Invalid status: ${newStatus}`);
+
+  const patch = { status: newStatus, updated_at: new Date().toISOString() };
+  if (newStatus === "resolved") {
+    // Record who resolved it and when.
+    const { data: auth } = await db.auth.getUser();
+    patch.resolved_by = auth?.user?.id ?? null;
+    patch.resolved_at = new Date().toISOString();
+  } else {
+    // Re-opening / acknowledging clears any prior resolution stamp.
+    patch.resolved_by = null;
+    patch.resolved_at = null;
+  }
+
   const { error } = await db
     .from("emergency_reports")
-    .update({ status: newStatus, updated_at: new Date().toISOString() })
+    .update(patch)
     .eq("id", reportId);
   if (error) throw error;
 }
@@ -302,7 +315,7 @@ async function getTodaySummary(directorateId) {
   const today = localDateISO();
   const [attendanceRes, reportsRes] = await Promise.all([
     db.from("daily_attendance")
-      .select("teachers_present, students_present, school:schools!inner(directorate_id)")
+      .select("school_id, teachers_present, students_present, school:schools!inner(directorate_id)")
       .eq("date", today)
       .eq("schools.directorate_id", directorateId),
     db.from("emergency_reports")
@@ -323,31 +336,54 @@ async function getTodaySummary(directorateId) {
       id: r.id, type: r.type, status: r.status,
       createdAt: r.created_at, schoolName: r.school?.name ?? "Unknown",
     })),
+    // "Reporting schools" = schools that SUBMITTED ATTENDANCE today, derived from
+    // the attendance rows — NOT from emergency reports (the previous bug counted
+    // schools with open emergencies, which is a different, misleading number).
     reportingSchoolsCount: new Set(
-      (reportsRes.data || []).map(r => r.school?.name).filter(Boolean)
+      (attendanceRes.data || []).map(r => r.school_id).filter(Boolean)
     ).size,
   };
 }
 
 async function getSchoolsAttendanceStatus(directorateId, date) {
   const isoDate  = date instanceof Date ? localDateISO(date) : date;
-  const schoolsRes = await db.from("schools").select("id").eq("directorate_id", directorateId);
+  // Fetch id + total_students so we can compute an attendance ratio per school.
+  const schoolsRes = await db.from("schools")
+    .select("id, total_students")
+    .eq("directorate_id", directorateId);
   if (schoolsRes.error) throw schoolsRes.error;
 
   const ids = (schoolsRes.data || []).map((s) => s.id);
   const [attendanceRes, reportsRes] = await Promise.all([
-    db.from("daily_attendance").select("school_id").eq("date", isoDate).in("school_id", ids),
+    db.from("daily_attendance").select("school_id, students_present").eq("date", isoDate).in("school_id", ids),
     db.from("emergency_reports").select("school_id").in("status", ["open", "acknowledged"]).in("school_id", ids),
   ]);
 
-  const submittedSet    = new Set((attendanceRes.data || []).map((r) => r.school_id));
-  const activeReportSet = new Set((reportsRes.data  || []).map((r) => r.school_id));
+  // Map school_id → students_present for today (a school may have one row/day).
+  const presentBySchool = {};
+  for (const r of attendanceRes.data || []) presentBySchool[r.school_id] = r.students_present || 0;
+  const activeReportSet = new Set((reportsRes.data || []).map((r) => r.school_id));
+
+  // Low-attendance threshold: schools below this ratio show as 'amber'.
+  const LOW_ATTENDANCE_THRESHOLD = 0.75;
 
   const result = {};
   for (const school of schoolsRes.data || []) {
-    result[school.id] = activeReportSet.has(school.id) ? "red"
-                      : submittedSet.has(school.id)    ? "green"
-                      : "no_data";
+    if (activeReportSet.has(school.id)) {
+      result[school.id] = "red";                 // active emergency outranks everything
+      continue;
+    }
+    if (!(school.id in presentBySchool)) {
+      result[school.id] = "no_data";             // no attendance submitted today
+      continue;
+    }
+    const total = school.total_students || 0;
+    if (total <= 0) {
+      result[school.id] = "no_data";             // can't compute a ratio → not "green" by default
+      continue;
+    }
+    const ratio = presentBySchool[school.id] / total;
+    result[school.id] = ratio < LOW_ATTENDANCE_THRESHOLD ? "amber" : "green";
   }
   return result;
 }
@@ -587,6 +623,22 @@ async function getClassAttendanceReport(classId, date) {
   return (data ?? []).sort(
     (a, b) => (a.students?.seat_number ?? 999) - (b.students?.seat_number ?? 999)
   );
+}
+
+// ─── Teacher: absence log (per class, current academic year) ─────────────────
+// Calls the get_class_absence_log RPC. Returns one row per student who has at
+// least one absent/excused day this academic year, with counts. 'late' excluded.
+// The RPC enforces that the caller teaches the class.
+async function getClassAbsenceLog(classId) {
+  const { data, error } = await db.rpc('get_class_absence_log', { p_class_id: classId });
+  if (error) throw error;
+  return (data ?? []).map(r => ({
+    studentId:     r.student_id,
+    fullName:      r.full_name,
+    seatNumber:    r.seat_number,
+    absentCount:   Number(r.absent_count)  || 0,
+    excusedCount:  Number(r.excused_count) || 0,
+  }));
 }
 
 // ─── Student attendance offline queue ────────────────────────────────────────
@@ -846,6 +898,7 @@ window.NSAMS_DB = {
   getClassSubmissionStatus,
   getClassAttendanceForDate,
   getClassAttendanceReport,
+  getClassAbsenceLog,
   saveStudentAttendance,
   getPendingStudentAttendance,
 
