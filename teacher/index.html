@@ -241,6 +241,10 @@
         <div id="att-class-name" class="att-hdr-name">…</div>
         <div id="att-date"       class="att-hdr-date">…</div>
       </div>
+      <button id="btn-absence-log" class="btn-abslog" aria-label="سجل الغيابات">
+        <svg class="icon icon-sm"><use href="#ic-clipboard"/></svg>
+        السجل
+      </button>
     </header>
 
     <!-- Summary bar -->
@@ -381,6 +385,54 @@
         <span id="confirm-submit-label">إرسال</span>
         <span class="spinner" id="confirm-spinner" hidden></span>
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Absence Log Modal ═════════════════════════════════════════════════════ -->
+<div id="modal-abslog" class="overlay" hidden aria-modal="true" role="dialog"
+     aria-labelledby="abslog-title">
+  <div class="abslog-sheet">
+    <div class="abslog-hdr">
+      <h3 id="abslog-title">سجل الغيابات</h3>
+      <button id="btn-abslog-close" class="abslog-close" aria-label="إغلاق">
+        <svg class="icon icon-sm"><use href="#ic-x"/></svg>
+      </button>
+    </div>
+    <div id="abslog-class" class="abslog-class">…</div>
+    <p class="abslog-note">إجمالي غيابات السنة الدراسية الحالية. التأخير لا يُحتسب.</p>
+
+    <div id="abslog-loading" class="abslog-loading">
+      <div class="stu-skeleton" style="height:14px;width:80%;margin-bottom:10px"></div>
+      <div class="stu-skeleton" style="height:14px;width:60%;margin-bottom:10px"></div>
+      <div class="stu-skeleton" style="height:14px;width:70%"></div>
+    </div>
+
+    <div id="abslog-empty" class="abslog-empty" hidden>
+      <svg class="icon icon-xl" style="color:var(--clr-border);margin-bottom:8px"><use href="#ic-check-circle"/></svg>
+      <p>لا توجد غيابات مسجّلة هذا العام.</p>
+    </div>
+
+    <div id="abslog-body" class="abslog-body" hidden>
+      <!-- Unexcused section -->
+      <section class="abslog-section">
+        <div class="abslog-sec-hdr abslog-sec-unexcused">
+          <span>غيابات غير مبررة</span>
+          <span id="abslog-unexcused-count" class="abslog-sec-badge">0</span>
+        </div>
+        <ul id="abslog-unexcused-list" class="abslog-list" role="list"></ul>
+        <p id="abslog-unexcused-empty" class="abslog-sec-empty" hidden>لا يوجد.</p>
+      </section>
+
+      <!-- Excused section -->
+      <section class="abslog-section">
+        <div class="abslog-sec-hdr abslog-sec-excused">
+          <span>غيابات مبررة (بعذر)</span>
+          <span id="abslog-excused-count" class="abslog-sec-badge">0</span>
+        </div>
+        <ul id="abslog-excused-list" class="abslog-list" role="list"></ul>
+        <p id="abslog-excused-empty" class="abslog-sec-empty" hidden>لا يوجد.</p>
+      </section>
     </div>
   </div>
 </div>
