@@ -8,7 +8,15 @@ const {
   getSchoolsAttendanceStatus,
   getReportsForDirectorate,
   updateReportStatus,
+  localDateISO,
 } = window.NSAMS_DB;
+
+// Local calendar date (not UTC) with a safe fallback.
+function todayLocalISO() {
+  if (typeof localDateISO === 'function') return localDateISO();
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 
 // ══════════════════════════════════════════════
 //  State
@@ -20,6 +28,14 @@ let refreshTimer;
 let countdownInterval;
 let currentUser  = null;
 const REFRESH_INTERVAL = 30;
+
+// Arabic labels for the map status colours returned by getSchoolsAttendanceStatus.
+const MAP_STATUS_LABELS = {
+  green:   'طبيعي',
+  amber:   'حضور منخفض',
+  red:     'حرج — تقرير طارئ',
+  no_data: 'لا توجد بيانات',
+};
 
 // ══════════════════════════════════════════════
 //  Bootstrap
@@ -58,7 +74,7 @@ function setupLoginForm() {
     }
 
     btn.disabled    = true;
-    btn.textContent = 'Signing in…';
+    btn.textContent = 'جارٍ تسجيل الدخول…';
 
     try {
       const session = await login(email, password);
@@ -76,7 +92,7 @@ function setupLoginForm() {
       showLoginError(err.message || 'فشل تسجيل الدخول، يرجى المحاولة مجدداً.');
     } finally {
       btn.disabled    = false;
-      btn.textContent = 'Sign In';
+      btn.textContent = 'تسجيل الدخول';
     }
   });
 
@@ -103,6 +119,7 @@ function showApp(session) {
   setupLogout();
   setupFilters();
   setupManualRefresh();
+  setupReportActionDelegation();
 }
 
 // ══════════════════════════════════════════════
@@ -156,7 +173,7 @@ function makeMarkerIcon(color) {
 async function loadMap() {
   if (!currentUser?.directorateId) return;
   try {
-    const today    = new Date().toISOString().slice(0, 10);
+    const today    = todayLocalISO();
     const statusMap = await getSchoolsAttendanceStatus(currentUser.directorateId, today);
     // statusMap = { schoolId: "green"|"orange"|"red" }
 
@@ -178,9 +195,10 @@ async function loadMap() {
       const lng      = school.lng;
       if (!lat || !lng) continue;
 
+      const statusLabel = MAP_STATUS_LABELS[rawColor] || rawColor;
       const popup = `
         <div class="popup-school-name">${esc(school.name)}</div>
-        <div class="popup-row"><span>Status</span><span>${esc(rawColor)}</span></div>`;
+        <div class="popup-row"><span>الحالة</span><span>${esc(statusLabel)}</span></div>`;
 
       if (markersLayer[school.id]) {
         markersLayer[school.id].setIcon(icon);
@@ -193,7 +211,7 @@ async function loadMap() {
     }
   } catch (err) {
     console.error('[Map] Failed:', err);
-    showToast('Map Error', 'Could not load school locations.', 'error');
+    showToast('خطأ في الخريطة', 'تعذّر تحميل مواقع المدارس.', 'error');
   }
 }
 
@@ -218,7 +236,7 @@ async function loadStats() {
     set('stat-reports-sub', 'التقارير النشطة');
   } catch (err) {
     console.error('[Stats] Failed:', err);
-    showToast('Stats Error', 'Could not load summary.', 'error');
+    showToast('خطأ في الإحصائيات', 'تعذّر تحميل الملخص.', 'error');
   }
 }
 
@@ -233,9 +251,9 @@ async function loadReports() {
     renderPendingList();
   } catch (err) {
     console.error('[Reports] Failed:', err);
-    showToast('Reports Error', 'Could not load reports.', 'error');
+    showToast('خطأ في التقارير', 'تعذّر تحميل التقارير.', 'error');
     document.getElementById('reports-tbody').innerHTML =
-      '<tr><td colspan="6" class="empty-state">Failed to load reports.</td></tr>';
+      '<tr><td colspan="6" class="empty-state">تعذّر تحميل التقارير.</td></tr>';
   }
 }
 
@@ -252,7 +270,7 @@ function renderReportsTable() {
   const tbody = document.getElementById('reports-tbody');
   if (filtered.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="6" class="empty-state">No reports match the current filters.</td></tr>';
+      '<tr><td colspan="6" class="empty-state">لا توجد تقارير مطابقة للفلاتر الحالية.</td></tr>';
     return;
   }
 
@@ -262,15 +280,15 @@ function renderReportsTable() {
       <td><span class="type-badge type-${esc(r.type)}">${esc(formatType(r.type))}</span></td>
       <td class="td-desc" title="${esc(r.description ?? '')}">${esc(r.description ?? '—')}</td>
       <td>${esc(formatDate(r.created_at))}</td>
-      <td><span class="status-badge status-${esc(r.status)}">${esc(capitalize(r.status))}</span></td>
+      <td><span class="status-badge status-${esc(r.status)}">${esc(formatStatus(r.status))}</span></td>
       <td>
         <div class="table-actions">
           ${r.status === 'open'
-            ? `<button class="btn btn-warning btn-sm" onclick="handleStatusUpdate('${esc(r.id)}','acknowledged')">Review</button>`
+            ? `<button class="btn btn-warning btn-sm" data-action="acknowledged" data-id="${esc(r.id)}">مراجعة</button>`
             : ''}
           ${r.status !== 'resolved'
-            ? `<button class="btn btn-success btn-sm" onclick="handleStatusUpdate('${esc(r.id)}','resolved')">Resolve</button>`
-            : `<button class="btn btn-ghost btn-sm" disabled>Resolved</button>`}
+            ? `<button class="btn btn-success btn-sm" data-action="resolved" data-id="${esc(r.id)}">حل</button>`
+            : `<button class="btn btn-ghost btn-sm" disabled>تم الحل</button>`}
         </div>
       </td>
     </tr>
@@ -285,7 +303,7 @@ function renderPendingList() {
 
   const container = document.getElementById('pending-list');
   if (pending.length === 0) {
-    container.innerHTML = '<p class="empty-state">No pending reports.</p>';
+    container.innerHTML = '<p class="empty-state">لا توجد تقارير معلقة.</p>';
     return;
   }
 
@@ -297,27 +315,40 @@ function renderPendingList() {
       <div class="pending-time">${esc(formatDate(r.created_at))}</div>
       <div class="pending-actions">
         ${r.status === 'open'
-          ? `<button class="btn btn-warning btn-sm" onclick="handleStatusUpdate('${esc(r.id)}','acknowledged')">Mark Reviewed</button>`
+          ? `<button class="btn btn-warning btn-sm" data-action="acknowledged" data-id="${esc(r.id)}">تمت المراجعة</button>`
           : ''}
-        <button class="btn btn-success btn-sm" onclick="handleStatusUpdate('${esc(r.id)}','resolved')">Resolve</button>
+        <button class="btn btn-success btn-sm" data-action="resolved" data-id="${esc(r.id)}">حل</button>
       </div>
     </div>
   `).join('');
 }
 
-window.handleStatusUpdate = async (reportId, newStatus) => {
+async function handleStatusUpdate(reportId, newStatus) {
   const btns = document.querySelectorAll(`[data-id="${reportId}"] button`);
   btns.forEach(b => (b.disabled = true));
   try {
     await updateReportStatus(reportId, newStatus);
-    showToast('Status Updated', `Report marked as ${newStatus}.`, 'success');
+    const label = formatStatus(newStatus);
+    showToast('تم تحديث الحالة', `تم تعيين التقرير كـ "${label}".`, 'success');
     await loadReports();
   } catch (err) {
     console.error('[Reports] Status update failed:', err);
-    showToast('Update Failed', err.message || 'Could not update status.', 'error');
+    showToast('فشل التحديث', err.message || 'تعذّر تحديث الحالة.', 'error');
     btns.forEach(b => (b.disabled = false));
   }
-};
+}
+
+// Event delegation: both the table and the pending list use [data-action]+[data-id]
+// buttons instead of inline onclick (safer, no HTML injection via id).
+function setupReportActionDelegation() {
+  const handler = (e) => {
+    const btn = e.target.closest('button[data-action][data-id]');
+    if (!btn) return;
+    handleStatusUpdate(btn.dataset.id, btn.dataset.action);
+  };
+  document.getElementById('reports-tbody').addEventListener('click', handler);
+  document.getElementById('pending-list').addEventListener('click', handler);
+}
 
 function setupFilters() {
   document.getElementById('filter-status').addEventListener('change', renderReportsTable);
@@ -363,7 +394,7 @@ function setupManualRefresh() {
     const el = document.getElementById('countdown-val');
     if (el) el.textContent = REFRESH_INTERVAL;
     startAutoRefresh();
-    showToast('Refreshed', 'Dashboard data updated.', 'info');
+    showToast('تم التحديث', 'تم تحديث بيانات اللوحة.', 'info');
   });
 }
 
@@ -391,6 +422,15 @@ function esc(str) {
 function capitalize(str) {
   if (!str) return '';
   return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function formatStatus(status) {
+  const map = {
+    open:         'مفتوح',
+    acknowledged: 'تمت المراجعة',
+    resolved:     'تم الحل',
+  };
+  return map[status] ?? capitalize(status ?? '');
 }
 
 function formatType(type) {
