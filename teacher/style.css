@@ -551,3 +551,79 @@ ul { list-style: none; }
   .student-row       { break-inside: avoid; }
   body               { direction: rtl; font-size: 12pt; }
 }
+/* ═══ Absence Log ════════════════════════════════════════════════════════════ */
+.att-screen-header { display: flex; align-items: center; gap: 10px; }
+
+.btn-abslog {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 7px 12px; border-radius: var(--r-sm);
+  background: rgba(255,255,255,.14); color: #fff;
+  border: 1px solid rgba(255,255,255,.22);
+  font-size: .8rem; font-weight: 600; cursor: pointer;
+  font-family: inherit;
+  transition: background var(--dur) var(--ease);
+}
+.btn-abslog:hover { background: rgba(255,255,255,.24); }
+.btn-abslog:active { transform: scale(.97); }
+
+.abslog-sheet {
+  background: var(--clr-surface);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  padding: 20px 20px calc(20px + env(safe-area-inset-bottom));
+  width: 100%; max-width: var(--page-max);
+  max-height: 85vh; overflow-y: auto;
+}
+.abslog-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 4px;
+}
+.abslog-hdr h3 { font-size: 1.05rem; font-weight: 700; color: var(--clr-text-1); }
+.abslog-close {
+  background: none; border: none; cursor: pointer; padding: 4px;
+  color: var(--clr-text-3); line-height: 0; border-radius: var(--r-xs);
+}
+.abslog-close:hover { color: var(--clr-text-1); background: var(--clr-bg); }
+.abslog-class {
+  font-size: .9rem; font-weight: 700; color: var(--clr-primary);
+  margin-bottom: 2px;
+}
+.abslog-note { font-size: .78rem; color: var(--clr-text-3); margin-bottom: 16px; }
+
+.abslog-loading { padding: 8px 0; }
+.abslog-empty   { text-align: center; padding: 32px 16px; color: var(--clr-text-3); }
+.abslog-empty p { font-size: .9rem; }
+
+.abslog-section { margin-bottom: 18px; }
+.abslog-section:last-child { margin-bottom: 4px; }
+.abslog-sec-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; border-radius: var(--r-sm);
+  font-size: .85rem; font-weight: 700; margin-bottom: 8px;
+}
+.abslog-sec-unexcused { background: var(--clr-danger-bg); color: #991B1B; }
+.abslog-sec-excused   { background: #EEF2FF;             color: #3730A3; }
+.abslog-sec-badge {
+  min-width: 22px; height: 22px; padding: 0 7px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--r-pill); background: rgba(255,255,255,.6);
+  font-size: .78rem; font-weight: 800;
+}
+.abslog-list { list-style: none; }
+.abslog-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 6px; border-bottom: 1px solid var(--clr-border-lt);
+}
+.abslog-row:last-child { border-bottom: none; }
+.abslog-seat {
+  min-width: 24px; height: 24px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--clr-bg); color: var(--clr-text-2);
+  border-radius: var(--r-xs); font-size: .72rem; font-weight: 800;
+}
+.abslog-name { flex: 1; min-width: 0; font-size: .9rem; font-weight: 600; color: var(--clr-text-1); }
+.abslog-count {
+  flex-shrink: 0; font-size: .8rem; font-weight: 700; color: var(--clr-text-2);
+  background: var(--clr-bg); padding: 3px 10px; border-radius: var(--r-pill);
+}
+.abslog-sec-empty { font-size: .82rem; color: var(--clr-text-3); padding: 4px 6px; }
