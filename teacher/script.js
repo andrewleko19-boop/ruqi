@@ -22,6 +22,7 @@ const {
   syncPending,
   gradeNameAr,
   localDateISO,
+  getClassAbsenceLog,
 } = window.NSAMS_DB;
 
 // ── App State ─────────────────────────────────────────────────────────────────
@@ -801,6 +802,95 @@ btnConfirmSubmit.addEventListener('click', async () => {
     toast(err?.message ?? 'حدث خطأ أثناء الإرسال', 'error');
     closeConfirmModal();
   }
+});
+
+// ── Absence Log ───────────────────────────────────────────────────────────────
+const modalAbslog        = $('modal-abslog');
+const btnAbsenceLog      = $('btn-absence-log');
+const btnAbslogClose     = $('btn-abslog-close');
+const abslogClass        = $('abslog-class');
+const abslogLoading      = $('abslog-loading');
+const abslogEmpty        = $('abslog-empty');
+const abslogBody         = $('abslog-body');
+const abslogUnexcusedList  = $('abslog-unexcused-list');
+const abslogExcusedList    = $('abslog-excused-list');
+const abslogUnexcusedCount = $('abslog-unexcused-count');
+const abslogExcusedCount   = $('abslog-excused-count');
+const abslogUnexcusedEmpty = $('abslog-unexcused-empty');
+const abslogExcusedEmpty   = $('abslog-excused-empty');
+
+hide(modalAbslog);
+
+function buildAbslogRow(stu, count) {
+  const li = document.createElement('li');
+  li.className = 'abslog-row';
+  const seat = stu.seatNumber != null ? `<span class="abslog-seat">${escapeHtml(String(stu.seatNumber))}</span>` : '';
+  li.innerHTML = `
+    ${seat}
+    <span class="abslog-name">${escapeHtml(stu.fullName ?? '—')}</span>
+    <span class="abslog-count">${count} ${count === 1 ? 'مرة' : 'مرات'}</span>
+  `;
+  return li;
+}
+
+async function openAbsenceLog() {
+  if (!S.activeClass) return;
+  abslogClass.textContent = S.activeClass.displayName ?? '';
+  abslogUnexcusedList.innerHTML = '';
+  abslogExcusedList.innerHTML   = '';
+  show(abslogLoading);
+  hide(abslogBody);
+  hide(abslogEmpty);
+  show(modalAbslog);
+  document.body.style.overflow = 'hidden';
+
+  try {
+    const rows = await getClassAbsenceLog(S.activeClass.id);
+    hide(abslogLoading);
+
+    const unexcused = rows.filter(r => r.absentCount  > 0);
+    const excused   = rows.filter(r => r.excusedCount > 0);
+
+    if (unexcused.length === 0 && excused.length === 0) {
+      show(abslogEmpty);
+      return;
+    }
+
+    abslogUnexcusedCount.textContent = unexcused.reduce((s, r) => s + r.absentCount, 0);
+    abslogExcusedCount.textContent   = excused.reduce((s, r) => s + r.excusedCount, 0);
+
+    if (unexcused.length === 0) {
+      show(abslogUnexcusedEmpty);
+    } else {
+      hide(abslogUnexcusedEmpty);
+      unexcused.forEach(r => abslogUnexcusedList.appendChild(buildAbslogRow(r, r.absentCount)));
+    }
+
+    if (excused.length === 0) {
+      show(abslogExcusedEmpty);
+    } else {
+      hide(abslogExcusedEmpty);
+      excused.forEach(r => abslogExcusedList.appendChild(buildAbslogRow(r, r.excusedCount)));
+    }
+
+    show(abslogBody);
+  } catch (err) {
+    console.error('[NSAMS-T] absence log', err);
+    hide(abslogLoading);
+    closeAbsenceLog();
+    toast('تعذّر تحميل سجل الغيابات', 'error');
+  }
+}
+
+function closeAbsenceLog() {
+  hide(modalAbslog);
+  document.body.style.overflow = '';
+}
+
+btnAbsenceLog.addEventListener('click', openAbsenceLog);
+btnAbslogClose.addEventListener('click', closeAbsenceLog);
+modalAbslog.addEventListener('click', (e) => {
+  if (e.target === modalAbslog) closeAbsenceLog();
 });
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
