@@ -197,6 +197,44 @@ ul { list-style: none; }
 
 textarea.field-input { resize: vertical; min-height: 80px; }
 
+/* ── Select (closed box) ──────────────────────────────────────────────────────
+   The native popup list itself is OS-drawn and can't be themed via CSS on a
+   plain <select>; this styles the CLOSED control to match the app: app-coloured
+   box, custom chevron, RTL-correct padding. Applies to every <select.field-input>
+   so the bare management dropdowns look identical to the wrapped ones. */
+select.field-input {
+  cursor: pointer;
+  /* Embedded chevron (var(--clr-text-3) #94A3B8). On the LEFT for RTL. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 12px center;
+  background-size: 16px;
+  padding-left: 38px;       /* room for the chevron on the left (RTL) */
+  padding-right: 12px;
+}
+select.field-input:focus {
+  /* Chevron turns brand colour on focus. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%231E4A7A' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+/* The OS popup uses these on most engines (closed-box option text fallback). */
+select.field-input option {
+  background: var(--clr-surface);
+  color: var(--clr-text-1);
+}
+select.field-input option:disabled { color: var(--clr-text-3); }
+
+/* When a select already sits in a .select-wrap (which renders its own SVG arrow),
+   suppress the embedded background chevron to avoid a double arrow. */
+.select-wrap select.field-input {
+  background-image: none;
+  padding-left: 36px;
+}
+
+/* ── Tab panels: hide the inactive one (.page has display:flex which overrides
+   the [hidden] attribute, so an explicit rule is required). ── */
+.page[hidden] { display: none; }
+
+
 .field-input[readonly] {
   background: #F1F5F9;
   color: var(--clr-text-2);
