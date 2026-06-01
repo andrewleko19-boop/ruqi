@@ -641,6 +641,106 @@ async function getClassAbsenceLog(classId) {
   }));
 }
 
+// ─── School admin: class ↔ teacher management ────────────────────────────────
+// All of these rely on the existing RLS policy school_admin_all_class_teacher
+// (FOR ALL, class_belongs_to_my_school) and the schools/classes read policies.
+
+// All classes in a school (for the management dropdown).
+async function getSchoolClasses(schoolId) {
+  const { data, error } = await db
+    .from('classes')
+    .select('id, name, grade, section')
+    .eq('school_id', schoolId)
+    .order('grade', { ascending: true })
+    .order('section', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(c => ({
+    id:      c.id,
+    name:    c.name,
+    grade:   c.grade,
+    section: c.section,
+  }));
+}
+
+// Teachers belonging to a school. If excludeClassId is given, teachers already
+// assigned to that class (this academic year) are filtered OUT, so the "assign"
+// dropdown only shows teachers not yet on the class.
+async function getTeachersBySchool(schoolId, excludeClassId = null) {
+  const { data, error } = await db
+    .from('users')
+    .select('id, full_name')
+    .eq('role', 'teacher')
+    .eq('school_id', schoolId)
+    .order('full_name', { ascending: true });
+  if (error) throw error;
+  let teachers = (data ?? []).map(t => ({ id: t.id, fullName: t.full_name }));
+
+  if (excludeClassId) {
+    const assigned = await getClassTeachers(excludeClassId);
+    const assignedIds = new Set(assigned.map(a => a.teacherId));
+    teachers = teachers.filter(t => !assignedIds.has(t.id));
+  }
+  return teachers;
+}
+
+// Teachers currently assigned to a class (this academic year).
+async function getClassTeachers(classId) {
+  const year = getAcademicYear();
+  const { data, error } = await db
+    .from('class_teacher')
+    .select('id, teacher_id, subject, teacher:users!class_teacher_teacher_id_fkey(full_name)')
+    .eq('class_id', classId)
+    .eq('academic_year', year);
+  if (error) throw error;
+  return (data ?? []).map(r => ({
+    assignmentId: r.id,
+    teacherId:    r.teacher_id,
+    subject:      r.subject ?? null,
+    fullName:     r.teacher?.full_name ?? '—',
+  }));
+}
+
+// Assign a teacher to a class for the current academic year.
+async function assignTeacherToClass(classId, teacherId, subject = null) {
+  const year = getAcademicYear();
+  const { error } = await db
+    .from('class_teacher')
+    .insert({
+      class_id:      classId,
+      teacher_id:    teacherId,
+      academic_year: year,
+      subject:       subject || null,
+    });
+  if (error) throw error;
+  return true;
+}
+
+// Remove a teacher from a class (current academic year).
+async function removeTeacherFromClass(classId, teacherId) {
+  const year = getAcademicYear();
+  const { error } = await db
+    .from('class_teacher')
+    .delete()
+    .eq('class_id', classId)
+    .eq('teacher_id', teacherId)
+    .eq('academic_year', year);
+  if (error) throw error;
+  return true;
+}
+
+// Is there any student-attendance row for this class dated TODAY (local date)?
+// Used to block removing a teacher from a class that already has today's records.
+async function hasTodayAttendance(classId) {
+  const today = localDateISO();
+  const { count, error } = await db
+    .from('daily_student_attendance')
+    .select('id', { count: 'exact', head: true })
+    .eq('class_id', classId)
+    .eq('date', today);
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
 // ─── Student attendance offline queue ────────────────────────────────────────
 function getPendingStudentAttendance() {
   return readQueue(QUEUE_STU_ATT).filter(r => !r.synced);
@@ -899,6 +999,13 @@ window.NSAMS_DB = {
   getClassAttendanceForDate,
   getClassAttendanceReport,
   getClassAbsenceLog,
+  // School-admin class/teacher management
+  getSchoolClasses,
+  getTeachersBySchool,
+  getClassTeachers,
+  assignTeacherToClass,
+  removeTeacherFromClass,
+  hasTodayAttendance,
   saveStudentAttendance,
   getPendingStudentAttendance,
 
