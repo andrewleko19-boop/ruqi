@@ -204,7 +204,21 @@
     <span id="pending-text">سجلات في انتظار المزامنة</span>
   </div>
 
-  <main class="page">
+  <!-- Tab bar (school admin) -->
+  <nav class="tabbar" role="tablist" aria-label="أقسام لوحة المدير">
+    <button class="tab-btn is-active" id="tab-attendance" role="tab"
+            aria-selected="true" data-tab="attendance">
+      <svg class="icon icon-sm"><use href="#ic-clipboard"/></svg>
+      الدوام
+    </button>
+    <button class="tab-btn" id="tab-manage" role="tab"
+            aria-selected="false" data-tab="manage">
+      <svg class="icon icon-sm"><use href="#ic-users"/></svg>
+      إدارة الصفوف
+    </button>
+  </nav>
+
+  <main class="page" id="view-attendance" role="tabpanel" aria-labelledby="tab-attendance">
 
     <!-- Status card -->
     <div id="status-card" class="status-card status-pending">
@@ -359,7 +373,69 @@
       </div>
     </div>
 
-  </main><!-- /page -->
+  </main><!-- /page (attendance) -->
+
+  <!-- ═══ Management view (class ↔ teacher) ═══════════════════════════════════ -->
+  <main class="page" id="view-manage" role="tabpanel" aria-labelledby="tab-manage" hidden>
+
+    <section class="card">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-users"/></svg>
+        <span>إدارة الصفوف والمعلمين</span>
+        <button class="hdr-btn" id="btn-refresh-manage" aria-label="تحديث" style="margin-inline-start:auto">
+          <svg class="icon icon-sm" id="manage-refresh-icon"><use href="#ic-refresh"/></svg>
+        </button>
+      </div>
+
+      <div class="card-body">
+        <p class="mng-hint">اختر صفاً لعرض معلميه وإدارة الإسناد. يمكن لعدة معلمين تدريس صف واحد (مادة لكل معلم).</p>
+
+        <div class="field-group">
+          <label for="mng-class-select">الصف</label>
+          <select id="mng-class-select" class="field-input">
+            <option value="">— اختر صفاً —</option>
+          </select>
+        </div>
+
+        <!-- Assigned teachers -->
+        <div id="mng-assigned-wrap" hidden>
+          <div class="block-label" style="margin-top:6px">
+            <svg class="icon icon-sm"><use href="#ic-users"/></svg>
+            المعلمون المرتبطون بالصف
+          </div>
+
+          <div id="mng-assigned-loading" hidden style="padding:8px 0">
+            <div class="dskel"></div><div class="dskel" style="width:60%"></div>
+          </div>
+          <ul id="mng-assigned-list" class="mng-list" role="list"></ul>
+          <p id="mng-assigned-empty" class="mng-empty" hidden>لا يوجد معلمون مرتبطون بهذا الصف بعد.</p>
+
+          <!-- Assign new -->
+          <div class="block-label" style="margin-top:16px">
+            <svg class="icon icon-sm"><use href="#ic-clipboard"/></svg>
+            إسناد معلم جديد
+          </div>
+          <div class="field-group">
+            <label for="mng-teacher-select">المعلم</label>
+            <select id="mng-teacher-select" class="field-input">
+              <option value="">— اختر معلماً —</option>
+            </select>
+          </div>
+          <div class="field-group" id="mng-subject-wrap">
+            <label for="mng-subject">المادة <span style="color:#94A3B8;font-weight:400">(اختياري — للإعدادي/الثانوي)</span></label>
+            <input type="text" id="mng-subject" class="field-input" maxlength="60" placeholder="مثال: الرياضيات" />
+          </div>
+          <div id="mng-error" class="msg msg-error" hidden></div>
+          <button type="button" class="btn btn-primary btn-full" id="btn-assign-teacher">
+            <svg class="icon icon-sm"><use href="#ic-send"/></svg>
+            <span id="assign-btn-label">تعيين معلم للصف</span>
+            <span class="spinner" id="assign-spinner" hidden></span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </main><!-- /page (manage) -->
 
   <!-- FAB: Emergency Report -->
   <button class="fab" id="btn-open-report" aria-label="فتح نموذج البلاغ الطارئ">
