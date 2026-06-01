@@ -982,3 +982,90 @@ select.field-input option:disabled { color: var(--clr-text-3); }
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+/* ═══ Custom Select (themed dropdown) ════════════════════════════════════════ */
+/* The enhanced native <select> is removed from view but kept for form value. */
+select.csel-native {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px; border: 0;
+  clip: rect(0 0 0 0); clip-path: inset(50%);
+  overflow: hidden; white-space: nowrap;
+  pointer-events: none;
+}
+
+.csel { position: relative; width: 100%; }
+
+.csel-trigger {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--clr-border);
+  border-radius: var(--r-sm);
+  background: var(--clr-bg);
+  color: var(--clr-text-1);
+  font-size: 0.93rem; font-family: inherit;
+  text-align: right;
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), background var(--dur);
+}
+.csel-trigger:hover:not(.is-disabled) { border-color: var(--clr-primary-int); }
+.csel.is-open .csel-trigger {
+  border-color: var(--clr-primary-int);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(30,74,122,.15);
+}
+.csel-trigger.is-disabled { opacity: .55; cursor: not-allowed; }
+
+.csel-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.csel-label.is-placeholder { color: var(--clr-text-3); }
+
+.csel-chevron {
+  width: 18px; height: 18px; flex-shrink: 0;
+  color: var(--clr-text-3);
+  transition: transform var(--dur) var(--ease), color var(--dur);
+}
+.csel.is-open .csel-chevron { transform: rotate(180deg); color: var(--clr-primary-int); }
+
+.csel-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  z-index: 50;
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border-lt);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-lg);
+  padding: 5px;
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  animation: cselIn .14s var(--ease);
+}
+@keyframes cselIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+.csel-menu[hidden] { display: none; }
+
+.csel-option {
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  font-size: 0.9rem;
+  color: var(--clr-text-1);
+  cursor: pointer;
+  transition: background var(--dur), color var(--dur);
+  white-space: normal;
+  line-height: 1.4;
+}
+.csel-option:hover { background: var(--clr-primary-dim); }
+.csel-option.is-selected {
+  background: var(--clr-primary);
+  color: #fff;
+  font-weight: 600;
+}
+.csel-option.is-disabled {
+  color: var(--clr-text-3);
+  cursor: not-allowed;
+  opacity: .7;
+}
+.csel-option.is-disabled:hover { background: transparent; }
