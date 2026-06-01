@@ -650,6 +650,10 @@ async function initApp() {
   resetReportForm();
   updateConnUI();
 
+  // Default to the attendance tab on each app entry; manage loads lazily.
+  switchTab('attendance');
+  _manageLoaded = false;
+
   // Kick off sync of any offline-queued records
   await doSync();
 
@@ -674,7 +678,9 @@ async function bootstrap() {
   showScreen('login');
 }
 
-bootstrap();
+// NOTE: bootstrap() is invoked at the very END of this file, after ALL top-level
+// const declarations (including the management-tab element refs that switchTab
+// touches). Calling it here would hit the temporal dead zone for those consts.
 // ════════════════════════════════════════════════════════════════════════════
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -882,3 +888,229 @@ btnConfirmReject.addEventListener('click', async () => {
 });
 
 btnRefreshClasses.addEventListener('click', () => loadClassSummaries());
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Tabs + Class/Teacher Management
+// ════════════════════════════════════════════════════════════════════════════
+const NDB = window.NSAMS_DB;
+
+const tabAttendance   = el('tab-attendance');
+const tabManage       = el('tab-manage');
+const viewAttendance  = el('view-attendance');
+const viewManage      = el('view-manage');
+const fabReport       = el('btn-open-report');
+
+const mngClassSelect    = el('mng-class-select');
+const mngAssignedWrap   = el('mng-assigned-wrap');
+const mngAssignedLoading= el('mng-assigned-loading');
+const mngAssignedList   = el('mng-assigned-list');
+const mngAssignedEmpty  = el('mng-assigned-empty');
+const mngTeacherSelect  = el('mng-teacher-select');
+const mngSubject        = el('mng-subject');
+const mngError          = el('mng-error');
+const btnAssignTeacher  = el('btn-assign-teacher');
+const assignBtnLabel    = el('assign-btn-label');
+const assignSpinner     = el('assign-spinner');
+const btnRefreshManage  = el('btn-refresh-manage');
+
+let _manageLoaded = false;   // classes dropdown loaded once per session
+let _mngBusy      = false;
+
+function switchTab(tab) {
+  const onManage = tab === 'manage';
+  viewManage.hidden     = !onManage;
+  viewAttendance.hidden = onManage;
+  tabManage.classList.toggle('is-active', onManage);
+  tabAttendance.classList.toggle('is-active', !onManage);
+  tabManage.setAttribute('aria-selected', String(onManage));
+  tabAttendance.setAttribute('aria-selected', String(!onManage));
+  // The emergency-report FAB belongs to the attendance view only.
+  if (fabReport) fabReport.hidden = onManage;
+
+  if (onManage && !_manageLoaded) loadManageClasses();
+}
+
+tabAttendance.addEventListener('click', () => switchTab('attendance'));
+tabManage.addEventListener('click',     () => switchTab('manage'));
+
+function clearMngError() { mngError.hidden = true; mngError.textContent = ''; }
+function showMngError(msg) { mngError.textContent = msg; mngError.hidden = false; }
+
+// Populate the class dropdown from the admin's school.
+async function loadManageClasses() {
+  if (!S.school?.id) return;
+  try {
+    const classes = await NDB.getSchoolClasses(S.school.id);
+    mngClassSelect.innerHTML = '<option value="">— اختر صفاً —</option>';
+    for (const c of classes) {
+      const label = c.name || `${gradeLabel(c.grade)} / ${c.section ?? ''}`.trim();
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = label;
+      mngClassSelect.appendChild(opt);
+    }
+    _manageLoaded = true;
+  } catch (err) {
+    console.error('[NSAMS] loadManageClasses', err);
+    toast('تعذّر تحميل قائمة الصفوف', 'error');
+  }
+}
+
+// Light grade label fallback (db.js gradeNameAr may not be exported here).
+function gradeLabel(grade) {
+  return grade != null ? `الصف ${grade}` : 'صف';
+}
+
+mngClassSelect.addEventListener('change', async () => {
+  clearMngError();
+  const classId = mngClassSelect.value;
+  if (!classId) {
+    mngAssignedWrap.hidden = true;
+    return;
+  }
+  mngAssignedWrap.hidden = false;
+  await Promise.all([loadAssignedTeachers(classId), loadAssignableTeachers(classId)]);
+});
+
+// Teachers currently on the selected class.
+async function loadAssignedTeachers(classId) {
+  mngAssignedLoading.hidden = false;
+  mngAssignedList.innerHTML = '';
+  mngAssignedEmpty.hidden = true;
+  try {
+    const teachers = await NDB.getClassTeachers(classId);
+    mngAssignedLoading.hidden = true;
+    if (teachers.length === 0) {
+      mngAssignedEmpty.hidden = false;
+      return;
+    }
+    teachers.forEach(t => mngAssignedList.appendChild(buildAssignedRow(classId, t)));
+  } catch (err) {
+    mngAssignedLoading.hidden = true;
+    console.error('[NSAMS] loadAssignedTeachers', err);
+    toast('تعذّر تحميل معلمي الصف', 'error');
+  }
+}
+
+function buildAssignedRow(classId, t) {
+  const li = document.createElement('li');
+  li.className = 'mng-row';
+  const subj = t.subject
+    ? `<span class="mng-subject-tag">${escapeHtml(t.subject)}</span>` : '';
+  li.innerHTML = `
+    <div class="mng-row-main">
+      <span class="mng-teacher-name">${escapeHtml(t.fullName)}</span>
+      ${subj}
+    </div>
+    <button class="mng-remove-btn" data-tid="${escapeHtml(t.teacherId)}"
+            data-name="${escapeHtml(t.fullName)}" aria-label="إزالة ${escapeHtml(t.fullName)}">
+      <svg class="icon icon-sm"><use href="#ic-x"/></svg>
+      إزالة
+    </button>
+  `;
+  li.querySelector('.mng-remove-btn').addEventListener('click', () =>
+    handleRemoveTeacher(classId, t.teacherId, t.fullName));
+  return li;
+}
+
+// Teachers in the school NOT yet on this class.
+async function loadAssignableTeachers(classId) {
+  mngTeacherSelect.innerHTML = '<option value="">— اختر معلماً —</option>';
+  try {
+    const teachers = await NDB.getTeachersBySchool(S.school.id, classId);
+    for (const t of teachers) {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = t.fullName;
+      mngTeacherSelect.appendChild(opt);
+    }
+    if (teachers.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'لا يوجد معلمون متاحون للإسناد';
+      opt.disabled = true;
+      mngTeacherSelect.appendChild(opt);
+    }
+  } catch (err) {
+    console.error('[NSAMS] loadAssignableTeachers', err);
+    toast('تعذّر تحميل قائمة المعلمين', 'error');
+  }
+}
+
+// Assign.
+btnAssignTeacher.addEventListener('click', async () => {
+  if (_mngBusy) return;
+  clearMngError();
+  const classId   = mngClassSelect.value;
+  const teacherId = mngTeacherSelect.value;
+  if (!classId)   { showMngError('اختر صفاً أولاً.'); return; }
+  if (!teacherId) { showMngError('اختر معلماً للإسناد.'); return; }
+  if (!navigator.onLine) { showMngError('الإسناد يحتاج اتصالاً بالإنترنت.'); return; }
+
+  _mngBusy = true;
+  btnAssignTeacher.disabled = true;
+  assignBtnLabel.hidden = true;
+  assignSpinner.hidden = false;
+  try {
+    await NDB.assignTeacherToClass(classId, teacherId, mngSubject.value.trim() || null);
+    mngSubject.value = '';
+    mngTeacherSelect.value = '';
+    toast('تم تعيين المعلم للصف', 'success');
+    await Promise.all([loadAssignedTeachers(classId), loadAssignableTeachers(classId)]);
+  } catch (err) {
+    console.error('[NSAMS] assignTeacherToClass', err);
+    // Unique-violation = teacher already on the class.
+    if (err?.code === '23505') {
+      showMngError('هذا المعلم مرتبط بالفعل بهذا الصف.');
+    } else {
+      showMngError(err?.message || 'تعذّر تعيين المعلم.');
+    }
+  } finally {
+    _mngBusy = false;
+    btnAssignTeacher.disabled = false;
+    assignBtnLabel.hidden = false;
+    assignSpinner.hidden = true;
+  }
+});
+
+// Remove — blocked if the class has attendance recorded today.
+async function handleRemoveTeacher(classId, teacherId, name) {
+  if (_mngBusy) return;
+  clearMngError();
+  if (!navigator.onLine) { showMngError('الإزالة تحتاج اتصالاً بالإنترنت.'); return; }
+
+  _mngBusy = true;
+  try {
+    const hasToday = await NDB.hasTodayAttendance(classId);
+    if (hasToday) {
+      showMngError('لا يمكن حذف معلم من صف له حضور مسجل اليوم.');
+      _mngBusy = false;
+      return;
+    }
+    const ok = confirm(`إزالة المعلم "${name}" من هذا الصف؟`);
+    if (!ok) { _mngBusy = false; return; }
+
+    await NDB.removeTeacherFromClass(classId, teacherId);
+    toast('تمت إزالة المعلم من الصف', 'success');
+    await Promise.all([loadAssignedTeachers(classId), loadAssignableTeachers(classId)]);
+  } catch (err) {
+    console.error('[NSAMS] removeTeacherFromClass', err);
+    showMngError(err?.message || 'تعذّر إزالة المعلم.');
+  } finally {
+    _mngBusy = false;
+  }
+}
+
+btnRefreshManage.addEventListener('click', async () => {
+  _manageLoaded = false;
+  await loadManageClasses();
+  // If a class was selected, refresh its lists too.
+  const classId = mngClassSelect.value;
+  if (classId) {
+    mngAssignedWrap.hidden = false;
+    await Promise.all([loadAssignedTeachers(classId), loadAssignableTeachers(classId)]);
+  }
+});
+
+// ── Start the app (after all declarations are initialized) ──
+bootstrap();
