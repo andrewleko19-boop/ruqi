@@ -524,7 +524,7 @@ select.field-input option:disabled { color: var(--clr-text-3); }
   border-radius: var(--r-md);
   border: 1px solid var(--clr-border-lt);
   box-shadow: var(--sh-sm);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .card-hdr {
@@ -536,6 +536,7 @@ select.field-input option:disabled { color: var(--clr-text-3); }
   color: #fff;
   font-weight: 700;
   font-size: 0.88rem;
+  border-radius: var(--r-md) var(--r-md) 0 0;   /* added */
 }
 
 .card-body {
@@ -1030,7 +1031,7 @@ select.csel-native {
   position: absolute;
   top: calc(100% + 4px);
   left: 0; right: 0;
-  z-index: 50;
+  z-index: 1000;
   background: var(--clr-surface);
   border: 1px solid var(--clr-border-lt);
   border-radius: var(--r-md);
