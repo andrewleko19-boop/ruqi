@@ -235,7 +235,7 @@
     <section class="card" id="class-sub-card">
       <div class="card-hdr">
         <svg class="icon"><use href="#ic-users"/></svg>
-        <span>كشوف الحضور من المعلمين</span>
+        <span id="subs-card-title">كشوف الحضور من المعلمين</span>
         <button class="hdr-btn" id="btn-refresh-classes" aria-label="تحديث" style="margin-inline-start:auto">
           <svg class="icon icon-sm" id="classes-refresh-icon"><use href="#ic-refresh"/></svg>
         </button>
@@ -259,7 +259,7 @@
         <div class="sheet-hdr sheet-hdr-danger">
           <div class="sheet-title">
             <svg class="icon"><use href="#ic-x"/></svg>
-            إعادة الكشف للمعلم
+            <span id="reject-title">إعادة الكشف للمعلم</span>
           </div>
           <button class="icon-btn" id="btn-close-reject" aria-label="إغلاق">
             <svg class="icon"><use href="#ic-x"/></svg>
@@ -346,7 +346,7 @@
                    min="0" max="9999" value="0" inputmode="numeric" readonly />
           </div>
         </div>
-        <p style="font-size:.75rem;color:#94A3B8;margin:-4px 0 10px">
+        <p id="auto-count-note" style="font-size:.75rem;color:#94A3B8;margin:-4px 0 10px">
           تُحتسب أعداد الطلاب تلقائياً من كشوف المعلمين المؤكدة.
         </p>
 
@@ -381,14 +381,14 @@
     <section class="card">
       <div class="card-hdr">
         <svg class="icon"><use href="#ic-users"/></svg>
-        <span>إدارة الصفوف والمعلمين</span>
+        <span id="manage-card-title">إدارة الصفوف والمعلمين</span>
         <button class="hdr-btn" id="btn-refresh-manage" aria-label="تحديث" style="margin-inline-start:auto">
           <svg class="icon icon-sm" id="manage-refresh-icon"><use href="#ic-refresh"/></svg>
         </button>
       </div>
 
       <div class="card-body">
-        <p class="mng-hint">اختر صفاً لعرض معلميه وإدارة الإسناد. يمكن لعدة معلمين تدريس صف واحد (مادة لكل معلم).</p>
+        <p id="manage-hint" class="mng-hint">اختر صفاً لعرض معلميه وإدارة الإسناد. يمكن لعدة معلمين تدريس صف واحد.</p>
 
         <div class="field-group">
           <label for="mng-class-select">الصف</label>
@@ -401,7 +401,7 @@
         <div id="mng-assigned-wrap" hidden>
           <div class="block-label" style="margin-top:6px">
             <svg class="icon icon-sm"><use href="#ic-users"/></svg>
-            المعلمون المرتبطون بالصف
+            <span id="assigned-label">المعلمون المرتبطون بالصف</span>
           </div>
 
           <div id="mng-assigned-loading" hidden style="padding:8px 0">
@@ -413,17 +413,13 @@
           <!-- Assign new -->
           <div class="block-label" style="margin-top:16px">
             <svg class="icon icon-sm"><use href="#ic-clipboard"/></svg>
-            إسناد معلم جديد
+            <span id="assign-new-label">إسناد معلم جديد</span>
           </div>
           <div class="field-group">
-            <label for="mng-teacher-select">المعلم</label>
+            <label for="mng-teacher-select" id="mng-teacher-label">المعلم</label>
             <select id="mng-teacher-select" class="field-input">
               <option value="">— اختر معلماً —</option>
             </select>
-          </div>
-          <div class="field-group" id="mng-subject-wrap">
-            <label for="mng-subject">المادة <span style="color:#94A3B8;font-weight:400">(اختياري — للإعدادي/الثانوي)</span></label>
-            <input type="text" id="mng-subject" class="field-input" maxlength="60" placeholder="مثال: الرياضيات" />
           </div>
           <div id="mng-error" class="msg msg-error" hidden></div>
           <button type="button" class="btn btn-primary btn-full" id="btn-assign-teacher">

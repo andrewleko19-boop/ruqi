@@ -33,6 +33,12 @@ const S = {
   photoMime:      null,
 };
 
+// ── Role vocabulary (معلم ابتدائي ↔ موجه إعدادي/ثانوي) ─────────────────────────
+// Switched automatically by school type. UI text only — DB role stays 'teacher'.
+// Initialised to the primary-school variant; applyRoleLabels() swaps it after the
+// school row loads. All dynamic strings (toasts, dropdowns) read from RW.
+let RW = roleWords(false);
+
 // ── School data cache helpers ─────────────────────────────────────────────────
 const SCHOOL_CACHE_PREFIX = 'nsams_school_';
 
@@ -55,13 +61,87 @@ function getCachedSchool(schoolId) {
  * Normalise a raw DB row into the shape the rest of the app uses:
  *   { id, name, totalTeachers, totalStudents }
  */
-function normaliseSchool(row) {
-  return {
-    id:            row.id,
-    name:          row.name,
-    totalTeachers: row.total_teachers ?? 0,
-    totalStudents: row.total_students ?? 0,
+/**
+ * Role label dictionary. secondary=true → موجه (إعدادي/ثانوي), else معلم (ابتدائي).
+ * Full inflected phrases (not composed) so each is unambiguously correct in Arabic.
+ */
+function roleWords(secondary) {
+  return secondary ? {
+    subsTitle:       'كشوف الحضور من الموجهين',
+    autoNote:        'تُحتسب أعداد الطلاب تلقائياً من كشوف الموجهين المؤكدة.',
+    manageTitle:     'إدارة الصفوف والموجهين',
+    manageHint:      'اختر صفاً لعرض موجهيه وإدارة الإسناد. يمكن لعدة موجهين متابعة الصف نفسه.',
+    assignedLabel:   'الموجهون المرتبطون بالصف',
+    assignedEmpty:   'لا يوجد موجهون مرتبطون بهذا الصف بعد.',
+    assignNew:       'إسناد موجه جديد',
+    pickLabel:       'الموجه',
+    pickPlaceholder: '— اختر موجهاً —',
+    assignBtn:       'تعيين موجه للصف',
+    rejectTitle:     'إعادة الكشف للموجه',
+    noneAvailable:   'لا يوجد موجهون متاحون للإسناد',
+    pickToAssign:    'اختر موجهاً للإسناد.',
+    assignedToast:   'تم تعيين الموجه للصف',
+    alreadyOnClass:  'هذا الموجه مرتبط بالفعل بهذا الصف.',
+    assignFail:      'تعذّر تعيين الموجه.',
+    cannotRemove:    'لا يمكن حذف موجه من صف له حضور مسجل اليوم.',
+    removeConfirm:   (n) => `إزالة الموجه "${n}" من هذا الصف؟`,
+    removedToast:    'تمت إزالة الموجه من الصف',
+    removeFail:      'تعذّر إزالة الموجه.',
+    loadSubsErr:     'تعذّر تحميل كشوف الموجهين',
+    loadAssignedErr: 'تعذّر تحميل موجهي الصف',
+    loadListErr:     'تعذّر تحميل قائمة الموجهين',
+    rejectedToast:   (c) => `تم إعادة كشف ${c} للموجه`,
+  } : {
+    subsTitle:       'كشوف الحضور من المعلمين',
+    autoNote:        'تُحتسب أعداد الطلاب تلقائياً من كشوف المعلمين المؤكدة.',
+    manageTitle:     'إدارة الصفوف والمعلمين',
+    manageHint:      'اختر صفاً لعرض معلميه وإدارة الإسناد. يمكن لعدة معلمين تدريس صف واحد.',
+    assignedLabel:   'المعلمون المرتبطون بالصف',
+    assignedEmpty:   'لا يوجد معلمون مرتبطون بهذا الصف بعد.',
+    assignNew:       'إسناد معلم جديد',
+    pickLabel:       'المعلم',
+    pickPlaceholder: '— اختر معلماً —',
+    assignBtn:       'تعيين معلم للصف',
+    rejectTitle:     'إعادة الكشف للمعلم',
+    noneAvailable:   'لا يوجد معلمون متاحون للإسناد',
+    pickToAssign:    'اختر معلماً للإسناد.',
+    assignedToast:   'تم تعيين المعلم للصف',
+    alreadyOnClass:  'هذا المعلم مرتبط بالفعل بهذا الصف.',
+    assignFail:      'تعذّر تعيين المعلم.',
+    cannotRemove:    'لا يمكن حذف معلم من صف له حضور مسجل اليوم.',
+    removeConfirm:   (n) => `إزالة المعلم "${n}" من هذا الصف؟`,
+    removedToast:    'تمت إزالة المعلم من الصف',
+    removeFail:      'تعذّر إزالة المعلم.',
+    loadSubsErr:     'تعذّر تحميل كشوف المعلمين',
+    loadAssignedErr: 'تعذّر تحميل معلمي الصف',
+    loadListErr:     'تعذّر تحميل قائمة المعلمين',
+    rejectedToast:   (c) => `تم إعادة كشف ${c} للمعلم`,
   };
+}
+
+/**
+ * Apply role vocabulary to the static DOM + reset RW for dynamic strings.
+ * Called once per app entry, right after the school row is loaded.
+ */
+function applyRoleLabels() {
+  RW = roleWords(S.school?.type === 'middle_high');
+  const set = (id, txt) => { const n = el(id); if (n) n.textContent = txt; };
+  set('subs-card-title',   RW.subsTitle);
+  set('auto-count-note',   RW.autoNote);
+  set('manage-card-title', RW.manageTitle);
+  set('manage-hint',       RW.manageHint);
+  set('assigned-label',    RW.assignedLabel);
+  set('mng-assigned-empty',RW.assignedEmpty);
+  set('assign-new-label',  RW.assignNew);
+  set('mng-teacher-label', RW.pickLabel);
+  set('assign-btn-label',  RW.assignBtn);
+  set('reject-title',      RW.rejectTitle);
+  // The assignable-teachers placeholder (mirrors the rebuild in loadAssignableTeachers).
+  const ts = el('mng-teacher-select');
+  if (ts && ts.options[0]) {
+    ts.options[0].textContent = RW.pickPlaceholder;
+    if (window.CustomSelect) CustomSelect.refresh(ts);
+  }
 }
 
 /**
@@ -632,6 +712,9 @@ async function initApp() {
   // ── Fetch real school data from DB (offline-safe) ──────────────────────────
   await loadSchoolData();
 
+  // Swap معلم↔موجه labels based on school type (after S.school is populated).
+  applyRoleLabels();
+
   // Header — now uses the live DB name, not a hardcoded string
   hdrSchool.textContent = S.school?.name ?? '…';
   hdrDate.textContent   = formatDateAr(todayISO());
@@ -746,7 +829,7 @@ async function loadClassSummaries() {
     console.error('[NSAMS] loadClassSummaries', err);
     hide(clasSubLoading);
     classesRefreshIcon.classList.remove('syncing');
-    toast('تعذّر تحميل كشوف المعلمين', 'error');
+    toast(RW.loadSubsErr, 'error');
   }
 }
 
@@ -875,7 +958,7 @@ btnConfirmReject.addEventListener('click', async () => {
     await window.NSAMS_DB.rejectClassSubmission(_rejectSubmissionId, S.user.user.id, notes);
     const cname = rejectClassName.textContent;
     closeRejectModal();
-    toast(`تم إعادة كشف ${cname} للمعلم`, 'warning');
+    toast(RW.rejectedToast(cname), 'warning');
     await loadClassSummaries();
   } catch (err) {
     console.error('[NSAMS] rejectSubmission', err);
@@ -907,7 +990,6 @@ const mngAssignedLoading= el('mng-assigned-loading');
 const mngAssignedList   = el('mng-assigned-list');
 const mngAssignedEmpty  = el('mng-assigned-empty');
 const mngTeacherSelect  = el('mng-teacher-select');
-const mngSubject        = el('mng-subject');
 const mngError          = el('mng-error');
 const btnAssignTeacher  = el('btn-assign-teacher');
 const assignBtnLabel    = el('assign-btn-label');
@@ -990,7 +1072,7 @@ async function loadAssignedTeachers(classId) {
   } catch (err) {
     mngAssignedLoading.hidden = true;
     console.error('[NSAMS] loadAssignedTeachers', err);
-    toast('تعذّر تحميل معلمي الصف', 'error');
+    toast(RW.loadAssignedErr, 'error');
   }
 }
 
@@ -1017,7 +1099,7 @@ function buildAssignedRow(classId, t) {
 
 // Teachers in the school NOT yet on this class.
 async function loadAssignableTeachers(classId) {
-  mngTeacherSelect.innerHTML = '<option value="">— اختر معلماً —</option>';
+  mngTeacherSelect.innerHTML = `<option value="">${RW.pickPlaceholder}</option>`;
   try {
     const teachers = await NDB.getTeachersBySchool(S.school.id, classId);
     for (const t of teachers) {
@@ -1029,14 +1111,14 @@ async function loadAssignableTeachers(classId) {
     if (teachers.length === 0) {
       const opt = document.createElement('option');
       opt.value = '';
-      opt.textContent = 'لا يوجد معلمون متاحون للإسناد';
+      opt.textContent = RW.noneAvailable;
       opt.disabled = true;
       mngTeacherSelect.appendChild(opt);
     }
     CustomSelect.refresh(mngTeacherSelect);
   } catch (err) {
     console.error('[NSAMS] loadAssignableTeachers', err);
-    toast('تعذّر تحميل قائمة المعلمين', 'error');
+    toast(RW.loadListErr, 'error');
   }
 }
 
@@ -1047,7 +1129,7 @@ btnAssignTeacher.addEventListener('click', async () => {
   const classId   = mngClassSelect.value;
   const teacherId = mngTeacherSelect.value;
   if (!classId)   { showMngError('اختر صفاً أولاً.'); return; }
-  if (!teacherId) { showMngError('اختر معلماً للإسناد.'); return; }
+  if (!teacherId) { showMngError(RW.pickToAssign); return; }
   if (!navigator.onLine) { showMngError('الإسناد يحتاج اتصالاً بالإنترنت.'); return; }
 
   _mngBusy = true;
@@ -1055,18 +1137,18 @@ btnAssignTeacher.addEventListener('click', async () => {
   assignBtnLabel.hidden = true;
   assignSpinner.hidden = false;
   try {
-    await NDB.assignTeacherToClass(classId, teacherId, mngSubject.value.trim() || null);
-    mngSubject.value = '';
+    // subject is intentionally null — the المادة field was removed from this UI.
+    await NDB.assignTeacherToClass(classId, teacherId, null);
     mngTeacherSelect.value = '';
-    toast('تم تعيين المعلم للصف', 'success');
+    toast(RW.assignedToast, 'success');
     await Promise.all([loadAssignedTeachers(classId), loadAssignableTeachers(classId)]);
   } catch (err) {
     console.error('[NSAMS] assignTeacherToClass', err);
     // Unique-violation = teacher already on the class.
     if (err?.code === '23505') {
-      showMngError('هذا المعلم مرتبط بالفعل بهذا الصف.');
+      showMngError(RW.alreadyOnClass);
     } else {
-      showMngError(err?.message || 'تعذّر تعيين المعلم.');
+      showMngError(err?.message || RW.assignFail);
     }
   } finally {
     _mngBusy = false;
@@ -1086,19 +1168,19 @@ async function handleRemoveTeacher(classId, teacherId, name) {
   try {
     const hasToday = await NDB.hasTodayAttendance(classId);
     if (hasToday) {
-      showMngError('لا يمكن حذف معلم من صف له حضور مسجل اليوم.');
+      showMngError(RW.cannotRemove);
       _mngBusy = false;
       return;
     }
-    const ok = confirm(`إزالة المعلم "${name}" من هذا الصف؟`);
+    const ok = confirm(RW.removeConfirm(name));
     if (!ok) { _mngBusy = false; return; }
 
     await NDB.removeTeacherFromClass(classId, teacherId);
-    toast('تمت إزالة المعلم من الصف', 'success');
+    toast(RW.removedToast, 'success');
     await Promise.all([loadAssignedTeachers(classId), loadAssignableTeachers(classId)]);
   } catch (err) {
     console.error('[NSAMS] removeTeacherFromClass', err);
-    showMngError(err?.message || 'تعذّر إزالة المعلم.');
+    showMngError(err?.message || RW.removeFail);
   } finally {
     _mngBusy = false;
   }

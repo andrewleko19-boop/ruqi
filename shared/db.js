@@ -167,9 +167,11 @@ async function getSchoolStatus(schoolId, date) {
 }
 
 async function getSchoolById(schoolId) {
+  // select('*') so school_type is included once the migration runs, while
+  // staying safe (no "column does not exist" error) if it hasn't yet.
   const { data, error } = await db
     .from('schools')
-    .select('id, name, total_teachers, total_students, directorate_id')
+    .select('*')
     .eq('id', schoolId)
     .single();
   if (error) throw error;
