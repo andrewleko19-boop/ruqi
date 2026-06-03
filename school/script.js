@@ -62,6 +62,22 @@ function getCachedSchool(schoolId) {
  *   { id, name, totalTeachers, totalStudents }
  */
 /**
+ * Normalise a raw DB row into the shape the rest of the app uses:
+ *   { id, name, totalTeachers, totalStudents, type }
+ */
+function normaliseSchool(row) {
+  return {
+    id:            row.id,
+    name:          row.name,
+    totalTeachers: row.total_teachers ?? 0,
+    totalStudents: row.total_students ?? 0,
+    // 'primary' (ابتدائي) | 'middle_high' (إعدادي/ثانوي). Drives معلم↔موجه labels.
+    // Falls back to 'primary' if the column is missing (e.g. migration not run yet).
+    type:          row.school_type ?? 'primary',
+  };
+}
+
+/**
  * Role label dictionary. secondary=true → موجه (إعدادي/ثانوي), else معلم (ابتدائي).
  * Full inflected phrases (not composed) so each is unambiguously correct in Arabic.
  */
