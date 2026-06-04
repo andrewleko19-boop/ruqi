@@ -3,7 +3,18 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL      = "https://xocrzpjfvizgnsybegwr.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_HCVzNgEJmov38FWXRO1uFw_DG1d87Y4";
 
-const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const LAYER = location.pathname.split('/').filter(Boolean).find(
+  s => ['school', 'teacher', 'directorate', 'ministry'].includes(s)
+) || 'root';
+
+const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    storageKey:       `nsams-auth-${LAYER}`,
+    persistSession:   true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+});
 export { db as supabase };
 
 // ─────────────────────────────────────────────────────────────────────────────
