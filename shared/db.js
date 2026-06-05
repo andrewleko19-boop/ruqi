@@ -326,11 +326,26 @@ async function updateReportStatus(reportId, newStatus) {
 
 async function getTodaySummary(directorateId) {
   const today = localDateISO();
-  const [attendanceRes, reportsRes] = await Promise.all([
-    db.from("daily_attendance")
-      .select("school_id, teachers_present, students_present, school:schools!inner(directorate_id)")
+
+  // مدارس المديرية (نحتاج المعرّفات لفلترة الحضور الفردي)
+  const schoolsRes = await db.from("schools")
+    .select("id")
+    .eq("directorate_id", directorateId);
+  if (schoolsRes.error) throw schoolsRes.error;
+  const schoolIds = (schoolsRes.data || []).map((s) => s.id);
+
+  const [dsaRes, daRes, reportsRes] = await Promise.all([
+    // حضور الطلاب الفردي (المصدر الحقيقي الموحّد مع الوزارة)
+    db.from("daily_student_attendance")
+      .select("school_id, status")
       .eq("date", today)
-      .eq("schools.directorate_id", directorateId),
+      .in("school_id", schoolIds.length ? schoolIds : ["__none__"]),
+    // دوام المعلمين — لا يزال من المجمّع (لم يُوحّد، مصدره الوحيد daily_attendance)
+    db.from("daily_attendance")
+      .select("school_id, teachers_present")
+      .eq("date", today)
+      .in("school_id", schoolIds.length ? schoolIds : ["__none__"]),
+    // البلاغات المعلّقة (دون تغيير)
     db.from("emergency_reports")
       .select("id, type, status, created_at, school:schools!inner(name, directorate_id)")
       .in("status", ["open", "acknowledged"])
@@ -339,28 +354,36 @@ async function getTodaySummary(directorateId) {
       .limit(5),
   ]);
 
-  if (attendanceRes.error) throw attendanceRes.error;
+  if (dsaRes.error)     throw dsaRes.error;
+  if (daRes.error)      throw daRes.error;
   if (reportsRes.error) throw reportsRes.error;
 
+  // تجميع الحضور الفردي
+  let present = 0, late = 0, absent = 0, excused = 0;
+  const reportingSchools = new Set();
+  for (const r of dsaRes.data || []) {
+    if (r.status === "present")      present++;
+    else if (r.status === "late")    late++;
+    else if (r.status === "absent")  absent++;
+    else if (r.status === "excused") excused++;
+    if (r.school_id) reportingSchools.add(r.school_id);
+  }
+  const attendingStudents = present + late + excused;   // الحاضرون (قرار موحّد)
+
   return {
-    totalTeachersPresent: (attendanceRes.data || []).reduce((s, r) => s + (r.teachers_present || 0), 0),
-    totalStudentsPresent: (attendanceRes.data || []).reduce((s, r) => s + (r.students_present || 0), 0),
+    totalTeachersPresent: (daRes.data || []).reduce((s, r) => s + (r.teachers_present || 0), 0),
+    totalStudentsPresent: attendingStudents,            // الآن حضور طلاب حقيقي
     topPendingReports: (reportsRes.data || []).map((r) => ({
       id: r.id, type: r.type, status: r.status,
       createdAt: r.created_at, schoolName: r.school?.name ?? "Unknown",
     })),
-    // "Reporting schools" = schools that SUBMITTED ATTENDANCE today, derived from
-    // the attendance rows — NOT from emergency reports (the previous bug counted
-    // schools with open emergencies, which is a different, misleading number).
-    reportingSchoolsCount: new Set(
-      (attendanceRes.data || []).map(r => r.school_id).filter(Boolean)
-    ).size,
+    reportingSchoolsCount: reportingSchools.size,
   };
 }
 
 async function getSchoolsAttendanceStatus(directorateId, date) {
-  const isoDate  = date instanceof Date ? localDateISO(date) : date;
-  // Fetch id + total_students so we can compute an attendance ratio per school.
+  const isoDate = date instanceof Date ? localDateISO(date) : date;
+
   const schoolsRes = await db.from("schools")
     .select("id, total_students")
     .eq("directorate_id", directorateId);
@@ -368,35 +391,70 @@ async function getSchoolsAttendanceStatus(directorateId, date) {
 
   const ids = (schoolsRes.data || []).map((s) => s.id);
   const [attendanceRes, reportsRes] = await Promise.all([
-    db.from("daily_attendance").select("school_id, students_present").eq("date", isoDate).in("school_id", ids),
-    db.from("emergency_reports").select("school_id").in("status", ["open", "acknowledged"]).in("school_id", ids),
+    db.from("daily_student_attendance")
+      .select("school_id, status")
+      .eq("date", isoDate)
+      .in("school_id", ids.length ? ids : ["__none__"]),
+    db.from("emergency_reports")
+      .select("school_id")
+      .in("status", ["open", "acknowledged"])
+      .in("school_id", ids.length ? ids : ["__none__"]),
   ]);
+  if (attendanceRes.error) throw attendanceRes.error;
+  if (reportsRes.error)    throw reportsRes.error;
 
-  // Map school_id → students_present for today (a school may have one row/day).
-  const presentBySchool = {};
-  for (const r of attendanceRes.data || []) presentBySchool[r.school_id] = r.students_present || 0;
+  // تجميع الحالات لكل مدرسة من السجل الفردي
+  const aggBySchool = {};   // school_id → {present, late, absent, excused}
+  for (const r of attendanceRes.data || []) {
+    let a = aggBySchool[r.school_id];
+    if (!a) a = aggBySchool[r.school_id] = { present: 0, late: 0, absent: 0, excused: 0 };
+    if (r.status === "present")      a.present++;
+    else if (r.status === "late")    a.late++;
+    else if (r.status === "absent")  a.absent++;
+    else if (r.status === "excused") a.excused++;
+  }
   const activeReportSet = new Set((reportsRes.data || []).map((r) => r.school_id));
 
-  // Low-attendance threshold: schools below this ratio show as 'amber'.
-  const LOW_ATTENDANCE_THRESHOLD = 0.75;
+  // العتبتان (طريقة ٤)
+  const LOW_ATTENDANCE_THRESHOLD = 0.75;  // أقل من 75% حضور = أحمر
+  const LOW_COVERAGE_THRESHOLD   = 0.50;  // سُجّل أقل من 50% من الطلاب = تغطية ناقصة (أصفر)
 
   const result = {};
   for (const school of schoolsRes.data || []) {
+    const a = aggBySchool[school.id];
+
     if (activeReportSet.has(school.id)) {
-      result[school.id] = "red";                 // active emergency outranks everything
+      result[school.id] = { color: "red", reason: "emergency", attendanceRate: null, coverageRate: null, enrolled: 0 };
       continue;
     }
-    if (!(school.id in presentBySchool)) {
-      result[school.id] = "no_data";             // no attendance submitted today
+    if (!a) {
+      result[school.id] = { color: "no_data", reason: "no_data", attendanceRate: null, coverageRate: null, enrolled: 0 };
       continue;
     }
-    const total = school.total_students || 0;
-    if (total <= 0) {
-      result[school.id] = "no_data";             // can't compute a ratio → not "green" by default
-      continue;
+
+    const enrolled  = a.present + a.late + a.absent + a.excused;  // المسجّلون اليوم
+    const attending = a.present + a.late + a.excused;             // الحاضرون
+    const total     = school.total_students || 0;
+
+    const attendanceRate = enrolled > 0 ? attending / enrolled : 0;
+    const coverageRate   = total   > 0 ? enrolled  / total    : 0;
+
+    let color;
+    if (attendanceRate < LOW_ATTENDANCE_THRESHOLD) {
+      color = "red";                      // حضور منخفض فعلي
+    } else if (total > 0 && coverageRate < LOW_COVERAGE_THRESHOLD) {
+      color = "amber";                    // حضور جيد لكن تغطية ناقصة
+    } else {
+      color = "green";                    // حضور جيد + تغطية كافية (أو total غير معروف)
     }
-    const ratio = presentBySchool[school.id] / total;
-    result[school.id] = ratio < LOW_ATTENDANCE_THRESHOLD ? "amber" : "green";
+
+    result[school.id] = {
+      color,
+      reason: color === "red" ? "low_attendance" : (color === "amber" ? "low_coverage" : "ok"),
+      attendanceRate: Math.round(attendanceRate * 100),
+      coverageRate:   total > 0 ? Math.round(coverageRate * 100) : null,
+      enrolled,
+    };
   }
   return result;
 }
