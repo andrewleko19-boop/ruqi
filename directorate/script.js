@@ -32,9 +32,9 @@ const REFRESH_INTERVAL = 30;
 // Arabic labels for the map status colours returned by getSchoolsAttendanceStatus.
 const MAP_STATUS_LABELS = {
   green:   'طبيعي',
-  amber:   'حضور منخفض',
-  red:     'حرج — تقرير طارئ',
-  no_data: 'لا توجد بيانات',
+  amber:   'تغطية ناقصة',
+  red:     'حضور منخفض / طارئ',
+  no_data: 'لم تُسجّل اليوم',
 };
 
 // ══════════════════════════════════════════════
@@ -173,11 +173,10 @@ function makeMarkerIcon(color) {
 async function loadMap() {
   if (!currentUser?.directorateId) return;
   try {
-    const today    = todayLocalISO();
+    const today     = todayLocalISO();
     const statusMap = await getSchoolsAttendanceStatus(currentUser.directorateId, today);
-    // statusMap = { schoolId: "green"|"orange"|"red" }
+    // statusMap[schoolId] = { color, reason, attendanceRate, coverageRate, enrolled }
 
-    // نحتاج مواقع المدارس — نجلبها من db
     const { getSchools } = window.NSAMS_DB;
     const schools = await getSchools(currentUser.directorateId);
     if (!schools || schools.length === 0) return;
@@ -188,17 +187,30 @@ async function loadMap() {
     }
 
     for (const school of schools) {
-      const rawColor = statusMap[school.id] || 'no_data';
-      const color    = rawColor;
-      const icon     = makeMarkerIcon(color);
-      const lat      = school.lat;
-      const lng      = school.lng;
+      const info  = statusMap[school.id] || { color: 'no_data', reason: 'no_data', attendanceRate: null, coverageRate: null, enrolled: 0 };
+      const color = info.color;
+      const icon  = makeMarkerIcon(color);
+      const lat   = school.lat;
+      const lng   = school.lng;
       if (!lat || !lng) continue;
 
-      const statusLabel = MAP_STATUS_LABELS[rawColor] || rawColor;
+      const statusLabel = MAP_STATUS_LABELS[color] || color;
+
+      // سطر تفصيلي يوضّح سبب اللون (يحلّ غموض الأصفر)
+      let detailRow = '';
+      if (info.reason === 'ok' || info.reason === 'low_coverage' || info.reason === 'low_attendance') {
+        const attTxt = info.attendanceRate !== null ? `${info.attendanceRate}%` : '—';
+        const covTxt = info.coverageRate   !== null ? `${info.coverageRate}%`   : '—';
+        detailRow =
+          `<div class="popup-row"><span>نسبة الحضور</span><span>${attTxt}</span></div>` +
+          `<div class="popup-row"><span>نسبة التغطية</span><span>${covTxt}</span></div>` +
+          `<div class="popup-row"><span>طلاب مُسجّلون اليوم</span><span>${esc(String(info.enrolled))}</span></div>`;
+      }
+
       const popup = `
         <div class="popup-school-name">${esc(school.name)}</div>
-        <div class="popup-row"><span>الحالة</span><span>${esc(statusLabel)}</span></div>`;
+        <div class="popup-row"><span>الحالة</span><span>${esc(statusLabel)}</span></div>
+        ${detailRow}`;
 
       if (markersLayer[school.id]) {
         markersLayer[school.id].setIcon(icon);
