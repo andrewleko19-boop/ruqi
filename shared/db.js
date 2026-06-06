@@ -23,6 +23,7 @@ export { db as supabase };
 const QUEUE_ATTENDANCE = "nsams_pending_attendance";
 const QUEUE_REPORTS    = "nsams_pending_reports";
 const QUEUE_STU_ATT    = 'nsams_pending_stu_att';
+const QUEUE_GRADES     = 'nsams_pending_grades';
 
 function readQueue(key) {
   try { return JSON.parse(localStorage.getItem(key) || "[]"); }
@@ -1022,12 +1023,344 @@ async function rejectClassSubmission(submissionId, confirmedBy, notes) {
   if (error) throw error;
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// Grades & report cards (الدرجات والشهادة)
+// ═════════════════════════════════════════════════════════════════════════════
+// Data model (tables created in Supabase, see project SQL):
+//   subjects(id, school_id, grade, name, max_total, pass_mark, is_core_arabic,
+//            sort_order, is_active)
+//   subject_components(id, subject_id, name, max_mark, sort_order)
+//   student_grades(id, student_id, class_id, school_id, subject_id, component_id,
+//                  semester, academic_year, mark, recorded_by, recorded_at)
+//     UNIQUE(student_id, component_id, semester, academic_year)
+// A subject's semester mark = Σ component marks; the final % = average of the two
+// semesters. Per-subject pass = pass_mark (Arabic parts use 50 via is_core_arabic).
+
+// ─── School admin: subjects catalog ──────────────────────────────────────────
+async function getSchoolSubjects(schoolId, grade = null) {
+  let q = db
+    .from('subjects')
+    .select('id, school_id, grade, name, max_total, pass_mark, is_core_arabic, sort_order, is_active')
+    .eq('school_id', schoolId);
+  if (grade != null) q = q.eq('grade', grade);
+  const { data, error } = await q
+    .order('grade',      { ascending: true })
+    .order('sort_order', { ascending: true, nullsFirst: false })
+    .order('name',       { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function createSubject({ schoolId, grade, name, maxTotal = 100, passMark = 40, isCoreArabic = false, sortOrder = null }) {
+  const { data, error } = await db
+    .from('subjects')
+    .insert({
+      school_id:      schoolId,
+      grade,
+      name,
+      max_total:      maxTotal,
+      pass_mark:      passMark,
+      is_core_arabic: isCoreArabic,
+      sort_order:     sortOrder,
+      is_active:      true,
+    })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data.id;
+}
+
+async function updateSubject(id, patch) {
+  const row = {};
+  if (patch.name         !== undefined) row.name           = patch.name;
+  if (patch.maxTotal     !== undefined) row.max_total       = patch.maxTotal;
+  if (patch.passMark     !== undefined) row.pass_mark       = patch.passMark;
+  if (patch.isCoreArabic !== undefined) row.is_core_arabic  = patch.isCoreArabic;
+  if (patch.sortOrder    !== undefined) row.sort_order      = patch.sortOrder;
+  if (patch.isActive     !== undefined) row.is_active       = patch.isActive;
+  const { error } = await db.from('subjects').update(row).eq('id', id);
+  if (error) throw error;
+  return true;
+}
+
+async function deleteSubject(id) {
+  const { error } = await db.from('subjects').delete().eq('id', id);
+  if (error) throw error;
+  return true;
+}
+
+async function getSubjectComponents(subjectId) {
+  const { data, error } = await db
+    .from('subject_components')
+    .select('id, subject_id, name, max_mark, sort_order')
+    .eq('subject_id', subjectId)
+    .order('sort_order', { ascending: true, nullsFirst: false })
+    .order('name',       { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+// Replace a subject's component set with the given list (full overwrite).
+// components: [{ name, maxMark }]. Existing rows are deleted then re-inserted —
+// simplest correct approach for an admin editing a short list.
+async function setSubjectComponents(subjectId, components) {
+  const { error: delErr } = await db
+    .from('subject_components')
+    .delete()
+    .eq('subject_id', subjectId);
+  if (delErr) throw delErr;
+
+  const rows = (components ?? [])
+    .filter(c => c.name && c.name.trim())
+    .map((c, i) => ({
+      subject_id: subjectId,
+      name:       c.name.trim(),
+      max_mark:   Number(c.maxMark) || 0,
+      sort_order: i,
+    }));
+  if (rows.length === 0) return [];
+
+  const { data, error } = await db
+    .from('subject_components')
+    .insert(rows)
+    .select('id, subject_id, name, max_mark, sort_order');
+  if (error) throw error;
+  return data ?? [];
+}
+
+// ─── Teacher: subjects gradable in a class ───────────────────────────────────
+// Returns active subjects defined for the class's grade, each with its
+// components. Writes are still restricted by RLS to classes the teacher is
+// assigned to. We surface all of the grade's subjects (the teacher picks which
+// to grade); the teacher's class_teacher.subject text, when set, is matched so
+// the UI can highlight their own subject first.
+async function getClassGradeSubjects(classId) {
+  const { data: cls, error: clsErr } = await db
+    .from('classes')
+    .select('id, grade, section, name, school_id')
+    .eq('id', classId)
+    .single();
+  if (clsErr) throw clsErr;
+
+  const subjects = await getSchoolSubjects(cls.school_id, cls.grade);
+  const active   = subjects.filter(s => s.is_active);
+
+  const withComponents = await Promise.all(
+    active.map(async (s) => ({ ...s, components: await getSubjectComponents(s.id) }))
+  );
+  return { class: cls, subjects: withComponents };
+}
+
+// ─── Teacher: load existing grades for a class + subject + semester ───────────
+// Returns { [student_id]: { [component_id]: mark } }.
+async function getClassGrades(classId, subjectId, semester) {
+  const academicYear = getAcademicYear();
+  const { data, error } = await db
+    .from('student_grades')
+    .select('student_id, component_id, mark')
+    .eq('class_id',      classId)
+    .eq('subject_id',    subjectId)
+    .eq('semester',      semester)
+    .eq('academic_year', academicYear);
+  if (error) throw error;
+
+  const map = {};
+  for (const row of data ?? []) {
+    (map[row.student_id] ||= {})[row.component_id] = row.mark;
+  }
+  return map;
+}
+
+// ─── Grades offline queue ────────────────────────────────────────────────────
+function getPendingStudentGrades() {
+  return readQueue(QUEUE_GRADES).filter(r => !r.synced);
+}
+
+function markStudentGradesSynced(localId) {
+  const queue = readQueue(QUEUE_GRADES).map(r =>
+    r.localId === localId ? { ...r, synced: true } : r
+  );
+  writeQueue(QUEUE_GRADES, queue);
+}
+
+// Core sync — used both online (direct) and by syncPendingV2.
+async function syncStudentGradesRecord(payload) {
+  const { records, classId, schoolId, subjectId, semester, academicYear, teacherId } = payload;
+
+  const rows = records.map(r => ({
+    student_id:    r.studentId,
+    class_id:      classId,
+    school_id:     schoolId,
+    subject_id:    subjectId,
+    component_id:  r.componentId,
+    semester,
+    academic_year: academicYear,
+    mark:          r.mark,
+    recorded_by:   teacherId,
+    recorded_at:   new Date().toISOString(),
+  }));
+  if (rows.length === 0) return true;
+
+  const { error } = await db
+    .from('student_grades')
+    .upsert(rows, {
+      onConflict: 'student_id,component_id,semester,academic_year',
+      ignoreDuplicates: false,
+    });
+  if (error) throw error;
+  return true;
+}
+
+// Save a class+subject+semester's grades. records: [{ studentId, componentId, mark }].
+async function saveStudentGrades({ records, classId, schoolId, subjectId, semester, teacherId }) {
+  const localId      = generateLocalId();
+  const academicYear = getAcademicYear();
+  const payload = {
+    localId, records, classId, schoolId, subjectId, semester, academicYear, teacherId,
+    synced: false, createdAt: new Date().toISOString(),
+  };
+
+  if (!isOnline()) {
+    const queue = readQueue(QUEUE_GRADES);
+    queue.push(payload);
+    writeQueue(QUEUE_GRADES, queue);
+    return { success: true, localId, synced: false };
+  }
+
+  try {
+    await syncStudentGradesRecord(payload);
+    return { success: true, localId, synced: true };
+  } catch (err) {
+    const queue = readQueue(QUEUE_GRADES);
+    queue.push(payload);
+    writeQueue(QUEUE_GRADES, queue);
+    console.warn('[NSAMS] saveStudentGrades: falling back to queue', err);
+    return { success: true, localId, synced: false };
+  }
+}
+
+// ─── Report-card result rule ─────────────────────────────────────────────────
+// Decides the year result from each subject's pass/fail flags.
+// PRIMARY (ابتدائي), confirmed by the principal:
+//   • Arabic = two subjects (is_core_arabic), each pass ≥ 50%.
+//   • Other subjects pass ≥ 40%.
+//   • FAIL the year (راسب) if Arabic is failed OR two+ non-Arabic subjects fail.
+//   • Exactly one non-Arabic fail (Arabic passed) → مكمّل.
+//   • Otherwise → ناجح.
+// NOTE: rules for إعدادي/ثانوي and the full إكمال details are still pending from
+// the user; non-primary stages use a provisional rule until then.
+function computeYearResult(subjectResults, stage = 'primary') {
+  const arabicFailed = subjectResults.some(s => s.isCoreArabic && s.passed === false);
+  const otherFailed  = subjectResults.filter(s => !s.isCoreArabic && s.passed === false).length;
+
+  if (stage === 'primary') {
+    if (arabicFailed || otherFailed >= 2) return 'راسب';
+    if (otherFailed === 1)                return 'مكمّل';
+    return 'ناجح';
+  }
+  // Provisional (pending إعدادي/ثانوي rules from the user):
+  const totalFailed = subjectResults.filter(s => s.passed === false).length;
+  if (totalFailed === 0) return 'ناجح';
+  if (totalFailed <= 2)  return 'مكمّل';
+  return 'راسب';
+}
+
+function stageForGrade(grade) {
+  if (grade <= 6)  return 'primary';     // ابتدائي
+  if (grade <= 9)  return 'preparatory'; // إعدادي
+  return 'secondary';                    // ثانوي
+}
+
+// ─── Report cards for a whole class ──────────────────────────────────────────
+// Computes, per student, each subject's semester marks, final %, pass flag, plus
+// the overall year result. Returns { class, students:[{ student, subjects:[…],
+// finalPercent, result }] }. Computed client-side (like getClassAbsenceSummary)
+// so it runs under the school_admin read policy.
+async function getClassReportCards(classId, academicYear = getAcademicYear()) {
+  const { data: cls, error: clsErr } = await db
+    .from('classes')
+    .select('id, grade, section, name, school_id')
+    .eq('id', classId)
+    .single();
+  if (clsErr) throw clsErr;
+
+  const stage = stageForGrade(cls.grade);
+
+  const [students, subjectsRaw, gradesRes] = await Promise.all([
+    getClassStudents(classId),
+    getSchoolSubjects(cls.school_id, cls.grade),
+    db.from('student_grades')
+      .select('student_id, subject_id, component_id, semester, mark')
+      .eq('class_id',      classId)
+      .eq('academic_year', academicYear),
+  ]);
+  if (gradesRes.error) throw gradesRes.error;
+
+  const subjects = subjectsRaw.filter(s => s.is_active);
+
+  // grades[studentId][subjectId][semester] = Σ component marks
+  const grades = {};
+  for (const r of gradesRes.data ?? []) {
+    const byStu  = grades[r.student_id]  ||= {};
+    const bySub  = byStu[r.subject_id]   ||= {};
+    bySub[r.semester] = (bySub[r.semester] || 0) + Number(r.mark || 0);
+  }
+
+  const cards = students.map(stu => {
+    const stuGrades = grades[stu.id] || {};
+    const subjResults = subjects.map(sub => {
+      const sem  = stuGrades[sub.id] || {};
+      const s1   = sem[1];
+      const s2   = sem[2];
+      const present = [s1, s2].filter(v => v != null);
+      const finalMark = present.length
+        ? present.reduce((a, b) => a + b, 0) / present.length
+        : null;
+      const maxTotal  = Number(sub.max_total) || 100;
+      const percent   = finalMark == null ? null : (finalMark / maxTotal) * 100;
+      const passed    = percent == null ? null : percent >= Number(sub.pass_mark);
+      return {
+        subjectId:    sub.id,
+        name:         sub.name,
+        isCoreArabic: !!sub.is_core_arabic,
+        maxTotal,
+        passMark:     Number(sub.pass_mark),
+        sem1:         s1 ?? null,
+        sem2:         s2 ?? null,
+        finalMark,
+        percent,
+        passed,
+      };
+    });
+
+    const graded = subjResults.filter(s => s.percent != null);
+    const finalPercent = graded.length
+      ? graded.reduce((a, s) => a + s.percent, 0) / graded.length
+      : null;
+    // Only declare a year result once every subject has a mark; otherwise it's
+    // an in-progress card (e.g. mid-year, only the first semester entered).
+    const complete = subjResults.length > 0 && subjResults.every(s => s.percent != null);
+    const result   = complete ? computeYearResult(subjResults, stage) : null;
+
+    return { student: stu, subjects: subjResults, finalPercent, result, complete };
+  });
+
+  return { class: cls, stage, academicYear, students: cards };
+}
+
+async function getStudentReportCard(classId, studentId, academicYear = getAcademicYear()) {
+  const all = await getClassReportCards(classId, academicYear);
+  const card = all.students.find(c => c.student.id === studentId) || null;
+  return card ? { class: all.class, stage: all.stage, academicYear: all.academicYear, ...card } : null;
+}
+
 // ─── Sync ─────────────────────────────────────────────────────────────────────
 async function syncPendingV2() {
   const results = {
     attendance: { synced: 0, failed: 0 },
     reports:    { synced: 0, failed: 0 },
     studentAtt: { synced: 0, failed: 0 },
+    grades:     { synced: 0, failed: 0 },
   };
 
   for (const record of getPendingAttendance()) {
@@ -1052,6 +1385,14 @@ async function syncPendingV2() {
       markStudentAttSynced(payload.localId);
       results.studentAtt.synced++;
     } catch { results.studentAtt.failed++; }
+  }
+
+  for (const payload of getPendingStudentGrades()) {
+    try {
+      await syncStudentGradesRecord(payload);
+      markStudentGradesSynced(payload.localId);
+      results.grades.synced++;
+    } catch { results.grades.failed++; }
   }
 
   return results;
@@ -1112,6 +1453,20 @@ window.NSAMS_DB = {
   getSchoolDailySummary,
   confirmClassSubmission,
   rejectClassSubmission,
+
+  // Grades & report cards
+  getSchoolSubjects,
+  createSubject,
+  updateSubject,
+  deleteSubject,
+  getSubjectComponents,
+  setSubjectComponents,
+  getClassGradeSubjects,
+  getClassGrades,
+  saveStudentGrades,
+  getPendingStudentGrades,
+  getClassReportCards,
+  getStudentReportCard,
 
   // Sync
   syncPending: syncPendingV2,

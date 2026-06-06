@@ -19,10 +19,14 @@ const {
   getClassAttendanceForDate,
   saveStudentAttendance,
   getPendingStudentAttendance,
+  getPendingStudentGrades,
   syncPending,
   gradeNameAr,
   localDateISO,
   getClassAbsenceLog,
+  getClassGradeSubjects,
+  getClassGrades,
+  saveStudentGrades,
 } = window.NSAMS_DB;
 
 // ── App State ─────────────────────────────────────────────────────────────────
@@ -209,8 +213,9 @@ function showScreen(name) {
 }
 
 function showView(name) {
-  viewHome.hidden = name !== 'home';
-  viewAtt.hidden  = name !== 'att';
+  viewHome.hidden   = name !== 'home';
+  viewAtt.hidden    = name !== 'att';
+  if (viewGrades) viewGrades.hidden = name !== 'grades';
 }
 
 // ── Connectivity ──────────────────────────────────────────────────────────────
@@ -223,7 +228,8 @@ function updateConnUI() {
 }
 
 function refreshPendingBar() {
-  const n = getPendingStudentAttendance().length;
+  const n = getPendingStudentAttendance().length
+          + (typeof getPendingStudentGrades === 'function' ? getPendingStudentGrades().length : 0);
   if (n > 0) {
     pendingText.textContent = `${n} كشف في انتظار المزامنة`;
     show(pendingBar);
@@ -246,7 +252,8 @@ async function doSync() {
     const result = await syncPending();
     const total  = (result.studentAtt?.synced ?? 0)
                  + (result.attendance?.synced ?? 0)
-                 + (result.reports?.synced    ?? 0);
+                 + (result.reports?.synced    ?? 0)
+                 + (result.grades?.synced     ?? 0);
     if (total > 0) toast(`تمت مزامنة ${total} سجل بنجاح`, 'success');
     refreshPendingBar();
   } catch (err) {
@@ -398,7 +405,10 @@ function buildClassCard(cls, submission) {
     </div>
   `;
 
-  card.addEventListener('click', () => openAttendanceView(cls));
+  card.addEventListener('click', () => {
+    if (homeMode === 'grades') openGradesView(cls);
+    else                       openAttendanceView(cls);
+  });
   return card;
 }
 
@@ -891,6 +901,322 @@ btnAbsenceLog.addEventListener('click', openAbsenceLog);
 btnAbslogClose.addEventListener('click', closeAbsenceLog);
 modalAbslog.addEventListener('click', (e) => {
   if (e.target === modalAbslog) closeAbsenceLog();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Grades (الدرجات)
+// ═══════════════════════════════════════════════════════════════════════════
+const viewGrades        = $('view-grades');
+const modeAttBtn        = $('mode-att');
+const modeGradesBtn     = $('mode-grades');
+const homeSectionTitle  = $('home-section-title');
+const btnGradesBack     = $('btn-grades-back');
+const gradesClassName   = $('grades-class-name');
+const gradesSubjectSel  = $('grades-subject');
+const gradesSemesterSel = $('grades-semester');
+const gradesLegend      = $('grades-legend');
+const gradesLoading     = $('grades-loading');
+const gradesList        = $('grades-list');
+const gradesEmpty       = $('grades-empty');
+const gradesEmptyText   = $('grades-empty-text');
+const gradesNoSubjects  = $('grades-no-subjects');
+const gradesFooter      = $('grades-footer');
+const btnSaveGrades     = $('btn-save-grades');
+const saveGradesLabel   = $('save-grades-label');
+const saveGradesSpinner = $('save-grades-spinner');
+
+// Home mode: 'att' (attendance) or 'grades'. Drives what a class card opens.
+let homeMode = 'att';
+
+// Grades view state
+const G = {
+  class:    null,   // active class (one of S.classes)
+  students: [],
+  subjects: [],     // [{ id, name, max_total, pass_mark, is_core_arabic, components:[{id,name,max_mark}] }]
+  semester: 1,
+  marks:    {},     // { [studentId]: { [componentId]: number|null } }
+  dirty:    false,
+};
+
+function setHomeMode(mode) {
+  homeMode = mode;
+  const grading = mode === 'grades';
+  modeAttBtn.classList.toggle('is-active', !grading);
+  modeGradesBtn.classList.toggle('is-active', grading);
+  modeAttBtn.setAttribute('aria-selected', String(!grading));
+  modeGradesBtn.setAttribute('aria-selected', String(grading));
+  homeSectionTitle.textContent = grading ? 'اختر صفاً لإدخال الدرجات' : 'صفوفي اليوم';
+}
+
+modeAttBtn.addEventListener('click', () => setHomeMode('att'));
+modeGradesBtn.addEventListener('click', () => setHomeMode('grades'));
+
+function currentSubject() {
+  return G.subjects.find(s => s.id === gradesSubjectSel.value) ?? null;
+}
+
+async function openGradesView(cls) {
+  G.class    = cls;
+  G.subjects = [];
+  G.marks    = {};
+  G.dirty    = false;
+
+  gradesClassName.textContent = cls.displayName;
+  showView('grades');
+
+  hide(gradesList);
+  hide(gradesEmpty);
+  hide(gradesNoSubjects);
+  hide(gradesLegend);
+  show(gradesFooter);
+  show(gradesLoading);
+
+  try {
+    const [{ subjects }, students] = await Promise.all([
+      getClassGradeSubjects(cls.id),
+      getClassStudents(cls.id),
+    ]);
+    G.subjects = subjects ?? [];
+    G.students = students ?? [];
+
+    hide(gradesLoading);
+
+    if (G.subjects.length === 0) {
+      hide(gradesFooter);
+      show(gradesNoSubjects);
+      return;
+    }
+    if (G.students.length === 0) {
+      hide(gradesFooter);
+      gradesEmptyText.textContent = 'لا يوجد طلاب في هذا الصف.';
+      show(gradesEmpty);
+      return;
+    }
+
+    // Populate the subject dropdown.
+    gradesSubjectSel.innerHTML = '';
+    for (const sub of G.subjects) {
+      const opt = document.createElement('option');
+      opt.value = sub.id;
+      opt.textContent = sub.name;
+      gradesSubjectSel.appendChild(opt);
+    }
+    gradesSemesterSel.value = String(G.semester);
+
+    await loadGradesForCurrent();
+  } catch (err) {
+    console.error('[NSAMS-T] openGradesView', err);
+    hide(gradesLoading);
+    hide(gradesFooter);
+    toast(err?.message ?? 'تعذّر تحميل المواد', 'error');
+  }
+}
+
+async function loadGradesForCurrent() {
+  const sub = currentSubject();
+  if (!sub) return;
+  G.semester = Number(gradesSemesterSel.value) || 1;
+  G.marks    = {};
+  G.dirty    = false;
+
+  show(gradesLoading);
+  hide(gradesList);
+
+  try {
+    const existing = await getClassGrades(G.class.id, sub.id, G.semester);
+    for (const stu of G.students) {
+      const row = existing[stu.id] || {};
+      G.marks[stu.id] = {};
+      for (const comp of sub.components) {
+        const v = row[comp.id];
+        G.marks[stu.id][comp.id] = (v == null) ? null : Number(v);
+      }
+    }
+  } catch (err) {
+    console.error('[NSAMS-T] getClassGrades', err);
+    toast(err?.message ?? 'تعذّر تحميل الدرجات', 'error');
+    for (const stu of G.students) {
+      G.marks[stu.id] = {};
+      for (const comp of sub.components) G.marks[stu.id][comp.id] = null;
+    }
+  }
+
+  hide(gradesLoading);
+  renderLegend(sub);
+  renderGradeRows(sub);
+}
+
+function renderLegend(sub) {
+  if (!sub.components || sub.components.length === 0) {
+    gradesLegend.innerHTML =
+      '<span class="gl-chip">لم تُعرّف مكوّنات لهذه المادة — تواصل مع المدير</span>';
+    show(gradesLegend);
+    return;
+  }
+  gradesLegend.innerHTML = sub.components
+    .map(c => `<span class="gl-chip">${escapeHtml(c.name)} (من ${escapeHtml(String(c.max_mark))})</span>`)
+    .join('') +
+    `<span class="gl-chip">المجموع من ${escapeHtml(String(sub.max_total))} · النجاح ≥ ${escapeHtml(String(sub.pass_mark))}٪</span>`;
+  show(gradesLegend);
+}
+
+function renderGradeRows(sub) {
+  gradesList.innerHTML = '';
+  if (!sub.components || sub.components.length === 0) {
+    hide(gradesList);
+    return;
+  }
+  G.students.forEach((stu, i) => {
+    gradesList.appendChild(buildGradeRow(stu, i + 1, sub));
+  });
+  show(gradesList);
+}
+
+function buildGradeRow(stu, num, sub) {
+  const li = document.createElement('li');
+  li.className  = 'grade-row';
+  li.dataset.id = stu.id;
+
+  const inputs = sub.components.map(comp => {
+    const v = G.marks[stu.id]?.[comp.id];
+    return `<input class="grade-input" type="number" inputmode="decimal"
+      min="0" max="${escapeHtml(String(comp.max_mark))}" step="0.5"
+      data-cid="${escapeHtml(comp.id)}"
+      aria-label="${escapeHtml(comp.name)} لـ ${escapeHtml(stu.full_name)}"
+      value="${v == null ? '' : escapeHtml(String(v))}" />`;
+  }).join('');
+
+  li.innerHTML = `
+    <span class="student-num">${num}</span>
+    <div class="student-name-wrap">
+      <div class="student-name">${escapeHtml(stu.full_name)}</div>
+    </div>
+    <div class="grade-inputs" data-sid="${escapeHtml(stu.id)}">${inputs}</div>
+    <span class="grade-total" data-total-for="${escapeHtml(stu.id)}"></span>
+  `;
+
+  // Initial total
+  setTimeout(() => updateRowTotal(li, stu.id, sub), 0);
+  return li;
+}
+
+function rowTotal(sid, sub) {
+  let sum = 0, any = false;
+  for (const comp of sub.components) {
+    const v = G.marks[sid]?.[comp.id];
+    if (v != null && Number.isFinite(v)) { sum += v; any = true; }
+  }
+  return { sum, any };
+}
+
+function updateRowTotal(row, sid, sub) {
+  const el = row.querySelector(`[data-total-for="${CSS.escape(sid)}"]`);
+  if (!el) return;
+  const { sum, any } = rowTotal(sid, sub);
+  if (!any) { el.textContent = '—'; el.classList.remove('fail'); return; }
+  const maxTotal = Number(sub.max_total) || 100;
+  const pct      = (sum / maxTotal) * 100;
+  el.textContent = String(Math.round(sum * 100) / 100);
+  el.classList.toggle('fail', pct < Number(sub.pass_mark));
+}
+
+// Input delegation: validate against the component max + keep state + live total.
+gradesList.addEventListener('input', (e) => {
+  const input = e.target.closest('.grade-input');
+  if (!input) return;
+  const wrap = input.closest('.grade-inputs');
+  const row  = input.closest('.grade-row');
+  const sid  = wrap.dataset.sid;
+  const cid  = input.dataset.cid;
+  const sub  = currentSubject();
+  if (!sub) return;
+
+  const raw = input.value.trim();
+  const max = Number(input.max);
+  if (raw === '') {
+    G.marks[sid][cid] = null;
+    input.classList.remove('invalid');
+  } else {
+    const n = Number(raw);
+    const valid = Number.isFinite(n) && n >= 0 && n <= max;
+    input.classList.toggle('invalid', !valid);
+    G.marks[sid][cid] = valid ? n : null;
+  }
+  G.dirty = true;
+  updateRowTotal(row, sid, sub);
+});
+
+// Subject / semester switching (warn on unsaved edits).
+async function switchGradeContext() {
+  if (G.dirty && !confirm('يوجد درجات غير محفوظة. هل تريد المتابعة وتجاهلها؟')) {
+    // revert the select to the loaded context
+    gradesSemesterSel.value = String(G.semester);
+    return;
+  }
+  await loadGradesForCurrent();
+}
+gradesSubjectSel.addEventListener('change', switchGradeContext);
+gradesSemesterSel.addEventListener('change', switchGradeContext);
+
+// Save
+btnSaveGrades.addEventListener('click', async () => {
+  const sub = currentSubject();
+  if (!sub) return;
+
+  if (gradesList.querySelector('.grade-input.invalid')) {
+    toast('توجد درجات غير صالحة (تتجاوز الحد الأقصى) — يرجى تصحيحها', 'error');
+    return;
+  }
+
+  const records = [];
+  for (const stu of G.students) {
+    for (const comp of sub.components) {
+      const v = G.marks[stu.id]?.[comp.id];
+      if (v != null && Number.isFinite(v)) {
+        records.push({ studentId: stu.id, componentId: comp.id, mark: v });
+      }
+    }
+  }
+
+  if (records.length === 0) {
+    toast('لم تُدخل أي درجات بعد', 'warning');
+    return;
+  }
+
+  btnSaveGrades.disabled   = true;
+  saveGradesLabel.hidden   = true;
+  saveGradesSpinner.hidden = false;
+
+  try {
+    const result = await saveStudentGrades({
+      records,
+      classId:   G.class.id,
+      schoolId:  G.class.schoolId,
+      subjectId: sub.id,
+      semester:  G.semester,
+      teacherId: S.user.user.id,
+    });
+    G.dirty = false;
+    if (result.synced) {
+      toast('تم حفظ الدرجات بنجاح', 'success');
+    } else {
+      toast('حُفظت الدرجات محلياً وستُرسل عند توفر الاتصال', 'warning', 5000);
+      refreshPendingBar();
+    }
+  } catch (err) {
+    console.error('[NSAMS-T] saveStudentGrades', err);
+    toast(err?.message ?? 'تعذّر حفظ الدرجات', 'error');
+  } finally {
+    btnSaveGrades.disabled   = false;
+    saveGradesLabel.hidden   = false;
+    saveGradesSpinner.hidden = true;
+  }
+});
+
+btnGradesBack.addEventListener('click', () => {
+  if (G.dirty && !confirm('يوجد درجات غير محفوظة. هل تريد الخروج وتجاهلها؟')) return;
+  G.class = null; G.students = []; G.subjects = []; G.marks = {}; G.dirty = false;
+  showView('home');
 });
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
