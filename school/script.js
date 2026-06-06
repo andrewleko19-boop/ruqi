@@ -814,6 +814,8 @@ const detailError        = el('detail-error');
 const detailContent      = el('detail-content');
 const detailStudents     = el('detail-students');
 const detailAbsence      = el('detail-absence');
+const detailDate         = el('detail-date');
+const btnPrintDetail     = el('btn-print-detail');
 
 // Ensure reject modal is hidden on page load
 hide(modalReject);
@@ -822,6 +824,11 @@ hide(modalReject);
 let _rejectSubmissionId = null;
 let _classBusy          = false;
 let _summaryByClass     = {};   // classId -> summary row (for the detail modal)
+// Class-detail modal state
+let _detailClassId  = null;
+let _detailStudents = [];
+let _detailMap      = {};
+let _detailDate     = null;
 
 // ── Load class summaries ──────────────────────────────────────────────────────
 async function loadClassSummaries() {
@@ -973,18 +980,35 @@ modalReject.addEventListener('click', (e) => { if (e.target === modalReject) clo
 const DET_STATUS_AR   = { present: 'حاضر', late: 'متأخر', absent: 'غائب', excused: 'بعذر' };
 const DET_STATUS_PILL = { present: 'det-pill-present', late: 'det-pill-late', absent: 'det-pill-absent', excused: 'det-pill-excused' };
 
-function openDetailModal(classId) {
-  const s = _summaryByClass[classId];
-  if (!s) return;
+function countsFromMap(map) {
+  const c = { present: 0, late: 0, absent: 0, excused: 0 };
+  for (const k in map) { const st = map[k].status; if (c[st] !== undefined) c[st]++; }
+  return c;
+}
 
-  detailTitle.textContent = s.displayName;
-  const st = s.stats || { present: 0, late: 0, absent: 0, excused: 0 };
+function renderDetailMeta(s, counts) {
+  const st = counts || s.stats || { present: 0, late: 0, absent: 0, excused: 0 };
   detailMeta.innerHTML =
     `<span class="det-chip">المعلّم: ${escapeHtml(s.teacherName || '—')}</span>` +
     `<span class="cstat-p det-chip">ح${st.present}</span>` +
     `<span class="cstat-l det-chip">ت${st.late}</span>` +
-    `<span class="cstat-a det-chip">غ${st.absent + st.excused}</span>` +
-    `<span class="det-chip">العدد: ${s.totalStudents ?? '—'}</span>`;
+    `<span class="cstat-a det-chip">غ${(st.absent || 0) + (st.excused || 0)}</span>` +
+    `<span class="det-chip">العدد: ${s.totalStudents ?? (_detailStudents.length || '—')}</span>`;
+}
+
+function openDetailModal(classId) {
+  const s = _summaryByClass[classId];
+  if (!s) return;
+
+  _detailClassId  = classId;
+  _detailStudents = [];
+  _detailMap      = {};
+  _detailDate     = todayISO();
+
+  detailTitle.textContent = s.displayName;
+  renderDetailMeta(s, null);                 // teacher + total now; counts after load
+  detailDate.value = todayISO();
+  detailDate.max   = todayISO();
 
   detailStudents.innerHTML = '';
   detailAbsence.innerHTML  = '';
@@ -1005,13 +1029,18 @@ function closeDetailModal() {
 async function loadDetail(classId) {
   const DB = window.NSAMS_DB;
   try {
-    const [students, todayMap, absMap] = await Promise.all([
+    const date = detailDate.value || todayISO();
+    const [students, dayMap, absMap] = await Promise.all([
       DB.getClassStudents(classId),
-      DB.getClassAttendanceForDate(classId, todayISO()),
+      DB.getClassAttendanceForDate(classId, date),
       DB.getClassAbsenceSummary(classId),
     ]);
-    renderDetailStudents(students, todayMap);
-    renderDetailAbsence(students, absMap);
+    _detailStudents = students || [];
+    _detailMap      = dayMap || {};
+    _detailDate     = date;
+    renderDetailStudents(_detailStudents, _detailMap);
+    renderDetailAbsence(_detailStudents, absMap);
+    renderDetailMeta(_summaryByClass[classId], countsFromMap(_detailMap));
     hide(detailLoading);
     show(detailContent);
   } catch (err) {
@@ -1023,6 +1052,22 @@ async function loadDetail(classId) {
     show(detailError);
   }
 }
+
+// Change the day → re-fetch attendance for that date (roster + cumulative stay).
+detailDate.addEventListener('change', async () => {
+  if (!_detailClassId) return;
+  const date = detailDate.value || todayISO();
+  try {
+    const map = await window.NSAMS_DB.getClassAttendanceForDate(_detailClassId, date);
+    _detailMap  = map || {};
+    _detailDate = date;
+    renderDetailStudents(_detailStudents, _detailMap);
+    renderDetailMeta(_summaryByClass[_detailClassId], countsFromMap(_detailMap));
+  } catch (err) {
+    console.error('[NSAMS] detail date change', err);
+    toast('تعذّر تحميل حضور هذا التاريخ', 'error');
+  }
+});
 
 function renderDetailStudents(students, todayMap) {
   if (!students || students.length === 0) {
@@ -1067,6 +1112,57 @@ function renderDetailAbsence(students, absMap) {
 
 btnCloseDetail.addEventListener('click', closeDetailModal);
 modalDetail.addEventListener('click', (e) => { if (e.target === modalDetail) closeDetailModal(); });
+
+// Export / PDF — open a clean printable sheet for the shown date.
+btnPrintDetail.addEventListener('click', printClassSheet);
+
+function printClassSheet() {
+  const s = _summaryByClass[_detailClassId];
+  if (!s) return;
+
+  const dateLabel  = _detailDate || todayISO();
+  const schoolName = S.school?.name || '';
+  const c = countsFromMap(_detailMap);
+
+  const rows = _detailStudents.map((stu, i) => {
+    const rec    = _detailMap[stu.id];
+    const status = rec?.status;
+    const label  = status ? DET_STATUS_AR[status] : 'لم يُسجّل';
+    const reason = rec?.reason ? escapeHtml(rec.reason) : '';
+    const seat   = stu.seat_number ?? (i + 1);
+    return `<tr><td>${seat}</td><td>${escapeHtml(stu.full_name)}</td><td>${label}</td><td>${reason}</td></tr>`;
+  }).join('');
+
+  const win = window.open('', '_blank');
+  if (!win) { toast('فعّل النوافذ المنبثقة لتتمكّن من التصدير', 'warning'); return; }
+
+  win.document.write(
+    '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">' +
+    '<title>كشف الحضور — ' + escapeHtml(s.displayName) + '</title>' +
+    '<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">' +
+    '<style>' +
+    "body{font-family:'Cairo',Arial,sans-serif;color:#0f172a;padding:24px;margin:0}" +
+    'h1{font-size:18px;margin:0 0 4px;color:#0B2B5E}' +
+    '.sub{color:#475569;font-size:13px;margin:2px 0}' +
+    '.sum{margin-top:10px;font-size:13px;font-weight:700}' +
+    'table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}' +
+    'th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:right}' +
+    'th{background:#0B2B5E;color:#fff}' +
+    'tr:nth-child(even) td{background:#f8fafc}' +
+    '@media print{@page{margin:14mm}}' +
+    '</style></head><body>' +
+    '<h1>' + escapeHtml(schoolName) + '</h1>' +
+    '<div class="sub">كشف الحضور — ' + escapeHtml(s.displayName) + '</div>' +
+    '<div class="sub">المعلّم: ' + escapeHtml(s.teacherName || '—') + ' &nbsp;·&nbsp; التاريخ: ' + dateLabel + '</div>' +
+    '<div class="sum">حاضر: ' + c.present + ' · متأخر: ' + c.late + ' · غائب: ' + c.absent + ' · بعذر: ' + c.excused + ' · العدد: ' + _detailStudents.length + '</div>' +
+    '<table><thead><tr><th>#</th><th>الاسم</th><th>الحالة</th><th>الملاحظة</th></tr></thead><tbody>' +
+    rows +
+    '</tbody></table>' +
+    '<scr' + 'ipt>window.onload=function(){setTimeout(function(){window.print()},400)}</scr' + 'ipt>' +
+    '</body></html>'
+  );
+  win.document.close();
+}
 
 btnConfirmReject.addEventListener('click', async () => {
   if (!_rejectSubmissionId) {  // ← فحص

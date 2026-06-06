@@ -320,7 +320,13 @@
           </div>
           <div id="detail-error" class="msg msg-error" hidden></div>
           <div id="detail-content" hidden>
-            <h4 class="det-section-title">حضور اليوم</h4>
+            <div class="det-day-hdr">
+              <h4 class="det-section-title">الحضور</h4>
+              <div class="det-day-tools">
+                <input type="date" id="detail-date" class="det-date" aria-label="اختر التاريخ" />
+                <button type="button" id="btn-print-detail" class="det-print">تصدير PDF</button>
+              </div>
+            </div>
             <div id="detail-students" class="det-list"></div>
             <h4 class="det-section-title">سجل الغياب (هذه السنة)</h4>
             <div id="detail-absence" class="det-list"></div>
@@ -689,6 +695,16 @@
 .det-pill-none    { background:#F1F5F9; color:#64748B; }
 .det-count { flex-shrink:0; font-weight:800; font-size:.8rem; color:#991B1B; }
 .det-empty { padding:14px 4px; color:#94A3B8; font-size:.82rem; text-align:center; }
+.det-day-hdr { display:flex; align-items:center; justify-content:space-between;
+  gap:10px; margin:16px 0 6px; flex-wrap:wrap; }
+.det-day-hdr .det-section-title { margin:0; }
+.det-day-tools { display:flex; align-items:center; gap:8px; }
+.det-date { font-family:inherit; font-size:.8rem; padding:5px 8px;
+  border:1px solid var(--clr-border,#CBD5E1); border-radius:6px; background:#fff; color:#0F172A; }
+.det-print { font-family:inherit; font-size:.78rem; font-weight:700; padding:6px 12px;
+  border-radius:6px; border:1px solid var(--clr-primary,#0B2B5E); background:transparent;
+  color:var(--clr-primary,#0B2B5E); cursor:pointer; }
+.det-print:hover { background:var(--clr-primary-dim, rgba(11,43,94,.08)); }
 
 /* overlay / sheet for reject modal */
 #modal-reject.overlay {
