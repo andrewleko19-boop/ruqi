@@ -103,6 +103,7 @@ function roleWords(secondary) {
     removeConfirm:   (n) => `إزالة الموجه "${n}" من هذا الصف؟`,
     removedToast:    'تمت إزالة الموجه من الصف',
     removeFail:      'تعذّر إزالة الموجه.',
+    noPermission:    'تعذّرت العملية: لا تملك صلاحية لتعديل إسناد الموجهين على قاعدة البيانات. راجع مسؤول النظام.',
     loadSubsErr:     'تعذّر تحميل كشوف الموجهين',
     loadAssignedErr: 'تعذّر تحميل موجهي الصف',
     loadListErr:     'تعذّر تحميل قائمة الموجهين',
@@ -128,6 +129,7 @@ function roleWords(secondary) {
     removeConfirm:   (n) => `إزالة المعلم "${n}" من هذا الصف؟`,
     removedToast:    'تمت إزالة المعلم من الصف',
     removeFail:      'تعذّر إزالة المعلم.',
+    noPermission:    'تعذّرت العملية: لا تملك صلاحية لتعديل إسناد المعلمين على قاعدة البيانات. راجع مسؤول النظام.',
     loadSubsErr:     'تعذّر تحميل كشوف المعلمين',
     loadAssignedErr: 'تعذّر تحميل معلمي الصف',
     loadListErr:     'تعذّر تحميل قائمة المعلمين',
@@ -1163,8 +1165,10 @@ btnAssignTeacher.addEventListener('click', async () => {
     // Unique-violation = teacher already on the class.
     if (err?.code === '23505') {
       showMngError(RW.alreadyOnClass);
+    } else if (err?.code === '42501') {
+      showMngError(RW.noPermission);
     } else {
-      showMngError(err?.message || RW.assignFail);
+      showMngError(RW.assignFail);
     }
   } finally {
     _mngBusy = false;
@@ -1196,7 +1200,9 @@ async function handleRemoveTeacher(classId, teacherId, name) {
     await Promise.all([loadAssignedTeachers(classId), loadAssignableTeachers(classId)]);
   } catch (err) {
     console.error('[NSAMS] removeTeacherFromClass', err);
-    showMngError(err?.message || RW.removeFail);
+    // 42501 = insufficient_privilege (RLS blocked the delete). Never surface the
+    // raw English Postgres message — always show an Arabic, user-facing string.
+    showMngError(err?.code === '42501' ? RW.noPermission : RW.removeFail);
   } finally {
     _mngBusy = false;
   }

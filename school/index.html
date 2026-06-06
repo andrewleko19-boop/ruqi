@@ -575,6 +575,7 @@
 /* ── Class submissions table ──────────────────────────── */
 .csub-row {
   display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap; row-gap: 8px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--clr-border-lt, #E2E8F0);
   font-size: .875rem;
@@ -612,7 +613,7 @@
 .csub-badge-confirmed { background:#D1FAE5; color:#065F46; border-color:#6EE7B7; }
 .csub-badge-rejected  { background:#FEE2E2; color:#991B1B; border-color:#FCA5A5; }
 
-.csub-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.csub-actions { display: flex; gap: 6px; flex-shrink: 0; margin-inline-start: auto; }
 
 .csub-btn-confirm {
   padding: 5px 10px; border-radius: 6px; font-size: .78rem; font-weight: 700;
