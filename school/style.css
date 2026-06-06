@@ -251,6 +251,7 @@ select.field-input option:disabled { color: var(--clr-text-3); }
 
 .input-wrap .input-icon {
   position: absolute;
+  width: 18px; height: 18px;
   right: 12px;
   color: var(--clr-text-3);
   pointer-events: none;
