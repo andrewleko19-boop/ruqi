@@ -153,6 +153,7 @@
     .card:nth-child(1) { animation-delay: 0.3s; }
     .card:nth-child(2) { animation-delay: 0.42s; }
     .card:nth-child(3) { animation-delay: 0.54s; }
+    .card:nth-child(4) { animation-delay: 0.66s; }
 
     /* Top accent bar */
     .card::before {
@@ -277,6 +278,7 @@
     .badge-school      { background: rgba(47, 128, 237, 0.12); color: #64b0ff; border: 1px solid rgba(47, 128, 237, 0.2); }
     .badge-directorate { background: rgba(240, 180, 41, 0.1);  color: #f0c84a; border: 1px solid rgba(240, 180, 41, 0.2); }
     .badge-ministry    { background: rgba(72, 199, 142, 0.1);  color: #5dd4a3; border: 1px solid rgba(72, 199, 142, 0.2); }
+    .badge-teacher     { background: rgba(167, 139, 250, 0.12); color: #b9a4fb; border: 1px solid rgba(167, 139, 250, 0.22); }
 
     .badge-dot {
       width: 6px; height: 6px;
@@ -375,6 +377,31 @@
         <div class="card-title">بوابة المدرسة</div>
         <div class="card-desc">
           إدارة بيانات الطلاب والغيابات والدرجات وتقارير الأداء على مستوى المدرسة.
+        </div>
+      </div>
+      <span class="card-cta">
+        دخول إلى البوابة
+        <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </span>
+    </a>
+
+    <!-- Teacher -->
+    <a href="./teacher/" class="card">
+      <div class="badge badge-teacher">
+        <span class="badge-dot"></span>
+        المعلم
+      </div>
+      <div class="card-icon">
+        <svg viewBox="0 0 24 24">
+          <rect x="6" y="4" width="12" height="17" rx="2"/>
+          <path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/>
+          <polyline points="9 13 11 15 15 11"/>
+        </svg>
+      </div>
+      <div class="card-body">
+        <div class="card-title">بوابة المعلم</div>
+        <div class="card-desc">
+          تسجيل حضور وغياب طلاب الصف يومياً، يعمل دون اتصال ويُزامن تلقائياً عند عودة الشبكة.
         </div>
       </div>
       <span class="card-cta">
