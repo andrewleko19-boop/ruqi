@@ -860,8 +860,10 @@ async function loadClassSummaries() {
     show(clasSubList);
 
     // Auto-populate aggregate student counts from teacher data
-    const totalPresent = summaries.reduce((a, s) => a + s.stats.present + s.stats.late, 0);
-    const totalAbsent  = summaries.reduce((a, s) => a + s.stats.absent  + s.stats.excused, 0);
+    // Excused (بعذر) counts as attending, NOT absent — matches the system-wide
+    // convention (directorate/ministry use attending = present + late + excused).
+    const totalPresent = summaries.reduce((a, s) => a + s.stats.present + s.stats.late + s.stats.excused, 0);
+    const totalAbsent  = summaries.reduce((a, s) => a + s.stats.absent, 0);
     if (totalPresent > 0 || totalAbsent > 0) {
       inStuPresent.value = totalPresent;
       inStuAbsent.value  = totalAbsent;
@@ -889,7 +891,8 @@ function buildClassRow(s) {
   const statsHtml = sub
     ? `<span class="cstat-p">ح${s.stats.present}</span>
        <span class="cstat-l">ت${s.stats.late}</span>
-       <span class="cstat-a">غ${s.stats.absent + s.stats.excused}</span>`
+       <span class="cstat-a">غ${s.stats.absent}</span>
+       <span class="cstat-e">ع${s.stats.excused}</span>`
     : `<span style="color:#CBD5E1">—</span>`;
 
   const actionsHtml = status === 'pending'
@@ -992,7 +995,8 @@ function renderDetailMeta(s, counts) {
     `<span class="det-chip">المعلّم: ${escapeHtml(s.teacherName || '—')}</span>` +
     `<span class="cstat-p det-chip">ح${st.present}</span>` +
     `<span class="cstat-l det-chip">ت${st.late}</span>` +
-    `<span class="cstat-a det-chip">غ${(st.absent || 0) + (st.excused || 0)}</span>` +
+    `<span class="cstat-a det-chip">غ${st.absent || 0}</span>` +
+    `<span class="cstat-e det-chip">ع${st.excused || 0}</span>` +
     `<span class="det-chip">العدد: ${s.totalStudents ?? (_detailStudents.length || '—')}</span>`;
 }
 
@@ -1114,15 +1118,35 @@ btnCloseDetail.addEventListener('click', closeDetailModal);
 modalDetail.addEventListener('click', (e) => { if (e.target === modalDetail) closeDetailModal(); });
 
 // Export / PDF — open a clean printable sheet for the shown date.
-btnPrintDetail.addEventListener('click', printClassSheet);
+// Open the window synchronously (popup-blocker friendly), then fill it async.
+btnPrintDetail.addEventListener('click', () => {
+  const win = window.open('', '_blank');
+  if (!win) { toast('فعّل النوافذ المنبثقة لتتمكّن من التصدير', 'warning'); return; }
+  printClassSheet(win);
+});
 
-function printClassSheet() {
+// Fetch the eagle mark as a data URI so it embeds in the PDF (works offline too).
+async function eagleDataUri() {
+  try {
+    const url = new URL('../icons/eagle-mark.png', location.href).href;
+    const blob = await (await fetch(url)).blob();
+    return await new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result);
+      fr.onerror = reject;
+      fr.readAsDataURL(blob);
+    });
+  } catch { return ''; }
+}
+
+async function printClassSheet(win) {
   const s = _summaryByClass[_detailClassId];
-  if (!s) return;
+  if (!s) { win.close(); return; }
 
   const dateLabel  = _detailDate || todayISO();
   const schoolName = S.school?.name || '';
   const c = countsFromMap(_detailMap);
+  const logo = await eagleDataUri();
 
   const rows = _detailStudents.map((stu, i) => {
     const rec    = _detailMap[stu.id];
@@ -1133,8 +1157,7 @@ function printClassSheet() {
     return `<tr><td>${seat}</td><td>${escapeHtml(stu.full_name)}</td><td>${label}</td><td>${reason}</td></tr>`;
   }).join('');
 
-  const win = window.open('', '_blank');
-  if (!win) { toast('فعّل النوافذ المنبثقة لتتمكّن من التصدير', 'warning'); return; }
+  const logoHtml = logo ? '<img class="logo" src="' + logo + '" alt="">' : '';
 
   win.document.write(
     '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">' +
@@ -1142,18 +1165,23 @@ function printClassSheet() {
     '<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">' +
     '<style>' +
     "body{font-family:'Cairo',Arial,sans-serif;color:#0f172a;padding:24px;margin:0}" +
-    'h1{font-size:18px;margin:0 0 4px;color:#0B2B5E}' +
+    '.head{text-align:center;margin-bottom:6px}' +
+    '.logo{width:90px;height:90px;object-fit:contain;display:block;margin:0 auto 8px}' +
+    'h1{font-size:19px;margin:0 0 2px;color:#0B2B5E}' +
     '.sub{color:#475569;font-size:13px;margin:2px 0}' +
-    '.sum{margin-top:10px;font-size:13px;font-weight:700}' +
+    '.sum{margin-top:10px;font-size:13px;font-weight:700;text-align:center}' +
     'table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}' +
     'th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:right}' +
     'th{background:#0B2B5E;color:#fff}' +
     'tr:nth-child(even) td{background:#f8fafc}' +
     '@media print{@page{margin:14mm}}' +
     '</style></head><body>' +
+    '<div class="head">' +
+    logoHtml +
     '<h1>' + escapeHtml(schoolName) + '</h1>' +
     '<div class="sub">كشف الحضور — ' + escapeHtml(s.displayName) + '</div>' +
     '<div class="sub">المعلّم: ' + escapeHtml(s.teacherName || '—') + ' &nbsp;·&nbsp; التاريخ: ' + dateLabel + '</div>' +
+    '</div>' +
     '<div class="sum">حاضر: ' + c.present + ' · متأخر: ' + c.late + ' · غائب: ' + c.absent + ' · بعذر: ' + c.excused + ' · العدد: ' + _detailStudents.length + '</div>' +
     '<table><thead><tr><th>#</th><th>الاسم</th><th>الحالة</th><th>الملاحظة</th></tr></thead><tbody>' +
     rows +
