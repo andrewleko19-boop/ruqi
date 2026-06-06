@@ -8,10 +8,10 @@ module.exports = {
       // 3 runs, take the median. Reduces variance from shared CI hardware.
       numberOfRuns: 3,
       settings: {
-        // Simulate a mid-tier phone — closer to the actual field devices
-        // (teachers / school staff on low-to-mid-range Android) than the
-        // default desktop preset would be.
-        preset: 'mobile',
+        // Mobile emulation is Lighthouse's DEFAULT form factor, so we don't set
+        // a `preset` — the only valid presets are 'desktop'/'perf'/'experimental'
+        // ('mobile' is not a valid value and aborts the run). Closest to the
+        // actual field devices (teachers/staff on low-to-mid-range Android).
         // Skip the "is this a 404?" audit since we only test the root URL.
         skipAudits: ['canonical']
       }
