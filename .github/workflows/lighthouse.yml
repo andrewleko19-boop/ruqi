@@ -1,0 +1,49 @@
+name: Lighthouse
+
+# Lighthouse runs on PRs to main only. We don't run it on every push because:
+#  1. It's slow (~90 seconds — boots a Chrome instance)
+#  2. Scores can fluctuate ±2 points between runs on shared CI hardware
+#  3. We want PR reviewers to see the score, not commit authors mid-iteration
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:  # manual trigger for ad-hoc audits
+
+jobs:
+  audit:
+    name: Performance audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dev tooling
+        run: npm ci --no-audit --no-fund
+
+      - name: Run Lighthouse CI
+        # @lhci/cli starts a static server, runs Lighthouse 3 times against
+        # http://localhost:8000, asserts the budgets in lighthouserc.cjs,
+        # uploads the report as a build artifact.
+        run: npx lhci autorun
+        env:
+          # Token is optional — without it, reports save as artifacts only.
+          # If you set up a GitHub App for lhci, paste the token in repo secrets.
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+      - name: Upload Lighthouse report
+        # Even without the GitHub App, you can download the HTML report
+        # from the workflow run page → Artifacts.
+        if: always()  # upload even if budgets failed — that's when you most want to see why
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-report
+          path: .lighthouseci/
+          retention-days: 14

@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate HTML / JS / versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dev tooling
+        run: npm ci --no-audit --no-fund
+
+      - name: JS syntax check (all pages + modules)
+        run: node tools/check-js-syntax.mjs
+
+      - name: HTML validation (all pages)
+        run: npm run check:html
+
+      - name: Cache-version check
+        run: node tools/check-versions.mjs
+
+      - name: Manifest sanity
+        run: node tools/check-manifest.mjs

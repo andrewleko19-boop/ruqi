@@ -1,0 +1,8 @@
+node_modules/
+.lighthouseci/
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
