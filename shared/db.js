@@ -712,6 +712,33 @@ async function getClassAbsenceLog(classId) {
   }));
 }
 
+// ─── School admin: cumulative absence summary for a class (this academic year) ─
+// Computed CLIENT-SIDE from daily_student_attendance instead of the teacher-only
+// get_class_absence_log RPC, so it runs under the dsa_read policy for a
+// school_admin. Returns a map: { [studentId]: { absent, excused } } (counts of
+// absent / excused days this academic year; 'present' and 'late' are ignored).
+async function getClassAbsenceSummary(classId) {
+  const startYear = getAcademicYear().split('-')[0];   // "2025-2026" -> "2025"
+  const startISO  = `${startYear}-09-01`;
+
+  const { data, error } = await db
+    .from('daily_student_attendance')
+    .select('student_id, status, date')
+    .eq('class_id', classId)
+    .gte('date', startISO);
+
+  if (error) throw error;
+
+  const map = {};
+  for (const row of data ?? []) {
+    if (row.status !== 'absent' && row.status !== 'excused') continue;
+    const e = map[row.student_id] || (map[row.student_id] = { absent: 0, excused: 0 });
+    if (row.status === 'absent')  e.absent++;
+    else                          e.excused++;
+  }
+  return map;
+}
+
 // ─── School admin: class ↔ teacher management ────────────────────────────────
 // All of these rely on the existing RLS policy school_admin_all_class_teacher
 // (FOR ALL, class_belongs_to_my_school) and the schools/classes read policies.
@@ -1070,6 +1097,7 @@ window.NSAMS_DB = {
   getClassAttendanceForDate,
   getClassAttendanceReport,
   getClassAbsenceLog,
+  getClassAbsenceSummary,
   // School-admin class/teacher management
   getSchoolClasses,
   getTeachersBySchool,

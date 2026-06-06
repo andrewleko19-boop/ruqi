@@ -300,6 +300,35 @@
       </div>
     </div>
 
+    <!-- Class detail modal (read-only — principal view) -->
+    <div id="modal-detail" class="overlay" hidden aria-modal="true" role="dialog">
+      <div class="sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-hdr">
+          <div class="sheet-title">
+            <svg class="icon"><use href="#ic-users"/></svg>
+            <span id="detail-title">تفاصيل الصف</span>
+          </div>
+          <button class="icon-btn" id="btn-close-detail" aria-label="إغلاق">
+            <svg class="icon"><use href="#ic-x"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body">
+          <div id="detail-meta" class="det-meta"></div>
+          <div id="detail-loading" class="det-loading" hidden>
+            <span class="spinner"></span> جارٍ التحميل…
+          </div>
+          <div id="detail-error" class="msg msg-error" hidden></div>
+          <div id="detail-content" hidden>
+            <h4 class="det-section-title">حضور اليوم</h4>
+            <div id="detail-students" class="det-list"></div>
+            <h4 class="det-section-title">سجل الغياب (هذه السنة)</h4>
+            <div id="detail-absence" class="det-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
 
     <!-- ── Attendance card ────────────────────────────────── -->
     <section class="card" id="att-card">
@@ -579,6 +608,7 @@
   padding: 12px 14px;
   border-bottom: 1px solid var(--clr-border-lt, #E2E8F0);
   font-size: .875rem;
+  cursor: pointer;
 }
 .csub-row:last-child { border-bottom: none; }
 
@@ -630,6 +660,35 @@
 }
 .csub-btn-reject:hover { background: #FEE2E2; }
 .csub-btn-reject:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── Class detail modal (read-only) ── */
+.det-meta { display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center;
+  font-size:.82rem; color:#475569; margin-bottom:14px; }
+.det-meta .det-chip { font-weight:700; }
+.det-loading { display:flex; align-items:center; gap:8px; justify-content:center;
+  padding:24px; color:#64748B; font-size:.85rem; }
+.det-section-title { font-size:.8rem; font-weight:800; color:var(--clr-primary,#0B2B5E);
+  margin:16px 0 6px; }
+.det-list { display:flex; flex-direction:column; }
+.det-row { display:flex; align-items:center; gap:10px; padding:9px 4px;
+  border-bottom:1px solid var(--clr-border-lt, #E2E8F0); font-size:.85rem; }
+.det-row:last-child { border-bottom:none; }
+.det-seat { min-width:26px; height:26px; border-radius:6px;
+  background:var(--clr-primary-dim, rgba(11,43,94,.1)); color:var(--clr-primary,#0B2B5E);
+  display:flex; align-items:center; justify-content:center; font-weight:800;
+  font-size:.72rem; flex-shrink:0; }
+.det-name { flex:1; min-width:0; font-weight:600; color:#0F172A;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.det-reason { font-size:.72rem; color:#94A3B8; flex-shrink:0; }
+.det-pill { flex-shrink:0; padding:2px 9px; border-radius:999px;
+  font-size:.72rem; font-weight:800; }
+.det-pill-present { background:#D1FAE5; color:#065F46; }
+.det-pill-late    { background:#FEF3C7; color:#92400E; }
+.det-pill-absent  { background:#FEE2E2; color:#991B1B; }
+.det-pill-excused { background:#E0E7FF; color:#3730A3; }
+.det-pill-none    { background:#F1F5F9; color:#64748B; }
+.det-count { flex-shrink:0; font-weight:800; font-size:.8rem; color:#991B1B; }
+.det-empty { padding:14px 4px; color:#94A3B8; font-size:.82rem; text-align:center; }
 
 /* overlay / sheet for reject modal */
 #modal-reject.overlay {

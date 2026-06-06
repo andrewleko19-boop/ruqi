@@ -804,12 +804,24 @@ const btnConfirmReject   = el('btn-confirm-reject');
 const rejectBtnLabel     = el('reject-btn-label');
 const rejectSpinner      = el('reject-spinner');
 
+// Class detail modal (read-only)
+const modalDetail        = el('modal-detail');
+const btnCloseDetail     = el('btn-close-detail');
+const detailTitle        = el('detail-title');
+const detailMeta         = el('detail-meta');
+const detailLoading      = el('detail-loading');
+const detailError        = el('detail-error');
+const detailContent      = el('detail-content');
+const detailStudents     = el('detail-students');
+const detailAbsence      = el('detail-absence');
+
 // Ensure reject modal is hidden on page load
 hide(modalReject);
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let _rejectSubmissionId = null;
 let _classBusy          = false;
+let _summaryByClass     = {};   // classId -> summary row (for the detail modal)
 
 // ── Load class summaries ──────────────────────────────────────────────────────
 async function loadClassSummaries() {
@@ -833,7 +845,11 @@ async function loadClassSummaries() {
     }
 
     clasSubList.innerHTML = '';
-    for (const s of summaries) clasSubList.appendChild(buildClassRow(s));
+    _summaryByClass = {};
+    for (const s of summaries) {
+      _summaryByClass[s.classId] = s;
+      clasSubList.appendChild(buildClassRow(s));
+    }
     show(clasSubList);
 
     // Auto-populate aggregate student counts from teacher data
@@ -878,6 +894,7 @@ function buildClassRow(s) {
 
   const div = document.createElement('div');
   div.className = 'csub-row';
+  div.dataset.classId = s.classId;
   div.innerHTML = `
     <div class="csub-grade">${s.grade}</div>
     <div class="csub-info">
@@ -895,8 +912,11 @@ function buildClassRow(s) {
 clasSubList.addEventListener('click', async (e) => {
   const confirmBtn = e.target.closest('.csub-btn-confirm');
   const rejectBtn  = e.target.closest('.csub-btn-reject');
-  if (confirmBtn) await handleConfirm(confirmBtn);
-  if (rejectBtn)  openRejectModal(rejectBtn.dataset.sid, rejectBtn.dataset.cname);
+  if (confirmBtn) { await handleConfirm(confirmBtn); return; }
+  if (rejectBtn)  { openRejectModal(rejectBtn.dataset.sid, rejectBtn.dataset.cname); return; }
+  // Otherwise: tapping the row opens the read-only class detail.
+  const row = e.target.closest('.csub-row');
+  if (row && row.dataset.classId) openDetailModal(row.dataset.classId);
 });
 
 async function handleConfirm(btn) {
@@ -948,6 +968,105 @@ function closeRejectModal() {
 
 btnCloseReject.addEventListener('click', closeRejectModal);
 modalReject.addEventListener('click', (e) => { if (e.target === modalReject) closeRejectModal(); });
+
+// ── Class detail modal (read-only — principal can view any class) ─────────────
+const DET_STATUS_AR   = { present: 'حاضر', late: 'متأخر', absent: 'غائب', excused: 'بعذر' };
+const DET_STATUS_PILL = { present: 'det-pill-present', late: 'det-pill-late', absent: 'det-pill-absent', excused: 'det-pill-excused' };
+
+function openDetailModal(classId) {
+  const s = _summaryByClass[classId];
+  if (!s) return;
+
+  detailTitle.textContent = s.displayName;
+  const st = s.stats || { present: 0, late: 0, absent: 0, excused: 0 };
+  detailMeta.innerHTML =
+    `<span class="det-chip">المعلّم: ${escapeHtml(s.teacherName || '—')}</span>` +
+    `<span class="cstat-p det-chip">ح${st.present}</span>` +
+    `<span class="cstat-l det-chip">ت${st.late}</span>` +
+    `<span class="cstat-a det-chip">غ${st.absent + st.excused}</span>` +
+    `<span class="det-chip">العدد: ${s.totalStudents ?? '—'}</span>`;
+
+  detailStudents.innerHTML = '';
+  detailAbsence.innerHTML  = '';
+  hide(detailContent);
+  hide(detailError);
+  show(detailLoading);
+  show(modalDetail);
+  document.body.style.overflow = 'hidden';
+
+  loadDetail(classId);
+}
+
+function closeDetailModal() {
+  hide(modalDetail);
+  document.body.style.overflow = '';
+}
+
+async function loadDetail(classId) {
+  const DB = window.NSAMS_DB;
+  try {
+    const [students, todayMap, absMap] = await Promise.all([
+      DB.getClassStudents(classId),
+      DB.getClassAttendanceForDate(classId, todayISO()),
+      DB.getClassAbsenceSummary(classId),
+    ]);
+    renderDetailStudents(students, todayMap);
+    renderDetailAbsence(students, absMap);
+    hide(detailLoading);
+    show(detailContent);
+  } catch (err) {
+    console.error('[NSAMS] loadDetail', err);
+    hide(detailLoading);
+    detailError.textContent = navigator.onLine
+      ? 'تعذّر تحميل تفاصيل الصف.'
+      : 'تفاصيل الصف تحتاج اتصالاً بالإنترنت.';
+    show(detailError);
+  }
+}
+
+function renderDetailStudents(students, todayMap) {
+  if (!students || students.length === 0) {
+    detailStudents.innerHTML = '<div class="det-empty">لا يوجد طلاب مسجلون في هذا الصف.</div>';
+    return;
+  }
+  detailStudents.innerHTML = students.map((stu, i) => {
+    const rec     = todayMap[stu.id];
+    const status  = rec?.status;
+    const pillCls = DET_STATUS_PILL[status] || 'det-pill-none';
+    const label   = status ? DET_STATUS_AR[status] : 'لم يُسجّل';
+    const reason  = rec?.reason ? `<span class="det-reason">${escapeHtml(rec.reason)}</span>` : '';
+    const seat    = stu.seat_number ?? (i + 1);
+    return `<div class="det-row">
+      <span class="det-seat">${seat}</span>
+      <span class="det-name">${escapeHtml(stu.full_name)}</span>
+      ${reason}
+      <span class="det-pill ${pillCls}">${label}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderDetailAbsence(students, absMap) {
+  const nameById = {};
+  for (const stu of students || []) nameById[stu.id] = stu.full_name;
+
+  const rows = Object.entries(absMap || {})
+    .map(([id, c]) => ({ name: nameById[id] || '—', absent: c.absent || 0, excused: c.excused || 0 }))
+    .filter(r => r.absent > 0 || r.excused > 0)
+    .sort((a, b) => (b.absent + b.excused) - (a.absent + a.excused));
+
+  if (rows.length === 0) {
+    detailAbsence.innerHTML = '<div class="det-empty">لا يوجد غياب مسجّل هذه السنة 🎉</div>';
+    return;
+  }
+  detailAbsence.innerHTML = rows.map(r => `<div class="det-row">
+    <span class="det-name">${escapeHtml(r.name)}</span>
+    <span class="det-reason">${r.excused ? `بعذر: ${r.excused}` : ''}</span>
+    <span class="det-count">غياب: ${r.absent}</span>
+  </div>`).join('');
+}
+
+btnCloseDetail.addEventListener('click', closeDetailModal);
+modalDetail.addEventListener('click', (e) => { if (e.target === modalDetail) closeDetailModal(); });
 
 btnConfirmReject.addEventListener('click', async () => {
   if (!_rejectSubmissionId) {  // ← فحص
