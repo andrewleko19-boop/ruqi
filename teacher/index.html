@@ -109,6 +109,14 @@
   <symbol id="ic-message-square" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
   </symbol>
+  <symbol id="ic-book"      viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+  </symbol>
+  <symbol id="ic-award"     viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="8" r="7"/>
+    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>
+  </symbol>
 </svg>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
@@ -216,7 +224,19 @@
   <!-- ── Home View: Class List ─────────────────────────────────────────────── -->
   <div id="view-home">
     <div class="page-body">
-      <p class="section-title">صفوفي اليوم</p>
+      <!-- Mode toggle: attendance vs grades -->
+      <div class="mode-tabs" role="tablist" aria-label="نوع العمل">
+        <button id="mode-att" class="mode-tab is-active" role="tab" aria-selected="true">
+          <svg class="icon icon-sm"><use href="#ic-clipboard"/></svg>
+          الحضور
+        </button>
+        <button id="mode-grades" class="mode-tab" role="tab" aria-selected="false">
+          <svg class="icon icon-sm"><use href="#ic-award"/></svg>
+          الدرجات
+        </button>
+      </div>
+
+      <p id="home-section-title" class="section-title">صفوفي اليوم</p>
 
       <!-- Loading skeletons -->
       <div id="classes-loading">
@@ -344,6 +364,71 @@
     </div>
 
   </div><!-- /view-att -->
+
+  <!-- ── Grades View: enter marks ──────────────────────────────────────────── -->
+  <div id="view-grades" hidden>
+
+    <header class="att-screen-header">
+      <button id="btn-grades-back" class="btn-back" aria-label="العودة">
+        <svg class="icon icon-sm"><use href="#ic-arrow-right"/></svg>
+        العودة
+      </button>
+      <div class="att-hdr-info">
+        <div id="grades-class-name" class="att-hdr-name">…</div>
+        <div id="grades-subtitle"   class="att-hdr-date">إدخال الدرجات</div>
+      </div>
+    </header>
+
+    <!-- Subject + semester pickers -->
+    <div class="grades-controls">
+      <div class="gc-field">
+        <label for="grades-subject">المادة</label>
+        <select id="grades-subject" class="gc-select"></select>
+      </div>
+      <div class="gc-field">
+        <label for="grades-semester">الفصل</label>
+        <select id="grades-semester" class="gc-select">
+          <option value="1">الفصل الأول</option>
+          <option value="2">الفصل الثاني</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Component header legend (max marks per component) -->
+    <div id="grades-legend" class="grades-legend" hidden></div>
+
+    <div id="grades-loading" style="padding:16px var(--page-px,16px)">
+      <div class="stu-skeleton" style="height:48px;border-radius:12px;margin-bottom:10px"></div>
+      <div class="stu-skeleton" style="height:48px;border-radius:12px;margin-bottom:10px"></div>
+      <div class="stu-skeleton" style="height:48px;border-radius:12px"></div>
+    </div>
+
+    <ul id="grades-list" class="students-list" hidden role="list" aria-label="درجات الطلاب"></ul>
+
+    <div id="grades-empty" hidden style="text-align:center;padding:48px 24px;color:var(--clr-text-3)">
+      <svg class="icon icon-2xl" style="color:var(--clr-border);margin-bottom:12px"><use href="#ic-award"/></svg>
+      <p id="grades-empty-text">لا يوجد طلاب في هذا الصف.</p>
+    </div>
+
+    <div id="grades-no-subjects" hidden style="text-align:center;padding:48px 24px;color:var(--clr-text-3)">
+      <svg class="icon icon-2xl" style="color:var(--clr-border);margin-bottom:12px"><use href="#ic-book"/></svg>
+      <p>لم تُعرّف مواد لهذا الصف بعد.</p>
+      <p style="margin-top:6px;font-size:.8rem">تواصل مع مدير المدرسة لإضافة مواد الصف.</p>
+    </div>
+
+    <div style="height:90px"></div>
+
+    <div id="grades-footer" class="att-footer">
+      <div class="att-footer-inner">
+        <button id="btn-save-grades" class="btn btn-primary" style="flex:1">
+          <svg class="icon icon-sm"><use href="#ic-check"/></svg>
+          <span id="save-grades-label">حفظ الدرجات</span>
+          <span class="spinner" id="save-grades-spinner" hidden></span>
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /view-grades -->
 
 </div><!-- /screen-app -->
 

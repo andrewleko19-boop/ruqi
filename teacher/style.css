@@ -627,3 +627,100 @@ ul { list-style: none; }
   background: var(--clr-bg); padding: 3px 10px; border-radius: var(--r-pill);
 }
 .abslog-sec-empty { font-size: .82rem; color: var(--clr-text-3); padding: 4px 6px; }
+/* ═══ Grades feature ═══════════════════════════════════════════════════════ */
+
+/* Home mode toggle: attendance vs grades */
+.mode-tabs {
+  display: flex; gap: 6px;
+  background: var(--clr-surface);
+  border: 1.5px solid var(--clr-border-lt);
+  border-radius: var(--r-md);
+  padding: 5px;
+  margin-bottom: 16px;
+}
+.mode-tab {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 10px 8px;
+  border-radius: var(--r-sm);
+  font-size: .9rem; font-weight: 700;
+  color: var(--clr-text-2);
+  background: transparent;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.mode-tab.is-active {
+  background: var(--clr-primary);
+  color: #fff;
+}
+
+/* Subject + semester pickers */
+.grades-controls {
+  display: flex; gap: 10px;
+  padding: 14px var(--page-px) 4px;
+}
+.gc-field { flex: 1; min-width: 0; }
+.gc-field label {
+  display: block;
+  font-size: .76rem; font-weight: 700; color: var(--clr-text-2);
+  margin-bottom: 5px;
+}
+.gc-select {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1.5px solid var(--clr-border);
+  border-radius: var(--r-sm);
+  background: var(--clr-surface);
+  font-family: inherit; font-size: .9rem; color: var(--clr-text-1);
+}
+.gc-select:focus {
+  outline: none;
+  border-color: var(--clr-primary);
+  box-shadow: 0 0 0 3px var(--clr-primary-dim);
+}
+
+/* Component legend under the pickers */
+.grades-legend {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 8px var(--page-px) 0;
+  font-size: .74rem; color: var(--clr-text-3);
+}
+.grades-legend .gl-chip {
+  background: var(--clr-bg);
+  border: 1px solid var(--clr-border-lt);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+/* A grade row: name + per-component inputs + total */
+.grade-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--clr-border-lt);
+  min-height: 56px;
+}
+.grade-row:last-child { border-bottom: none; }
+.grade-inputs {
+  display: flex; gap: 6px; flex-shrink: 0; align-items: center;
+}
+.grade-input {
+  width: 52px; height: 38px;
+  text-align: center;
+  border: 1.5px solid var(--clr-border);
+  border-radius: var(--r-sm);
+  font-family: inherit; font-size: .9rem; font-weight: 600;
+  color: var(--clr-text-1);
+}
+.grade-input:focus {
+  outline: none;
+  border-color: var(--clr-primary);
+  box-shadow: 0 0 0 3px var(--clr-primary-dim);
+}
+.grade-input.invalid {
+  border-color: var(--clr-danger);
+  box-shadow: 0 0 0 3px var(--clr-danger-bg);
+}
+.grade-total {
+  min-width: 46px; text-align: center; flex-shrink: 0;
+  font-size: .92rem; font-weight: 800; color: var(--clr-primary);
+}
+.grade-total.fail { color: var(--clr-danger); }
