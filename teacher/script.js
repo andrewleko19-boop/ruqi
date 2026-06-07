@@ -955,6 +955,16 @@ function currentSubject() {
   return G.subjects.find(s => s.id === gradesSubjectSel.value) ?? null;
 }
 
+// Map a Supabase error to a clear Arabic message. Permission errors (42501 /
+// "permission denied for table") mean the grades tables haven't been granted to
+// the app role yet — surface that instead of the raw English string.
+function gradesErr(err, fallback) {
+  if (err?.code === '42501' || /permission denied/i.test(err?.message || '')) {
+    return 'لا تملك صلاحية الوصول إلى بيانات الدرجات على قاعدة البيانات (راجع إعداد الصلاحيات).';
+  }
+  return fallback;
+}
+
 async function openGradesView(cls) {
   G.class    = cls;
   G.subjects = [];
@@ -1008,7 +1018,7 @@ async function openGradesView(cls) {
     console.error('[NSAMS-T] openGradesView', err);
     hide(gradesLoading);
     hide(gradesFooter);
-    toast(err?.message ?? 'تعذّر تحميل المواد', 'error');
+    toast(gradesErr(err, 'تعذّر تحميل المواد'), 'error');
   }
 }
 
@@ -1034,7 +1044,7 @@ async function loadGradesForCurrent() {
     }
   } catch (err) {
     console.error('[NSAMS-T] getClassGrades', err);
-    toast(err?.message ?? 'تعذّر تحميل الدرجات', 'error');
+    toast(gradesErr(err, 'تعذّر تحميل الدرجات'), 'error');
     for (const stu of G.students) {
       G.marks[stu.id] = {};
       for (const comp of sub.components) G.marks[stu.id][comp.id] = null;
@@ -1205,7 +1215,7 @@ btnSaveGrades.addEventListener('click', async () => {
     }
   } catch (err) {
     console.error('[NSAMS-T] saveStudentGrades', err);
-    toast(err?.message ?? 'تعذّر حفظ الدرجات', 'error');
+    toast(gradesErr(err, 'تعذّر حفظ الدرجات'), 'error');
   } finally {
     btnSaveGrades.disabled   = false;
     saveGradesLabel.hidden   = false;

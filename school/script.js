@@ -1682,6 +1682,15 @@ function gradeNameLabel(grade) {
   return (typeof NDB.gradeNameAr === 'function') ? `الصف ${NDB.gradeNameAr(grade)}` : gradeLabel(grade);
 }
 
+// Map a Supabase error to a clear Arabic message. 42501 / "permission denied
+// for table" means the grades tables haven't been granted to the app role yet.
+function gradesErr(err, fallback) {
+  if (err?.code === '42501' || /permission denied/i.test(err?.message || '')) {
+    return 'لا تملك صلاحية الوصول إلى بيانات الدرجات على قاعدة البيانات (راجع إعداد الصلاحيات).';
+  }
+  return fallback;
+}
+
 function initSubjectsTab() {
   if (!S.school?.id) return;
   subjGradeSelect.innerHTML = '';
@@ -1711,7 +1720,7 @@ async function loadSubjects() {
   } catch (err) {
     console.error('[NSAMS] loadSubjects', err);
     hide(subjLoading);
-    toast('تعذّر تحميل المواد', 'error');
+    toast(gradesErr(err, 'تعذّر تحميل المواد'), 'error');
   }
 }
 
@@ -1933,7 +1942,7 @@ async function loadReports(classId) {
   } catch (err) {
     console.error('[NSAMS] loadReports', err);
     hide(repLoading);
-    toast(err?.message ?? 'تعذّر تحميل النتائج', 'error');
+    toast(gradesErr(err, 'تعذّر تحميل النتائج'), 'error');
   }
 }
 
