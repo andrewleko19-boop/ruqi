@@ -693,17 +693,29 @@ ul { list-style: none; }
 
 /* A grade row: name + per-component inputs + total */
 .grade-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 14px;
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--clr-border-lt);
-  min-height: 56px;
 }
 .grade-row:last-child { border-bottom: none; }
+
+/* Head line: number + full name + running total */
+.grade-row-head { display: flex; align-items: center; gap: 10px; }
+.grade-row .student-name {
+  white-space: normal; overflow: visible; text-overflow: clip;
+  flex: 1; min-width: 0;
+}
+
+/* Inputs row: one labeled cell per component, wraps on narrow screens */
 .grade-inputs {
-  display: flex; gap: 6px; flex-shrink: 0; align-items: center;
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start;
+}
+.grade-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  width: 72px;
 }
 .grade-input {
-  width: 52px; height: 38px;
+  width: 100%; height: 38px;
   text-align: center;
   border: 1.5px solid var(--clr-border);
   border-radius: var(--r-sm);
@@ -719,8 +731,16 @@ ul { list-style: none; }
   border-color: var(--clr-danger);
   box-shadow: 0 0 0 3px var(--clr-danger-bg);
 }
+.grade-cell-lbl {
+  font-size: .68rem; line-height: 1.2; text-align: center;
+  color: var(--clr-text-3);
+}
+.grade-cell-lbl .gcl-max {
+  display: block; font-size: .62rem; color: var(--clr-text-3); opacity: .8;
+}
 .grade-total {
+  margin-inline-start: auto;
   min-width: 46px; text-align: center; flex-shrink: 0;
-  font-size: .92rem; font-weight: 800; color: var(--clr-primary);
+  font-size: .95rem; font-weight: 800; color: var(--clr-primary);
 }
 .grade-total.fail { color: var(--clr-danger); }

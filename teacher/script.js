@@ -1063,9 +1063,9 @@ function renderLegend(sub) {
     show(gradesLegend);
     return;
   }
-  gradesLegend.innerHTML = sub.components
-    .map(c => `<span class="gl-chip">${escapeHtml(c.name)} (من ${escapeHtml(String(c.max_mark))})</span>`)
-    .join('') +
+  // Per-component names now appear under each input box, so the legend only
+  // shows the subject summary (total + pass threshold).
+  gradesLegend.innerHTML =
     `<span class="gl-chip">المجموع من ${escapeHtml(String(sub.max_total))} · النجاح ≥ ${escapeHtml(String(sub.pass_mark))}٪</span>`;
   show(gradesLegend);
 }
@@ -1089,20 +1089,23 @@ function buildGradeRow(stu, num, sub) {
 
   const inputs = sub.components.map(comp => {
     const v = G.marks[stu.id]?.[comp.id];
-    return `<input class="grade-input" type="number" inputmode="decimal"
-      min="0" max="${escapeHtml(String(comp.max_mark))}" step="0.5"
-      data-cid="${escapeHtml(comp.id)}"
-      aria-label="${escapeHtml(comp.name)} لـ ${escapeHtml(stu.full_name)}"
-      value="${v == null ? '' : escapeHtml(String(v))}" />`;
+    return `<div class="grade-cell">
+      <input class="grade-input" type="number" inputmode="decimal"
+        min="0" max="${escapeHtml(String(comp.max_mark))}" step="0.5"
+        data-cid="${escapeHtml(comp.id)}"
+        aria-label="${escapeHtml(comp.name)} لـ ${escapeHtml(stu.full_name)}"
+        value="${v == null ? '' : escapeHtml(String(v))}" />
+      <span class="grade-cell-lbl">${escapeHtml(comp.name)}<span class="gcl-max">من ${escapeHtml(String(comp.max_mark))}</span></span>
+    </div>`;
   }).join('');
 
   li.innerHTML = `
-    <span class="student-num">${num}</span>
-    <div class="student-name-wrap">
-      <div class="student-name">${escapeHtml(stu.full_name)}</div>
+    <div class="grade-row-head">
+      <span class="student-num">${num}</span>
+      <span class="student-name">${escapeHtml(stu.full_name)}</span>
+      <span class="grade-total" data-total-for="${escapeHtml(stu.id)}"></span>
     </div>
     <div class="grade-inputs" data-sid="${escapeHtml(stu.id)}">${inputs}</div>
-    <span class="grade-total" data-total-for="${escapeHtml(stu.id)}"></span>
   `;
 
   // Initial total
