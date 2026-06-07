@@ -1962,15 +1962,19 @@ function buildReportRow(card, num) {
   li.className = 'rep-row';
   const b = resultBadge(card);
   li.innerHTML = `
-    <span class="student-num" style="min-width:24px;color:#94A3B8;font-weight:600">${num}</span>
-    <div class="rep-info">
-      <div class="rep-name">${escapeHtml(card.student.full_name)}</div>
+    <div class="rep-row-head">
+      <span class="student-num" style="min-width:24px;color:#94A3B8;font-weight:600">${num}</span>
+      <div class="rep-info">
+        <div class="rep-name">${escapeHtml(card.student.full_name)}</div>
+      </div>
     </div>
-    <span class="rep-pct">${card.finalPercent == null ? '—' : fmtNum(card.finalPercent) + '٪'}</span>
-    <span class="rep-badge ${b.cls}">${b.text}</span>
-    <button class="icon-btn-sm" data-act="print" aria-label="تصدير الشهادة">
-      <svg class="icon icon-sm"><use href="#ic-printer"/></svg>
-    </button>
+    <div class="rep-row-controls">
+      <span class="rep-pct">${card.finalPercent == null ? '—' : fmtNum(card.finalPercent) + '٪'}</span>
+      <span class="rep-badge ${b.cls}">${b.text}</span>
+      <button class="icon-btn-sm" data-act="print" aria-label="تصدير الشهادة">
+        <svg class="icon icon-sm"><use href="#ic-printer"/></svg>
+      </button>
+    </div>
   `;
   li.querySelector('[data-act="print"]').addEventListener('click', () => {
     const win = window.open('', '_blank');

@@ -908,6 +908,12 @@
   font-weight: 700; color: #0F172A;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* Report rows stack: full name on top, controls (%, badge, print) below */
+.rep-row { flex-direction: column; align-items: stretch; gap: 8px; }
+.rep-row-head { display: flex; align-items: center; gap: 10px; }
+.rep-row .rep-name { white-space: normal; overflow: visible; text-overflow: clip; }
+.rep-row-controls { display: flex; align-items: center; gap: 8px; }
+.rep-row-controls .icon-btn-sm { margin-inline-start: auto; }
 .subj-meta, .rep-meta { font-size: .75rem; color: #94A3B8; margin-top: 2px; }
 .subj-actions, .rep-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .subj-tag {
