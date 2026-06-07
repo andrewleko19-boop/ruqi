@@ -494,7 +494,27 @@
           <ul id="mng-assigned-list" class="mng-list" role="list"></ul>
           <p id="mng-assigned-empty" class="mng-empty" hidden>لا يوجد معلمون مرتبطون بهذا الصف بعد.</p>
 
-          <!-- Assign new -->
+          <!-- Assign supervisor (إعدادي/ثانوي only) — attendance only -->
+          <div id="mng-sup-section" hidden>
+            <div class="block-label" style="margin-top:16px">
+              <svg class="icon icon-sm"><use href="#ic-clipboard"/></svg>
+              <span>إسناد موجه جديد</span>
+            </div>
+            <div class="field-group">
+              <label for="mng-sup-select">الموجه</label>
+              <select id="mng-sup-select" class="field-input">
+                <option value="">— اختر موجهاً —</option>
+              </select>
+            </div>
+            <div id="mng-sup-error" class="msg msg-error" hidden></div>
+            <button type="button" class="btn btn-primary btn-full" id="btn-assign-supervisor">
+              <svg class="icon icon-sm"><use href="#ic-send"/></svg>
+              <span>تعيين موجه للصف</span>
+              <span class="spinner" id="assign-sup-spinner" hidden></span>
+            </button>
+          </div>
+
+          <!-- Assign new teacher -->
           <div class="block-label" style="margin-top:16px">
             <svg class="icon icon-sm"><use href="#ic-clipboard"/></svg>
             <span id="assign-new-label">إسناد معلم جديد</span>

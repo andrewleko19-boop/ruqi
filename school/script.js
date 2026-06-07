@@ -150,16 +150,14 @@ function applyRoleLabels() {
   set('manage-hint',       RW.manageHint);
   set('assigned-label',    RW.assignedLabel);
   set('mng-assigned-empty',RW.assignedEmpty);
-  set('assign-new-label',  RW.assignNew);
-  set('mng-teacher-label', RW.pickLabel);
-  set('assign-btn-label',  RW.assignBtn);
   set('reject-title',      RW.rejectTitle);
-  // The assignable-teachers placeholder (mirrors the rebuild in loadAssignableTeachers).
-  const ts = el('mng-teacher-select');
-  if (ts && ts.options[0]) {
-    ts.options[0].textContent = RW.pickPlaceholder;
-    if (window.CustomSelect) CustomSelect.refresh(ts);
-  }
+  // The teacher-assignment section always uses معلم vocabulary (HTML defaults);
+  // the موجه section is separate and only shown for إعدادي/ثانوي schools.
+  const supSection = el('mng-sup-section');
+  if (supSection) supSection.hidden = !isMiddleHigh();
+  // Role choices depend on the school type, not the grade number (إعدادي/ثانوي
+  // classes are numbered الأول/الثاني/الثالث which stageForGrade would misread).
+  populateRoleOptions();
 }
 
 /**
@@ -1261,6 +1259,10 @@ const mngRoleSelect     = el('mng-role-select');
 const mngSubjField      = el('mng-subj-field');
 const mngSubjPick       = el('mng-subj-pick');
 const mngSubjEmpty      = el('mng-subj-empty');
+const mngSupSelect      = el('mng-sup-select');
+const mngSupError       = el('mng-sup-error');
+const btnAssignSup      = el('btn-assign-supervisor');
+const assignSupSpinner  = el('assign-sup-spinner');
 const mngError          = el('mng-error');
 const btnAssignTeacher  = el('btn-assign-teacher');
 const assignBtnLabel    = el('assign-btn-label');
@@ -1301,6 +1303,8 @@ tabReports.addEventListener('click',    () => switchTab('reports'));
 
 function clearMngError() { mngError.hidden = true; mngError.textContent = ''; }
 function showMngError(msg) { mngError.textContent = msg; mngError.hidden = false; }
+function clearSupError() { mngSupError.hidden = true; mngSupError.textContent = ''; }
+function showSupError(msg) { mngSupError.textContent = msg; mngSupError.hidden = false; }
 
 // Populate the class dropdown from the admin's school.
 async function loadManageClasses() {
@@ -1338,18 +1342,22 @@ const ROLE_LABELS = {
   subject:    'أستاذ مادة (درجات فقط)',
 };
 
+function isMiddleHigh() {
+  return S.school?.type === 'middle_high';
+}
+
 function selectedClassGrade() {
   const opt = mngClassSelect.selectedOptions[0];
   const g = opt ? Number(opt.dataset.grade) : NaN;
   return Number.isFinite(g) ? g : null;
 }
 
-// Role choices depend on the stage: primary uses معلم الصف, إعدادي/ثانوي use موجه.
-function populateRoleOptions(grade) {
-  const stage = grade != null ? NDB.stageForGrade(grade) : 'primary';
-  const roles = stage === 'primary'
-    ? ['homeroom', 'subject']
-    : ['supervisor', 'subject'];
+// Role choices for the teacher (معلم) section depend on the SCHOOL type:
+// • primary (ابتدائي): معلم الصف (حضور + درجات) or أستاذ مادة (درجات فقط).
+// • middle_high (إعدادي/ثانوي): أستاذ مادة only — attendance is handled by the
+//   separate موجه section.
+function populateRoleOptions() {
+  const roles = isMiddleHigh() ? ['subject'] : ['homeroom', 'subject'];
   mngRoleSelect.innerHTML = '';
   for (const r of roles) {
     const opt = document.createElement('option');
@@ -1361,7 +1369,8 @@ function populateRoleOptions(grade) {
   updateSubjFieldVisibility();
 }
 
-// The subjects picker is irrelevant for supervisors (they grade nothing).
+// The subjects picker is irrelevant for supervisors (they grade nothing); the
+// teacher section never offers the supervisor role, so it stays visible.
 function updateSubjFieldVisibility() {
   mngSubjField.hidden = (mngRoleSelect.value === 'supervisor');
 }
@@ -1397,7 +1406,6 @@ mngClassSelect.addEventListener('change', async () => {
   }
   mngAssignedWrap.hidden = false;
   const grade = selectedClassGrade();
-  populateRoleOptions(grade);
   await Promise.all([
     loadAssignedTeachers(classId),
     loadAssignableTeachers(classId),
@@ -1447,25 +1455,36 @@ function buildAssignedRow(classId, t) {
   return li;
 }
 
-// Teachers in the school NOT yet on this class.
+// Fill one <select> with the teachers available for assignment.
+function fillAssignableSelect(sel, teachers, placeholder, noneLabel) {
+  sel.innerHTML = `<option value="">${placeholder}</option>`;
+  for (const t of teachers) {
+    const opt = document.createElement('option');
+    opt.value = t.id;
+    opt.textContent = t.fullName;
+    sel.appendChild(opt);
+  }
+  if (teachers.length === 0) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = noneLabel;
+    opt.disabled = true;
+    sel.appendChild(opt);
+  }
+  CustomSelect.refresh(sel);
+}
+
+// Teachers in the school NOT yet on this class — feeds the teacher picker, and
+// the موجه picker too (إعدادي/ثانوي), both drawing from the same pool.
 async function loadAssignableTeachers(classId) {
-  mngTeacherSelect.innerHTML = `<option value="">${RW.pickPlaceholder}</option>`;
   try {
     const teachers = await NDB.getTeachersBySchool(S.school.id, classId);
-    for (const t of teachers) {
-      const opt = document.createElement('option');
-      opt.value = t.id;
-      opt.textContent = t.fullName;
-      mngTeacherSelect.appendChild(opt);
+    fillAssignableSelect(mngTeacherSelect, teachers, '— اختر معلماً —',
+      'لا يوجد معلمون متاحون للإسناد');
+    if (isMiddleHigh()) {
+      fillAssignableSelect(mngSupSelect, teachers, '— اختر موجهاً —',
+        'لا يوجد موجهون متاحون للإسناد');
     }
-    if (teachers.length === 0) {
-      const opt = document.createElement('option');
-      opt.value = '';
-      opt.textContent = RW.noneAvailable;
-      opt.disabled = true;
-      mngTeacherSelect.appendChild(opt);
-    }
-    CustomSelect.refresh(mngTeacherSelect);
   } catch (err) {
     console.error('[NSAMS] loadAssignableTeachers', err);
     toast(RW.loadListErr, 'error');
@@ -1480,14 +1499,12 @@ btnAssignTeacher.addEventListener('click', async () => {
   const teacherId = mngTeacherSelect.value;
   const role      = mngRoleSelect.value || 'homeroom';
   if (!classId)   { showMngError('اختر صفاً أولاً.'); return; }
-  if (!teacherId) { showMngError(RW.pickToAssign); return; }
+  if (!teacherId) { showMngError('اختر معلماً للإسناد.'); return; }
   if (!navigator.onLine) { showMngError('الإسناد يحتاج اتصالاً بالإنترنت.'); return; }
 
-  // Subjects only matter for grade-entering roles; supervisors carry none.
-  const subjectIds = role === 'supervisor'
-    ? []
-    : Array.from(mngSubjPick.querySelectorAll('input:checked')).map(i => i.value);
-  if (role !== 'supervisor' && subjectIds.length === 0) {
+  // The teacher section never assigns a supervisor — subjects are required.
+  const subjectIds = Array.from(mngSubjPick.querySelectorAll('input:checked')).map(i => i.value);
+  if (subjectIds.length === 0) {
     showMngError('اختر مادة واحدة على الأقل لهذا الدور.');
     return;
   }
@@ -1500,23 +1517,57 @@ btnAssignTeacher.addEventListener('click', async () => {
     await NDB.assignTeacherToClass(classId, teacherId, { role, subjectIds });
     mngTeacherSelect.value = '';
     mngSubjPick.querySelectorAll('input:checked').forEach(i => { i.checked = false; });
-    toast(RW.assignedToast, 'success');
+    toast('تم تعيين المعلم للصف', 'success');
     await Promise.all([loadAssignedTeachers(classId), loadAssignableTeachers(classId)]);
   } catch (err) {
     console.error('[NSAMS] assignTeacherToClass', err);
     // Unique-violation = teacher already on the class.
     if (err?.code === '23505') {
-      showMngError(RW.alreadyOnClass);
+      showMngError('هذا المعلم مرتبط بالفعل بهذا الصف.');
     } else if (err?.code === '42501') {
       showMngError(RW.noPermission);
     } else {
-      showMngError(RW.assignFail);
+      showMngError('تعذّر تعيين المعلم.');
     }
   } finally {
     _mngBusy = false;
     btnAssignTeacher.disabled = false;
     assignBtnLabel.hidden = false;
     assignSpinner.hidden = true;
+  }
+});
+
+// Assign a supervisor (موجه) — attendance only, no subjects (إعدادي/ثانوي).
+btnAssignSup.addEventListener('click', async () => {
+  if (_mngBusy) return;
+  clearSupError();
+  const classId   = mngClassSelect.value;
+  const teacherId = mngSupSelect.value;
+  if (!classId)   { showSupError('اختر صفاً أولاً.'); return; }
+  if (!teacherId) { showSupError('اختر موجهاً للإسناد.'); return; }
+  if (!navigator.onLine) { showSupError('الإسناد يحتاج اتصالاً بالإنترنت.'); return; }
+
+  _mngBusy = true;
+  btnAssignSup.disabled = true;
+  assignSupSpinner.hidden = false;
+  try {
+    await NDB.assignTeacherToClass(classId, teacherId, { role: 'supervisor', subjectIds: [] });
+    mngSupSelect.value = '';
+    toast('تم تعيين الموجه للصف', 'success');
+    await Promise.all([loadAssignedTeachers(classId), loadAssignableTeachers(classId)]);
+  } catch (err) {
+    console.error('[NSAMS] assignSupervisor', err);
+    if (err?.code === '23505') {
+      showSupError('هذا الموجه مرتبط بالفعل بهذا الصف.');
+    } else if (err?.code === '42501') {
+      showSupError(RW.noPermission);
+    } else {
+      showSupError('تعذّر تعيين الموجه.');
+    }
+  } finally {
+    _mngBusy = false;
+    btnAssignSup.disabled = false;
+    assignSupSpinner.hidden = true;
   }
 });
 
@@ -2184,6 +2235,7 @@ async function printReportDoc(win, cards, term = 'year') {
 // Enhance the school-admin selects once the DOM is parsed.
 CustomSelect.enhance('mng-class-select');
 CustomSelect.enhance('mng-role-select');
+CustomSelect.enhance('mng-sup-select');
 CustomSelect.enhance('mng-teacher-select');
 CustomSelect.enhance('r-type');
 CustomSelect.enhance('subj-grade-select');
