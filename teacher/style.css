@@ -779,6 +779,17 @@ select.csel-native {
   padding: 3px 10px;
 }
 
+/* Read-only banner when viewing a subject that isn't the teacher's own */
+.grades-readonly {
+  display: flex; align-items: center; gap: 8px;
+  margin: 8px var(--page-px) 0;
+  padding: 9px 12px; border-radius: var(--r-sm);
+  background: #FEF3C7; border: 1px solid #FDE68A; color: #92400E;
+  font-size: .82rem; font-weight: 600;
+}
+.grades-readonly[hidden] { display: none; }
+.grade-input:disabled { background: var(--clr-bg); color: var(--clr-text-2); opacity: .8; cursor: not-allowed; }
+
 /* A grade row: name + per-component inputs + total */
 .grade-row {
   display: flex; flex-direction: column; align-items: stretch; gap: 8px;

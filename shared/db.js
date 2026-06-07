@@ -571,7 +571,7 @@ async function getTeacherClasses(teacherId) {
   const { data, error } = await db
     .from('class_teacher')
     .select(`
-      class_id,
+      class_id, role, subject_ids,
       classes:class_id (
         id, grade, section, school_id,
         schools:school_id ( name )
@@ -590,6 +590,8 @@ async function getTeacherClasses(teacherId) {
       section:     c.section,
       schoolId:    c.school_id,
       schoolName:  c.schools?.name ?? '',
+      role:        row.role ?? 'homeroom',
+      subjectIds:  Array.isArray(row.subject_ids) ? row.subject_ids : [],
       academicYear,
       displayName: `الصف ${gradeNameAr(c.grade)} / شعبة ${c.section}`,
     };
@@ -782,25 +784,44 @@ async function getTeachersBySchool(schoolId, excludeClassId = null) {
   return teachers;
 }
 
-// Teachers currently assigned to a class (this academic year).
+// Teachers currently assigned to a class (this academic year), each with their
+// role (homeroom/supervisor/subject) and the subjects they may grade.
 async function getClassTeachers(classId) {
   const year = getAcademicYear();
   const { data, error } = await db
     .from('class_teacher')
-    .select('id, teacher_id, subject, teacher:users!class_teacher_teacher_id_fkey(full_name)')
+    .select('id, teacher_id, role, subject_ids, teacher:users!class_teacher_teacher_id_fkey(full_name)')
     .eq('class_id', classId)
     .eq('academic_year', year);
   if (error) throw error;
-  return (data ?? []).map(r => ({
-    assignmentId: r.id,
-    teacherId:    r.teacher_id,
-    subject:      r.subject ?? null,
-    fullName:     r.teacher?.full_name ?? '—',
-  }));
+
+  // Resolve subject ids → names for display (subjects are per grade).
+  let nameById = {};
+  try {
+    const { data: cls } = await db
+      .from('classes').select('grade, school_id').eq('id', classId).single();
+    if (cls) {
+      const subs = await getSchoolSubjects(cls.school_id, cls.grade);
+      nameById = Object.fromEntries(subs.map(s => [s.id, s.name]));
+    }
+  } catch { /* names are best-effort */ }
+
+  return (data ?? []).map(r => {
+    const subjectIds = Array.isArray(r.subject_ids) ? r.subject_ids : [];
+    return {
+      assignmentId: r.id,
+      teacherId:    r.teacher_id,
+      role:         r.role ?? 'homeroom',
+      subjectIds,
+      subjectNames: subjectIds.map(id => nameById[id]).filter(Boolean),
+      fullName:     r.teacher?.full_name ?? '—',
+    };
+  });
 }
 
-// Assign a teacher to a class for the current academic year.
-async function assignTeacherToClass(classId, teacherId, subject = null) {
+// Assign a teacher to a class for the current academic year with a role and the
+// subjects they may grade (supervisors carry no subjects).
+async function assignTeacherToClass(classId, teacherId, { role = 'homeroom', subjectIds = [] } = {}) {
   const year = getAcademicYear();
   const { error } = await db
     .from('class_teacher')
@@ -808,7 +829,8 @@ async function assignTeacherToClass(classId, teacherId, subject = null) {
       class_id:      classId,
       teacher_id:    teacherId,
       academic_year: year,
-      subject:       subject || null,
+      role,
+      subject_ids:   role === 'supervisor' ? [] : (subjectIds || []),
     });
   if (error) throw error;
   return true;
@@ -1129,11 +1151,10 @@ async function setSubjectComponents(subjectId, components) {
 }
 
 // ─── Teacher: subjects gradable in a class ───────────────────────────────────
-// Returns active subjects defined for the class's grade, each with its
-// components. Writes are still restricted by RLS to classes the teacher is
-// assigned to. We surface all of the grade's subjects (the teacher picks which
-// to grade); the teacher's class_teacher.subject text, when set, is matched so
-// the UI can highlight their own subject first.
+// Returns ALL active subjects defined for the class's grade, each with its
+// components — the teacher can VIEW any subject's marks. Editing is limited to
+// the teacher's own subjects (class_teacher.subject_ids): the portal renders
+// the rest read-only, and RLS rejects writes to subjects they aren't assigned.
 async function getClassGradeSubjects(classId) {
   const { data: cls, error: clsErr } = await db
     .from('classes')
@@ -1442,6 +1463,7 @@ window.NSAMS_DB = {
   getAcademicYear,
   localDateISO,
   gradeNameAr,
+  stageForGrade,
   getTeacherClasses,
   getClassStudents,
   getClassSubmissionStatus,

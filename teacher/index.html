@@ -397,6 +397,12 @@
     <!-- Component header legend (max marks per component) -->
     <div id="grades-legend" class="grades-legend" hidden></div>
 
+    <!-- Shown when the picked subject is not the teacher's own (read-only view) -->
+    <div id="grades-readonly" class="grades-readonly" hidden>
+      <svg class="icon icon-sm"><use href="#ic-eye"/></svg>
+      <span>عرض للقراءة فقط — هذه المادة ليست من اختصاصك.</span>
+    </div>
+
     <div id="grades-loading" style="padding:16px var(--page-px,16px)">
       <div class="stu-skeleton" style="height:48px;border-radius:12px;margin-bottom:10px"></div>
       <div class="stu-skeleton" style="height:48px;border-radius:12px;margin-bottom:10px"></div>

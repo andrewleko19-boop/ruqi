@@ -1257,6 +1257,10 @@ const mngAssignedLoading= el('mng-assigned-loading');
 const mngAssignedList   = el('mng-assigned-list');
 const mngAssignedEmpty  = el('mng-assigned-empty');
 const mngTeacherSelect  = el('mng-teacher-select');
+const mngRoleSelect     = el('mng-role-select');
+const mngSubjField      = el('mng-subj-field');
+const mngSubjPick       = el('mng-subj-pick');
+const mngSubjEmpty      = el('mng-subj-empty');
 const mngError          = el('mng-error');
 const btnAssignTeacher  = el('btn-assign-teacher');
 const assignBtnLabel    = el('assign-btn-label');
@@ -1309,6 +1313,7 @@ async function loadManageClasses() {
       const opt = document.createElement('option');
       opt.value = c.id;
       opt.textContent = label;
+      opt.dataset.grade = c.grade;
       mngClassSelect.appendChild(opt);
     }
     _manageLoaded = true;
@@ -1324,6 +1329,65 @@ function gradeLabel(grade) {
   return grade != null ? `الصف ${grade}` : 'صف';
 }
 
+// Subjects of the currently-selected class's grade, for the assign picker.
+let _mngGradeSubjects = [];
+
+const ROLE_LABELS = {
+  homeroom:   'معلم الصف (حضور + درجات)',
+  supervisor: 'موجه الصف (حضور فقط)',
+  subject:    'أستاذ مادة (درجات فقط)',
+};
+
+function selectedClassGrade() {
+  const opt = mngClassSelect.selectedOptions[0];
+  const g = opt ? Number(opt.dataset.grade) : NaN;
+  return Number.isFinite(g) ? g : null;
+}
+
+// Role choices depend on the stage: primary uses معلم الصف, إعدادي/ثانوي use موجه.
+function populateRoleOptions(grade) {
+  const stage = grade != null ? NDB.stageForGrade(grade) : 'primary';
+  const roles = stage === 'primary'
+    ? ['homeroom', 'subject']
+    : ['supervisor', 'subject'];
+  mngRoleSelect.innerHTML = '';
+  for (const r of roles) {
+    const opt = document.createElement('option');
+    opt.value = r;
+    opt.textContent = ROLE_LABELS[r];
+    mngRoleSelect.appendChild(opt);
+  }
+  CustomSelect.refresh(mngRoleSelect);
+  updateSubjFieldVisibility();
+}
+
+// The subjects picker is irrelevant for supervisors (they grade nothing).
+function updateSubjFieldVisibility() {
+  mngSubjField.hidden = (mngRoleSelect.value === 'supervisor');
+}
+
+async function loadSubjectsPicker(grade) {
+  mngSubjPick.innerHTML = '';
+  _mngGradeSubjects = [];
+  mngSubjEmpty.hidden = true;
+  if (grade == null) return;
+  try {
+    const subs = (await NDB.getSchoolSubjects(S.school.id, grade)).filter(s => s.is_active);
+    _mngGradeSubjects = subs;
+    if (subs.length === 0) { mngSubjEmpty.hidden = false; return; }
+    for (const s of subs) {
+      const lbl = document.createElement('label');
+      lbl.innerHTML =
+        `<input type="checkbox" value="${escapeHtml(s.id)}"><span>${escapeHtml(s.name)}</span>`;
+      mngSubjPick.appendChild(lbl);
+    }
+  } catch (err) {
+    console.error('[NSAMS] loadSubjectsPicker', err);
+  }
+}
+
+mngRoleSelect.addEventListener('change', updateSubjFieldVisibility);
+
 mngClassSelect.addEventListener('change', async () => {
   clearMngError();
   const classId = mngClassSelect.value;
@@ -1332,7 +1396,13 @@ mngClassSelect.addEventListener('change', async () => {
     return;
   }
   mngAssignedWrap.hidden = false;
-  await Promise.all([loadAssignedTeachers(classId), loadAssignableTeachers(classId)]);
+  const grade = selectedClassGrade();
+  populateRoleOptions(grade);
+  await Promise.all([
+    loadAssignedTeachers(classId),
+    loadAssignableTeachers(classId),
+    loadSubjectsPicker(grade),
+  ]);
 });
 
 // Teachers currently on the selected class.
@@ -1358,12 +1428,13 @@ async function loadAssignedTeachers(classId) {
 function buildAssignedRow(classId, t) {
   const li = document.createElement('li');
   li.className = 'mng-row';
-  const subj = t.subject
-    ? `<span class="mng-subject-tag">${escapeHtml(t.subject)}</span>` : '';
+  const roleBadge = `<span class="mng-role-tag">${escapeHtml(ROLE_LABELS[t.role] || t.role)}</span>`;
+  const subj = (t.subjectNames || [])
+    .map(n => `<span class="mng-subject-tag">${escapeHtml(n)}</span>`).join('');
   li.innerHTML = `
     <div class="mng-row-main">
       <span class="mng-teacher-name">${escapeHtml(t.fullName)}</span>
-      ${subj}
+      ${roleBadge}${subj}
     </div>
     <button class="mng-remove-btn" data-tid="${escapeHtml(t.teacherId)}"
             data-name="${escapeHtml(t.fullName)}" aria-label="إزالة ${escapeHtml(t.fullName)}">
@@ -1407,18 +1478,28 @@ btnAssignTeacher.addEventListener('click', async () => {
   clearMngError();
   const classId   = mngClassSelect.value;
   const teacherId = mngTeacherSelect.value;
+  const role      = mngRoleSelect.value || 'homeroom';
   if (!classId)   { showMngError('اختر صفاً أولاً.'); return; }
   if (!teacherId) { showMngError(RW.pickToAssign); return; }
   if (!navigator.onLine) { showMngError('الإسناد يحتاج اتصالاً بالإنترنت.'); return; }
+
+  // Subjects only matter for grade-entering roles; supervisors carry none.
+  const subjectIds = role === 'supervisor'
+    ? []
+    : Array.from(mngSubjPick.querySelectorAll('input:checked')).map(i => i.value);
+  if (role !== 'supervisor' && subjectIds.length === 0) {
+    showMngError('اختر مادة واحدة على الأقل لهذا الدور.');
+    return;
+  }
 
   _mngBusy = true;
   btnAssignTeacher.disabled = true;
   assignBtnLabel.hidden = true;
   assignSpinner.hidden = false;
   try {
-    // subject is intentionally null — the المادة field was removed from this UI.
-    await NDB.assignTeacherToClass(classId, teacherId, null);
+    await NDB.assignTeacherToClass(classId, teacherId, { role, subjectIds });
     mngTeacherSelect.value = '';
+    mngSubjPick.querySelectorAll('input:checked').forEach(i => { i.checked = false; });
     toast(RW.assignedToast, 'success');
     await Promise.all([loadAssignedTeachers(classId), loadAssignableTeachers(classId)]);
   } catch (err) {
@@ -2102,6 +2183,7 @@ async function printReportDoc(win, cards, term = 'year') {
 
 // Enhance the school-admin selects once the DOM is parsed.
 CustomSelect.enhance('mng-class-select');
+CustomSelect.enhance('mng-role-select');
 CustomSelect.enhance('mng-teacher-select');
 CustomSelect.enhance('r-type');
 CustomSelect.enhance('subj-grade-select');

@@ -370,27 +370,67 @@ async function loadClasses() {
     return;
   }
 
-  // Fetch submission status for each class (best-effort, parallel)
-  const today = todayISO();
-  const statuses = await Promise.allSettled(
-    S.classes.map(c => getClassSubmissionStatus(c.id, today))
-  );
+  // Roles decide which tab a class belongs to: attendance is for the homeroom
+  // teacher (معلم الصف) and the supervisor (موجه الصف); grades are for the
+  // homeroom teacher and subject teachers (أستاذ مادة).
+  setupModeTabs();
+  applyHomeMode();
+}
+
+function attendanceClasses() {
+  return S.classes.filter(c => c.role === 'homeroom' || c.role === 'supervisor');
+}
+function gradeClasses() {
+  return S.classes.filter(c => c.role === 'homeroom' || c.role === 'subject');
+}
+
+// Show only the tabs the teacher actually has classes for; pick a sensible
+// default mode. A teacher with a single role sees no tab bar at all.
+function setupModeTabs() {
+  const hasAtt    = attendanceClasses().length > 0;
+  const hasGrades = gradeClasses().length > 0;
+  modeAttBtn.style.display    = hasAtt    ? '' : 'none';
+  modeGradesBtn.style.display = hasGrades ? '' : 'none';
+  if (modeTabs) modeTabs.style.display = (hasAtt && hasGrades) ? '' : 'none';
+  homeMode = hasAtt ? 'att' : (hasGrades ? 'grades' : 'att');
+}
+
+// Render the class list for the current mode (re-run when the tab changes).
+async function renderClassList() {
+  const grading = homeMode === 'grades';
+  const list = grading ? gradeClasses() : attendanceClasses();
+
+  hide(classesEmpty);
+  if (list.length === 0) { hide(classesList); show(classesEmpty); return; }
+
+  // Submission badges only matter in attendance mode.
+  let statuses = [];
+  if (!grading) {
+    const today = todayISO();
+    statuses = await Promise.allSettled(list.map(c => getClassSubmissionStatus(c.id, today)));
+  }
 
   show(classesList);
   classesList.innerHTML = '';
-  S.classes.forEach((cls, i) => {
-    const sub = statuses[i].status === 'fulfilled' ? statuses[i].value : null;
-    classesList.appendChild(buildClassCard(cls, sub));
+  list.forEach((cls, i) => {
+    const sub = (!grading && statuses[i]?.status === 'fulfilled') ? statuses[i].value : null;
+    classesList.appendChild(buildClassCard(cls, sub, grading));
   });
 }
 
 // ── Class Card ────────────────────────────────────────────────────────────────
-function buildClassCard(cls, submission) {
+function buildClassCard(cls, submission, grading = false) {
   const card = document.createElement('button');
   card.className   = 'class-card';
   card.setAttribute('aria-label', `فتح ${cls.displayName}`);
 
-  const { badgeClass, badgeText } = submissionBadge(submission);
+  // The submission badge is an attendance concept; grade cards omit it.
+  const statusHtml = grading
+    ? ''
+    : (() => {
+        const { badgeClass, badgeText } = submissionBadge(submission);
+        return `<div class="class-status"><span class="status-badge ${badgeClass}">${badgeText}</span></div>`;
+      })();
 
   card.innerHTML = `
     <div class="class-icon">
@@ -400,14 +440,12 @@ function buildClassCard(cls, submission) {
       <div class="class-name">${escapeHtml(cls.displayName)}</div>
       <div class="class-meta">${escapeHtml(cls.schoolName)}</div>
     </div>
-    <div class="class-status">
-      <span class="status-badge ${badgeClass}">${badgeText}</span>
-    </div>
+    ${statusHtml}
   `;
 
   card.addEventListener('click', () => {
-    if (homeMode === 'grades') openGradesView(cls);
-    else                       openAttendanceView(cls);
+    if (grading) openGradesView(cls);
+    else         openAttendanceView(cls);
   });
   return card;
 }
@@ -909,12 +947,14 @@ modalAbslog.addEventListener('click', (e) => {
 const viewGrades        = $('view-grades');
 const modeAttBtn        = $('mode-att');
 const modeGradesBtn     = $('mode-grades');
+const modeTabs          = document.querySelector('.mode-tabs');
 const homeSectionTitle  = $('home-section-title');
 const btnGradesBack     = $('btn-grades-back');
 const gradesClassName   = $('grades-class-name');
 const gradesSubjectSel  = $('grades-subject');
 const gradesSemesterSel = $('grades-semester');
 const gradesLegend      = $('grades-legend');
+const gradesReadonly    = $('grades-readonly');
 const gradesLoading     = $('grades-loading');
 const gradesList        = $('grades-list');
 const gradesEmpty       = $('grades-empty');
@@ -1094,19 +1134,36 @@ const G = {
   class:    null,   // active class (one of S.classes)
   students: [],
   subjects: [],     // [{ id, name, max_total, pass_mark, is_core_arabic, components:[{id,name,max_mark}] }]
+  editableIds: [],  // subject ids this teacher may EDIT in this class (others are read-only)
   semester: 1,
   marks:    {},     // { [studentId]: { [componentId]: number|null } }
   dirty:    false,
 };
 
+// The teacher may edit only the subjects assigned to them in this class; the
+// rest of the grade's subjects are shown read-only.
+function canEditSubject(subjectId) {
+  return G.editableIds.includes(subjectId);
+}
+function canEditCurrent() {
+  const sub = currentSubject();
+  return !!sub && canEditSubject(sub.id);
+}
+
 function setHomeMode(mode) {
   homeMode = mode;
-  const grading = mode === 'grades';
+  applyHomeMode();
+}
+
+// Reflect the current homeMode in the tab UI + re-render the filtered list.
+function applyHomeMode() {
+  const grading = homeMode === 'grades';
   modeAttBtn.classList.toggle('is-active', !grading);
   modeGradesBtn.classList.toggle('is-active', grading);
   modeAttBtn.setAttribute('aria-selected', String(!grading));
   modeGradesBtn.setAttribute('aria-selected', String(grading));
   homeSectionTitle.textContent = grading ? 'اختر صفاً لإدخال الدرجات' : 'صفوفي اليوم';
+  renderClassList();
 }
 
 modeAttBtn.addEventListener('click', () => setHomeMode('att'));
@@ -1139,6 +1196,7 @@ async function openGradesView(cls) {
   hide(gradesEmpty);
   hide(gradesNoSubjects);
   hide(gradesLegend);
+  gradesReadonly.hidden = true;
   show(gradesFooter);
   show(gradesLoading);
 
@@ -1147,7 +1205,10 @@ async function openGradesView(cls) {
       getClassGradeSubjects(cls.id),
       getClassStudents(cls.id),
     ]);
-    G.subjects = subjects ?? [];
+    G.editableIds = Array.isArray(cls.subjectIds) ? cls.subjectIds : [];
+    // Show the teacher's own subjects first so they land on an editable one.
+    G.subjects = (subjects ?? []).slice().sort((a, b) =>
+      (canEditSubject(b.id) ? 1 : 0) - (canEditSubject(a.id) ? 1 : 0));
     G.students = students ?? [];
 
     hide(gradesLoading);
@@ -1164,12 +1225,12 @@ async function openGradesView(cls) {
       return;
     }
 
-    // Populate the subject dropdown.
+    // Populate the subject dropdown (own subjects flagged).
     gradesSubjectSel.innerHTML = '';
     for (const sub of G.subjects) {
       const opt = document.createElement('option');
       opt.value = sub.id;
-      opt.textContent = sub.name;
+      opt.textContent = canEditSubject(sub.id) ? `${sub.name} — اختصاصك` : sub.name;
       gradesSubjectSel.appendChild(opt);
     }
     CustomSelect.refresh(gradesSubjectSel);
@@ -1215,8 +1276,12 @@ async function loadGradesForCurrent() {
   }
 
   hide(gradesLoading);
+  const readOnly = !canEditSubject(sub.id);
+  gradesReadonly.hidden = !readOnly;
+  // No Save button when the subject isn't the teacher's own.
+  if (readOnly) hide(gradesFooter); else show(gradesFooter);
   renderLegend(sub);
-  renderGradeRows(sub);
+  renderGradeRows(sub, readOnly);
 }
 
 function renderLegend(sub) {
@@ -1233,19 +1298,19 @@ function renderLegend(sub) {
   show(gradesLegend);
 }
 
-function renderGradeRows(sub) {
+function renderGradeRows(sub, readOnly = false) {
   gradesList.innerHTML = '';
   if (!sub.components || sub.components.length === 0) {
     hide(gradesList);
     return;
   }
   G.students.forEach((stu, i) => {
-    gradesList.appendChild(buildGradeRow(stu, i + 1, sub));
+    gradesList.appendChild(buildGradeRow(stu, i + 1, sub, readOnly));
   });
   show(gradesList);
 }
 
-function buildGradeRow(stu, num, sub) {
+function buildGradeRow(stu, num, sub, readOnly = false) {
   const li = document.createElement('li');
   li.className  = 'grade-row';
   li.dataset.id = stu.id;
@@ -1256,6 +1321,7 @@ function buildGradeRow(stu, num, sub) {
       <input class="grade-input" type="number" inputmode="decimal"
         min="0" max="${escapeHtml(String(comp.max_mark))}" step="0.5"
         data-cid="${escapeHtml(comp.id)}"
+        ${readOnly ? 'disabled' : ''}
         aria-label="${escapeHtml(comp.name)} لـ ${escapeHtml(stu.full_name)}"
         value="${v == null ? '' : escapeHtml(String(v))}" />
       <span class="grade-cell-lbl">${escapeHtml(comp.name)}<span class="gcl-max">من ${escapeHtml(String(comp.max_mark))}</span></span>
@@ -1339,6 +1405,11 @@ gradesSemesterSel.addEventListener('change', switchGradeContext);
 btnSaveGrades.addEventListener('click', async () => {
   const sub = currentSubject();
   if (!sub) return;
+  // Guard: can't save a subject that isn't the teacher's own (RLS also blocks it).
+  if (!canEditCurrent()) {
+    toast('لا يمكنك تعديل علامات مادة ليست من اختصاصك.', 'error');
+    return;
+  }
 
   if (gradesList.querySelector('.grade-input.invalid')) {
     toast('توجد درجات غير صالحة (تتجاوز الحد الأقصى) — يرجى تصحيحها', 'error');

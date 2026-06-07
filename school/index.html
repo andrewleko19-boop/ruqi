@@ -505,6 +505,15 @@
               <option value="">— اختر معلماً —</option>
             </select>
           </div>
+          <div class="field-group">
+            <label for="mng-role-select">الدور</label>
+            <select id="mng-role-select" class="field-input"></select>
+          </div>
+          <div class="field-group" id="mng-subj-field">
+            <label>المواد التي يُدرّسها</label>
+            <div id="mng-subj-pick" class="subj-pick"></div>
+            <p id="mng-subj-empty" class="mng-hint" hidden>لا توجد مواد معرّفة لهذا الصف — أضِفها من «المواد».</p>
+          </div>
           <div id="mng-error" class="msg msg-error" hidden></div>
           <button type="button" class="btn btn-primary btn-full" id="btn-assign-teacher">
             <svg class="icon icon-sm"><use href="#ic-send"/></svg>

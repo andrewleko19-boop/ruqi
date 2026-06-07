@@ -976,6 +976,28 @@ select.field-input option:disabled { color: var(--clr-text-3); }
 .mng-remove-btn:active { transform: scale(.97); }
 .mng-empty { font-size: .85rem; color: var(--clr-text-3); padding: 12px 6px; text-align: center; }
 
+/* Role badge on assigned-teacher rows */
+.mng-role-tag {
+  font-size: .72rem; font-weight: 700; color: #0B2B5E;
+  background: var(--clr-primary-dim); border: 1px solid var(--clr-border);
+  padding: 2px 8px; border-radius: var(--r-pill);
+}
+
+/* Multi-subject picker (assign flow) */
+.subj-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.subj-pick label {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 11px; border-radius: var(--r-pill);
+  border: 1.5px solid var(--clr-border); background: var(--clr-bg);
+  font-size: .84rem; color: var(--clr-text-1); cursor: pointer;
+  transition: border-color var(--dur), background var(--dur);
+}
+.subj-pick label:has(input:checked) {
+  border-color: var(--clr-primary); background: var(--clr-primary-dim); font-weight: 600;
+}
+.subj-pick input { accent-color: var(--clr-primary); width: 15px; height: 15px; }
+.field-group[hidden] { display: none; }
+
 /* FAB must respect [hidden] (it has display:flex which would otherwise win). */
 .fab[hidden] { display: none !important; }
 
