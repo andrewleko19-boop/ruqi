@@ -560,12 +560,20 @@
         </button>
       </div>
       <div class="card-body">
-        <p class="mng-hint">اختر صفاً لعرض نتائج الطلاب وتصدير الشهادات. النسبة النهائية = متوسط الفصلين.</p>
+        <p class="mng-hint">اختر صفاً ونوع الشهادة. شهادة السنة = متوسط الفصلين، وشهادة الفصل الأول تعرض علامات الفصل الأول فقط.</p>
 
         <div class="field-group">
           <label for="rep-class-select">الصف</label>
           <select id="rep-class-select" class="field-input">
             <option value="">— اختر صفاً —</option>
+          </select>
+        </div>
+
+        <div class="field-group">
+          <label for="rep-term-select">نوع الشهادة</label>
+          <select id="rep-term-select" class="field-input">
+            <option value="year">شهادة السنة الكاملة</option>
+            <option value="s1">شهادة الفصل الأول</option>
           </select>
         </div>
 

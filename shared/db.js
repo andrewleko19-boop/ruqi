@@ -1276,7 +1276,7 @@ function stageForGrade(grade) {
 // the overall year result. Returns { class, students:[{ student, subjects:[…],
 // finalPercent, result }] }. Computed client-side (like getClassAbsenceSummary)
 // so it runs under the school_admin read policy.
-async function getClassReportCards(classId, academicYear = getAcademicYear()) {
+async function getClassReportCards(classId, academicYear = getAcademicYear(), term = 'year') {
   const { data: cls, error: clsErr } = await db
     .from('classes')
     .select('id, grade, section, name, school_id')
@@ -1306,28 +1306,37 @@ async function getClassReportCards(classId, academicYear = getAcademicYear()) {
     bySub[r.semester] = (bySub[r.semester] || 0) + Number(r.mark || 0);
   }
 
+  const isS1 = term === 's1';
+
   const cards = students.map(stu => {
     const stuGrades = grades[stu.id] || {};
     const subjResults = subjects.map(sub => {
       const sem  = stuGrades[sub.id] || {};
-      const s1   = sem[1];
-      const s2   = sem[2];
-      const present = [s1, s2].filter(v => v != null);
-      const finalMark = present.length
-        ? present.reduce((a, b) => a + b, 0) / present.length
-        : null;
+      const s1   = sem[1] ?? null;
+      const s2   = sem[2] ?? null;
       const maxTotal  = Number(sub.max_total) || 100;
-      const percent   = finalMark == null ? null : (finalMark / maxTotal) * 100;
-      const passed    = percent == null ? null : percent >= Number(sub.pass_mark);
+
+      // The displayed mark depends on the certificate term:
+      //  • s1   → the first-semester mark alone.
+      //  • year → the equal-weight average of BOTH semesters; null until both
+      //           are entered, so a year card stays "incomplete" mid-year.
+      let mark;
+      if (isS1) {
+        mark = s1;
+      } else {
+        mark = (s1 != null && s2 != null) ? (s1 + s2) / 2 : null;
+      }
+      const percent = mark == null ? null : (mark / maxTotal) * 100;
+      const passed  = percent == null ? null : percent >= Number(sub.pass_mark);
       return {
         subjectId:    sub.id,
         name:         sub.name,
         isCoreArabic: !!sub.is_core_arabic,
         maxTotal,
         passMark:     Number(sub.pass_mark),
-        sem1:         s1 ?? null,
-        sem2:         s2 ?? null,
-        finalMark,
+        sem1:         s1,
+        sem2:         s2,
+        mark,
         percent,
         passed,
       };
@@ -1337,21 +1346,22 @@ async function getClassReportCards(classId, academicYear = getAcademicYear()) {
     const finalPercent = graded.length
       ? graded.reduce((a, s) => a + s.percent, 0) / graded.length
       : null;
-    // Only declare a year result once every subject has a mark; otherwise it's
-    // an in-progress card (e.g. mid-year, only the first semester entered).
     const complete = subjResults.length > 0 && subjResults.every(s => s.percent != null);
-    const result   = complete ? computeYearResult(subjResults, stage) : null;
+    // First-semester certificate shows marks + average only — no year verdict.
+    const result   = (!isS1 && complete) ? computeYearResult(subjResults, stage) : null;
 
     return { student: stu, subjects: subjResults, finalPercent, result, complete };
   });
 
-  return { class: cls, stage, academicYear, students: cards };
+  return { class: cls, stage, term, academicYear, students: cards };
 }
 
-async function getStudentReportCard(classId, studentId, academicYear = getAcademicYear()) {
-  const all = await getClassReportCards(classId, academicYear);
+async function getStudentReportCard(classId, studentId, academicYear = getAcademicYear(), term = 'year') {
+  const all = await getClassReportCards(classId, academicYear, term);
   const card = all.students.find(c => c.student.id === studentId) || null;
-  return card ? { class: all.class, stage: all.stage, academicYear: all.academicYear, ...card } : null;
+  return card
+    ? { class: all.class, stage: all.stage, term: all.term, academicYear: all.academicYear, ...card }
+    : null;
 }
 
 // ─── Sync ─────────────────────────────────────────────────────────────────────

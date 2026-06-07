@@ -1891,6 +1891,7 @@ btnSaveSubject.addEventListener('click', async () => {
 // Report cards (الشهادات)
 // ═══════════════════════════════════════════════════════════════════════════
 const repClassSelect    = el('rep-class-select');
+const repTermSelect     = el('rep-term-select');
 const repLoading        = el('rep-loading');
 const repListEl         = el('rep-list');
 const repEmpty          = el('rep-empty');
@@ -1899,6 +1900,10 @@ const btnRefreshReports = el('btn-refresh-reports');
 
 let _reportsLoaded = false;
 let _repData       = null;
+
+function currentTerm() {
+  return repTermSelect.value === 's1' ? 's1' : 'year';
+}
 
 async function initReportsTab() {
   if (!S.school?.id) return;
@@ -1925,6 +1930,7 @@ repClassSelect.addEventListener('change', () => {
   if (id) loadReports(id);
   else { repListEl.innerHTML = ''; repEmpty.hidden = true; hide(btnPrintAll); }
 });
+repTermSelect.addEventListener('change', () => { if (repClassSelect.value) loadReports(repClassSelect.value); });
 btnRefreshReports.addEventListener('click', () => { if (repClassSelect.value) loadReports(repClassSelect.value); });
 
 async function loadReports(classId) {
@@ -1933,7 +1939,7 @@ async function loadReports(classId) {
   repEmpty.hidden = true;
   hide(btnPrintAll);
   try {
-    _repData = await NDB.getClassReportCards(classId);
+    _repData = await NDB.getClassReportCards(classId, undefined, currentTerm());
     hide(repLoading);
     const cards = _repData.students || [];
     if (cards.length === 0) { repEmpty.hidden = false; return; }
@@ -1960,7 +1966,16 @@ function fmtNum(n) {
 function buildReportRow(card, num) {
   const li = document.createElement('li');
   li.className = 'rep-row';
-  const b = resultBadge(card);
+  const term = currentTerm();
+  // Year certificate shows the verdict badge; the first-semester certificate
+  // shows marks + average only (just «غير مكتمل» when sem1 marks are missing).
+  let badgeHtml = '';
+  if (term === 's1') {
+    if (!card.complete) badgeHtml = `<span class="rep-badge pending">غير مكتمل</span>`;
+  } else {
+    const b = resultBadge(card);
+    badgeHtml = `<span class="rep-badge ${b.cls}">${b.text}</span>`;
+  }
   li.innerHTML = `
     <div class="rep-row-head">
       <span class="student-num" style="min-width:24px;color:#94A3B8;font-weight:600">${num}</span>
@@ -1970,7 +1985,7 @@ function buildReportRow(card, num) {
     </div>
     <div class="rep-row-controls">
       <span class="rep-pct">${card.finalPercent == null ? '—' : fmtNum(card.finalPercent) + '٪'}</span>
-      <span class="rep-badge ${b.cls}">${b.text}</span>
+      ${badgeHtml}
       <button class="icon-btn-sm" data-act="print" aria-label="تصدير الشهادة">
         <svg class="icon icon-sm"><use href="#ic-printer"/></svg>
       </button>
@@ -1979,7 +1994,7 @@ function buildReportRow(card, num) {
   li.querySelector('[data-act="print"]').addEventListener('click', () => {
     const win = window.open('', '_blank');
     if (!win) { toast('فعّل النوافذ المنبثقة لتتمكّن من التصدير', 'warning'); return; }
-    printReportDoc(win, [card]);
+    printReportDoc(win, [card], term);
   });
   return li;
 }
@@ -1988,7 +2003,7 @@ btnPrintAll.addEventListener('click', () => {
   if (!_repData?.students?.length) return;
   const win = window.open('', '_blank');
   if (!win) { toast('فعّل النوافذ المنبثقة لتتمكّن من التصدير', 'warning'); return; }
-  printReportDoc(win, _repData.students);
+  printReportDoc(win, _repData.students, currentTerm());
 });
 
 function classDisplay() {
@@ -1997,44 +2012,65 @@ function classDisplay() {
   return `${gradeNameLabel(c.grade)} / شعبة ${c.section ?? ''}`.trim();
 }
 
-function reportCardHtml(card) {
-  const rows = card.subjects.map(s => {
-    const verdict = s.passed == null ? '—' : (s.passed ? 'ناجح' : 'راسب');
-    const cls = s.passed === false ? ' style="color:#DC2626;font-weight:700"' : '';
-    return '<tr>' +
-      '<td>' + escapeHtml(s.name) + '</td>' +
-      '<td>' + fmtNum(s.sem1) + '</td>' +
-      '<td>' + fmtNum(s.sem2) + '</td>' +
-      '<td>' + fmtNum(s.finalMark) + ' / ' + escapeHtml(String(s.maxTotal)) + '</td>' +
-      '<td' + cls + '>' + verdict + '</td>' +
-      '</tr>';
-  }).join('');
+function reportCardHtml(card, term) {
+  const isS1 = term === 's1';
 
-  const b = resultBadge(card);
-  const resultColor = b.cls === 'pass' ? '#059669' : (b.cls === 'fail' ? '#DC2626' : (b.cls === 'partial' ? '#B45309' : '#64748B'));
+  let thead, rows;
+  if (isS1) {
+    thead = '<tr><th>المادة</th><th>علامة الفصل الأول</th></tr>';
+    rows = card.subjects.map(s =>
+      '<tr>' +
+        '<td>' + escapeHtml(s.name) + '</td>' +
+        '<td>' + fmtNum(s.sem1) + ' / ' + escapeHtml(String(s.maxTotal)) + '</td>' +
+      '</tr>'
+    ).join('');
+  } else {
+    thead = '<tr><th>المادة</th><th>الفصل الأول</th><th>الفصل الثاني</th><th>المعدّل</th><th>النتيجة</th></tr>';
+    rows = card.subjects.map(s => {
+      const verdict = s.passed == null ? '—' : (s.passed ? 'ناجح' : 'راسب');
+      const cls = s.passed === false ? ' style="color:#DC2626;font-weight:700"' : '';
+      return '<tr>' +
+        '<td>' + escapeHtml(s.name) + '</td>' +
+        '<td>' + fmtNum(s.sem1) + '</td>' +
+        '<td>' + fmtNum(s.sem2) + '</td>' +
+        '<td>' + fmtNum(s.mark) + ' / ' + escapeHtml(String(s.maxTotal)) + '</td>' +
+        '<td' + cls + '>' + verdict + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  const title = isS1 ? 'شهادة الفصل الأول' : 'شهادة نهاية العام';
+
+  let footer;
+  if (isS1) {
+    footer = 'معدّل الفصل الأول: <strong>' +
+      (card.finalPercent == null ? '—' : fmtNum(card.finalPercent) + '٪') + '</strong>';
+  } else {
+    const b = resultBadge(card);
+    const resultColor = b.cls === 'pass' ? '#059669' : (b.cls === 'fail' ? '#DC2626' : (b.cls === 'partial' ? '#B45309' : '#64748B'));
+    footer = 'النسبة النهائية: <strong>' + (card.finalPercent == null ? '—' : fmtNum(card.finalPercent) + '٪') + '</strong>' +
+      ' &nbsp;·&nbsp; النتيجة: <strong style="color:' + resultColor + '">' + b.text + '</strong>';
+  }
 
   return '<section class="card-page">' +
     '<div class="rc-head">' + '%%LOGO%%' +
       '<h1>' + escapeHtml(S.school?.name || '') + '</h1>' +
-      '<div class="sub">شهادة درجات — العام الدراسي ' + escapeHtml(_repData.academicYear) + '</div>' +
+      '<div class="sub">' + title + ' — العام الدراسي ' + escapeHtml(_repData.academicYear) + '</div>' +
     '</div>' +
     '<div class="rc-meta">' +
       '<div><strong>الطالب:</strong> ' + escapeHtml(card.student.full_name) + '</div>' +
       '<div><strong>الصف:</strong> ' + escapeHtml(classDisplay()) + '</div>' +
     '</div>' +
-    '<table><thead><tr><th>المادة</th><th>الفصل الأول</th><th>الفصل الثاني</th><th>المعدّل</th><th>النتيجة</th></tr></thead>' +
+    '<table><thead>' + thead + '</thead>' +
     '<tbody>' + rows + '</tbody></table>' +
-    '<div class="rc-final">' +
-      'النسبة النهائية: <strong>' + (card.finalPercent == null ? '—' : fmtNum(card.finalPercent) + '٪') + '</strong>' +
-      ' &nbsp;·&nbsp; النتيجة: <strong style="color:' + resultColor + '">' + b.text + '</strong>' +
-    '</div>' +
+    '<div class="rc-final">' + footer + '</div>' +
     '</section>';
 }
 
-async function printReportDoc(win, cards) {
+async function printReportDoc(win, cards, term = 'year') {
   const logo = await eagleDataUri();
   const logoHtml = logo ? '<img class="logo" src="' + logo + '" alt="">' : '';
-  const body = cards.map(c => reportCardHtml(c).replace('%%LOGO%%', logoHtml)).join('');
+  const body = cards.map(c => reportCardHtml(c, term).replace('%%LOGO%%', logoHtml)).join('');
 
   win.document.write(
     '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">' +
@@ -2070,6 +2106,7 @@ CustomSelect.enhance('mng-teacher-select');
 CustomSelect.enhance('r-type');
 CustomSelect.enhance('subj-grade-select');
 CustomSelect.enhance('rep-class-select');
+CustomSelect.enhance('rep-term-select');
 
 // ── Start the app (after all declarations are initialized) ──
 bootstrap();
