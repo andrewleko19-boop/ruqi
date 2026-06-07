@@ -74,6 +74,8 @@ function normaliseSchool(row) {
     // 'primary' (ابتدائي) | 'middle_high' (إعدادي/ثانوي). Drives معلم↔موجه labels.
     // Falls back to 'primary' if the column is missing (e.g. migration not run yet).
     type:          row.school_type ?? 'primary',
+    // Minimum yearly attendance % required to pass (grades 5+). Editable.
+    minAttendancePct: row.min_attendance_pct ?? 75,
   };
 }
 
@@ -1798,6 +1800,7 @@ const subjNameIn     = el('subj-name');
 const subjMaxIn      = el('subj-max');
 const subjPassIn     = el('subj-pass');
 const subjArabicIn   = el('subj-arabic');
+const subjMathIn     = el('subj-math');
 const subjCompList   = el('subj-comp-list');
 const btnAddComp     = el('btn-add-comp');
 const subjCompSum    = el('subj-comp-sum');
@@ -1859,7 +1862,8 @@ async function loadSubjects() {
 function buildSubjectRow(sub) {
   const li = document.createElement('li');
   li.className = 'subj-row';
-  const tag = sub.is_core_arabic ? '<span class="subj-tag">عربي</span>' : '';
+  const tag = (sub.is_core_arabic ? '<span class="subj-tag">عربي</span>' : '')
+            + (sub.is_core_math ? '<span class="subj-tag">رياضيات</span>' : '');
   li.innerHTML = `
     <div class="subj-info">
       <div class="subj-name">${escapeHtml(sub.name)}${tag}</div>
@@ -1930,6 +1934,7 @@ async function openSubjectModal(sub) {
   subjMaxIn.value    = sub?.max_total ?? 100;
   subjPassIn.value   = sub?.pass_mark ?? 40;
   subjArabicIn.checked = !!sub?.is_core_arabic;
+  subjMathIn.checked   = !!sub?.is_core_math;
   subjCompList.innerHTML = '';
 
   show(modalSubject);
@@ -1996,12 +2001,14 @@ btnSaveSubject.addEventListener('click', async () => {
     let subjectId = _editingSubjectId;
     if (subjectId) {
       await NDB.updateSubject(subjectId, {
-        name, maxTotal, passMark, isCoreArabic: subjArabicIn.checked,
+        name, maxTotal, passMark,
+        isCoreArabic: subjArabicIn.checked, isCoreMath: subjMathIn.checked,
       });
     } else {
       subjectId = await NDB.createSubject({
         schoolId: S.school.id, grade: _subjGrade,
-        name, maxTotal, passMark, isCoreArabic: subjArabicIn.checked,
+        name, maxTotal, passMark,
+        isCoreArabic: subjArabicIn.checked, isCoreMath: subjMathIn.checked,
       });
     }
     await NDB.setSubjectComponents(subjectId, comps);
@@ -2029,9 +2036,40 @@ const repListEl         = el('rep-list');
 const repEmpty          = el('rep-empty');
 const btnPrintAll       = el('btn-print-all');
 const btnRefreshReports = el('btn-refresh-reports');
+const repMinAtt         = el('rep-minatt');
+const btnSaveMinAtt     = el('btn-save-minatt');
+const modalGrace        = el('modal-grace');
+const graceList         = el('grace-list');
+const graceTotalIn      = el('grace-total');
+const graceStudentEl    = el('grace-student');
+const graceSummaryEl    = el('grace-summary');
+const graceErrorEl      = el('grace-error');
+const btnCloseGrace     = el('btn-close-grace');
+const btnSaveGrace      = el('btn-save-grace');
 
 let _reportsLoaded = false;
 let _repData       = null;
+
+// Minimum-attendance setting: prefill from the loaded school, save on demand.
+function syncMinAttField() {
+  if (repMinAtt && S.school) repMinAtt.value = S.school.minAttendancePct ?? 75;
+}
+btnSaveMinAtt?.addEventListener('click', async () => {
+  const v = Number(repMinAtt.value);
+  if (!(v >= 0 && v <= 100)) { toast('النسبة يجب أن تكون بين 0 و 100', 'error'); return; }
+  btnSaveMinAtt.disabled = true;
+  try {
+    await NDB.updateSchool(S.school.id, { minAttendancePct: v });
+    S.school.minAttendancePct = v;
+    toast('تم حفظ الحد الأدنى للدوام', 'success');
+    if (repClassSelect.value) loadReports(repClassSelect.value);
+  } catch (err) {
+    console.error('[NSAMS] saveMinAtt', err);
+    toast('تعذّر حفظ الإعداد', 'error');
+  } finally {
+    btnSaveMinAtt.disabled = false;
+  }
+});
 
 function currentTerm() {
   return repTermSelect.value === 's1' ? 's1' : 'year';
@@ -2050,6 +2088,7 @@ async function initReportsTab() {
       repClassSelect.appendChild(opt);
     }
     CustomSelect.refresh(repClassSelect);
+    syncMinAttField();
     _reportsLoaded = true;
   } catch (err) {
     console.error('[NSAMS] initReportsTab', err);
@@ -2073,6 +2112,11 @@ async function loadReports(classId) {
   try {
     _repData = await NDB.getClassReportCards(classId, undefined, currentTerm());
     hide(repLoading);
+    // Keep the editable field + cached school in sync with the authoritative value.
+    if (_repData?.minAttendancePct != null && S.school) {
+      S.school.minAttendancePct = _repData.minAttendancePct;
+      syncMinAttField();
+    }
     const cards = _repData.students || [];
     if (cards.length === 0) { repEmpty.hidden = false; return; }
     cards.forEach((card, i) => repListEl.appendChild(buildReportRow(card, i + 1)));
@@ -2086,8 +2130,7 @@ async function loadReports(classId) {
 
 function resultBadge(card) {
   if (!card.complete) return { cls: 'pending', text: 'غير مكتمل' };
-  if (card.result === 'ناجح')  return { cls: 'pass',    text: 'ناجح' };
-  if (card.result === 'مكمّل') return { cls: 'partial', text: 'مكمّل' };
+  if (card.result === 'ناجح')  return { cls: 'pass', text: 'ناجح' };
   return { cls: 'fail', text: 'راسب' };
 }
 
@@ -2108,16 +2151,40 @@ function buildReportRow(card, num) {
     const b = resultBadge(card);
     badgeHtml = `<span class="rep-badge ${b.cls}">${b.text}</span>`;
   }
+  // Year cards show attendance % and (for grades 7+) conduct as small meta tags.
+  const band = _repData?.band;
+  let metaHtml = '';
+  if (term !== 's1') {
+    const att = card.attendancePercent;
+    if (band === 'B' || band === 'C') {
+      const attFail = att != null && att < (_repData.minAttendancePct ?? 75);
+      metaHtml += `<span class="rep-meta-tag${attFail ? ' bad' : ''}">دوام ${att == null ? '—' : fmtNum(att) + '٪'}</span>`;
+    }
+    if (band === 'C') {
+      const cFail = card.conductMark == null || card.conductMark < 60;
+      metaHtml += `<span class="rep-meta-tag${cFail ? ' bad' : ''}">سلوك ${card.conductMark == null ? '—' : fmtNum(card.conductMark)}</span>`;
+    }
+  }
+  // Grace-marks tool: only for grade bands that use it, on the year certificate.
+  const showGrace = term !== 's1' && (band === 'B' || band === 'C');
+  const graceBtn = showGrace
+    ? `<button class="icon-btn-sm" data-act="grace" aria-label="درجات المساعدة">
+         <svg class="icon icon-sm"><use href="#ic-award"/></svg>
+       </button>`
+    : '';
+
   li.innerHTML = `
     <div class="rep-row-head">
       <span class="student-num" style="min-width:24px;color:#94A3B8;font-weight:600">${num}</span>
       <div class="rep-info">
         <div class="rep-name">${escapeHtml(card.student.full_name)}</div>
+        ${metaHtml ? `<div class="rep-meta">${metaHtml}</div>` : ''}
       </div>
     </div>
     <div class="rep-row-controls">
       <span class="rep-pct">${card.finalPercent == null ? '—' : fmtNum(card.finalPercent) + '٪'}</span>
       ${badgeHtml}
+      ${graceBtn}
       <button class="icon-btn-sm" data-act="print" aria-label="تصدير الشهادة">
         <svg class="icon icon-sm"><use href="#ic-printer"/></svg>
       </button>
@@ -2128,6 +2195,8 @@ function buildReportRow(card, num) {
     if (!win) { toast('فعّل النوافذ المنبثقة لتتمكّن من التصدير', 'warning'); return; }
     printReportDoc(win, [card], term);
   });
+  const gBtn = li.querySelector('[data-act="grace"]');
+  if (gBtn) gBtn.addEventListener('click', () => openGraceModal(card));
   return li;
 }
 
@@ -2179,8 +2248,19 @@ function reportCardHtml(card, term) {
       (card.finalPercent == null ? '—' : fmtNum(card.finalPercent) + '٪') + '</strong>';
   } else {
     const b = resultBadge(card);
-    const resultColor = b.cls === 'pass' ? '#059669' : (b.cls === 'fail' ? '#DC2626' : (b.cls === 'partial' ? '#B45309' : '#64748B'));
+    const resultColor = b.cls === 'pass' ? '#059669' : (b.cls === 'fail' ? '#DC2626' : '#64748B');
+    const band = _repData?.band;
+    let extra = '';
+    if (band === 'B' || band === 'C') {
+      extra += ' &nbsp;·&nbsp; الدوام: <strong>' +
+        (card.attendancePercent == null ? '—' : fmtNum(card.attendancePercent) + '٪') + '</strong>';
+    }
+    if (band === 'C') {
+      extra += ' &nbsp;·&nbsp; السلوك: <strong>' +
+        (card.conductMark == null ? '—' : fmtNum(card.conductMark)) + '</strong>';
+    }
     footer = 'النسبة النهائية: <strong>' + (card.finalPercent == null ? '—' : fmtNum(card.finalPercent) + '٪') + '</strong>' +
+      extra +
       ' &nbsp;·&nbsp; النتيجة: <strong style="color:' + resultColor + '">' + b.text + '</strong>';
   }
 
@@ -2231,6 +2311,108 @@ async function printReportDoc(win, cards, term = 'year') {
   );
   win.document.close();
 }
+
+// ─── Grace marks (درجات المساعدة) ─────────────────────────────────────────────
+let _graceCard = null;
+
+const GRACE_PER_SUBJECT = 10;   // ≤10 per subject
+const GRACE_TOTAL_CAP   = 50;   // ≤50 overall
+
+// Sum of grace inputs: each subject row + the total field. Arabic rows share one
+// cap of 10 (the two زمرتان count as a single subject).
+function graceFigures() {
+  let arabic = 0, others = 0;
+  graceList.querySelectorAll('.grace-in').forEach(inp => {
+    const v = Math.max(0, Number(inp.value) || 0);
+    if (inp.dataset.arabic === '1') arabic += v; else others += v;
+  });
+  const total = Math.max(0, Number(graceTotalIn.value) || 0);
+  const arabicCapped = Math.min(arabic, GRACE_PER_SUBJECT);
+  return { arabic, others, total, grandTotal: arabicCapped + others + total, arabicCapped };
+}
+
+function refreshGraceSummary() {
+  const f = graceFigures();
+  const over = f.grandTotal > GRACE_TOTAL_CAP;
+  const arOver = f.arabic > GRACE_PER_SUBJECT;
+  graceSummaryEl.innerHTML =
+    `الإجمالي المستخدم: <strong>${f.grandTotal}</strong> / ${GRACE_TOTAL_CAP}` +
+    (arOver ? ' — <span style="color:#DC2626">مجموع مساعدة العربية يتجاوز ١٠</span>' : '') +
+    (over ? ' — <span style="color:#DC2626">يتجاوز الحد الأقصى</span>' : '');
+  btnSaveGrace.disabled = over || arOver;
+}
+
+function openGraceModal(card) {
+  _graceCard = card;
+  graceErrorEl.hidden = true;
+  graceStudentEl.textContent = card.student.full_name;
+  graceList.innerHTML = '';
+  // Offer grace on subjects the student hasn't passed (after current grace).
+  const subs = card.subjects.filter(s => s.passed === false || (s.grace || 0) > 0);
+  if (subs.length === 0) {
+    graceList.innerHTML = '<li class="mng-hint">لا توجد مواد راسبة تحتاج مساعدة.</li>';
+  }
+  subs.forEach(s => {
+    const li = document.createElement('li');
+    li.className = 'comp-row';
+    li.innerHTML =
+      `<span style="flex:1">${escapeHtml(s.name)}` +
+      `<small style="color:#94A3B8"> (${fmtNum(s.percent)}٪)</small></span>` +
+      `<input class="field-input grace-in" type="number" min="0" max="${GRACE_PER_SUBJECT}" step="1" ` +
+      `style="width:84px" data-sid="${escapeHtml(s.subjectId)}" data-arabic="${s.isCoreArabic ? '1' : '0'}" ` +
+      `value="${s.grace || 0}" />`;
+    graceList.appendChild(li);
+  });
+  graceTotalIn.value = card.graceTotal || 0;
+  refreshGraceSummary();
+  show(modalGrace);
+  document.body.style.overflow = 'hidden';
+}
+
+function closeGraceModal() {
+  hide(modalGrace);
+  document.body.style.overflow = '';
+  _graceCard = null;
+}
+
+graceList.addEventListener('input', (e) => { if (e.target.closest('.grace-in')) refreshGraceSummary(); });
+graceTotalIn.addEventListener('input', refreshGraceSummary);
+btnCloseGrace.addEventListener('click', closeGraceModal);
+modalGrace.addEventListener('click', (e) => { if (e.target === modalGrace) closeGraceModal(); });
+
+btnSaveGrace.addEventListener('click', async () => {
+  if (!_graceCard) return;
+  const f = graceFigures();
+  if (f.arabic > GRACE_PER_SUBJECT) { graceErrorEl.textContent = 'مساعدة العربية لا تتجاوز ١٠.'; show(graceErrorEl); return; }
+  if (f.grandTotal > GRACE_TOTAL_CAP) { graceErrorEl.textContent = 'الإجمالي يتجاوز ٥٠.'; show(graceErrorEl); return; }
+  graceErrorEl.hidden = true;
+
+  const items = [];
+  graceList.querySelectorAll('.grace-in').forEach(inp => {
+    const marks = Math.max(0, Number(inp.value) || 0);
+    items.push({ subjectId: inp.dataset.sid, marks: Math.min(marks, GRACE_PER_SUBJECT) });
+  });
+  const totalMarks = Math.max(0, Number(graceTotalIn.value) || 0);
+  if (totalMarks > 0) items.push({ subjectId: null, marks: totalMarks });
+
+  btnSaveGrace.disabled = true;
+  try {
+    await NDB.setStudentGrace({
+      studentId: _graceCard.student.id,
+      classId:   _repData.class.id,
+      schoolId:  S.school.id,
+      items,
+      adminId:   S.user?.user?.id ?? null,
+    });
+    closeGraceModal();
+    toast('تم حفظ درجات المساعدة', 'success');
+    loadReports(_repData.class.id);
+  } catch (err) {
+    console.error('[NSAMS] setStudentGrace', err);
+    graceErrorEl.textContent = 'تعذّر الحفظ.'; show(graceErrorEl);
+    btnSaveGrace.disabled = false;
+  }
+});
 
 // Enhance the school-admin selects once the DOM is parsed.
 CustomSelect.enhance('mng-class-select');

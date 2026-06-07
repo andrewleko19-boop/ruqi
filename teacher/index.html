@@ -234,6 +234,10 @@
           <svg class="icon icon-sm"><use href="#ic-award"/></svg>
           الدرجات
         </button>
+        <button id="mode-conduct" class="mode-tab" role="tab" aria-selected="false" style="display:none">
+          <svg class="icon icon-sm"><use href="#ic-users"/></svg>
+          السلوك
+        </button>
       </div>
 
       <p id="home-section-title" class="section-title">صفوفي اليوم</p>
@@ -435,6 +439,45 @@
     </div>
 
   </div><!-- /view-grades -->
+
+  <!-- ── Conduct View: enter السلوك (grades 7+) ────────────────────────────── -->
+  <div id="view-conduct" hidden>
+    <header class="att-screen-header">
+      <button id="btn-conduct-back" class="btn-back" aria-label="العودة">
+        <svg class="icon icon-sm"><use href="#ic-arrow-right"/></svg>
+        العودة
+      </button>
+      <div class="att-hdr-info">
+        <div id="conduct-class-name" class="att-hdr-name">…</div>
+        <div class="att-hdr-date">إدخال درجة السلوك (من ١٠٠)</div>
+      </div>
+    </header>
+
+    <div class="grades-legend"><span class="gl-chip">النجاح يتطلب سلوكاً ≥ ٦٠ من ١٠٠</span></div>
+
+    <div id="conduct-loading" style="padding:16px var(--page-px,16px)">
+      <div class="stu-skeleton" style="height:48px;border-radius:12px;margin-bottom:10px"></div>
+      <div class="stu-skeleton" style="height:48px;border-radius:12px"></div>
+    </div>
+
+    <ul id="conduct-list" class="students-list" hidden role="list" aria-label="درجات السلوك"></ul>
+
+    <div id="conduct-empty" hidden style="text-align:center;padding:48px 24px;color:var(--clr-text-3)">
+      <p>لا يوجد طلاب في هذا الصف.</p>
+    </div>
+
+    <div style="height:90px"></div>
+
+    <div id="conduct-footer" class="att-footer">
+      <div class="att-footer-inner">
+        <button id="btn-save-conduct" class="btn btn-primary" style="flex:1">
+          <svg class="icon icon-sm"><use href="#ic-check"/></svg>
+          <span id="save-conduct-label">حفظ السلوك</span>
+          <span class="spinner" id="save-conduct-spinner" hidden></span>
+        </button>
+      </div>
+    </div>
+  </div><!-- /view-conduct -->
 
 </div><!-- /screen-app -->
 

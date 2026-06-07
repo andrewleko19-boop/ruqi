@@ -606,6 +606,16 @@
           </select>
         </div>
 
+        <div class="field-group">
+          <label for="rep-minatt">الحد الأدنى لنسبة الدوام للنجاح (٪)</label>
+          <div style="display:flex; gap:8px; align-items:center">
+            <input id="rep-minatt" class="field-input" type="number" min="0" max="100" step="1"
+                   style="flex:1" />
+            <button type="button" class="btn btn-ghost" id="btn-save-minatt">حفظ</button>
+          </div>
+          <p class="mng-hint" style="margin-top:4px">يُطبَّق شرطاً للنجاح في الصفوف ٥ فما فوق.</p>
+        </div>
+
         <div id="rep-loading" hidden style="padding:8px 0">
           <div class="dskel"></div><div class="dskel" style="width:70%"></div>
         </div>
@@ -773,6 +783,10 @@
         <input id="subj-arabic" type="checkbox" />
         <span>مادة لغة عربية (نسبة النجاح 50٪ وتدخل في قاعدة الرسوب)</span>
       </label>
+      <label class="subj-check">
+        <input id="subj-math" type="checkbox" />
+        <span>مادة الرياضيات (تدخل في قاعدة الرسوب للصفوف ١–٤)</span>
+      </label>
 
       <div class="block-label" style="margin-top:14px">
         <svg class="icon icon-sm"><use href="#ic-clipboard"/></svg>
@@ -793,6 +807,35 @@
         <span class="spinner" id="subj-spinner" hidden></span>
       </button>
     </div>
+  </div>
+</div>
+
+<!-- ═══ Grace marks (درجات المساعدة) ═══════════════════════════════════════════ -->
+<div id="modal-grace" class="overlay" hidden aria-modal="true" role="dialog" aria-label="درجات المساعدة">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-hdr">
+      <div class="sheet-title">
+        <svg class="icon"><use href="#ic-award"/></svg>
+        <span id="grace-title">درجات المساعدة</span>
+      </div>
+      <button class="icon-btn" id="btn-close-grace" aria-label="إغلاق">
+        <svg class="icon icon-sm"><use href="#ic-x"/></svg>
+      </button>
+    </div>
+    <p class="mng-hint" id="grace-student"></p>
+    <p class="mng-hint">حتى ١٠ درجات لكل مادة، وزمرتا العربية تُعدّان مادة واحدة، والإجمالي لا يتجاوز ٥٠ درجة. لا تدخل في ترتيب النجاح.</p>
+    <ul id="grace-list" class="comp-list" role="list"></ul>
+    <div class="field-group" style="margin-top:10px">
+      <label for="grace-total">درجات مساعدة تُضاف للمجموع</label>
+      <input id="grace-total" class="field-input" type="number" min="0" step="1" value="0" />
+    </div>
+    <div id="grace-summary" class="mng-hint" style="margin-top:8px"></div>
+    <div id="grace-error" class="msg msg-error" hidden></div>
+    <button type="button" class="btn btn-primary btn-full" id="btn-save-grace" style="margin-top:10px">
+      <svg class="icon icon-sm"><use href="#ic-check"/></svg>
+      <span>حفظ درجات المساعدة</span>
+    </button>
   </div>
 </div>
 
@@ -977,6 +1020,13 @@
 .rep-badge.partial { background: #FEF3C7; color: #B45309; }
 .rep-badge.pending { background: #E2E8F0; color: #64748B; }
 .rep-pct { font-weight: 800; color: #0B2B5E; min-width: 52px; text-align: center; flex-shrink: 0; }
+.rep-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.rep-meta-tag {
+  font-size: .68rem; font-weight: 700; color: #475569;
+  background: #F1F5F9; border: 1px solid #E2E8F0; border-radius: 999px; padding: 2px 8px;
+}
+.rep-meta-tag.bad { color: #DC2626; background: #FEE2E2; border-color: #FECACA; }
+.grace-in { text-align: center; }
 
 /* Subject component editor */
 .subj-check {

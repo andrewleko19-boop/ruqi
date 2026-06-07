@@ -24,6 +24,7 @@ const QUEUE_ATTENDANCE = "nsams_pending_attendance";
 const QUEUE_REPORTS    = "nsams_pending_reports";
 const QUEUE_STU_ATT    = 'nsams_pending_stu_att';
 const QUEUE_GRADES     = 'nsams_pending_grades';
+const QUEUE_CONDUCT    = 'nsams_pending_conduct';
 
 function readQueue(key) {
   try { return JSON.parse(localStorage.getItem(key) || "[]"); }
@@ -188,6 +189,17 @@ async function getSchoolById(schoolId) {
     .single();
   if (error) throw error;
   return data;
+}
+
+// School-admin: update editable school settings (currently the minimum
+// attendance % used as a promotion gate). camelCase in → snake_case column.
+async function updateSchool(schoolId, patch) {
+  const row = {};
+  if (patch.minAttendancePct !== undefined) row.min_attendance_pct = patch.minAttendancePct;
+  if (Object.keys(row).length === 0) return true;
+  const { error } = await db.from('schools').update(row).eq('id', schoolId);
+  if (error) throw error;
+  return true;
 }
 
 // ─── Attendance ───────────────────────────────────────────────────────────────
@@ -1062,7 +1074,7 @@ async function rejectClassSubmission(submissionId, confirmedBy, notes) {
 async function getSchoolSubjects(schoolId, grade = null) {
   let q = db
     .from('subjects')
-    .select('id, school_id, grade, name, max_total, pass_mark, is_core_arabic, sort_order, is_active')
+    .select('id, school_id, grade, name, max_total, pass_mark, is_core_arabic, is_core_math, sort_order, is_active')
     .eq('school_id', schoolId);
   if (grade != null) q = q.eq('grade', grade);
   const { data, error } = await q
@@ -1073,7 +1085,7 @@ async function getSchoolSubjects(schoolId, grade = null) {
   return data ?? [];
 }
 
-async function createSubject({ schoolId, grade, name, maxTotal = 100, passMark = 40, isCoreArabic = false, sortOrder = null }) {
+async function createSubject({ schoolId, grade, name, maxTotal = 100, passMark = 40, isCoreArabic = false, isCoreMath = false, sortOrder = null }) {
   const { data, error } = await db
     .from('subjects')
     .insert({
@@ -1083,6 +1095,7 @@ async function createSubject({ schoolId, grade, name, maxTotal = 100, passMark =
       max_total:      maxTotal,
       pass_mark:      passMark,
       is_core_arabic: isCoreArabic,
+      is_core_math:   isCoreMath,
       sort_order:     sortOrder,
       is_active:      true,
     })
@@ -1098,6 +1111,7 @@ async function updateSubject(id, patch) {
   if (patch.maxTotal     !== undefined) row.max_total       = patch.maxTotal;
   if (patch.passMark     !== undefined) row.pass_mark       = patch.passMark;
   if (patch.isCoreArabic !== undefined) row.is_core_arabic  = patch.isCoreArabic;
+  if (patch.isCoreMath   !== undefined) row.is_core_math    = patch.isCoreMath;
   if (patch.sortOrder    !== undefined) row.sort_order      = patch.sortOrder;
   if (patch.isActive     !== undefined) row.is_active       = patch.isActive;
   const { error } = await db.from('subjects').update(row).eq('id', id);
@@ -1260,30 +1274,159 @@ async function saveStudentGrades({ records, classId, schoolId, subjectId, semest
   }
 }
 
-// ─── Report-card result rule ─────────────────────────────────────────────────
-// Decides the year result from each subject's pass/fail flags.
-// PRIMARY (ابتدائي), confirmed by the principal:
-//   • Arabic = two subjects (is_core_arabic), each pass ≥ 50%.
-//   • Other subjects pass ≥ 40%.
-//   • FAIL the year (راسب) if Arabic is failed OR two+ non-Arabic subjects fail.
-//   • Exactly one non-Arabic fail (Arabic passed) → مكمّل.
-//   • Otherwise → ناجح.
-// NOTE: rules for إعدادي/ثانوي and the full إكمال details are still pending from
-// the user; non-primary stages use a provisional rule until then.
-function computeYearResult(subjectResults, stage = 'primary') {
-  const arabicFailed = subjectResults.some(s => s.isCoreArabic && s.passed === false);
-  const otherFailed  = subjectResults.filter(s => !s.isCoreArabic && s.passed === false).length;
+// ─── Conduct (درجة السلوك) — required for grades 7+ promotion ─────────────────
+// One mark (0..100) per student per academic year, entered by the class's
+// attendance teacher (homeroom/supervisor). Mirrors the grades offline queue.
+async function getClassConduct(classId) {
+  const academicYear = getAcademicYear();
+  const { data, error } = await db
+    .from('student_conduct')
+    .select('student_id, mark')
+    .eq('class_id',      classId)
+    .eq('academic_year', academicYear);
+  if (error) throw error;
+  const map = {};
+  for (const r of data ?? []) map[r.student_id] = r.mark;
+  return map;
+}
 
-  if (stage === 'primary') {
-    if (arabicFailed || otherFailed >= 2) return 'راسب';
-    if (otherFailed === 1)                return 'مكمّل';
-    return 'ناجح';
+function getPendingStudentConduct() {
+  return readQueue(QUEUE_CONDUCT).filter(r => !r.synced);
+}
+function markStudentConductSynced(localId) {
+  writeQueue(QUEUE_CONDUCT, readQueue(QUEUE_CONDUCT).map(r =>
+    r.localId === localId ? { ...r, synced: true } : r));
+}
+
+async function syncStudentConductRecord(payload) {
+  const { records, classId, schoolId, academicYear, teacherId } = payload;
+  const rows = records.map(r => ({
+    student_id:    r.studentId,
+    class_id:      classId,
+    school_id:     schoolId,
+    academic_year: academicYear,
+    mark:          r.mark,
+    recorded_by:   teacherId,
+    recorded_at:   new Date().toISOString(),
+  }));
+  if (rows.length === 0) return true;
+  const { error } = await db
+    .from('student_conduct')
+    .upsert(rows, { onConflict: 'student_id,academic_year', ignoreDuplicates: false });
+  if (error) throw error;
+  return true;
+}
+
+// Save a class's conduct marks. records: [{ studentId, mark }].
+async function saveStudentConduct({ records, classId, schoolId, teacherId }) {
+  const localId      = generateLocalId();
+  const academicYear = getAcademicYear();
+  const payload = {
+    localId, records, classId, schoolId, academicYear, teacherId,
+    synced: false, createdAt: new Date().toISOString(),
+  };
+  if (!isOnline()) {
+    const q = readQueue(QUEUE_CONDUCT); q.push(payload); writeQueue(QUEUE_CONDUCT, q);
+    return { success: true, localId, synced: false };
   }
-  // Provisional (pending إعدادي/ثانوي rules from the user):
-  const totalFailed = subjectResults.filter(s => s.passed === false).length;
-  if (totalFailed === 0) return 'ناجح';
-  if (totalFailed <= 2)  return 'مكمّل';
-  return 'راسب';
+  try {
+    await syncStudentConductRecord(payload);
+    return { success: true, localId, synced: true };
+  } catch (err) {
+    const q = readQueue(QUEUE_CONDUCT); q.push(payload); writeQueue(QUEUE_CONDUCT, q);
+    console.warn('[NSAMS] saveStudentConduct: falling back to queue', err);
+    return { success: true, localId, synced: false };
+  }
+}
+
+// ─── Grace marks (درجات المساعدة) — school-admin remediation tool ─────────────
+// Pushes a failing student over the line within the official caps (≤10 per
+// subject, Arabic group counts once, ≤50 total). subjectId = null means the
+// grace is added to the overall total only. Stored per (student, subject[,null]).
+async function getClassGrace(classId) {
+  const academicYear = getAcademicYear();
+  const { data, error } = await db
+    .from('student_grace')
+    .select('student_id, subject_id, marks')
+    .eq('class_id',      classId)
+    .eq('academic_year', academicYear);
+  if (error) throw error;
+  // map[studentId] = { bySubject: { [subjectId]: marks }, total: marks }
+  const map = {};
+  for (const r of data ?? []) {
+    const e = map[r.student_id] ||= { bySubject: {}, total: 0 };
+    if (r.subject_id == null) e.total += Number(r.marks) || 0;
+    else e.bySubject[r.subject_id] = Number(r.marks) || 0;
+  }
+  return map;
+}
+
+// Replace a student's grace for the year. items: [{ subjectId|null, marks }].
+// Rows with marks <= 0 are removed. Online-only (admin tool).
+async function setStudentGrace({ studentId, classId, schoolId, items, adminId }) {
+  const academicYear = getAcademicYear();
+  const { error: delErr } = await db
+    .from('student_grace')
+    .delete()
+    .eq('student_id',    studentId)
+    .eq('class_id',      classId)
+    .eq('academic_year', academicYear);
+  if (delErr) throw delErr;
+
+  const rows = (items ?? [])
+    .filter(it => Number(it.marks) > 0)
+    .map(it => ({
+      student_id:    studentId,
+      class_id:      classId,
+      school_id:     schoolId,
+      academic_year: academicYear,
+      subject_id:    it.subjectId ?? null,
+      marks:         Number(it.marks),
+      granted_by:    adminId,
+      granted_at:    new Date().toISOString(),
+    }));
+  if (rows.length === 0) return true;
+  const { error } = await db.from('student_grace').insert(rows);
+  if (error) throw error;
+  return true;
+}
+
+// ─── Report-card result rule (شروط النجاح والرسوب — مديرية التربية) ───────────
+// Three grade bands, result is ناجح/راسب only (no مكمّل for basic education):
+//   • Band A (grades 1-4): fail if MORE THAN ONE of the core areas
+//     (is_core_arabic ×2 + is_core_math) is "weak" (percent < 50).
+//   • Band B (grades 5-6): pass needs ALL of — total ≥ 50%, the combined Arabic
+//     unit ≥ 50%, at most TWO non-Arabic subjects below 40%, and attendance ≥
+//     the school's minimum. Grace marks are applied before this check.
+//   • Band C (grades 7+): same as B PLUS conduct ≥ 60%.
+// ctx = { band, subjects:[{percent,isCoreArabic,isCoreMath}], totalPercent,
+//         arabicPercent, conductPercent, attendancePercent, minAttendancePct }.
+function promotionBand(grade) {
+  if (grade <= 4) return 'A';
+  if (grade <= 6) return 'B';
+  return 'C'; // grades 7+ (certificate grades 9/12 treated the same for now)
+}
+
+function computeYearResult(ctx) {
+  if (ctx.band === 'A') {
+    const weak = ctx.subjects.filter(s =>
+      (s.isCoreArabic || s.isCoreMath) && s.percent != null && s.percent < 50).length;
+    return weak > 1 ? 'راسب' : 'ناجح';
+  }
+  // Bands B and C
+  const totalOk    = ctx.totalPercent != null && ctx.totalPercent >= 50;
+  const arabicOk   = ctx.arabicPercent == null || ctx.arabicPercent >= 50;
+  const belowForty = ctx.subjects.filter(s =>
+    !s.isCoreArabic && s.percent != null && s.percent < 40).length;
+  const fortyOk    = belowForty <= 2;
+  // Attendance only gates when we have both a recorded % and a configured min.
+  const attOk      = ctx.attendancePercent == null || ctx.minAttendancePct == null
+                     || ctx.attendancePercent >= ctx.minAttendancePct;
+  let ok = totalOk && arabicOk && fortyOk && attOk;
+  if (ctx.band === 'C') {
+    ok = ok && (ctx.conductPercent != null && ctx.conductPercent >= 60);
+  }
+  return ok ? 'ناجح' : 'راسب';
 }
 
 function stageForGrade(grade) {
@@ -1306,18 +1449,28 @@ async function getClassReportCards(classId, academicYear = getAcademicYear(), te
   if (clsErr) throw clsErr;
 
   const stage = stageForGrade(cls.grade);
+  const band  = promotionBand(cls.grade);
 
-  const [students, subjectsRaw, gradesRes] = await Promise.all([
+  const [students, subjectsRaw, gradesRes, attRes, conduct, grace, schoolRes] = await Promise.all([
     getClassStudents(classId),
     getSchoolSubjects(cls.school_id, cls.grade),
     db.from('student_grades')
       .select('student_id, subject_id, component_id, semester, mark')
       .eq('class_id',      classId)
       .eq('academic_year', academicYear),
+    db.from('daily_student_attendance')
+      .select('student_id, status')
+      .eq('class_id', classId)
+      .gte('date', `${academicYear.split('-')[0]}-09-01`),
+    getClassConduct(classId).catch(() => ({})),
+    getClassGrace(classId).catch(() => ({})),
+    db.from('schools').select('min_attendance_pct').eq('id', cls.school_id).single(),
   ]);
   if (gradesRes.error) throw gradesRes.error;
+  if (attRes.error) throw attRes.error;
 
   const subjects = subjectsRaw.filter(s => s.is_active);
+  const minAttendancePct = Number(schoolRes?.data?.min_attendance_pct ?? 75);
 
   // grades[studentId][subjectId][semester] = Σ component marks
   const grades = {};
@@ -1327,10 +1480,19 @@ async function getClassReportCards(classId, academicYear = getAcademicYear(), te
     bySub[r.semester] = (bySub[r.semester] || 0) + Number(r.mark || 0);
   }
 
+  // attendance[studentId] = { attended, total }  (present+late vs all recorded)
+  const attendance = {};
+  for (const r of attRes.data ?? []) {
+    const e = attendance[r.student_id] ||= { attended: 0, total: 0 };
+    e.total++;
+    if (r.status === 'present' || r.status === 'late') e.attended++;
+  }
+
   const isS1 = term === 's1';
 
   const cards = students.map(stu => {
-    const stuGrades = grades[stu.id] || {};
+    const stuGrades  = grades[stu.id] || {};
+    const stuGrace   = grace[stu.id]  || { bySubject: {}, total: 0 };
     const subjResults = subjects.map(sub => {
       const sem  = stuGrades[sub.id] || {};
       const s1   = sem[1] ?? null;
@@ -1349,10 +1511,15 @@ async function getClassReportCards(classId, academicYear = getAcademicYear(), te
       }
       const percent = mark == null ? null : (mark / maxTotal) * 100;
       const passed  = percent == null ? null : percent >= Number(sub.pass_mark);
+      // Grace marks (درجات المساعدة) lift the subject for the promotion check.
+      const graceMk = Number(stuGrace.bySubject[sub.id]) || 0;
+      const markWithGrace    = mark == null ? null : mark + graceMk;
+      const percentWithGrace = markWithGrace == null ? null : (markWithGrace / maxTotal) * 100;
       return {
         subjectId:    sub.id,
         name:         sub.name,
         isCoreArabic: !!sub.is_core_arabic,
+        isCoreMath:   !!sub.is_core_math,
         maxTotal,
         passMark:     Number(sub.pass_mark),
         sem1:         s1,
@@ -1360,21 +1527,48 @@ async function getClassReportCards(classId, academicYear = getAcademicYear(), te
         mark,
         percent,
         passed,
+        grace:            graceMk,
+        markWithGrace,
+        percentWithGrace,
       };
     });
 
-    const graded = subjResults.filter(s => s.percent != null);
-    const finalPercent = graded.length
-      ? graded.reduce((a, s) => a + s.percent, 0) / graded.length
-      : null;
+    const graded = subjResults.filter(s => s.mark != null);
     const complete = subjResults.length > 0 && subjResults.every(s => s.percent != null);
-    // First-semester certificate shows marks + average only — no year verdict.
-    const result   = (!isS1 && complete) ? computeYearResult(subjResults, stage) : null;
 
-    return { student: stu, subjects: subjResults, finalPercent, result, complete };
+    // Totals (grace-applied) for the promotion gate + displayed final %.
+    const sumMax   = graded.reduce((a, s) => a + s.maxTotal, 0);
+    const sumMark  = graded.reduce((a, s) => a + s.markWithGrace, 0) + (Number(stuGrace.total) || 0);
+    const totalPercent = sumMax ? (sumMark / sumMax) * 100 : null;
+    const arSubs   = graded.filter(s => s.isCoreArabic);
+    const arMax    = arSubs.reduce((a, s) => a + s.maxTotal, 0);
+    const arabicPercent = arMax ? (arSubs.reduce((a, s) => a + s.markWithGrace, 0) / arMax) * 100 : null;
+
+    const att = attendance[stu.id];
+    const attendancePercent = att && att.total ? (att.attended / att.total) * 100 : null;
+    const conductMark = conduct[stu.id] ?? null;
+
+    // First-semester certificate shows marks + average only — no year verdict.
+    const result = (!isS1 && complete)
+      ? computeYearResult({
+          band,
+          subjects: subjResults.map(s => ({
+            percent: s.percentWithGrace, isCoreArabic: s.isCoreArabic, isCoreMath: s.isCoreMath,
+          })),
+          totalPercent, arabicPercent,
+          conductPercent: conductMark, attendancePercent, minAttendancePct,
+        })
+      : null;
+
+    return {
+      student: stu, subjects: subjResults,
+      finalPercent: totalPercent, result, complete,
+      attendancePercent, conductMark,
+      graceTotal: Number(stuGrace.total) || 0,
+    };
   });
 
-  return { class: cls, stage, term, academicYear, students: cards };
+  return { class: cls, stage, band, term, academicYear, minAttendancePct, students: cards };
 }
 
 async function getStudentReportCard(classId, studentId, academicYear = getAcademicYear(), term = 'year') {
@@ -1392,6 +1586,7 @@ async function syncPendingV2() {
     reports:    { synced: 0, failed: 0 },
     studentAtt: { synced: 0, failed: 0 },
     grades:     { synced: 0, failed: 0 },
+    conduct:    { synced: 0, failed: 0 },
   };
 
   for (const record of getPendingAttendance()) {
@@ -1426,6 +1621,14 @@ async function syncPendingV2() {
     } catch { results.grades.failed++; }
   }
 
+  for (const payload of getPendingStudentConduct()) {
+    try {
+      await syncStudentConductRecord(payload);
+      markStudentConductSynced(payload.localId);
+      results.conduct.synced++;
+    } catch { results.conduct.failed++; }
+  }
+
   return results;
 }
 
@@ -1440,6 +1643,7 @@ window.NSAMS_DB = {
   getSchools,
   getSchoolStatus,
   getSchoolById,
+  updateSchool,
 
   // School-level attendance & reports
   saveAttendance,
@@ -1497,8 +1701,14 @@ window.NSAMS_DB = {
   getClassGrades,
   saveStudentGrades,
   getPendingStudentGrades,
+  getClassConduct,
+  saveStudentConduct,
+  getPendingStudentConduct,
+  getClassGrace,
+  setStudentGrace,
   getClassReportCards,
   getStudentReportCard,
+  promotionBand,
 
   // Sync
   syncPending: syncPendingV2,

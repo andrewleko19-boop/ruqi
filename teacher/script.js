@@ -27,6 +27,8 @@ const {
   getClassGradeSubjects,
   getClassGrades,
   saveStudentGrades,
+  getClassConduct,
+  saveStudentConduct,
 } = window.NSAMS_DB;
 
 // ── App State ─────────────────────────────────────────────────────────────────
@@ -215,7 +217,8 @@ function showScreen(name) {
 function showView(name) {
   viewHome.hidden   = name !== 'home';
   viewAtt.hidden    = name !== 'att';
-  if (viewGrades) viewGrades.hidden = name !== 'grades';
+  if (viewGrades)  viewGrades.hidden  = name !== 'grades';
+  if (viewConduct) viewConduct.hidden = name !== 'conduct';
 }
 
 // ── Connectivity ──────────────────────────────────────────────────────────────
@@ -383,29 +386,41 @@ function attendanceClasses() {
 function gradeClasses() {
   return S.classes.filter(c => c.role === 'homeroom' || c.role === 'subject');
 }
+// Conduct (السلوك) is entered by the attendance teacher for grades 7+.
+function conductClasses() {
+  return S.classes.filter(c =>
+    (c.role === 'homeroom' || c.role === 'supervisor') && c.grade >= 7);
+}
+function classesForMode(mode) {
+  if (mode === 'grades')  return gradeClasses();
+  if (mode === 'conduct') return conductClasses();
+  return attendanceClasses();
+}
 
 // Show only the tabs the teacher actually has classes for; pick a sensible
-// default mode. A teacher with a single role sees no tab bar at all.
+// default mode. A teacher with a single mode sees no tab bar at all.
 function setupModeTabs() {
-  const hasAtt    = attendanceClasses().length > 0;
-  const hasGrades = gradeClasses().length > 0;
-  modeAttBtn.style.display    = hasAtt    ? '' : 'none';
-  modeGradesBtn.style.display = hasGrades ? '' : 'none';
-  if (modeTabs) modeTabs.style.display = (hasAtt && hasGrades) ? '' : 'none';
-  homeMode = hasAtt ? 'att' : (hasGrades ? 'grades' : 'att');
+  const hasAtt     = attendanceClasses().length > 0;
+  const hasGrades  = gradeClasses().length > 0;
+  const hasConduct = conductClasses().length > 0;
+  modeAttBtn.style.display     = hasAtt     ? '' : 'none';
+  modeGradesBtn.style.display  = hasGrades  ? '' : 'none';
+  modeConductBtn.style.display = hasConduct ? '' : 'none';
+  const count = [hasAtt, hasGrades, hasConduct].filter(Boolean).length;
+  if (modeTabs) modeTabs.style.display = count > 1 ? '' : 'none';
+  homeMode = hasAtt ? 'att' : (hasGrades ? 'grades' : (hasConduct ? 'conduct' : 'att'));
 }
 
 // Render the class list for the current mode (re-run when the tab changes).
 async function renderClassList() {
-  const grading = homeMode === 'grades';
-  const list = grading ? gradeClasses() : attendanceClasses();
+  const list = classesForMode(homeMode);
 
   hide(classesEmpty);
   if (list.length === 0) { hide(classesList); show(classesEmpty); return; }
 
   // Submission badges only matter in attendance mode.
   let statuses = [];
-  if (!grading) {
+  if (homeMode === 'att') {
     const today = todayISO();
     statuses = await Promise.allSettled(list.map(c => getClassSubmissionStatus(c.id, today)));
   }
@@ -413,24 +428,24 @@ async function renderClassList() {
   show(classesList);
   classesList.innerHTML = '';
   list.forEach((cls, i) => {
-    const sub = (!grading && statuses[i]?.status === 'fulfilled') ? statuses[i].value : null;
-    classesList.appendChild(buildClassCard(cls, sub, grading));
+    const sub = (homeMode === 'att' && statuses[i]?.status === 'fulfilled') ? statuses[i].value : null;
+    classesList.appendChild(buildClassCard(cls, sub, homeMode));
   });
 }
 
 // ── Class Card ────────────────────────────────────────────────────────────────
-function buildClassCard(cls, submission, grading = false) {
+function buildClassCard(cls, submission, mode = 'att') {
   const card = document.createElement('button');
   card.className   = 'class-card';
   card.setAttribute('aria-label', `فتح ${cls.displayName}`);
 
-  // The submission badge is an attendance concept; grade cards omit it.
-  const statusHtml = grading
-    ? ''
-    : (() => {
+  // The submission badge is an attendance concept; other modes omit it.
+  const statusHtml = mode === 'att'
+    ? (() => {
         const { badgeClass, badgeText } = submissionBadge(submission);
         return `<div class="class-status"><span class="status-badge ${badgeClass}">${badgeText}</span></div>`;
-      })();
+      })()
+    : '';
 
   card.innerHTML = `
     <div class="class-icon">
@@ -444,8 +459,9 @@ function buildClassCard(cls, submission, grading = false) {
   `;
 
   card.addEventListener('click', () => {
-    if (grading) openGradesView(cls);
-    else         openAttendanceView(cls);
+    if (mode === 'grades')       openGradesView(cls);
+    else if (mode === 'conduct') openConductView(cls);
+    else                         openAttendanceView(cls);
   });
   return card;
 }
@@ -945,8 +961,10 @@ modalAbslog.addEventListener('click', (e) => {
 // Grades (الدرجات)
 // ═══════════════════════════════════════════════════════════════════════════
 const viewGrades        = $('view-grades');
+const viewConduct       = $('view-conduct');
 const modeAttBtn        = $('mode-att');
 const modeGradesBtn     = $('mode-grades');
+const modeConductBtn    = $('mode-conduct');
 const modeTabs          = document.querySelector('.mode-tabs');
 const homeSectionTitle  = $('home-section-title');
 const btnGradesBack     = $('btn-grades-back');
@@ -964,6 +982,15 @@ const gradesFooter      = $('grades-footer');
 const btnSaveGrades     = $('btn-save-grades');
 const saveGradesLabel   = $('save-grades-label');
 const saveGradesSpinner = $('save-grades-spinner');
+const viewConductName   = $('conduct-class-name');
+const btnConductBack    = $('btn-conduct-back');
+const conductLoading    = $('conduct-loading');
+const conductList       = $('conduct-list');
+const conductEmpty      = $('conduct-empty');
+const conductFooter     = $('conduct-footer');
+const btnSaveConduct    = $('btn-save-conduct');
+const saveConductLabel  = $('save-conduct-label');
+const saveConductSpinner= $('save-conduct-spinner');
 
 // ─── Custom Select (themed dropdown) ─────────────────────────────────────────
 // Same component the school page uses, so the teacher pickers match the rest of
@@ -1157,17 +1184,22 @@ function setHomeMode(mode) {
 
 // Reflect the current homeMode in the tab UI + re-render the filtered list.
 function applyHomeMode() {
-  const grading = homeMode === 'grades';
-  modeAttBtn.classList.toggle('is-active', !grading);
-  modeGradesBtn.classList.toggle('is-active', grading);
-  modeAttBtn.setAttribute('aria-selected', String(!grading));
-  modeGradesBtn.setAttribute('aria-selected', String(grading));
-  homeSectionTitle.textContent = grading ? 'اختر صفاً لإدخال الدرجات' : 'صفوفي اليوم';
+  const set = (btn, on) => {
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-selected', String(on));
+  };
+  set(modeAttBtn,     homeMode === 'att');
+  set(modeGradesBtn,  homeMode === 'grades');
+  set(modeConductBtn, homeMode === 'conduct');
+  homeSectionTitle.textContent =
+    homeMode === 'grades'  ? 'اختر صفاً لإدخال الدرجات' :
+    homeMode === 'conduct' ? 'اختر صفاً لإدخال السلوك'  : 'صفوفي اليوم';
   renderClassList();
 }
 
 modeAttBtn.addEventListener('click', () => setHomeMode('att'));
 modeGradesBtn.addEventListener('click', () => setHomeMode('grades'));
+modeConductBtn.addEventListener('click', () => setHomeMode('conduct'));
 
 function currentSubject() {
   return G.subjects.find(s => s.id === gradesSubjectSel.value) ?? null;
@@ -1464,6 +1496,105 @@ btnSaveGrades.addEventListener('click', async () => {
 btnGradesBack.addEventListener('click', () => {
   if (G.dirty && !confirm('يوجد درجات غير محفوظة. هل تريد الخروج وتجاهلها؟')) return;
   G.class = null; G.students = []; G.subjects = []; G.marks = {}; G.dirty = false;
+  showView('home');
+});
+
+// ── Conduct (السلوك) entry ─────────────────────────────────────────────────────
+const C = { class: null, students: [], marks: {}, dirty: false };
+
+async function openConductView(cls) {
+  C.class = cls; C.students = []; C.marks = {}; C.dirty = false;
+  viewConductName.textContent = cls.displayName;
+  showView('conduct');
+  hide(conductList); hide(conductEmpty); show(conductFooter); show(conductLoading);
+  try {
+    const [students, existing] = await Promise.all([
+      getClassStudents(cls.id),
+      getClassConduct(cls.id).catch(() => ({})),
+    ]);
+    C.students = students ?? [];
+    hide(conductLoading);
+    if (C.students.length === 0) { hide(conductFooter); show(conductEmpty); return; }
+    conductList.innerHTML = '';
+    C.students.forEach((stu, i) => {
+      const v = existing[stu.id];
+      C.marks[stu.id] = (v == null) ? null : Number(v);
+      conductList.appendChild(buildConductRow(stu, i + 1));
+    });
+    show(conductList);
+  } catch (err) {
+    console.error('[NSAMS-T] openConductView', err);
+    hide(conductLoading); hide(conductFooter);
+    toast('تعذّر تحميل قائمة الطلاب', 'error');
+  }
+}
+
+function buildConductRow(stu, num) {
+  const li = document.createElement('li');
+  li.className = 'grade-row';
+  const v = C.marks[stu.id];
+  li.innerHTML = `
+    <div class="grade-row-head">
+      <span class="student-num">${num}</span>
+      <span class="student-name">${escapeHtml(stu.full_name)}</span>
+    </div>
+    <div class="grade-inputs" data-sid="${escapeHtml(stu.id)}">
+      <div class="grade-cell">
+        <input class="grade-input conduct-input" type="number" inputmode="numeric"
+          min="0" max="100" step="1" data-sid="${escapeHtml(stu.id)}"
+          aria-label="درجة سلوك ${escapeHtml(stu.full_name)}"
+          value="${v == null ? '' : escapeHtml(String(v))}" />
+        <span class="grade-cell-lbl">من ١٠٠</span>
+      </div>
+    </div>
+  `;
+  return li;
+}
+
+conductList.addEventListener('input', (e) => {
+  const input = e.target.closest('.conduct-input');
+  if (!input) return;
+  const sid = input.dataset.sid;
+  const raw = input.value.trim();
+  if (raw === '') { C.marks[sid] = null; input.classList.remove('invalid'); }
+  else {
+    const n = Number(raw);
+    const valid = Number.isFinite(n) && n >= 0 && n <= 100;
+    input.classList.toggle('invalid', !valid);
+    C.marks[sid] = valid ? n : null;
+  }
+  C.dirty = true;
+});
+
+btnSaveConduct.addEventListener('click', async () => {
+  if (!C.class) return;
+  const records = C.students
+    .filter(stu => C.marks[stu.id] != null)
+    .map(stu => ({ studentId: stu.id, mark: C.marks[stu.id] }));
+  if (records.length === 0) { toast('أدخل درجة سلوك واحدة على الأقل', 'warning'); return; }
+
+  btnSaveConduct.disabled = true;
+  saveConductLabel.hidden = true;
+  saveConductSpinner.hidden = false;
+  try {
+    const res = await saveStudentConduct({
+      records, classId: C.class.id, schoolId: C.class.schoolId, teacherId: S.user.user.id,
+    });
+    C.dirty = false;
+    toast(res.synced ? 'تم حفظ السلوك' : 'حُفظ محلياً وسيُرسل عند الاتصال', 'success');
+  } catch (err) {
+    console.error('[NSAMS-T] saveStudentConduct', err);
+    toast('تعذّر حفظ السلوك', 'error');
+  } finally {
+    btnSaveConduct.disabled = false;
+    saveConductLabel.hidden = false;
+    saveConductSpinner.hidden = true;
+  }
+});
+
+btnConductBack.addEventListener('click', () => {
+  if (C.dirty && !confirm('يوجد درجات سلوك غير محفوظة. هل تريد الخروج وتجاهلها؟')) return;
+  C.class = null; C.students = []; C.marks = {}; C.dirty = false;
   showView('home');
 });
 
