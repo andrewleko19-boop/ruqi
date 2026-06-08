@@ -2950,8 +2950,14 @@ el('btn-save-student').addEventListener('click', async () => {
   if (!input.firstName || !input.fatherName || !input.familyName) {
     stuFormError.textContent = 'الاسم واسم الأب والكنية حقول إلزامية.'; show(stuFormError); return;
   }
-  if (input.nationalId && !/^\d{6,20}$/.test(input.nationalId)) {
-    stuFormError.textContent = 'الرقم الوطني يجب أن يكون أرقاماً (٦–٢٠ خانة).'; show(stuFormError); return;
+  if (!input.cardNumber) {
+    stuFormError.textContent = 'رقم السجل العام حقل إلزامي.'; show(stuFormError); return;
+  }
+  if (input.nationalId && !/^\d{11}$/.test(input.nationalId)) {
+    stuFormError.textContent = input.nationalId.length < 11
+      ? `الرقم الوطني يجب أن يكون ١١ رقماً — أدخلت ${input.nationalId.length} فقط.`
+      : `الرقم الوطني يجب أن يكون ١١ رقماً — أدخلت ${input.nationalId.length}.`;
+    show(stuFormError); return;
   }
   // Date of birth (optional) — must be a valid, non-future, not-too-old date.
   const dob = validateDob();

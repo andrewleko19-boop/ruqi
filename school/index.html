@@ -954,20 +954,21 @@
         </div>
         <div class="field-group">
           <label for="stu-natid">الرقم الوطني</label>
-          <input id="stu-natid" class="field-input field-narrow" type="text" inputmode="numeric" maxlength="20" />
+          <input id="stu-natid" class="field-input field-narrow" type="text" inputmode="numeric" maxlength="11" />
+        </div>
+        <div class="field-group">
+          <label for="stu-card">رقم السجل العام <span style="color:var(--clr-danger)">*</span></label>
+          <input id="stu-card" class="field-input field-narrow" type="text" inputmode="numeric" maxlength="30" />
         </div>
 
         <details class="stu-optional">
-          <summary>بيانات اختيارية (الأهل، البطاقة، السكن)</summary>
+          <summary>بيانات اختيارية (الأهل، السكن)</summary>
           <div class="block-label" style="margin-top:10px"><span>بيانات الأهل</span></div>
           <div class="twin-fields">
             <div class="field-group"><label for="stu-mother">اسم الأم</label><input id="stu-mother" class="field-input" type="text" maxlength="40" /></div>
             <div class="field-group"><label for="stu-mother-family">كنية الأم</label><input id="stu-mother-family" class="field-input" type="text" maxlength="40" /></div>
           </div>
-          <div class="twin-fields">
-            <div class="field-group"><label for="stu-grandfather">اسم الجد</label><input id="stu-grandfather" class="field-input" type="text" maxlength="40" /></div>
-            <div class="field-group"><label for="stu-card">رقم البطاقة</label><input id="stu-card" class="field-input" type="text" maxlength="30" /></div>
-          </div>
+          <div class="field-group"><label for="stu-grandfather">اسم الجد</label><input id="stu-grandfather" class="field-input" type="text" maxlength="40" /></div>
           <div class="twin-fields">
             <div class="field-group"><label for="stu-birthplace">مكان الولادة</label><input id="stu-birthplace" class="field-input" type="text" maxlength="60" /></div>
             <div class="field-group"><label for="stu-phone">رقم التواصل</label><input id="stu-phone" class="field-input" type="tel" inputmode="tel" maxlength="20" /></div>
