@@ -2761,7 +2761,7 @@ const stuNoResults   = el('stu-noresults');
 
 const STU_FIELDS = {
   firstName:'stu-first', fatherName:'stu-father', familyName:'stu-family',
-  gender:'stu-gender', birthDate:'stu-birth', nationalId:'stu-natid', seatNumber:'stu-seat',
+  gender:'stu-gender', birthDate:'stu-birth', nationalId:'stu-natid',
   motherName:'stu-mother', motherFamily:'stu-mother-family', grandfatherName:'stu-grandfather',
   cardNumber:'stu-card', birthPlace:'stu-birthplace', contactPhone:'stu-phone',
   resGovernorate:'stu-gov', resRegion:'stu-region', resSubdistrict:'stu-subdistrict',
@@ -2823,14 +2823,11 @@ function renderStudents() {
   hide(stuEmpty); hide(stuNoResults);
   if (_stuList.length === 0) { stuListEl.innerHTML = ''; show(stuEmpty); return; }
   if (list.length === 0)     { stuListEl.innerHTML = ''; show(stuNoResults); return; }
-  stuListEl.innerHTML = list.map(s => {
-    const seat = s.seat_number != null ? s.seat_number : '—';
-    const meta = [s.national_id ? `الوطني: ${escapeHtml(s.national_id)}` : null,
-                  s.gender === 'male' ? 'ذكر' : s.gender === 'female' ? 'أنثى' : null]
-                  .filter(Boolean).join(' · ');
+  stuListEl.innerHTML = list.map((s, i) => {
+    const meta = s.national_id ? `الرقم الوطني: ${escapeHtml(s.national_id)}` : '';
     return (
       `<li class="stu-row" data-id="${escapeHtml(s.id)}">` +
-        `<span class="stu-seat">${escapeHtml(String(seat))}</span>` +
+        `<span class="stu-seat">${i + 1}</span>` +
         `<span class="stu-info"><span class="stu-name">${escapeHtml(s.full_name || '—')}</span>` +
           (meta ? `<span class="stu-meta">${meta}</span>` : '') + `</span>` +
         `<span class="stu-acts">` +
@@ -2867,7 +2864,7 @@ function openStudentForm(student) {
   for (const [key, id] of Object.entries(STU_FIELDS)) {
     const node = el(id); if (!node) continue;
     const col = ({ firstName:'first_name', fatherName:'father_name', familyName:'family_name',
-      gender:'gender', birthDate:'birth_date', nationalId:'national_id', seatNumber:'seat_number',
+      gender:'gender', birthDate:'birth_date', nationalId:'national_id',
       motherName:'mother_name', motherFamily:'mother_family', grandfatherName:'grandfather_name',
       cardNumber:'card_number', birthPlace:'birth_place', contactPhone:'contact_phone',
       resGovernorate:'res_governorate', resRegion:'res_region', resSubdistrict:'res_subdistrict',
@@ -2996,8 +2993,8 @@ el('btn-import-students').addEventListener('click', () => {
 el('btn-close-import').addEventListener('click', () => hide(modalImport));
 
 el('btn-download-template').addEventListener('click', () => {
-  const csv = 'الاسم,الأب,الكنية,الجنس,تاريخ الميلاد,الرقم الوطني,رقم المقعد\n'
-            + 'أحمد,محمد,العلي,male,2015-03-01,,1\n';
+  const csv = 'الاسم,الأب,الكنية,الجنس,تاريخ الميلاد,الرقم الوطني\n'
+            + 'أحمد,محمد,العلي,male,2015-03-01,\n';
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = 'students-template.csv';
@@ -3037,14 +3034,14 @@ el('import-file').addEventListener('change', async (e) => {
     const dataRows = rows.slice(1); // skip header
     const parsed = []; const errors = [];
     dataRows.forEach((cols, idx) => {
-      const [firstName, fatherName, familyName, gender, birthDate, nationalId, seat] =
+      const [firstName, fatherName, familyName, gender, birthDate, nationalId] =
         cols.map(c => (c || '').trim());
       if (!firstName || !fatherName || !familyName) {
         errors.push(`السطر ${idx + 2}: الاسم/الأب/الكنية مطلوبة`); return;
       }
       parsed.push({
         firstName, fatherName, familyName, gender: normGender(gender),
-        birthDate: birthDate || '', nationalId: nationalId || '', seatNumber: seat || '',
+        birthDate: birthDate || '', nationalId: nationalId || '',
       });
     });
     _stuImportRows = parsed;
