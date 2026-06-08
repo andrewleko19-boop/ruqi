@@ -925,33 +925,36 @@
         </div>
         <div class="field-group">
           <label for="stu-first">الاسم <span class="req">*</span></label>
-          <input id="stu-first" class="field-input" type="text" maxlength="40" />
+          <input id="stu-first" class="field-input field-narrow" type="text" maxlength="40" />
         </div>
         <div class="field-group">
           <label for="stu-father">اسم الأب <span class="req">*</span></label>
-          <input id="stu-father" class="field-input" type="text" maxlength="40" />
+          <input id="stu-father" class="field-input field-narrow" type="text" maxlength="40" />
         </div>
         <div class="field-group">
           <label for="stu-family">الكنية <span class="req">*</span></label>
-          <input id="stu-family" class="field-input" type="text" maxlength="40" />
+          <input id="stu-family" class="field-input field-narrow" type="text" maxlength="40" />
         </div>
-        <div class="twin-fields">
-          <div class="field-group">
-            <label for="stu-gender">الجنس</label>
-            <select id="stu-gender" class="field-input">
-              <option value="">—</option>
-              <option value="male">ذكر</option>
-              <option value="female">أنثى</option>
-            </select>
+        <div class="field-group">
+          <label for="stu-gender">الجنس</label>
+          <select id="stu-gender" class="field-input field-narrow">
+            <option value="">—</option>
+            <option value="male">ذكر</option>
+            <option value="female">أنثى</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>تاريخ الميلاد</label>
+          <div class="dob-row">
+            <input id="stu-dob-day"   class="field-input dob-in" type="text" inputmode="numeric" maxlength="2" placeholder="يوم" aria-label="اليوم" />
+            <input id="stu-dob-month" class="field-input dob-in" type="text" inputmode="numeric" maxlength="2" placeholder="شهر" aria-label="الشهر" />
+            <input id="stu-dob-year"  class="field-input dob-in dob-year" type="text" inputmode="numeric" maxlength="4" placeholder="سنة" aria-label="السنة" />
           </div>
-          <div class="field-group">
-            <label for="stu-birth">تاريخ الميلاد</label>
-            <input id="stu-birth" class="field-input" type="date" />
-          </div>
+          <div id="stu-dob-error" class="msg msg-error" hidden></div>
         </div>
         <div class="field-group">
           <label for="stu-natid">الرقم الوطني</label>
-          <input id="stu-natid" class="field-input" type="text" inputmode="numeric" maxlength="20" />
+          <input id="stu-natid" class="field-input field-narrow" type="text" inputmode="numeric" maxlength="20" />
         </div>
 
         <details class="stu-optional">
@@ -971,7 +974,25 @@
           </div>
           <div class="block-label" style="margin-top:10px"><span>السكن</span></div>
           <div class="twin-fields">
-            <div class="field-group"><label for="stu-gov">المحافظة</label><input id="stu-gov" class="field-input" type="text" maxlength="40" /></div>
+            <div class="field-group"><label for="stu-gov">المحافظة</label>
+              <select id="stu-gov" class="field-input">
+                <option value="">—</option>
+                <option value="إدلب">إدلب</option>
+                <option value="الحسكة">الحسكة</option>
+                <option value="حلب">حلب</option>
+                <option value="حماة">حماة</option>
+                <option value="حمص">حمص</option>
+                <option value="درعا">درعا</option>
+                <option value="دمشق">دمشق</option>
+                <option value="دير الزور">دير الزور</option>
+                <option value="الرقة">الرقة</option>
+                <option value="ريف دمشق">ريف دمشق</option>
+                <option value="السويداء">السويداء</option>
+                <option value="طرطوس">طرطوس</option>
+                <option value="القنيطرة">القنيطرة</option>
+                <option value="اللاذقية">اللاذقية</option>
+              </select>
+            </div>
             <div class="field-group"><label for="stu-region">المنطقة</label><input id="stu-region" class="field-input" type="text" maxlength="40" /></div>
           </div>
           <div class="twin-fields">
@@ -982,7 +1003,6 @@
             <div class="field-group"><label for="stu-sector">القطاع</label><input id="stu-sector" class="field-input" type="text" maxlength="40" /></div>
             <div class="field-group"><label for="stu-block">الكتلة</label><input id="stu-block" class="field-input" type="text" maxlength="40" /></div>
           </div>
-          <div class="field-group"><label for="stu-record">المحضر</label><input id="stu-record" class="field-input" type="text" maxlength="40" /></div>
         </details>
 
         <div id="stu-form-error" class="msg msg-error" hidden></div>
@@ -1610,6 +1630,13 @@
 .stu-acts { display:flex; gap:6px; flex-shrink:0; }
 .import-sum { font-size:.82rem; font-weight:700; margin:10px 0 6px; color:#475569; }
 .import-fail { font-size:.78rem; color:#DC2626; margin-top:2px; }
+
+/* Core fields: a moderate width (not the full phone width) */
+.field-narrow { max-width: 300px; }
+/* Date of birth — three numeric boxes (day / month / year), RTL order */
+.dob-row { display:flex; gap:8px; }
+.dob-in { width:70px; text-align:center; }
+.dob-in.dob-year { width:96px; }
 
 /* ── Teacher login credentials ───────────────────────── */
 .cred-row { display:flex; align-items:flex-start; gap:10px; padding:11px 4px;
