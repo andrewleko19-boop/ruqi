@@ -2761,15 +2761,75 @@ const stuNoResults   = el('stu-noresults');
 
 const STU_FIELDS = {
   firstName:'stu-first', fatherName:'stu-father', familyName:'stu-family',
-  gender:'stu-gender', birthDate:'stu-birth', nationalId:'stu-natid',
+  gender:'stu-gender', nationalId:'stu-natid',
   motherName:'stu-mother', motherFamily:'stu-mother-family', grandfatherName:'stu-grandfather',
   cardNumber:'stu-card', birthPlace:'stu-birthplace', contactPhone:'stu-phone',
   resGovernorate:'stu-gov', resRegion:'stu-region', resSubdistrict:'stu-subdistrict',
-  resTown:'stu-town', resSector:'stu-sector', resBlock:'stu-block', resRecord:'stu-record',
+  resTown:'stu-town', resSector:'stu-sector', resBlock:'stu-block',
 };
 
 function actorId() { return S.user?.user?.id ?? null; }
 function schoolId() { return S.school?.id ?? S.user?.schoolId ?? null; }
+
+// ── Date of birth: three numeric boxes (day / month / year) + live validation ─
+const dobDay   = el('stu-dob-day');
+const dobMonth = el('stu-dob-month');
+const dobYear  = el('stu-dob-year');
+const dobError = el('stu-dob-error');
+
+function daysInMonth(m, y) {
+  if (m === 2) {
+    const leap = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+    return leap ? 29 : 28;
+  }
+  return [4, 6, 9, 11].includes(m) ? 30 : 31;
+}
+function showDobError(msg) {
+  if (msg) { dobError.textContent = msg; show(dobError); } else hide(dobError);
+}
+// Strict check used on save — all-or-nothing; returns { ok, value:'YYYY-MM-DD'|'', error }.
+function validateDob() {
+  const d = dobDay.value.trim(), m = dobMonth.value.trim(), y = dobYear.value.trim();
+  if (!d && !m && !y) return { ok: true, value: '' };               // left blank = optional
+  if (!d || !m || y.length < 4) return { ok: false, error: 'أكمل خانات اليوم والشهر والسنة.' };
+  const dd = +d, mm = +m, yy = +y, now = new Date();
+  if (mm < 1 || mm > 12) return { ok: false, error: 'الشهر يجب أن يكون بين ١ و ١٢.' };
+  if (dd < 1 || dd > 31) return { ok: false, error: 'اليوم يجب أن يكون بين ١ و ٣١.' };
+  if (yy < now.getFullYear() - 120) return { ok: false, error: 'سنة الميلاد قديمة جداً (أكثر من ١٢٠ سنة).' };
+  const max = daysInMonth(mm, yy);
+  if (dd > max) return { ok: false, error: `اليوم غير صحيح لهذا الشهر (الحد الأقصى ${max}).` };
+  if (new Date(yy, mm - 1, dd) > now) return { ok: false, error: 'لا يمكن أن يكون تاريخ الميلاد في المستقبل.' };
+  return { ok: true, value: `${String(yy).padStart(4,'0')}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}` };
+}
+// Lighter check used live (while typing / onBlur) — flags impossible values as
+// soon as enough is entered, without nagging about not-yet-filled boxes.
+function liveDobError() {
+  const dRaw = dobDay.value, mRaw = dobMonth.value, yRaw = dobYear.value;
+  const dd = +dRaw, mm = +mRaw, yy = +yRaw, now = new Date();
+  if (mRaw && (mm < 1 || mm > 12)) return 'الشهر يجب أن يكون بين ١ و ١٢.';
+  if (dRaw && (dd < 1 || dd > 31)) return 'اليوم يجب أن يكون بين ١ و ٣١.';
+  if (dRaw && mRaw && mm >= 1 && mm <= 12) {
+    const yForMax = yRaw.length === 4 ? yy : 2000;   // unknown year ⇒ leap, so 29 stays allowed
+    const max = daysInMonth(mm, yForMax);
+    if (dd > max) return `اليوم غير صحيح لهذا الشهر (الحد الأقصى ${max}).`;
+  }
+  if (yRaw.length === 4) {
+    if (yy < now.getFullYear() - 120) return 'سنة الميلاد قديمة جداً (أكثر من ١٢٠ سنة).';
+    if (dRaw && mRaw && mm >= 1 && mm <= 12 && dd >= 1 && new Date(yy, mm - 1, dd) > now)
+      return 'لا يمكن أن يكون تاريخ الميلاد في المستقبل.';
+  }
+  return '';
+}
+[dobDay, dobMonth, dobYear].forEach((node, idx) => {
+  node.addEventListener('input', () => {
+    const cleaned = node.value.replace(/\D/g, '');
+    if (cleaned !== node.value) node.value = cleaned;   // numeric only
+    if (idx === 0 && node.value.length === 2) dobMonth.focus();   // auto-advance
+    else if (idx === 1 && node.value.length === 2) dobYear.focus();
+    showDobError(liveDobError());
+  });
+  node.addEventListener('blur', () => showDobError(liveDobError()));
+});
 
 async function initStudentsTab() {
   _studentsLoaded = true;
@@ -2824,12 +2884,10 @@ function renderStudents() {
   if (_stuList.length === 0) { stuListEl.innerHTML = ''; show(stuEmpty); return; }
   if (list.length === 0)     { stuListEl.innerHTML = ''; show(stuNoResults); return; }
   stuListEl.innerHTML = list.map((s, i) => {
-    const meta = s.national_id ? `الرقم الوطني: ${escapeHtml(s.national_id)}` : '';
     return (
       `<li class="stu-row" data-id="${escapeHtml(s.id)}">` +
         `<span class="stu-seat">${i + 1}</span>` +
-        `<span class="stu-info"><span class="stu-name">${escapeHtml(s.full_name || '—')}</span>` +
-          (meta ? `<span class="stu-meta">${meta}</span>` : '') + `</span>` +
+        `<span class="stu-info"><span class="stu-name">${escapeHtml(s.full_name || '—')}</span></span>` +
         `<span class="stu-acts">` +
           `<button class="icon-btn-sm" data-act="edit" title="تعديل"><svg class="icon icon-sm"><use href="#ic-edit"/></svg></button>` +
           `<button class="icon-btn-sm" data-act="transfer" title="نقل"><svg class="icon icon-sm"><use href="#ic-arrow-right"/></svg></button>` +
@@ -2864,14 +2922,21 @@ function openStudentForm(student) {
   for (const [key, id] of Object.entries(STU_FIELDS)) {
     const node = el(id); if (!node) continue;
     const col = ({ firstName:'first_name', fatherName:'father_name', familyName:'family_name',
-      gender:'gender', birthDate:'birth_date', nationalId:'national_id',
+      gender:'gender', nationalId:'national_id',
       motherName:'mother_name', motherFamily:'mother_family', grandfatherName:'grandfather_name',
       cardNumber:'card_number', birthPlace:'birth_place', contactPhone:'contact_phone',
       resGovernorate:'res_governorate', resRegion:'res_region', resSubdistrict:'res_subdistrict',
-      resTown:'res_town', resSector:'res_sector', resBlock:'res_block', resRecord:'res_record' })[key];
+      resTown:'res_town', resSector:'res_sector', resBlock:'res_block' })[key];
     node.value = student && student[col] != null ? student[col] : '';
   }
+  // Date of birth → fill the three day/month/year boxes from YYYY-MM-DD.
+  const bd = (student && student.birth_date) ? String(student.birth_date).split('-') : [];
+  dobYear.value  = bd[0] || '';
+  dobMonth.value = bd[1] ? String(Number(bd[1])) : '';
+  dobDay.value   = bd[2] ? String(Number(bd[2])) : '';
+  hide(dobError);
   CustomSelect.refresh(el('stu-gender'));
+  CustomSelect.refresh(el('stu-gov'));
   hide(stuFormError);
   show(modalStudent);
 }
@@ -2888,6 +2953,10 @@ el('btn-save-student').addEventListener('click', async () => {
   if (input.nationalId && !/^\d{6,20}$/.test(input.nationalId)) {
     stuFormError.textContent = 'الرقم الوطني يجب أن يكون أرقاماً (٦–٢٠ خانة).'; show(stuFormError); return;
   }
+  // Date of birth (optional) — must be a valid, non-future, not-too-old date.
+  const dob = validateDob();
+  if (!dob.ok) { showDobError(dob.error); return; }
+  input.birthDate = dob.value;   // '' when left blank
   const btn = el('btn-save-student'); btn.disabled = true; show(el('stu-save-spinner'));
   try {
     if (input.nationalId && navigator.onLine) {
@@ -3266,6 +3335,7 @@ function showTchErr(msg) { el('tch-error').textContent = msg; show(el('tch-error
 // Enhance the school-admin selects once the DOM is parsed.
 CustomSelect.enhance('stu-class-select');
 CustomSelect.enhance('stu-gender');
+CustomSelect.enhance('stu-gov');
 CustomSelect.enhance('transfer-class');
 CustomSelect.enhance('sch-shift');
 CustomSelect.enhance('staff-status');
