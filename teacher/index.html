@@ -224,6 +224,25 @@
   <!-- ── Home View: Class List ─────────────────────────────────────────────── -->
   <div id="view-home">
     <div class="page-body">
+      <!-- ── My duty (دوامي اليوم): self check-in / check-out ─────────────────── -->
+      <section id="duty-card" class="duty-card" aria-label="دوامي اليوم">
+        <div class="duty-hdr">
+          <svg class="icon icon-sm"><use href="#ic-clipboard"/></svg>
+          <span>دوامي اليوم</span>
+          <span id="duty-status" class="duty-status" hidden></span>
+        </div>
+        <div id="duty-info" class="duty-info">لم تُسجّل دخولك بعد.</div>
+        <div class="duty-actions">
+          <button id="btn-check-in" class="btn btn-primary" type="button">
+            <svg class="icon icon-sm"><use href="#ic-clipboard"/></svg>
+            تسجيل دخول
+          </button>
+          <button id="btn-check-out" class="btn btn-ghost" type="button" disabled>
+            تسجيل خروج
+          </button>
+        </div>
+      </section>
+
       <!-- Mode toggle: attendance vs grades -->
       <div class="mode-tabs" role="tablist" aria-label="نوع العمل">
         <button id="mode-att" class="mode-tab is-active" role="tab" aria-selected="true">

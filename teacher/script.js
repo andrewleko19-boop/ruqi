@@ -29,6 +29,9 @@ const {
   saveStudentGrades,
   getClassConduct,
   saveStudentConduct,
+  teacherCheckIn,
+  teacherCheckOut,
+  getMyStaffAttendanceToday,
 } = window.NSAMS_DB;
 
 // ── App State ─────────────────────────────────────────────────────────────────
@@ -41,6 +44,8 @@ const S = {
   attendance:       {},      // { [studentId]: { status, reason } }
   submission:       null,    // from getClassSubmissionStatus() – null = not yet
   isDirty:          false,   // unsaved changes since last render
+  duty:             null,    // today's staff_attendance record (or null)
+  dutyBusy:         false,   // a check-in/out request is in flight
 };
 
 // Default status for a student when the teacher first opens the class.
@@ -83,6 +88,13 @@ const screenLogin  = $('screen-login');
 const screenApp    = $('screen-app');
 const viewHome     = $('view-home');
 const viewAtt      = $('view-att');
+
+// Duty card (دوامي اليوم)
+const dutyCard     = $('duty-card');
+const dutyStatus   = $('duty-status');
+const dutyInfo     = $('duty-info');
+const btnCheckIn   = $('btn-check-in');
+const btnCheckOut  = $('btn-check-out');
 
 // Login
 const formLogin      = $('form-login');
@@ -256,8 +268,10 @@ async function doSync() {
     const total  = (result.studentAtt?.synced ?? 0)
                  + (result.attendance?.synced ?? 0)
                  + (result.reports?.synced    ?? 0)
-                 + (result.grades?.synced     ?? 0);
+                 + (result.grades?.synced     ?? 0)
+                 + (result.staffAtt?.synced   ?? 0);
     if (total > 0) toast(`تمت مزامنة ${total} سجل بنجاح`, 'success');
+    if (result.staffAtt?.synced > 0) await loadDutyCard();
     refreshPendingBar();
   } catch (err) {
     console.warn('[NSAMS-T] sync error', err);
@@ -349,6 +363,7 @@ async function initApp() {
 
   updateConnUI();
   await loadClasses();
+  await loadDutyCard();
   await doSync();
 }
 
@@ -379,6 +394,103 @@ async function loadClasses() {
   setupModeTabs();
   applyHomeMode();
 }
+
+// ── Duty card: self check-in / out ──────────────────────────────────────────────
+// The teacher's school + work-start time come from their class assignment (all
+// classes are in the same school); the session also carries schoolId as a fallback.
+function dutySchoolId() {
+  return S.classes[0]?.schoolId ?? S.user?.schoolId ?? null;
+}
+function dutyWorkStart() {
+  return S.classes[0]?.workStartTime ?? null;
+}
+
+function fmtTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleTimeString('ar-SY', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+function renderDutyCard() {
+  if (!dutyCard) return;
+  const rec = S.duty;
+  const effIn = rec?.checkInAdjusted ?? rec?.checkInOriginal ?? null;
+
+  // Status pill
+  if (rec && (rec.status === 'present' || rec.status === 'late')) {
+    dutyStatus.hidden = false;
+    dutyStatus.textContent = rec.status === 'late' ? 'متأخر' : 'حاضر';
+    dutyStatus.className = 'duty-status ' + (rec.status === 'late' ? 'is-late' : 'is-present');
+  } else {
+    dutyStatus.hidden = true;
+  }
+
+  // Info line
+  if (!effIn) {
+    dutyInfo.textContent = 'لم تُسجّل دخولك بعد.';
+  } else {
+    let html = `الدخول: <strong>${fmtTime(effIn)}</strong>`;
+    if (rec.lateMinutes > 0) html += ` · تأخّر <strong>${rec.lateMinutes}</strong> دقيقة`;
+    html += rec.checkOut ? ` · الخروج: <strong>${fmtTime(rec.checkOut)}</strong>` : '';
+    dutyInfo.innerHTML = html;
+  }
+
+  // Buttons: can check in only if not yet; can check out only after check-in & before checkout.
+  const hasIn  = !!effIn;
+  const hasOut = !!rec?.checkOut;
+  btnCheckIn.disabled  = S.dutyBusy || hasIn;
+  btnCheckOut.disabled = S.dutyBusy || !hasIn || hasOut;
+}
+
+async function loadDutyCard() {
+  if (!dutyCard) return;
+  if (!dutySchoolId()) { dutyCard.hidden = true; return; }
+  dutyCard.hidden = false;
+  try {
+    S.duty = await getMyStaffAttendanceToday(S.user.user.id);
+  } catch (err) {
+    console.error('[NSAMS-T] getMyStaffAttendanceToday', err);
+    S.duty = null;
+  }
+  renderDutyCard();
+}
+
+async function handleCheckIn() {
+  const schoolId = dutySchoolId();
+  if (!schoolId || S.dutyBusy) return;
+  S.dutyBusy = true; renderDutyCard();
+  try {
+    const res = await teacherCheckIn(S.user.user.id, schoolId, dutyWorkStart());
+    S.duty = await getMyStaffAttendanceToday(S.user.user.id).catch(() => S.duty);
+    toast(res.synced ? 'تم تسجيل دخولك' : 'سُجّل دخولك محلياً وسيُزامن عند الاتصال',
+          res.synced ? 'success' : 'warning');
+  } catch (err) {
+    console.error('[NSAMS-T] checkIn', err);
+    toast('تعذّر تسجيل الدخول', 'error');
+  } finally {
+    S.dutyBusy = false; renderDutyCard();
+  }
+}
+
+async function handleCheckOut() {
+  const schoolId = dutySchoolId();
+  if (!schoolId || S.dutyBusy) return;
+  S.dutyBusy = true; renderDutyCard();
+  try {
+    const res = await teacherCheckOut(S.user.user.id, schoolId);
+    S.duty = await getMyStaffAttendanceToday(S.user.user.id).catch(() => S.duty);
+    toast(res.synced ? 'تم تسجيل خروجك' : 'سُجّل خروجك محلياً وسيُزامن عند الاتصال',
+          res.synced ? 'success' : 'warning');
+  } catch (err) {
+    console.error('[NSAMS-T] checkOut', err);
+    toast('تعذّر تسجيل الخروج', 'error');
+  } finally {
+    S.dutyBusy = false; renderDutyCard();
+  }
+}
+
+if (btnCheckIn)  btnCheckIn.addEventListener('click', handleCheckIn);
+if (btnCheckOut) btnCheckOut.addEventListener('click', handleCheckOut);
 
 function attendanceClasses() {
   return S.classes.filter(c => c.role === 'homeroom' || c.role === 'supervisor');

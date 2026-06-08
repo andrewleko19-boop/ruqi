@@ -244,6 +244,10 @@ const inAbsent      = el('in-absent');
 const btnAddAbsent  = el('btn-add-absent');
 const inStuPresent  = el('in-stu-present');
 const inStuAbsent   = el('in-stu-absent');
+const inAdminPresent  = el('in-admin-present');
+const inAdminAbsent   = el('in-admin-absent');
+const inWorkerPresent = el('in-worker-present');
+const inWorkerAbsent  = el('in-worker-absent');
 const inNotes       = el('in-notes');
 const btnSubmitAtt  = el('btn-submit-att');
 const attCard       = el('att-card');
@@ -478,6 +482,10 @@ btnSubmitAtt.addEventListener('click', async () => {
     date:             todayISO(),
     teachers_present: Math.max(0, total - absentCount),
     teachers_absent:  absentCount,
+    admins_present:   parseInt(inAdminPresent.value,  10) || 0,
+    admins_absent:    parseInt(inAdminAbsent.value,   10) || 0,
+    workers_present:  parseInt(inWorkerPresent.value, 10) || 0,
+    workers_absent:   parseInt(inWorkerAbsent.value,  10) || 0,
     students_present: studPresent,
     // NOTE: daily_attendance has no students_absent column — do not send it,
     // or the upsert fails and silently falls back to the offline queue forever.
@@ -757,6 +765,7 @@ async function initApp() {
   _manageLoaded   = false;
   _subjectsLoaded = false;
   _reportsLoaded  = false;
+  _staffLoaded    = false;
 
   // Kick off sync of any offline-queued records
   await doSync();
@@ -765,6 +774,7 @@ async function initApp() {
   // (Previously triggered by a fragile MutationObserver that could fire before
   //  school data was ready; called directly here instead.)
   await loadClassSummaries();
+  loadStaffDailyCounts();   // auto-fill admin/worker counts from the staff register
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
@@ -1243,10 +1253,12 @@ const NDB = window.NSAMS_DB;
 
 const tabAttendance   = el('tab-attendance');
 const tabManage       = el('tab-manage');
+const tabStaff        = el('tab-staff');
 const tabSubjects     = el('tab-subjects');
 const tabReports      = el('tab-reports');
 const viewAttendance  = el('view-attendance');
 const viewManage      = el('view-manage');
+const viewStaff       = el('view-staff');
 const viewSubjects    = el('view-subjects');
 const viewReports     = el('view-reports');
 const fabReport       = el('btn-open-report');
@@ -1277,6 +1289,7 @@ let _mngBusy      = false;
 const TABS = {
   attendance: { tab: tabAttendance, view: viewAttendance },
   manage:     { tab: tabManage,     view: viewManage },
+  staff:      { tab: tabStaff,      view: viewStaff },
   subjects:   { tab: tabSubjects,   view: viewSubjects },
   reports:    { tab: tabReports,    view: viewReports },
 };
@@ -1294,12 +1307,14 @@ function switchTab(tab) {
   if (fabReport) fabReport.hidden = tab !== 'attendance';
 
   if (tab === 'manage'   && !_manageLoaded)  loadManageClasses();
+  if (tab === 'staff'    && !_staffLoaded)   initStaffTab();
   if (tab === 'subjects' && !_subjectsLoaded) initSubjectsTab();
   if (tab === 'reports'  && !_reportsLoaded)  initReportsTab();
 }
 
 tabAttendance.addEventListener('click', () => switchTab('attendance'));
 tabManage.addEventListener('click',     () => switchTab('manage'));
+tabStaff.addEventListener('click',      () => switchTab('staff'));
 tabSubjects.addEventListener('click',   () => switchTab('subjects'));
 tabReports.addEventListener('click',    () => switchTab('reports'));
 
@@ -2414,7 +2429,291 @@ btnSaveGrace.addEventListener('click', async () => {
   }
 });
 
+// ═══ Staff attendance (دوام الموظفين) ════════════════════════════════════════
+let _staffLoaded = false;
+let _staffData   = { teachers: [], admins: [], workers: [] };
+let _staffEdit   = null;  // { kind, refId, name, record } currently being edited
+
+// Refs — work-start + register + roster
+const inWorkStart       = el('in-work-start');
+const btnSaveWorkStart  = el('btn-save-work-start');
+const workStartMsg      = el('work-start-msg');
+const btnRefreshStaff   = el('btn-refresh-staff');
+const staffRefreshIcon  = el('staff-refresh-icon');
+const staffLoading      = el('staff-loading');
+const staffListEl       = el('staff-list');
+const staffErrorEl      = el('staff-error');
+const inPersonnelName   = el('in-personnel-name');
+const inPersonnelKind   = el('in-personnel-kind');
+const btnAddPersonnel   = el('btn-add-personnel');
+const personnelErrorEl  = el('personnel-error');
+const personnelListEl   = el('personnel-list');
+
+// Refs — staff edit modal
+const modalStaff        = el('modal-staff');
+const btnCloseStaff     = el('btn-close-staff');
+const staffEditName     = el('staff-edit-name');
+const staffStatusSel    = el('staff-status');
+const staffCheckinInp   = el('staff-checkin');
+const staffCheckoutInp  = el('staff-checkout');
+const staffReasonInp    = el('staff-reason');
+const staffNoteInp      = el('staff-note');
+const staffEditError    = el('staff-edit-error');
+const btnSaveStaff      = el('btn-save-staff');
+const staffSaveLabel    = el('staff-save-label');
+const staffSaveSpinner  = el('staff-save-spinner');
+
+const STAFF_STATUS_AR    = { present: 'حاضر', late: 'متأخر', absent: 'غائب', leave: 'إجازة' };
+const PERSONNEL_KIND_AR  = { admin: 'إداري', worker: 'عامل' };
+
+function staffWorkStart() { return S.school?.work_start_time || null; }
+
+function isoToLocalHHMM(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+function hhmmToISO(hhmm, dateISO) {
+  if (!hhmm) return null;
+  const d = new Date(`${dateISO}T${hhmm}:00`);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+function fmtHHMM(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleTimeString('ar-SY', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+async function initStaffTab() {
+  _staffLoaded = true;
+  if (inWorkStart) inWorkStart.value = staffWorkStart() ? String(staffWorkStart()).slice(0, 5) : '';
+  await Promise.all([loadStaffAttendance(), loadPersonnelRoster()]);
+}
+
+async function loadStaffAttendance() {
+  if (!S.school?.id) return;
+  show(staffLoading); hide(staffListEl); hide(staffErrorEl);
+  staffRefreshIcon.classList.add('syncing');
+  try {
+    _staffData = await window.NSAMS_DB.getStaffAttendanceForDate(S.school.id, todayISO());
+    renderStaffGroups();
+    hide(staffLoading); show(staffListEl);
+  } catch (err) {
+    console.error('[NSAMS] loadStaffAttendance', err);
+    hide(staffLoading);
+    staffErrorEl.textContent = 'تعذّر تحميل دوام الموظفين.'; show(staffErrorEl);
+  } finally {
+    staffRefreshIcon.classList.remove('syncing');
+  }
+}
+
+function staffRowHtml(entry) {
+  const r = entry.record;
+  const status   = r?.status;
+  const badgeCls = status ? `staff-badge-${status}` : 'staff-badge-none';
+  const badgeTxt = status ? STAFF_STATUS_AR[status] : 'لم يُسجّل';
+  const inT = r ? (r.checkInAdjusted ?? r.checkInOriginal) : null;
+  let times = '';
+  if (inT)                times += `دخول ${fmtHHMM(inT)}`;
+  if (r?.checkOut)        times += `${times ? ' · ' : ''}خروج ${fmtHHMM(r.checkOut)}`;
+  if (r?.lateMinutes > 0) times += `${times ? ' · ' : ''}تأخّر ${r.lateMinutes}د`;
+  const src = r ? (r.source === 'self' ? 'معلم' : 'مدير') : '';
+  return (
+    `<div class="staff-row" data-kind="${entry.kind}" data-ref="${entry.refId}">` +
+      `<span class="staff-name">${escapeHtml(entry.name)}</span>` +
+      `<span class="staff-badge ${badgeCls}">${badgeTxt}</span>` +
+      (times ? `<span class="staff-times">${times}</span>` : '') +
+      (src ? `<span class="staff-src">${src}</span>` : '') +
+      `<button class="staff-edit-btn" data-act="edit-staff">تعديل</button>` +
+    `</div>`
+  );
+}
+
+function renderStaffGroups() {
+  const groups = [
+    ['المعلمون', _staffData.teachers],
+    ['الإداريون', _staffData.admins],
+    ['العمال',    _staffData.workers],
+  ];
+  let html = '';
+  for (const [label, list] of groups) {
+    if (!list || list.length === 0) continue;
+    html += `<div class="staff-group-label">${label}</div>`;
+    html += list.map(staffRowHtml).join('');
+  }
+  staffListEl.innerHTML = html ||
+    '<div style="padding:24px 16px;text-align:center;color:#94A3B8;font-size:.85rem">لا يوجد موظفون.</div>';
+}
+
+if (staffListEl) staffListEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-act="edit-staff"]');
+  if (!btn) return;
+  const row  = btn.closest('.staff-row');
+  const kind = row.dataset.kind, refId = row.dataset.ref;
+  const list = kind === 'teacher' ? _staffData.teachers
+             : kind === 'admin'   ? _staffData.admins
+             : _staffData.workers;
+  const entry = list.find(x => String(x.refId) === String(refId));
+  if (entry) openStaffModal(entry);
+});
+
+function openStaffModal(entry) {
+  _staffEdit = entry;
+  const r = entry.record;
+  staffEditName.textContent = entry.name;
+  staffStatusSel.value = r?.status || 'present';
+  CustomSelect.refresh(staffStatusSel);
+  staffCheckinInp.value  = isoToLocalHHMM(r ? (r.checkInAdjusted ?? r.checkInOriginal) : null);
+  staffCheckoutInp.value = isoToLocalHHMM(r?.checkOut);
+  staffReasonInp.value   = r?.adjustReason || '';
+  staffNoteInp.value     = r?.note || '';
+  hide(staffEditError);
+  show(modalStaff);
+  document.body.style.overflow = 'hidden';
+}
+function closeStaffModal() {
+  hide(modalStaff);
+  document.body.style.overflow = '';
+  _staffEdit = null;
+}
+if (btnCloseStaff) btnCloseStaff.addEventListener('click', closeStaffModal);
+if (modalStaff) modalStaff.addEventListener('click', (e) => { if (e.target === modalStaff) closeStaffModal(); });
+
+if (btnSaveStaff) btnSaveStaff.addEventListener('click', async () => {
+  if (!_staffEdit) return;
+  if (!navigator.onLine) { staffEditError.textContent = 'التعديل يحتاج اتصالاً بالإنترنت'; show(staffEditError); return; }
+  const reason = staffReasonInp.value.trim();
+  if (!reason) { staffEditError.textContent = 'يرجى كتابة سبب التعديل'; show(staffEditError); staffReasonInp.focus(); return; }
+
+  const date    = todayISO();
+  const status  = staffStatusSel.value;
+  const isAway  = status === 'absent' || status === 'leave';
+  const checkInTime = isAway ? null : hhmmToISO(staffCheckinInp.value,  date);
+  const checkOut    = isAway ? null : hhmmToISO(staffCheckoutInp.value, date);
+
+  hide(staffEditError);
+  btnSaveStaff.disabled = true; staffSaveLabel.hidden = true; staffSaveSpinner.hidden = false;
+  try {
+    await window.NSAMS_DB.upsertStaffAttendance({
+      schoolId:    S.school.id, date,
+      kind:        _staffEdit.kind,
+      teacherId:   _staffEdit.kind === 'teacher' ? _staffEdit.refId : null,
+      personnelId: _staffEdit.kind === 'teacher' ? null : _staffEdit.refId,
+      status, checkInTime, checkOut,
+      adjustReason:  reason,
+      note:          staffNoteInp.value.trim() || null,
+      workStartTime: staffWorkStart(),
+      adjustedBy:    S.user?.user?.id ?? null,
+    });
+    closeStaffModal();
+    toast('تم حفظ الدوام', 'success');
+    await loadStaffAttendance();
+    loadStaffDailyCounts();
+  } catch (err) {
+    console.error('[NSAMS] upsertStaffAttendance', err);
+    staffEditError.textContent = 'تعذّر الحفظ، حاول مجدداً'; show(staffEditError);
+  } finally {
+    btnSaveStaff.disabled = false; staffSaveLabel.hidden = false; staffSaveSpinner.hidden = true;
+  }
+});
+
+// ── Personnel roster (admins & workers) ──
+async function loadPersonnelRoster() {
+  if (!S.school?.id) return;
+  try {
+    const list = await window.NSAMS_DB.getSchoolPersonnel(S.school.id);
+    personnelListEl.innerHTML = list.filter(p => p.isActive).map(p =>
+      `<li class="staff-roster-item" data-id="${p.id}">` +
+        `<span class="sr-name">${escapeHtml(p.fullName)}</span>` +
+        `<span class="sr-kind">${PERSONNEL_KIND_AR[p.kind] || ''}</span>` +
+        `<button class="staff-roster-del" data-act="del-personnel" aria-label="إزالة">` +
+          `<svg class="icon icon-sm"><use href="#ic-x"/></svg></button>` +
+      `</li>`
+    ).join('');
+  } catch (err) {
+    console.error('[NSAMS] loadPersonnelRoster', err);
+  }
+}
+
+async function addPersonnelHandler() {
+  const name = inPersonnelName.value.trim();
+  const kind = inPersonnelKind.value;
+  hide(personnelErrorEl);
+  if (!name) { personnelErrorEl.textContent = 'يرجى إدخال الاسم'; show(personnelErrorEl); return; }
+  if (!navigator.onLine) { personnelErrorEl.textContent = 'الإضافة تحتاج اتصالاً بالإنترنت'; show(personnelErrorEl); return; }
+  btnAddPersonnel.disabled = true;
+  try {
+    await window.NSAMS_DB.addPersonnel({ schoolId: S.school.id, fullName: name, kind });
+    inPersonnelName.value = '';
+    await loadPersonnelRoster();
+    await loadStaffAttendance();
+    toast('تمت الإضافة', 'success');
+  } catch (err) {
+    console.error('[NSAMS] addPersonnel', err);
+    personnelErrorEl.textContent = 'تعذّرت الإضافة'; show(personnelErrorEl);
+  } finally {
+    btnAddPersonnel.disabled = false;
+  }
+}
+if (btnAddPersonnel) btnAddPersonnel.addEventListener('click', addPersonnelHandler);
+if (inPersonnelName) inPersonnelName.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); addPersonnelHandler(); }
+});
+
+if (personnelListEl) personnelListEl.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-act="del-personnel"]');
+  if (!btn) return;
+  const id = btn.closest('.staff-roster-item').dataset.id;
+  if (!confirm('إزالة هذا الموظف من السجل؟')) return;
+  try {
+    await window.NSAMS_DB.setPersonnelActive(id, false);
+    await loadPersonnelRoster();
+    await loadStaffAttendance();
+    loadStaffDailyCounts();
+  } catch (err) {
+    console.error('[NSAMS] setPersonnelActive', err);
+    toast('تعذّرت الإزالة', 'error');
+  }
+});
+
+// ── Work-start time ──
+if (btnSaveWorkStart) btnSaveWorkStart.addEventListener('click', async () => {
+  if (!navigator.onLine) {
+    workStartMsg.className = 'msg msg-error'; workStartMsg.textContent = 'الحفظ يحتاج اتصالاً'; show(workStartMsg); return;
+  }
+  const val = inWorkStart.value || null;
+  btnSaveWorkStart.disabled = true;
+  try {
+    await window.NSAMS_DB.updateSchool(S.school.id, { workStartTime: val });
+    if (S.school) S.school.work_start_time = val;
+    workStartMsg.className = 'msg msg-success'; workStartMsg.textContent = 'تم حفظ بداية الدوام'; show(workStartMsg);
+    setTimeout(() => hide(workStartMsg), 2500);
+  } catch (err) {
+    console.error('[NSAMS] updateSchool workStart', err);
+    workStartMsg.className = 'msg msg-error'; workStartMsg.textContent = 'تعذّر الحفظ'; show(workStartMsg);
+  } finally {
+    btnSaveWorkStart.disabled = false;
+  }
+});
+
+if (btnRefreshStaff) btnRefreshStaff.addEventListener('click', () => loadStaffAttendance());
+
+// Auto-fill the daily-record admin/worker counts from the staff register.
+async function loadStaffDailyCounts() {
+  if (!S.school?.id || !window.NSAMS_DB?.computeStaffDailyCounts) return;
+  try {
+    const c = await window.NSAMS_DB.computeStaffDailyCounts(S.school.id, todayISO());
+    if (inAdminPresent)  inAdminPresent.value  = c.admins.present;
+    if (inAdminAbsent)   inAdminAbsent.value   = c.admins.absent;
+    if (inWorkerPresent) inWorkerPresent.value = c.workers.present;
+    if (inWorkerAbsent)  inWorkerAbsent.value  = c.workers.absent;
+  } catch (err) {
+    console.warn('[NSAMS] loadStaffDailyCounts', err);
+  }
+}
+
 // Enhance the school-admin selects once the DOM is parsed.
+CustomSelect.enhance('staff-status');
+CustomSelect.enhance('in-personnel-kind');
 CustomSelect.enhance('mng-class-select');
 CustomSelect.enhance('mng-role-select');
 CustomSelect.enhance('mng-sup-select');

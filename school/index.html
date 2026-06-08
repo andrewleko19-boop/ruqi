@@ -255,6 +255,11 @@
       <svg class="icon icon-sm"><use href="#ic-users"/></svg>
       إدارة الصفوف
     </button>
+    <button class="tab-btn" id="tab-staff" role="tab"
+            aria-selected="false" data-tab="staff">
+      <svg class="icon icon-sm"><use href="#ic-clock"/></svg>
+      دوام الموظفين
+    </button>
     <button class="tab-btn" id="tab-subjects" role="tab"
             aria-selected="false" data-tab="subjects">
       <svg class="icon icon-sm"><use href="#ic-book"/></svg>
@@ -410,6 +415,39 @@
           </div>
         </div>
 
+        <!-- Admins & workers — auto-filled from the staff register, editable -->
+        <div class="subsection">
+          <div class="sub-label">الإداريون</div>
+          <div class="twin-fields">
+            <div class="field-group">
+              <label for="in-admin-present">حاضرون</label>
+              <input type="number" id="in-admin-present" class="field-input"
+                     min="0" max="999" value="0" inputmode="numeric" />
+            </div>
+            <div class="field-group">
+              <label for="in-admin-absent">غائبون</label>
+              <input type="number" id="in-admin-absent" class="field-input"
+                     min="0" max="999" value="0" inputmode="numeric" />
+            </div>
+          </div>
+          <div class="sub-label">العمال</div>
+          <div class="twin-fields">
+            <div class="field-group">
+              <label for="in-worker-present">حاضرون</label>
+              <input type="number" id="in-worker-present" class="field-input"
+                     min="0" max="999" value="0" inputmode="numeric" />
+            </div>
+            <div class="field-group">
+              <label for="in-worker-absent">غائبون</label>
+              <input type="number" id="in-worker-absent" class="field-input"
+                     min="0" max="999" value="0" inputmode="numeric" />
+            </div>
+          </div>
+          <p style="font-size:.75rem;color:#94A3B8;margin:-2px 0 6px">
+            تُحتسب تلقائياً من «دوام الموظفين» — يمكنك تعديلها قبل الإرسال.
+          </p>
+        </div>
+
         <div class="divider"></div>
 
         <!-- Students block -->
@@ -458,6 +496,124 @@
     </div>
 
   </main><!-- /page (attendance) -->
+
+  <!-- ═══ Staff attendance view (دوام الموظفين) ═══════════════════════════════ -->
+  <main class="page" id="view-staff" role="tabpanel" aria-labelledby="tab-staff" hidden>
+
+    <!-- Work-start time (drives the lateness calc) -->
+    <section class="card">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-clock"/></svg>
+        <span>بداية الدوام</span>
+      </div>
+      <div class="card-body">
+        <div class="add-row">
+          <input type="time" id="in-work-start" class="field-input" aria-label="بداية الدوام" />
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-save-work-start">حفظ</button>
+        </div>
+        <p style="font-size:.75rem;color:#94A3B8;margin:6px 0 0">
+          يُحتسب التأخير بناءً على هذا الوقت (الافتراضي 07:30).
+        </p>
+        <div id="work-start-msg" class="msg msg-success" hidden style="margin-top:8px"></div>
+      </div>
+    </section>
+
+    <!-- Today's staff attendance, grouped by category -->
+    <section class="card">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-clipboard"/></svg>
+        <span>دوام اليوم</span>
+        <button class="hdr-btn" id="btn-refresh-staff" aria-label="تحديث" style="margin-inline-start:auto">
+          <svg class="icon icon-sm" id="staff-refresh-icon"><use href="#ic-refresh"/></svg>
+        </button>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div id="staff-loading" style="padding:16px 14px">
+          <div style="height:13px;border-radius:6px;background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);background-size:200% 100%;animation:shimmer 1.4s ease-in-out infinite;margin-bottom:10px"></div>
+          <div style="height:13px;width:65%;border-radius:6px;background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);background-size:200% 100%;animation:shimmer 1.4s ease-in-out infinite"></div>
+        </div>
+        <div id="staff-error" class="msg msg-error" hidden style="margin:12px 14px"></div>
+        <div id="staff-list" hidden></div>
+      </div>
+    </section>
+
+    <!-- Personnel roster (admins & workers — they have no app login) -->
+    <section class="card">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-users"/></svg>
+        <span>سجل الإداريين والعمال</span>
+      </div>
+      <div class="card-body">
+        <div class="add-row">
+          <input type="text" id="in-personnel-name" class="field-input"
+                 placeholder="اسم الموظف" maxlength="80" />
+          <select id="in-personnel-kind" class="field-input" aria-label="الفئة">
+            <option value="admin">إداري</option>
+            <option value="worker">عامل</option>
+          </select>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-add-personnel">
+            <svg class="icon icon-sm"><use href="#ic-plus"/></svg>إضافة
+          </button>
+        </div>
+        <div id="personnel-error" class="msg msg-error" hidden style="margin-top:8px"></div>
+        <ul class="staff-roster" id="personnel-list"></ul>
+      </div>
+    </section>
+
+    <!-- Staff attendance edit modal -->
+    <div id="modal-staff" class="overlay" hidden aria-modal="true" role="dialog">
+      <div class="sheet sheet-sm">
+        <div class="sheet-handle"></div>
+        <div class="sheet-hdr">
+          <div class="sheet-title">
+            <svg class="icon"><use href="#ic-clipboard"/></svg>
+            <span>تعديل الدوام</span>
+          </div>
+          <button class="icon-btn" id="btn-close-staff" aria-label="إغلاق">
+            <svg class="icon"><use href="#ic-x"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body">
+          <p style="font-size:.85rem;color:#475569;margin-bottom:12px">الموظف: <strong id="staff-edit-name">—</strong></p>
+          <div class="field-group">
+            <label for="staff-status">الحالة</label>
+            <select id="staff-status" class="field-input">
+              <option value="present">حاضر</option>
+              <option value="late">متأخر</option>
+              <option value="absent">غائب</option>
+              <option value="leave">إجازة</option>
+            </select>
+          </div>
+          <div class="twin-fields">
+            <div class="field-group">
+              <label for="staff-checkin">وقت الدخول</label>
+              <input type="time" id="staff-checkin" class="field-input" />
+            </div>
+            <div class="field-group">
+              <label for="staff-checkout">وقت الخروج</label>
+              <input type="time" id="staff-checkout" class="field-input" />
+            </div>
+          </div>
+          <div class="field-group">
+            <label for="staff-reason">سبب التعديل <span class="req">*</span></label>
+            <textarea id="staff-reason" class="field-input" rows="2"
+                      placeholder="مثال: تأخّر بعذر طبي…" maxlength="300"></textarea>
+          </div>
+          <div class="field-group">
+            <label for="staff-note">ملاحظة <span class="optional">(اختياري)</span></label>
+            <textarea id="staff-note" class="field-input" rows="2" maxlength="300"></textarea>
+          </div>
+          <div id="staff-edit-error" class="msg msg-error" hidden></div>
+          <button type="button" class="btn btn-primary btn-full" id="btn-save-staff">
+            <svg class="icon icon-sm"><use href="#ic-send"/></svg>
+            <span id="staff-save-label">حفظ</span>
+            <span class="spinner" id="staff-save-spinner" hidden></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main><!-- /page (staff) -->
 
   <!-- ═══ Management view (class ↔ teacher) ═══════════════════════════════════ -->
   <main class="page" id="view-manage" role="tabpanel" aria-labelledby="tab-manage" hidden>
