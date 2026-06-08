@@ -1318,6 +1318,10 @@ function switchTab(tab) {
   }
   // The emergency-report FAB belongs to the attendance view only.
   if (fabReport) fabReport.hidden = tab !== 'attendance';
+  // The «المزيد» hamburger lights up whenever a non-primary section is active,
+  // and the menu closes after a selection.
+  if (btnMore) btnMore.classList.toggle('is-active', tab !== 'attendance');
+  closeMoreMenu();
 
   if (tab === 'manage'   && !_manageLoaded)  loadManageClasses();
   if (tab === 'students' && !_studentsLoaded) initStudentsTab();
@@ -1332,6 +1336,16 @@ tabStudents.addEventListener('click',   () => switchTab('students'));
 tabStaff.addEventListener('click',      () => switchTab('staff'));
 tabSubjects.addEventListener('click',   () => switchTab('subjects'));
 tabReports.addEventListener('click',    () => switchTab('reports'));
+
+// «المزيد» sections menu (bottom sheet)
+const btnMore   = el('btn-more');
+const menuMore  = el('menu-more');
+function openMoreMenu()  { if (menuMore) { menuMore.hidden = false; btnMore?.setAttribute('aria-expanded', 'true'); } }
+function closeMoreMenu() { if (menuMore) { menuMore.hidden = true;  btnMore?.setAttribute('aria-expanded', 'false'); } }
+btnMore?.addEventListener('click', openMoreMenu);
+el('btn-close-more')?.addEventListener('click', closeMoreMenu);
+// Tap on the backdrop (outside the sheet) closes the menu.
+menuMore?.addEventListener('click', (e) => { if (e.target === menuMore) closeMoreMenu(); });
 
 function clearMngError() { mngError.hidden = true; mngError.textContent = ''; }
 function showMngError(msg) { mngError.textContent = msg; mngError.hidden = false; }

@@ -990,6 +990,46 @@ select.field-input option:disabled { color: var(--clr-text-3); }
 }
 .tab-btn .icon { flex-shrink: 0; }
 
+/* «المزيد» — circular hamburger that opens the sections menu */
+.tab-more-btn {
+  flex: 0 0 auto;
+  width: 42px; height: 42px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--clr-border-lt); background: transparent; cursor: pointer;
+  color: var(--clr-text-2);
+  border-radius: 999px;
+  transition: background var(--dur, .2s), color var(--dur, .2s), border-color var(--dur, .2s);
+}
+.tab-more-btn:hover { background: var(--clr-bg); }
+.tab-more-btn.is-active {
+  background: var(--clr-primary-dim);
+  color: var(--clr-primary);
+  border-color: var(--clr-primary);
+}
+
+/* «المزيد» menu (bottom sheet) list */
+.menu-sheet .menu-list {
+  display: flex; flex-direction: column;
+  padding: 6px 10px calc(12px + env(safe-area-inset-bottom, 0));
+}
+.menu-item {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 14px 12px;
+  border: none; background: transparent; cursor: pointer;
+  font-family: inherit; font-size: .95rem; font-weight: 600;
+  color: var(--clr-text-1, #0F172A); text-align: right;
+  border-radius: var(--r-md, 10px);
+  border-bottom: 1px solid var(--clr-border-lt);
+  transition: background var(--dur, .2s), color var(--dur, .2s);
+}
+.menu-item:last-child { border-bottom: none; }
+.menu-item:hover { background: var(--clr-bg); }
+.menu-item .icon { flex-shrink: 0; color: var(--clr-primary); }
+.menu-item.is-active {
+  background: var(--clr-primary-dim);
+  color: var(--clr-primary);
+}
+
 .mng-hint { font-size: .82rem; color: var(--clr-text-3); line-height: 1.6; margin-bottom: 14px; }
 
 .dskel {
