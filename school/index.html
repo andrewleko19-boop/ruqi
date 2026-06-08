@@ -923,25 +923,29 @@
           <svg class="icon icon-sm"><use href="#ic-user"/></svg>
           <span>البيانات الأساسية</span>
         </div>
-        <div class="field-group">
-          <label for="stu-first">الاسم <span class="req">*</span></label>
-          <input id="stu-first" class="field-input field-narrow" type="text" maxlength="40" />
+        <div class="twin-fields">
+          <div class="field-group">
+            <label for="stu-first">الاسم <span class="req">*</span></label>
+            <input id="stu-first" class="field-input" type="text" maxlength="40" />
+          </div>
+          <div class="field-group">
+            <label for="stu-father">اسم الأب <span class="req">*</span></label>
+            <input id="stu-father" class="field-input" type="text" maxlength="40" />
+          </div>
         </div>
-        <div class="field-group">
-          <label for="stu-father">اسم الأب <span class="req">*</span></label>
-          <input id="stu-father" class="field-input field-narrow" type="text" maxlength="40" />
-        </div>
-        <div class="field-group">
-          <label for="stu-family">الكنية <span class="req">*</span></label>
-          <input id="stu-family" class="field-input field-narrow" type="text" maxlength="40" />
-        </div>
-        <div class="field-group">
-          <label for="stu-gender">الجنس</label>
-          <select id="stu-gender" class="field-input field-narrow">
-            <option value="">—</option>
-            <option value="male">ذكر</option>
-            <option value="female">أنثى</option>
-          </select>
+        <div class="twin-fields">
+          <div class="field-group">
+            <label for="stu-family">الكنية <span class="req">*</span></label>
+            <input id="stu-family" class="field-input" type="text" maxlength="40" />
+          </div>
+          <div class="field-group">
+            <label for="stu-gender">الجنس</label>
+            <select id="stu-gender" class="field-input">
+              <option value="">—</option>
+              <option value="male">ذكر</option>
+              <option value="female">أنثى</option>
+            </select>
+          </div>
         </div>
         <div class="field-group">
           <label>تاريخ الميلاد</label>
@@ -952,13 +956,15 @@
           </div>
           <div id="stu-dob-error" class="msg msg-error" hidden></div>
         </div>
-        <div class="field-group">
-          <label for="stu-natid">الرقم الوطني</label>
-          <input id="stu-natid" class="field-input field-narrow" type="text" inputmode="numeric" maxlength="11" />
-        </div>
-        <div class="field-group">
-          <label for="stu-card">رقم السجل العام <span style="color:var(--clr-danger)">*</span></label>
-          <input id="stu-card" class="field-input field-narrow" type="text" inputmode="numeric" maxlength="30" />
+        <div class="twin-fields">
+          <div class="field-group">
+            <label for="stu-natid">الرقم الوطني</label>
+            <input id="stu-natid" class="field-input" type="text" inputmode="numeric" maxlength="11" />
+          </div>
+          <div class="field-group">
+            <label for="stu-card">رقم السجل العام <span style="color:var(--clr-danger)">*</span></label>
+            <input id="stu-card" class="field-input" type="text" inputmode="numeric" maxlength="30" />
+          </div>
         </div>
 
         <details class="stu-optional">
