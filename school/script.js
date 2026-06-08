@@ -2950,9 +2950,7 @@ el('btn-save-student').addEventListener('click', async () => {
   if (!input.firstName || !input.fatherName || !input.familyName) {
     stuFormError.textContent = 'الاسم واسم الأب والكنية حقول إلزامية.'; show(stuFormError); return;
   }
-  if (!input.cardNumber) {
-    stuFormError.textContent = 'رقم السجل العام حقل إلزامي.'; show(stuFormError); return;
-  }
+
   if (input.nationalId && !/^\d{11}$/.test(input.nationalId)) {
     stuFormError.textContent = input.nationalId.length < 11
       ? `الرقم الوطني يجب أن يكون ١١ رقماً — أدخلت ${input.nationalId.length} فقط.`
