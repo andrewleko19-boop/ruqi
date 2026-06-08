@@ -76,6 +76,16 @@ function normaliseSchool(row) {
     type:          row.school_type ?? 'primary',
     // Minimum yearly attendance % required to pass (grades 5+). Editable.
     minAttendancePct: row.min_attendance_pct ?? 75,
+    // Raw passthroughs needed by staff/identity settings (kept on S.school so
+    // they survive caching). Safe when the columns are missing (⇒ undefined).
+    work_start_time: row.work_start_time ?? null,
+    complex_name:    row.complex_name    ?? null,
+    classification:  row.classification  ?? null,
+    education_type:  row.education_type  ?? null,
+    shift:           row.shift           ?? null,
+    student_type:    row.student_type    ?? null,
+    lat:             row.lat ?? null,
+    lng:             row.lng ?? null,
   };
 }
 
@@ -1253,11 +1263,13 @@ const NDB = window.NSAMS_DB;
 
 const tabAttendance   = el('tab-attendance');
 const tabManage       = el('tab-manage');
+const tabStudents     = el('tab-students');
 const tabStaff        = el('tab-staff');
 const tabSubjects     = el('tab-subjects');
 const tabReports      = el('tab-reports');
 const viewAttendance  = el('view-attendance');
 const viewManage      = el('view-manage');
+const viewStudents    = el('view-students');
 const viewStaff       = el('view-staff');
 const viewSubjects    = el('view-subjects');
 const viewReports     = el('view-reports');
@@ -1289,6 +1301,7 @@ let _mngBusy      = false;
 const TABS = {
   attendance: { tab: tabAttendance, view: viewAttendance },
   manage:     { tab: tabManage,     view: viewManage },
+  students:   { tab: tabStudents,   view: viewStudents },
   staff:      { tab: tabStaff,      view: viewStaff },
   subjects:   { tab: tabSubjects,   view: viewSubjects },
   reports:    { tab: tabReports,    view: viewReports },
@@ -1307,6 +1320,7 @@ function switchTab(tab) {
   if (fabReport) fabReport.hidden = tab !== 'attendance';
 
   if (tab === 'manage'   && !_manageLoaded)  loadManageClasses();
+  if (tab === 'students' && !_studentsLoaded) initStudentsTab();
   if (tab === 'staff'    && !_staffLoaded)   initStaffTab();
   if (tab === 'subjects' && !_subjectsLoaded) initSubjectsTab();
   if (tab === 'reports'  && !_reportsLoaded)  initReportsTab();
@@ -1314,6 +1328,7 @@ function switchTab(tab) {
 
 tabAttendance.addEventListener('click', () => switchTab('attendance'));
 tabManage.addEventListener('click',     () => switchTab('manage'));
+tabStudents.addEventListener('click',   () => switchTab('students'));
 tabStaff.addEventListener('click',      () => switchTab('staff'));
 tabSubjects.addEventListener('click',   () => switchTab('subjects'));
 tabReports.addEventListener('click',    () => switchTab('reports'));
@@ -2711,7 +2726,418 @@ async function loadStaffDailyCounts() {
   }
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+//  Students (سجل الطلاب / SIS): roster, editor, transfer, archive, CSV import
+// ════════════════════════════════════════════════════════════════════════════
+let _studentsLoaded = false;
+let _stuClassId = '';
+let _stuList    = [];          // raw student rows for the selected class
+let _stuEditId  = null;        // student id being edited (null = create)
+let _stuActionStudent = null;  // student targeted by transfer / archive
+let _stuImportRows = [];       // parsed+validated rows ready to import
+
+const stuClassSelect = el('stu-class-select');
+const stuTools       = el('stu-tools');
+const stuSearch      = el('stu-search');
+const stuLoading     = el('stu-loading');
+const stuListEl      = el('stu-list');
+const stuEmpty       = el('stu-empty');
+const stuNoResults   = el('stu-noresults');
+
+const STU_FIELDS = {
+  firstName:'stu-first', fatherName:'stu-father', familyName:'stu-family',
+  gender:'stu-gender', birthDate:'stu-birth', nationalId:'stu-natid', seatNumber:'stu-seat',
+  motherName:'stu-mother', motherFamily:'stu-mother-family', grandfatherName:'stu-grandfather',
+  cardNumber:'stu-card', birthPlace:'stu-birthplace', contactPhone:'stu-phone',
+  resGovernorate:'stu-gov', resRegion:'stu-region', resSubdistrict:'stu-subdistrict',
+  resTown:'stu-town', resSector:'stu-sector', resBlock:'stu-block', resRecord:'stu-record',
+};
+
+function actorId() { return S.user?.user?.id ?? null; }
+function schoolId() { return S.school?.id ?? S.user?.schoolId ?? null; }
+
+async function initStudentsTab() {
+  _studentsLoaded = true;
+  populateIdentityCard();
+  await loadStuClasses();
+}
+
+async function loadStuClasses() {
+  if (!S.school?.id) return;
+  try {
+    const classes = await NDB.getSchoolClasses(S.school.id);
+    _stuClasses = classes;
+    const opts = '<option value="">— اختر صفاً —</option>' + classes.map(c => {
+      const label = c.name || `${gradeLabel(c.grade)} / ${c.section ?? ''}`.trim();
+      return `<option value="${escapeHtml(c.id)}">${escapeHtml(label)}</option>`;
+    }).join('');
+    stuClassSelect.innerHTML = opts;
+    CustomSelect.refresh(stuClassSelect);
+  } catch (err) {
+    console.error('[NSAMS] loadStuClasses', err);
+    toast('تعذّر تحميل قائمة الصفوف', 'error');
+  }
+}
+let _stuClasses = [];
+
+stuClassSelect.addEventListener('change', async () => {
+  _stuClassId = stuClassSelect.value;
+  if (!_stuClassId) { stuTools.hidden = true; stuListEl.innerHTML = ''; hide(stuEmpty); hide(stuNoResults); return; }
+  stuTools.hidden = false;
+  await loadStudents();
+});
+
+async function loadStudents() {
+  if (!_stuClassId) return;
+  show(stuLoading); stuListEl.innerHTML = ''; hide(stuEmpty); hide(stuNoResults);
+  try {
+    _stuList = await NDB.getClassStudents(_stuClassId);
+    renderStudents();
+  } catch (err) {
+    console.error('[NSAMS] loadStudents', err);
+    toast('تعذّر تحميل الطلاب', 'error');
+  } finally {
+    hide(stuLoading);
+  }
+}
+
+function renderStudents() {
+  const q = (stuSearch.value || '').trim();
+  const list = q
+    ? _stuList.filter(s => (s.full_name || '').includes(q) || (s.national_id || '').includes(q))
+    : _stuList;
+  hide(stuEmpty); hide(stuNoResults);
+  if (_stuList.length === 0) { stuListEl.innerHTML = ''; show(stuEmpty); return; }
+  if (list.length === 0)     { stuListEl.innerHTML = ''; show(stuNoResults); return; }
+  stuListEl.innerHTML = list.map(s => {
+    const seat = s.seat_number != null ? s.seat_number : '—';
+    const meta = [s.national_id ? `الوطني: ${escapeHtml(s.national_id)}` : null,
+                  s.gender === 'male' ? 'ذكر' : s.gender === 'female' ? 'أنثى' : null]
+                  .filter(Boolean).join(' · ');
+    return (
+      `<li class="stu-row" data-id="${escapeHtml(s.id)}">` +
+        `<span class="stu-seat">${escapeHtml(String(seat))}</span>` +
+        `<span class="stu-info"><span class="stu-name">${escapeHtml(s.full_name || '—')}</span>` +
+          (meta ? `<span class="stu-meta">${meta}</span>` : '') + `</span>` +
+        `<span class="stu-acts">` +
+          `<button class="icon-btn-sm" data-act="edit" title="تعديل"><svg class="icon icon-sm"><use href="#ic-edit"/></svg></button>` +
+          `<button class="icon-btn-sm" data-act="transfer" title="نقل"><svg class="icon icon-sm"><use href="#ic-arrow-right"/></svg></button>` +
+          `<button class="icon-btn-sm danger" data-act="archive" title="أرشفة"><svg class="icon icon-sm"><use href="#ic-trash"/></svg></button>` +
+        `</span>` +
+      `</li>`
+    );
+  }).join('');
+}
+
+stuSearch.addEventListener('input', renderStudents);
+el('btn-refresh-students').addEventListener('click', () => { if (_stuClassId) loadStudents(); });
+
+stuListEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const id = btn.closest('.stu-row')?.dataset.id;
+  const student = _stuList.find(s => s.id === id);
+  if (!student) return;
+  if (btn.dataset.act === 'edit')     openStudentForm(student);
+  if (btn.dataset.act === 'transfer') openTransfer(student);
+  if (btn.dataset.act === 'archive')  openArchive(student);
+});
+
+// ── Student editor ──────────────────────────────────────────────────────────
+const modalStudent = el('modal-student');
+const stuFormError = el('stu-form-error');
+
+function openStudentForm(student) {
+  _stuEditId = student?.id ?? null;
+  el('stu-modal-title').textContent = student ? 'تعديل بيانات الطالب' : 'طالب جديد';
+  for (const [key, id] of Object.entries(STU_FIELDS)) {
+    const node = el(id); if (!node) continue;
+    const col = ({ firstName:'first_name', fatherName:'father_name', familyName:'family_name',
+      gender:'gender', birthDate:'birth_date', nationalId:'national_id', seatNumber:'seat_number',
+      motherName:'mother_name', motherFamily:'mother_family', grandfatherName:'grandfather_name',
+      cardNumber:'card_number', birthPlace:'birth_place', contactPhone:'contact_phone',
+      resGovernorate:'res_governorate', resRegion:'res_region', resSubdistrict:'res_subdistrict',
+      resTown:'res_town', resSector:'res_sector', resBlock:'res_block', resRecord:'res_record' })[key];
+    node.value = student && student[col] != null ? student[col] : '';
+  }
+  CustomSelect.refresh(el('stu-gender'));
+  hide(stuFormError);
+  show(modalStudent);
+}
+function closeStudentForm() { hide(modalStudent); }
+el('btn-close-student').addEventListener('click', closeStudentForm);
+
+el('btn-save-student').addEventListener('click', async () => {
+  hide(stuFormError);
+  const input = {};
+  for (const key of Object.keys(STU_FIELDS)) input[key] = el(STU_FIELDS[key]).value.trim();
+  if (!input.firstName || !input.fatherName || !input.familyName) {
+    stuFormError.textContent = 'الاسم واسم الأب والكنية حقول إلزامية.'; show(stuFormError); return;
+  }
+  if (input.nationalId && !/^\d{6,20}$/.test(input.nationalId)) {
+    stuFormError.textContent = 'الرقم الوطني يجب أن يكون أرقاماً (٦–٢٠ خانة).'; show(stuFormError); return;
+  }
+  const btn = el('btn-save-student'); btn.disabled = true; show(el('stu-save-spinner'));
+  try {
+    if (input.nationalId && navigator.onLine) {
+      const dup = await NDB.findDuplicateStudent(schoolId(), input.nationalId, _stuEditId);
+      if (dup) {
+        stuFormError.textContent = `الرقم الوطني مُستخدم لطالب آخر: ${dup.full_name || ''}`.trim();
+        show(stuFormError); btn.disabled = false; hide(el('stu-save-spinner')); return;
+      }
+    }
+    const res = await NDB.saveStudent({
+      ...input, id: _stuEditId || undefined,
+      schoolId: schoolId(), classId: _stuClassId, actorId: actorId(),
+    });
+    closeStudentForm();
+    toast(res.synced ? (_stuEditId ? 'تم تحديث الطالب' : 'تمت إضافة الطالب')
+                     : 'حُفظ محلياً وسيُزامن عند الاتصال', res.synced ? 'success' : 'warning');
+    await loadStudents();
+  } catch (err) {
+    console.error('[NSAMS] saveStudent', err);
+    stuFormError.textContent = 'تعذّر الحفظ.'; show(stuFormError);
+  } finally {
+    btn.disabled = false; hide(el('stu-save-spinner'));
+  }
+});
+
+el('btn-add-student').addEventListener('click', () => openStudentForm(null));
+
+// ── Transfer ────────────────────────────────────────────────────────────────
+const modalTransfer = el('modal-transfer');
+function openTransfer(student) {
+  _stuActionStudent = student;
+  el('transfer-name').textContent = student.full_name || '—';
+  el('transfer-reason').value = '';
+  hide(el('transfer-error'));
+  const sel = el('transfer-class');
+  sel.innerHTML = '<option value="">— اختر صفاً —</option>' + _stuClasses
+    .filter(c => c.id !== _stuClassId)
+    .map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name || `${gradeLabel(c.grade)} / ${c.section ?? ''}`.trim())}</option>`)
+    .join('');
+  CustomSelect.refresh(sel);
+  show(modalTransfer);
+}
+el('btn-close-transfer').addEventListener('click', () => hide(modalTransfer));
+el('btn-confirm-transfer').addEventListener('click', async () => {
+  const toClassId = el('transfer-class').value;
+  if (!toClassId) { el('transfer-error').textContent = 'اختر الصف الجديد.'; show(el('transfer-error')); return; }
+  const btn = el('btn-confirm-transfer'); btn.disabled = true; show(el('transfer-spinner'));
+  try {
+    const res = await NDB.transferStudent({
+      id: _stuActionStudent.id, schoolId: schoolId(),
+      fromClassId: _stuClassId, toClassId,
+      reason: el('transfer-reason').value.trim() || null, actorId: actorId(),
+    });
+    hide(modalTransfer);
+    toast(res.synced ? 'تم نقل الطالب' : 'سيُنقل عند الاتصال', res.synced ? 'success' : 'warning');
+    await loadStudents();
+  } catch (err) {
+    console.error('[NSAMS] transferStudent', err);
+    el('transfer-error').textContent = 'تعذّر النقل.'; show(el('transfer-error'));
+  } finally {
+    btn.disabled = false; hide(el('transfer-spinner'));
+  }
+});
+
+// ── Archive (soft-delete) ─────────────────────────────────────────────────────
+const modalArchive = el('modal-archive');
+function openArchive(student) {
+  _stuActionStudent = student;
+  el('archive-name').textContent = student.full_name || '—';
+  el('archive-reason').value = '';
+  hide(el('archive-error'));
+  show(modalArchive);
+}
+el('btn-close-archive').addEventListener('click', () => hide(modalArchive));
+el('btn-confirm-archive').addEventListener('click', async () => {
+  const btn = el('btn-confirm-archive'); btn.disabled = true; show(el('archive-spinner'));
+  try {
+    const res = await NDB.archiveStudent({
+      id: _stuActionStudent.id, schoolId: schoolId(), classId: _stuClassId,
+      reason: el('archive-reason').value.trim() || null, actorId: actorId(),
+    });
+    hide(modalArchive);
+    toast(res.synced ? 'تمت أرشفة الطالب' : 'ستُؤرشف عند الاتصال', res.synced ? 'success' : 'warning');
+    await loadStudents();
+  } catch (err) {
+    console.error('[NSAMS] archiveStudent', err);
+    el('archive-error').textContent = 'تعذّرت الأرشفة.'; show(el('archive-error'));
+  } finally {
+    btn.disabled = false; hide(el('archive-spinner'));
+  }
+});
+
+// ── CSV bulk import ───────────────────────────────────────────────────────────
+const modalImport = el('modal-import');
+el('btn-import-students').addEventListener('click', () => {
+  _stuImportRows = [];
+  el('import-file').value = '';
+  el('import-preview').hidden = true; el('import-preview').innerHTML = '';
+  el('btn-confirm-import').hidden = true;
+  hide(el('import-error'));
+  show(modalImport);
+});
+el('btn-close-import').addEventListener('click', () => hide(modalImport));
+
+el('btn-download-template').addEventListener('click', () => {
+  const csv = 'الاسم,الأب,الكنية,الجنس,تاريخ الميلاد,الرقم الوطني,رقم المقعد\n'
+            + 'أحمد,محمد,العلي,male,2015-03-01,,1\n';
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'students-template.csv';
+  a.click(); URL.revokeObjectURL(a.href);
+});
+
+function parseCSV(text) {
+  const rows = []; let field = '', row = [], inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) {
+      if (ch === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += ch;
+    } else if (ch === '"') inQ = true;
+    else if (ch === ',') { row.push(field); field = ''; }
+    else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+    else if (ch !== '\r') field += ch;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim() !== ''));
+}
+
+function normGender(v) {
+  const s = (v || '').trim().toLowerCase();
+  if (['male', 'm', 'ذكر'].includes(s)) return 'male';
+  if (['female', 'f', 'أنثى', 'انثى'].includes(s)) return 'female';
+  return '';
+}
+
+el('import-file').addEventListener('change', async (e) => {
+  hide(el('import-error'));
+  const file = e.target.files?.[0]; if (!file) return;
+  try {
+    const text = await file.text();
+    const rows = parseCSV(text);
+    if (rows.length <= 1) throw new Error('الملف فارغ أو لا يحوي بيانات.');
+    const dataRows = rows.slice(1); // skip header
+    const parsed = []; const errors = [];
+    dataRows.forEach((cols, idx) => {
+      const [firstName, fatherName, familyName, gender, birthDate, nationalId, seat] =
+        cols.map(c => (c || '').trim());
+      if (!firstName || !fatherName || !familyName) {
+        errors.push(`السطر ${idx + 2}: الاسم/الأب/الكنية مطلوبة`); return;
+      }
+      parsed.push({
+        firstName, fatherName, familyName, gender: normGender(gender),
+        birthDate: birthDate || '', nationalId: nationalId || '', seatNumber: seat || '',
+      });
+    });
+    _stuImportRows = parsed;
+    const prev = el('import-preview');
+    prev.innerHTML =
+      `<div class="import-sum">جاهز للاستيراد: ${parsed.length} طالب${errors.length ? ` — تخطّي ${errors.length} سطر` : ''}</div>` +
+      parsed.slice(0, 20).map(p => `<div class="stu-meta">• ${escapeHtml([p.firstName, p.fatherName, p.familyName].join(' '))}</div>`).join('') +
+      (parsed.length > 20 ? `<div class="stu-meta">… و${parsed.length - 20} غيرهم</div>` : '') +
+      errors.slice(0, 10).map(er => `<div class="import-fail">${escapeHtml(er)}</div>`).join('');
+    prev.hidden = false;
+    el('import-btn-label').textContent = `استيراد ${parsed.length} طالب`;
+    el('btn-confirm-import').hidden = parsed.length === 0;
+  } catch (err) {
+    el('import-error').textContent = err.message || 'تعذّرت قراءة الملف.'; show(el('import-error'));
+  }
+});
+
+el('btn-confirm-import').addEventListener('click', async () => {
+  if (!_stuImportRows.length || !_stuClassId) return;
+  const btn = el('btn-confirm-import'); btn.disabled = true; show(el('import-spinner'));
+  hide(el('import-error'));
+  try {
+    const sum = await NDB.bulkImportStudents({
+      schoolId: schoolId(), classId: _stuClassId, rows: _stuImportRows, actorId: actorId(),
+    });
+    hide(modalImport);
+    let msg = `تم استيراد ${sum.inserted} طالب`;
+    if (sum.duplicate) msg += ` · ${sum.duplicate} مكرّر`;
+    if (sum.failed.length) msg += ` · ${sum.failed.length} فشل`;
+    toast(msg, sum.failed.length ? 'warning' : 'success', 5000);
+    await loadStudents();
+  } catch (err) {
+    console.error('[NSAMS] bulkImportStudents', err);
+    el('import-error').textContent = err.message || 'تعذّر الاستيراد.'; show(el('import-error'));
+  } finally {
+    btn.disabled = false; hide(el('import-spinner'));
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+//  School identity + GPS (هوية المدرسة والموقع)
+// ════════════════════════════════════════════════════════════════════════════
+function populateIdentityCard() {
+  const s = S.school; if (!s) return;
+  if (el('sch-complex'))        el('sch-complex').value        = s.complex_name   ?? '';
+  if (el('sch-classification')) el('sch-classification').value = s.classification ?? '';
+  if (el('sch-edutype'))        el('sch-edutype').value        = s.education_type ?? '';
+  if (el('sch-shift'))        { el('sch-shift').value          = s.shift ?? ''; CustomSelect.refresh(el('sch-shift')); }
+  if (el('sch-studenttype'))    el('sch-studenttype').value    = s.student_type   ?? '';
+  if (el('sch-lat'))            el('sch-lat').value            = s.lat ?? '';
+  if (el('sch-lng'))            el('sch-lng').value            = s.lng ?? '';
+}
+
+el('btn-locate')?.addEventListener('click', () => {
+  if (!navigator.geolocation) { toast('المتصفّح لا يدعم تحديد الموقع', 'error'); return; }
+  toast('جارٍ تحديد الموقع…', 'info');
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      el('sch-lat').value = pos.coords.latitude.toFixed(6);
+      el('sch-lng').value = pos.coords.longitude.toFixed(6);
+      toast('تم تحديد الموقع — لا تنسَ الحفظ', 'success');
+    },
+    (err) => { console.warn('[NSAMS] geolocation', err); toast('تعذّر تحديد الموقع. أدخله يدوياً أو امنح الإذن.', 'error', 4500); },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+});
+
+el('btn-save-identity')?.addEventListener('click', async () => {
+  const msg = el('sch-identity-msg');
+  const latRaw = el('sch-lat').value.trim(), lngRaw = el('sch-lng').value.trim();
+  const patch = {
+    complexName:   el('sch-complex').value.trim(),
+    classification:el('sch-classification').value.trim(),
+    educationType: el('sch-edutype').value.trim(),
+    shift:         el('sch-shift').value,
+    studentType:   el('sch-studenttype').value.trim(),
+    lat: latRaw === '' ? null : Number(latRaw),
+    lng: lngRaw === '' ? null : Number(lngRaw),
+  };
+  if ((latRaw && Number.isNaN(patch.lat)) || (lngRaw && Number.isNaN(patch.lng))) {
+    msg.className = 'msg msg-error'; msg.textContent = 'إحداثيات GPS غير صحيحة.'; show(msg); return;
+  }
+  const btn = el('btn-save-identity'); btn.disabled = true;
+  try {
+    await NDB.updateSchool(S.school.id, patch);
+    // Reflect on the cached school object so the card persists across tabs.
+    Object.assign(S.school, {
+      complex_name: patch.complexName || null, classification: patch.classification || null,
+      education_type: patch.educationType || null, shift: patch.shift || null,
+      student_type: patch.studentType || null, lat: patch.lat, lng: patch.lng,
+    });
+    cacheSchool(S.school.id, S.school);
+    msg.className = 'msg msg-success'; msg.textContent = 'تم حفظ هوية المدرسة'; show(msg);
+    setTimeout(() => hide(msg), 2500);
+  } catch (err) {
+    console.error('[NSAMS] saveIdentity', err);
+    msg.className = 'msg msg-error'; msg.textContent = 'تعذّر الحفظ.'; show(msg);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // Enhance the school-admin selects once the DOM is parsed.
+CustomSelect.enhance('stu-class-select');
+CustomSelect.enhance('stu-gender');
+CustomSelect.enhance('transfer-class');
+CustomSelect.enhance('sch-shift');
 CustomSelect.enhance('staff-status');
 CustomSelect.enhance('in-personnel-kind');
 CustomSelect.enhance('mng-class-select');

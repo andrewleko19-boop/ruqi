@@ -26,6 +26,7 @@ const QUEUE_STU_ATT    = 'nsams_pending_stu_att';
 const QUEUE_GRADES     = 'nsams_pending_grades';
 const QUEUE_CONDUCT    = 'nsams_pending_conduct';
 const QUEUE_STAFF_ATT  = 'nsams_pending_staff_att';
+const QUEUE_STUDENTS   = 'nsams_pending_students';
 
 // Default work-start time used for the lateness calculation when a school has
 // not configured `schools.work_start_time`.
@@ -202,6 +203,14 @@ async function updateSchool(schoolId, patch) {
   const row = {};
   if (patch.minAttendancePct !== undefined) row.min_attendance_pct = patch.minAttendancePct;
   if (patch.workStartTime    !== undefined) row.work_start_time     = patch.workStartTime || null;
+  // School identity (هوية المدرسة) + GPS — reuses the existing lat/lng columns.
+  if (patch.complexName   !== undefined) row.complex_name   = patch.complexName   || null;
+  if (patch.classification!== undefined) row.classification = patch.classification|| null;
+  if (patch.educationType !== undefined) row.education_type = patch.educationType || null;
+  if (patch.shift         !== undefined) row.shift          = patch.shift         || null;
+  if (patch.studentType   !== undefined) row.student_type   = patch.studentType   || null;
+  if (patch.lat           !== undefined) row.lat            = patch.lat;
+  if (patch.lng           !== undefined) row.lng            = patch.lng;
   if (Object.keys(row).length === 0) return true;
   const { error } = await db.from('schools').update(row).eq('id', schoolId);
   if (error) throw error;
@@ -649,6 +658,11 @@ function setCachedStudents(classId, data) {
   } catch { /* storage quota — non-fatal */ }
 }
 
+function clearCachedStudents(classId) {
+  if (!classId) return;
+  try { localStorage.removeItem(STUDENTS_CACHE_PFX + classId); } catch { /* non-fatal */ }
+}
+
 // ─── Teacher: get students for a class ───────────────────────────────────────
 async function getClassStudents(classId) {
   if (!isOnline()) {
@@ -657,9 +671,13 @@ async function getClassStudents(classId) {
     throw new Error('لا يوجد اتصال ولا توجد بيانات محفوظة لهذا الصف');
   }
 
+  // select('*') (not an explicit column list) so the new SIS columns are
+  // included once the migration runs, while staying safe if it hasn't yet —
+  // same rationale as getSchoolById. Existing consumers keep reading
+  // full_name / national_id / gender / seat_number unchanged.
   const { data, error } = await db
     .from('students')
-    .select('id, full_name, national_id, gender, seat_number')
+    .select('*')
     .eq('class_id',  classId)
     .eq('is_active', true)
     .order('seat_number', { ascending: true,  nullsFirst: false })
@@ -670,6 +688,203 @@ async function getClassStudents(classId) {
   const students = data ?? [];
   setCachedStudents(classId, students);
   return students;
+}
+
+// ─── Student records (SIS): create / edit / transfer / archive ───────────────
+// Offline-first, mirroring saveStudentAttendance: every mutation is wrapped in
+// a queue item synced by syncStudentRecord (online path + syncPendingV2). Each
+// item carries an audit payload written (best-effort) to audit_log on sync.
+
+// camelCase student object (from the form) → snake_case students row.
+function studentRowFromInput(p) {
+  const fullName = [p.firstName, p.fatherName, p.familyName]
+    .map(s => (s ?? '').trim()).filter(Boolean).join(' ');
+  return {
+    id:               p.id,
+    school_id:        p.schoolId,
+    class_id:         p.classId ?? null,
+    first_name:       (p.firstName  ?? '').trim() || null,
+    father_name:      (p.fatherName ?? '').trim() || null,
+    family_name:      (p.familyName ?? '').trim() || null,
+    full_name:        fullName,
+    gender:           p.gender || null,
+    birth_date:       p.birthDate || null,
+    national_id:      (p.nationalId ?? '').trim() || null,
+    seat_number:      p.seatNumber === '' || p.seatNumber == null ? null : Number(p.seatNumber),
+    mother_name:      (p.motherName     ?? '').trim() || null,
+    mother_family:    (p.motherFamily   ?? '').trim() || null,
+    grandfather_name: (p.grandfatherName?? '').trim() || null,
+    card_number:      (p.cardNumber     ?? '').trim() || null,
+    birth_place:      (p.birthPlace     ?? '').trim() || null,
+    contact_phone:    (p.contactPhone   ?? '').trim() || null,
+    res_governorate:  (p.resGovernorate ?? '').trim() || null,
+    res_region:       (p.resRegion      ?? '').trim() || null,
+    res_subdistrict:  (p.resSubdistrict ?? '').trim() || null,
+    res_town:         (p.resTown        ?? '').trim() || null,
+    res_sector:       (p.resSector      ?? '').trim() || null,
+    res_block:        (p.resBlock       ?? '').trim() || null,
+    res_record:       (p.resRecord      ?? '').trim() || null,
+    is_active:        p.isActive !== false,
+    recorded_by:      p.actorId ?? null,
+    updated_at:       new Date().toISOString(),
+  };
+}
+
+function newStudentId() {
+  return (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID() : generateLocalId();
+}
+
+// Best-effort audit write (online direct path + sync path). Never throws —
+// auditing must not block or fail a mutation the user already committed.
+async function writeAudit({ schoolId, entity, entityId, action, changes = null, reason = null, actorId = null }) {
+  try {
+    if (!isOnline()) return false;
+    const { error } = await db.from('audit_log').insert({
+      school_id: schoolId, actor_id: actorId, entity,
+      entity_id: entityId, action, changes, reason,
+    });
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.warn('[NSAMS] writeAudit failed (non-fatal)', e);
+    return false;
+  }
+}
+
+// Core sync — runs the actual DB mutation for one queued student item, then
+// records the audit row. Called on the online path and by syncPendingV2.
+async function syncStudentRecord(item) {
+  if (item.op === 'save') {
+    const { error } = await db.from('students')
+      .upsert(item.row, { onConflict: 'id', ignoreDuplicates: false });
+    if (error) throw error;
+  } else if (item.op === 'archive') {
+    const { error } = await db.from('students')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('id', item.id);
+    if (error) throw error;
+  } else if (item.op === 'transfer') {
+    const { error } = await db.from('students')
+      .update({ class_id: item.classId, updated_at: new Date().toISOString() })
+      .eq('id', item.id);
+    if (error) throw error;
+  }
+  if (item.audit) await writeAudit(item.audit);
+  return true;
+}
+
+function getPendingStudents() {
+  return readQueue(QUEUE_STUDENTS).filter(r => !r.synced);
+}
+
+function markStudentSynced(localId) {
+  writeQueue(QUEUE_STUDENTS, readQueue(QUEUE_STUDENTS).map(r =>
+    r.localId === localId ? { ...r, synced: true } : r));
+}
+
+// Shared offline-or-sync path for a single student mutation item.
+async function enqueueOrSyncStudent(item) {
+  [item.classId, item.fromClassId].forEach(clearCachedStudents);
+
+  if (!isOnline()) {
+    const q = readQueue(QUEUE_STUDENTS); q.push(item); writeQueue(QUEUE_STUDENTS, q);
+    return { success: true, id: item.id, synced: false };
+  }
+  try {
+    await syncStudentRecord(item);
+    return { success: true, id: item.id, synced: true };
+  } catch (err) {
+    const q = readQueue(QUEUE_STUDENTS); q.push(item); writeQueue(QUEUE_STUDENTS, q);
+    console.warn('[NSAMS] saveStudent: falling back to queue', err);
+    return { success: true, id: item.id, synced: false };
+  }
+}
+
+// Create or update one student. `input.id` present ⇒ update, absent ⇒ create.
+async function saveStudent(input) {
+  const isCreate = !input.id;
+  const id  = input.id || newStudentId();
+  const row = studentRowFromInput({ ...input, id });
+  const item = {
+    localId: generateLocalId(), op: 'save', id, classId: row.class_id,
+    row,
+    audit: {
+      schoolId: row.school_id, entity: 'student', entityId: id,
+      action: isCreate ? 'create' : 'update', changes: row,
+      reason: input.reason ?? null, actorId: input.actorId ?? null,
+    },
+    synced: false, createdAt: new Date().toISOString(),
+  };
+  return enqueueOrSyncStudent(item);
+}
+
+// Soft-delete (never a hard DELETE) — keeps history & references intact.
+async function archiveStudent({ id, schoolId, classId, reason, actorId }) {
+  const item = {
+    localId: generateLocalId(), op: 'archive', id, classId,
+    audit: { schoolId, entity: 'student', entityId: id, action: 'archive',
+             changes: null, reason: reason ?? null, actorId: actorId ?? null },
+    synced: false, createdAt: new Date().toISOString(),
+  };
+  return enqueueOrSyncStudent(item);
+}
+
+// Move a student to another class/section (the official «نقل طالب»).
+async function transferStudent({ id, schoolId, fromClassId, toClassId, reason, actorId }) {
+  const item = {
+    localId: generateLocalId(), op: 'transfer', id,
+    classId: toClassId, fromClassId,
+    audit: { schoolId, entity: 'student', entityId: id, action: 'transfer',
+             changes: { from: fromClassId, to: toClassId },
+             reason: reason ?? null, actorId: actorId ?? null },
+    synced: false, createdAt: new Date().toISOString(),
+  };
+  return enqueueOrSyncStudent(item);
+}
+
+// Duplicate guard: is there an active student with this national_id in the
+// school? Backs the unique partial index; surfaced in the form & bulk import.
+async function findDuplicateStudent(schoolId, nationalId, excludeId = null) {
+  const nid = (nationalId ?? '').trim();
+  if (!nid) return null;
+  let q = db.from('students')
+    .select('id, full_name, class_id')
+    .eq('school_id', schoolId).eq('national_id', nid).eq('is_active', true);
+  if (excludeId) q = q.neq('id', excludeId);
+  const { data, error } = await q.limit(1);
+  if (error) throw error;
+  return (data && data[0]) || null;
+}
+
+// Bulk import a parsed/validated batch of students into one class. Requires a
+// connection (large op). Inserts row-by-row so one bad row can't drop the rest;
+// returns a per-row summary for the preview UI.
+async function bulkImportStudents({ schoolId, classId, rows, actorId }) {
+  if (!isOnline()) throw new Error('الاستيراد الجماعي يتطلّب اتصالاً بالإنترنت.');
+  const summary = { inserted: 0, duplicate: 0, failed: [] };
+  for (let i = 0; i < rows.length; i++) {
+    const input = rows[i];
+    try {
+      const dup = await findDuplicateStudent(schoolId, input.nationalId);
+      if (dup) { summary.duplicate++; continue; }
+      const id  = newStudentId();
+      const row = studentRowFromInput({ ...input, id, schoolId, classId, actorId });
+      const { error } = await db.from('students').insert(row);
+      if (error) throw error;
+      summary.inserted++;
+    } catch (err) {
+      summary.failed.push({ line: i + 1, name: input.firstName || input.fullName || '—',
+                            error: err?.message || 'خطأ' });
+    }
+  }
+  clearCachedStudents(classId);
+  if (summary.inserted > 0) {
+    await writeAudit({ schoolId, entity: 'student', entityId: null,
+      action: 'bulk_import', changes: { class_id: classId, count: summary.inserted },
+      reason: null, actorId });
+  }
+  return summary;
 }
 
 // ─── Teacher: check submission status for a class + date ─────────────────────
@@ -1851,6 +2066,7 @@ async function syncPendingV2() {
     grades:     { synced: 0, failed: 0 },
     conduct:    { synced: 0, failed: 0 },
     staffAtt:   { synced: 0, failed: 0 },
+    students:   { synced: 0, failed: 0 },
   };
 
   for (const record of getPendingAttendance()) {
@@ -1899,6 +2115,14 @@ async function syncPendingV2() {
       markStaffAttSynced(payload.localId);
       results.staffAtt.synced++;
     } catch { results.staffAtt.failed++; }
+  }
+
+  for (const item of getPendingStudents()) {
+    try {
+      await syncStudentRecord(item);
+      markStudentSynced(item.localId);
+      results.students.synced++;
+    } catch { results.students.failed++; }
   }
 
   return results;
@@ -1956,6 +2180,15 @@ window.NSAMS_DB = {
   hasTodayAttendance,
   saveStudentAttendance,
   getPendingStudentAttendance,
+
+  // Student records (SIS) — create / edit / transfer / archive / import
+  saveStudent,
+  archiveStudent,
+  transferStudent,
+  findDuplicateStudent,
+  bulkImportStudents,
+  getPendingStudents,
+  writeAudit,
 
   // Staff attendance (دوام الموظفين)
   getSchoolPersonnel,
