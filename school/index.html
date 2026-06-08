@@ -949,15 +949,9 @@
             <input id="stu-birth" class="field-input" type="date" />
           </div>
         </div>
-        <div class="twin-fields">
-          <div class="field-group">
-            <label for="stu-natid">الرقم الوطني</label>
-            <input id="stu-natid" class="field-input" type="text" inputmode="numeric" maxlength="20" />
-          </div>
-          <div class="field-group">
-            <label for="stu-seat">رقم المقعد</label>
-            <input id="stu-seat" class="field-input" type="number" min="1" max="999" inputmode="numeric" />
-          </div>
+        <div class="field-group">
+          <label for="stu-natid">الرقم الوطني</label>
+          <input id="stu-natid" class="field-input" type="text" inputmode="numeric" maxlength="20" />
         </div>
 
         <details class="stu-optional">
@@ -1080,7 +1074,7 @@
         </button>
       </div>
       <div class="sheet-body">
-        <p class="mng-hint">الأعمدة: الاسم، الأب، الكنية، الجنس (male/female)، تاريخ الميلاد (YYYY-MM-DD)، الرقم الوطني، رقم المقعد. السطر الأول عناوين.</p>
+        <p class="mng-hint">الأعمدة: الاسم، الأب، الكنية، الجنس (male/female)، تاريخ الميلاد (YYYY-MM-DD)، الرقم الوطني. السطر الأول عناوين.</p>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-download-template">
           <svg class="icon icon-sm"><use href="#ic-receipt"/></svg>
           تنزيل قالب CSV
@@ -1603,15 +1597,16 @@
   padding:12px 0; list-style:none; }
 .stu-optional > summary::-webkit-details-marker { display:none; }
 .stu-optional[open] > summary { border-bottom:1px solid var(--clr-border-lt,#E2E8F0); margin-bottom:10px; }
-.stu-row { display:flex; align-items:center; gap:10px; padding:11px 4px;
+.stu-row { display:flex; align-items:center; gap:12px; padding:11px 4px;
   border-bottom:1px solid var(--clr-border-lt,#E2E8F0); }
 .stu-row:last-child { border-bottom:none; }
-.stu-seat { min-width:28px; height:28px; border-radius:6px;
+.stu-seat { width:26px; height:26px; border-radius:6px;
   background:var(--clr-primary-dim, rgba(11,43,94,.1)); color:var(--clr-primary,#0B2B5E);
   display:flex; align-items:center; justify-content:center; font-weight:800; font-size:.72rem; flex-shrink:0; }
-.stu-info { flex:1; min-width:0; }
-.stu-name { font-weight:700; color:#0F172A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.stu-meta { font-size:.72rem; color:#94A3B8; margin-top:1px; }
+.stu-info { flex:1 1 auto; min-width:0; }
+.stu-name { font-weight:600; font-size:.88rem; color:#0F172A; line-height:1.45;
+  overflow-wrap:anywhere; word-break:break-word; }
+.stu-meta { font-size:.72rem; color:#94A3B8; margin-top:2px; }
 .stu-acts { display:flex; gap:6px; flex-shrink:0; }
 .import-sum { font-size:.82rem; font-weight:700; margin:10px 0 6px; color:#475569; }
 .import-fail { font-size:.78rem; color:#DC2626; margin-top:2px; }
