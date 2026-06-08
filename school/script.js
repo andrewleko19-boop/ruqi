@@ -2824,12 +2824,10 @@ function renderStudents() {
   if (_stuList.length === 0) { stuListEl.innerHTML = ''; show(stuEmpty); return; }
   if (list.length === 0)     { stuListEl.innerHTML = ''; show(stuNoResults); return; }
   stuListEl.innerHTML = list.map((s, i) => {
-    const meta = s.national_id ? `الرقم الوطني: ${escapeHtml(s.national_id)}` : '';
     return (
       `<li class="stu-row" data-id="${escapeHtml(s.id)}">` +
         `<span class="stu-seat">${i + 1}</span>` +
-        `<span class="stu-info"><span class="stu-name">${escapeHtml(s.full_name || '—')}</span>` +
-          (meta ? `<span class="stu-meta">${meta}</span>` : '') + `</span>` +
+        `<span class="stu-info"><span class="stu-name">${escapeHtml(s.full_name || '—')}</span></span>` +
         `<span class="stu-acts">` +
           `<button class="icon-btn-sm" data-act="edit" title="تعديل"><svg class="icon icon-sm"><use href="#ic-edit"/></svg></button>` +
           `<button class="icon-btn-sm" data-act="transfer" title="نقل"><svg class="icon icon-sm"><use href="#ic-arrow-right"/></svg></button>` +
