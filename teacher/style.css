@@ -158,6 +158,29 @@ ul { list-style: none; }
 .btn-ghost:hover:not(:disabled) { background: var(--clr-bg); }
 .btn-full { width: 100%; }
 
+/* ═══ Duty card (دوامي اليوم) ═════════════════════════════════════════════════ */
+.duty-card {
+  background: #fff; border: 1.5px solid var(--clr-border);
+  border-radius: 14px; padding: 14px 16px; margin-bottom: 14px;
+  box-shadow: var(--sh-sm);
+}
+.duty-hdr {
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 700; color: var(--clr-primary); font-size: .95rem;
+}
+.duty-status {
+  margin-inline-start: auto; padding: 3px 10px; border-radius: 999px;
+  font-size: .72rem; font-weight: 700;
+}
+.duty-status.is-present { background: var(--clr-success-bg); color: var(--clr-success); border: 1px solid var(--clr-success-brd); }
+.duty-status.is-late    { background: var(--clr-warning-bg); color: var(--clr-warning); border: 1px solid var(--clr-warning-brd); }
+.duty-info {
+  margin: 10px 0 12px; font-size: .85rem; color: var(--clr-text-2); line-height: 1.7;
+}
+.duty-info strong { color: var(--clr-text-1); font-weight: 700; }
+.duty-actions { display: flex; gap: 10px; }
+.duty-actions .btn { flex: 1; }
+
 /* ═══ Spinner ═════════════════════════════════════════════════════════════════ */
 .spinner {
   display: inline-block; width: 18px; height: 18px;

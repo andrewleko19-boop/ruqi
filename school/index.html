@@ -255,6 +255,16 @@
       <svg class="icon icon-sm"><use href="#ic-users"/></svg>
       إدارة الصفوف
     </button>
+    <button class="tab-btn" id="tab-students" role="tab"
+            aria-selected="false" data-tab="students">
+      <svg class="icon icon-sm"><use href="#ic-user"/></svg>
+      الطلاب
+    </button>
+    <button class="tab-btn" id="tab-staff" role="tab"
+            aria-selected="false" data-tab="staff">
+      <svg class="icon icon-sm"><use href="#ic-clock"/></svg>
+      دوام الموظفين
+    </button>
     <button class="tab-btn" id="tab-subjects" role="tab"
             aria-selected="false" data-tab="subjects">
       <svg class="icon icon-sm"><use href="#ic-book"/></svg>
@@ -410,6 +420,39 @@
           </div>
         </div>
 
+        <!-- Admins & workers — auto-filled from the staff register, editable -->
+        <div class="subsection">
+          <div class="sub-label">الإداريون</div>
+          <div class="twin-fields">
+            <div class="field-group">
+              <label for="in-admin-present">حاضرون</label>
+              <input type="number" id="in-admin-present" class="field-input"
+                     min="0" max="999" value="0" inputmode="numeric" />
+            </div>
+            <div class="field-group">
+              <label for="in-admin-absent">غائبون</label>
+              <input type="number" id="in-admin-absent" class="field-input"
+                     min="0" max="999" value="0" inputmode="numeric" />
+            </div>
+          </div>
+          <div class="sub-label">العمال</div>
+          <div class="twin-fields">
+            <div class="field-group">
+              <label for="in-worker-present">حاضرون</label>
+              <input type="number" id="in-worker-present" class="field-input"
+                     min="0" max="999" value="0" inputmode="numeric" />
+            </div>
+            <div class="field-group">
+              <label for="in-worker-absent">غائبون</label>
+              <input type="number" id="in-worker-absent" class="field-input"
+                     min="0" max="999" value="0" inputmode="numeric" />
+            </div>
+          </div>
+          <p style="font-size:.75rem;color:#94A3B8;margin:-2px 0 6px">
+            تُحتسب تلقائياً من «دوام الموظفين» — يمكنك تعديلها قبل الإرسال.
+          </p>
+        </div>
+
         <div class="divider"></div>
 
         <!-- Students block -->
@@ -458,6 +501,248 @@
     </div>
 
   </main><!-- /page (attendance) -->
+
+  <!-- ═══ Staff attendance view (دوام الموظفين) ═══════════════════════════════ -->
+  <main class="page" id="view-staff" role="tabpanel" aria-labelledby="tab-staff" hidden>
+
+    <!-- Work-start time (drives the lateness calc) -->
+    <section class="card">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-clock"/></svg>
+        <span>بداية الدوام</span>
+      </div>
+      <div class="card-body">
+        <div class="add-row">
+          <input type="time" id="in-work-start" class="field-input" aria-label="بداية الدوام" />
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-save-work-start">حفظ</button>
+        </div>
+        <p style="font-size:.75rem;color:#94A3B8;margin:6px 0 0">
+          يُحتسب التأخير بناءً على هذا الوقت (الافتراضي 07:30).
+        </p>
+        <div id="work-start-msg" class="msg msg-success" hidden style="margin-top:8px"></div>
+      </div>
+    </section>
+
+    <!-- School identity + GPS (هوية المدرسة والموقع) -->
+    <section class="card">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-school"/></svg>
+        <span>هوية المدرسة والموقع</span>
+      </div>
+      <div class="card-body">
+        <div class="field-group">
+          <label for="sch-complex">المجمّع التربوي</label>
+          <input id="sch-complex" class="field-input" type="text" maxlength="120" />
+        </div>
+        <div class="twin-fields">
+          <div class="field-group">
+            <label for="sch-classification">التصنيف</label>
+            <input id="sch-classification" class="field-input" type="text" maxlength="60" />
+          </div>
+          <div class="field-group">
+            <label for="sch-edutype">نوع التعليم</label>
+            <input id="sch-edutype" class="field-input" type="text" maxlength="60" />
+          </div>
+        </div>
+        <div class="twin-fields">
+          <div class="field-group">
+            <label for="sch-shift">فترة الدوام</label>
+            <select id="sch-shift" class="field-input">
+              <option value="">—</option>
+              <option value="morning">صباحي</option>
+              <option value="evening">مسائي</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="sch-studenttype">نوع الطلاب</label>
+            <input id="sch-studenttype" class="field-input" type="text" maxlength="60" />
+          </div>
+        </div>
+        <div class="block-label" style="margin-top:8px">
+          <svg class="icon icon-sm"><use href="#ic-school"/></svg>
+          <span>الموقع الجغرافي (GPS)</span>
+        </div>
+        <div class="twin-fields">
+          <div class="field-group">
+            <label for="sch-lat">خط العرض</label>
+            <input id="sch-lat" class="field-input" type="number" step="any" inputmode="decimal" />
+          </div>
+          <div class="field-group">
+            <label for="sch-lng">خط الطول</label>
+            <input id="sch-lng" class="field-input" type="number" step="any" inputmode="decimal" />
+          </div>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-locate">
+          <svg class="icon icon-sm"><use href="#ic-school"/></svg>
+          تحديد موقعي الحالي
+        </button>
+        <div id="sch-identity-msg" class="msg msg-success" hidden style="margin-top:8px"></div>
+        <button type="button" class="btn btn-primary btn-full" id="btn-save-identity" style="margin-top:10px">
+          <svg class="icon icon-sm"><use href="#ic-check"/></svg>
+          حفظ هوية المدرسة
+        </button>
+      </div>
+    </section>
+
+    <!-- Today's staff attendance, grouped by category -->
+    <section class="card">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-clipboard"/></svg>
+        <span>دوام اليوم</span>
+        <button class="hdr-btn" id="btn-refresh-staff" aria-label="تحديث" style="margin-inline-start:auto">
+          <svg class="icon icon-sm" id="staff-refresh-icon"><use href="#ic-refresh"/></svg>
+        </button>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div id="staff-loading" style="padding:16px 14px">
+          <div style="height:13px;border-radius:6px;background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);background-size:200% 100%;animation:shimmer 1.4s ease-in-out infinite;margin-bottom:10px"></div>
+          <div style="height:13px;width:65%;border-radius:6px;background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);background-size:200% 100%;animation:shimmer 1.4s ease-in-out infinite"></div>
+        </div>
+        <div id="staff-error" class="msg msg-error" hidden style="margin:12px 14px"></div>
+        <div id="staff-list" hidden></div>
+      </div>
+    </section>
+
+    <!-- Personnel roster (admins & workers — they have no app login) -->
+    <section class="card">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-users"/></svg>
+        <span>سجل الإداريين والعمال</span>
+      </div>
+      <div class="card-body">
+        <div class="add-row">
+          <input type="text" id="in-personnel-name" class="field-input"
+                 placeholder="اسم الموظف" maxlength="80" />
+          <select id="in-personnel-kind" class="field-input" aria-label="الفئة">
+            <option value="admin">إداري</option>
+            <option value="worker">عامل</option>
+          </select>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-add-personnel">
+            <svg class="icon icon-sm"><use href="#ic-plus"/></svg>إضافة
+          </button>
+        </div>
+        <div id="personnel-error" class="msg msg-error" hidden style="margin-top:8px"></div>
+        <ul class="staff-roster" id="personnel-list"></ul>
+      </div>
+    </section>
+
+    <!-- Teacher accounts — created centrally by the principal (username + password) -->
+    <section class="card">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-user"/></svg>
+        <span>معلومات تسجيل الكادر المدرسي</span>
+        <button class="hdr-btn" id="btn-refresh-cred" aria-label="تحديث" style="margin-inline-start:auto">
+          <svg class="icon icon-sm" id="cred-refresh-icon"><use href="#ic-refresh"/></svg>
+        </button>
+      </div>
+      <div class="card-body">
+        <button type="button" class="btn btn-primary btn-sm" id="btn-add-teacher">
+          <svg class="icon icon-sm"><use href="#ic-plus"/></svg>
+          إضافة معلّم
+        </button>
+        <p class="mng-hint" style="margin-top:8px">
+          يُنشئ المدير حساب كل معلّم (اسم مستخدم وكلمة مرور). تظهر بيانات الدخول هنا لك وحدك.
+        </p>
+        <div id="cred-loading" hidden style="padding:8px 0"><div class="dskel"></div></div>
+        <ul id="cred-list" class="mng-list" role="list"></ul>
+        <p id="cred-empty" class="mng-empty" hidden>لا توجد حسابات معلّمين بعد.</p>
+      </div>
+    </section>
+
+    <!-- Add / edit teacher account modal -->
+    <div id="modal-teacher" class="overlay" hidden aria-modal="true" role="dialog" aria-label="حساب معلّم">
+      <div class="sheet sheet-sm">
+        <div class="sheet-handle"></div>
+        <div class="sheet-hdr">
+          <div class="sheet-title">
+            <svg class="icon"><use href="#ic-user"/></svg>
+            <span id="tch-modal-title">إضافة معلّم</span>
+          </div>
+          <button class="icon-btn" id="btn-close-teacher" aria-label="إغلاق">
+            <svg class="icon"><use href="#ic-x"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body">
+          <div class="field-group" id="tch-name-group">
+            <label for="tch-name">الاسم الكامل <span class="req">*</span></label>
+            <input id="tch-name" class="field-input" type="text" maxlength="80" />
+          </div>
+          <div class="field-group" id="tch-username-group">
+            <label for="tch-username">اسم المستخدم <span class="req">*</span></label>
+            <input id="tch-username" class="field-input" type="text"
+                   autocomplete="off" dir="ltr" placeholder="أحرف لاتينية/أرقام بدون فراغات" maxlength="40" />
+          </div>
+          <div class="field-group">
+            <label for="tch-password" id="tch-password-label">كلمة المرور <span class="req">*</span></label>
+            <div class="input-wrap">
+              <input id="tch-password" class="field-input" type="text" autocomplete="off"
+                     placeholder="٦ أحرف على الأقل" maxlength="64" />
+            </div>
+          </div>
+          <div id="tch-error" class="msg msg-error" hidden></div>
+          <button type="button" class="btn btn-primary btn-full" id="btn-save-teacher">
+            <svg class="icon icon-sm"><use href="#ic-check"/></svg>
+            <span id="tch-save-label">إنشاء الحساب</span>
+            <span class="spinner" id="tch-spinner" hidden></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Staff attendance edit modal -->
+    <div id="modal-staff" class="overlay" hidden aria-modal="true" role="dialog">
+      <div class="sheet sheet-sm">
+        <div class="sheet-handle"></div>
+        <div class="sheet-hdr">
+          <div class="sheet-title">
+            <svg class="icon"><use href="#ic-clipboard"/></svg>
+            <span>تعديل الدوام</span>
+          </div>
+          <button class="icon-btn" id="btn-close-staff" aria-label="إغلاق">
+            <svg class="icon"><use href="#ic-x"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body">
+          <p style="font-size:.85rem;color:#475569;margin-bottom:12px">الموظف: <strong id="staff-edit-name">—</strong></p>
+          <div class="field-group">
+            <label for="staff-status">الحالة</label>
+            <select id="staff-status" class="field-input">
+              <option value="present">حاضر</option>
+              <option value="late">متأخر</option>
+              <option value="absent">غائب</option>
+              <option value="leave">إجازة</option>
+            </select>
+          </div>
+          <div class="twin-fields">
+            <div class="field-group">
+              <label for="staff-checkin">وقت الدخول</label>
+              <input type="time" id="staff-checkin" class="field-input" />
+            </div>
+            <div class="field-group">
+              <label for="staff-checkout">وقت الخروج</label>
+              <input type="time" id="staff-checkout" class="field-input" />
+            </div>
+          </div>
+          <div class="field-group">
+            <label for="staff-reason">سبب التعديل <span class="req">*</span></label>
+            <textarea id="staff-reason" class="field-input" rows="2"
+                      placeholder="مثال: تأخّر بعذر طبي…" maxlength="300"></textarea>
+          </div>
+          <div class="field-group">
+            <label for="staff-note">ملاحظة <span class="optional">(اختياري)</span></label>
+            <textarea id="staff-note" class="field-input" rows="2" maxlength="300"></textarea>
+          </div>
+          <div id="staff-edit-error" class="msg msg-error" hidden></div>
+          <button type="button" class="btn btn-primary btn-full" id="btn-save-staff">
+            <svg class="icon icon-sm"><use href="#ic-send"/></svg>
+            <span id="staff-save-label">حفظ</span>
+            <span class="spinner" id="staff-save-spinner" hidden></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main><!-- /page (staff) -->
 
   <!-- ═══ Management view (class ↔ teacher) ═══════════════════════════════════ -->
   <main class="page" id="view-manage" role="tabpanel" aria-labelledby="tab-manage" hidden>
@@ -545,6 +830,248 @@
     </section>
 
   </main><!-- /page (manage) -->
+
+  <!-- ═══ Students (سجل الطلاب / SIS) ═══════════════════════════════════════════ -->
+  <main class="page" id="view-students" role="tabpanel" aria-labelledby="tab-students" hidden>
+    <section class="card">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-user"/></svg>
+        <span>سجل الطلاب</span>
+        <button class="hdr-btn" id="btn-refresh-students" aria-label="تحديث" style="margin-inline-start:auto">
+          <svg class="icon icon-sm" id="students-refresh-icon"><use href="#ic-refresh"/></svg>
+        </button>
+      </div>
+      <div class="card-body">
+        <p class="mng-hint">اختر صفاً لعرض طلابه. يمكنك إضافة طالب، تعديل بياناته، نقله لصفّ آخر، أو أرشفته (دون حذف).</p>
+
+        <div class="field-group">
+          <label for="stu-class-select">الصف</label>
+          <select id="stu-class-select" class="field-input">
+            <option value="">— اختر صفاً —</option>
+          </select>
+        </div>
+
+        <div id="stu-tools" hidden>
+          <div class="field-group">
+            <input type="search" id="stu-search" class="field-input"
+                   placeholder="بحث بالاسم أو الرقم الوطني" />
+          </div>
+          <div class="stu-actions-row">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-add-student">
+              <svg class="icon icon-sm"><use href="#ic-plus"/></svg>
+              إضافة طالب
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-import-students">
+              <svg class="icon icon-sm"><use href="#ic-clipboard"/></svg>
+              استيراد CSV
+            </button>
+          </div>
+        </div>
+
+        <div id="stu-loading" hidden style="padding:8px 0">
+          <div class="dskel"></div><div class="dskel" style="width:60%"></div>
+        </div>
+        <ul id="stu-list" class="mng-list" role="list"></ul>
+        <p id="stu-empty" class="mng-empty" hidden>لا يوجد طلاب في هذا الصف بعد.</p>
+        <p id="stu-noresults" class="mng-empty" hidden>لا نتائج مطابقة للبحث.</p>
+      </div>
+    </section>
+  </main><!-- /page (students) -->
+
+  <!-- ═══ Student editor modal ═════════════════════════════════════════════════ -->
+  <div id="modal-student" class="overlay" hidden aria-modal="true" role="dialog" aria-label="بيانات الطالب">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-hdr">
+        <div class="sheet-title">
+          <svg class="icon"><use href="#ic-user"/></svg>
+          <span id="stu-modal-title">طالب جديد</span>
+        </div>
+        <button class="icon-btn" id="btn-close-student" aria-label="إغلاق">
+          <svg class="icon"><use href="#ic-x"/></svg>
+        </button>
+      </div>
+      <div class="sheet-body">
+        <div class="block-label">
+          <svg class="icon icon-sm"><use href="#ic-user"/></svg>
+          <span>البيانات الأساسية</span>
+        </div>
+        <div class="field-group">
+          <label for="stu-first">الاسم <span class="req">*</span></label>
+          <input id="stu-first" class="field-input" type="text" maxlength="40" />
+        </div>
+        <div class="field-group">
+          <label for="stu-father">اسم الأب <span class="req">*</span></label>
+          <input id="stu-father" class="field-input" type="text" maxlength="40" />
+        </div>
+        <div class="field-group">
+          <label for="stu-family">الكنية <span class="req">*</span></label>
+          <input id="stu-family" class="field-input" type="text" maxlength="40" />
+        </div>
+        <div class="twin-fields">
+          <div class="field-group">
+            <label for="stu-gender">الجنس</label>
+            <select id="stu-gender" class="field-input">
+              <option value="">—</option>
+              <option value="male">ذكر</option>
+              <option value="female">أنثى</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="stu-birth">تاريخ الميلاد</label>
+            <input id="stu-birth" class="field-input" type="date" />
+          </div>
+        </div>
+        <div class="twin-fields">
+          <div class="field-group">
+            <label for="stu-natid">الرقم الوطني</label>
+            <input id="stu-natid" class="field-input" type="text" inputmode="numeric" maxlength="20" />
+          </div>
+          <div class="field-group">
+            <label for="stu-seat">رقم المقعد</label>
+            <input id="stu-seat" class="field-input" type="number" min="1" max="999" inputmode="numeric" />
+          </div>
+        </div>
+
+        <details class="stu-optional">
+          <summary>بيانات اختيارية (الأهل، البطاقة، السكن)</summary>
+          <div class="block-label" style="margin-top:10px"><span>بيانات الأهل</span></div>
+          <div class="twin-fields">
+            <div class="field-group"><label for="stu-mother">اسم الأم</label><input id="stu-mother" class="field-input" type="text" maxlength="40" /></div>
+            <div class="field-group"><label for="stu-mother-family">كنية الأم</label><input id="stu-mother-family" class="field-input" type="text" maxlength="40" /></div>
+          </div>
+          <div class="twin-fields">
+            <div class="field-group"><label for="stu-grandfather">اسم الجد</label><input id="stu-grandfather" class="field-input" type="text" maxlength="40" /></div>
+            <div class="field-group"><label for="stu-card">رقم البطاقة</label><input id="stu-card" class="field-input" type="text" maxlength="30" /></div>
+          </div>
+          <div class="twin-fields">
+            <div class="field-group"><label for="stu-birthplace">مكان الولادة</label><input id="stu-birthplace" class="field-input" type="text" maxlength="60" /></div>
+            <div class="field-group"><label for="stu-phone">رقم التواصل</label><input id="stu-phone" class="field-input" type="tel" inputmode="tel" maxlength="20" /></div>
+          </div>
+          <div class="block-label" style="margin-top:10px"><span>السكن</span></div>
+          <div class="twin-fields">
+            <div class="field-group"><label for="stu-gov">المحافظة</label><input id="stu-gov" class="field-input" type="text" maxlength="40" /></div>
+            <div class="field-group"><label for="stu-region">المنطقة</label><input id="stu-region" class="field-input" type="text" maxlength="40" /></div>
+          </div>
+          <div class="twin-fields">
+            <div class="field-group"><label for="stu-subdistrict">الناحية</label><input id="stu-subdistrict" class="field-input" type="text" maxlength="40" /></div>
+            <div class="field-group"><label for="stu-town">البلدة</label><input id="stu-town" class="field-input" type="text" maxlength="40" /></div>
+          </div>
+          <div class="twin-fields">
+            <div class="field-group"><label for="stu-sector">القطاع</label><input id="stu-sector" class="field-input" type="text" maxlength="40" /></div>
+            <div class="field-group"><label for="stu-block">الكتلة</label><input id="stu-block" class="field-input" type="text" maxlength="40" /></div>
+          </div>
+          <div class="field-group"><label for="stu-record">المحضر</label><input id="stu-record" class="field-input" type="text" maxlength="40" /></div>
+        </details>
+
+        <div id="stu-form-error" class="msg msg-error" hidden></div>
+        <button type="button" class="btn btn-primary btn-full" id="btn-save-student" style="margin-top:10px">
+          <svg class="icon icon-sm"><use href="#ic-check"/></svg>
+          <span id="stu-save-label">حفظ</span>
+          <span class="spinner" id="stu-save-spinner" hidden></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Transfer student modal ═══════════════════════════════════════════════ -->
+  <div id="modal-transfer" class="overlay" hidden aria-modal="true" role="dialog" aria-label="نقل طالب">
+    <div class="sheet sheet-sm">
+      <div class="sheet-handle"></div>
+      <div class="sheet-hdr">
+        <div class="sheet-title">
+          <svg class="icon"><use href="#ic-arrow-right"/></svg>
+          <span>نقل طالب</span>
+        </div>
+        <button class="icon-btn" id="btn-close-transfer" aria-label="إغلاق">
+          <svg class="icon"><use href="#ic-x"/></svg>
+        </button>
+      </div>
+      <div class="sheet-body">
+        <p style="font-size:.85rem;color:#475569;margin-bottom:12px">الطالب: <strong id="transfer-name">—</strong></p>
+        <div class="field-group">
+          <label for="transfer-class">الصف الجديد <span class="req">*</span></label>
+          <select id="transfer-class" class="field-input"><option value="">— اختر صفاً —</option></select>
+        </div>
+        <div class="field-group">
+          <label for="transfer-reason">سبب النقل <span class="optional">(اختياري)</span></label>
+          <textarea id="transfer-reason" class="field-input" rows="2" maxlength="300"></textarea>
+        </div>
+        <div id="transfer-error" class="msg msg-error" hidden></div>
+        <button type="button" class="btn btn-primary btn-full" id="btn-confirm-transfer">
+          <svg class="icon icon-sm"><use href="#ic-arrow-right"/></svg>
+          <span>تأكيد النقل</span>
+          <span class="spinner" id="transfer-spinner" hidden></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Archive student modal ════════════════════════════════════════════════ -->
+  <div id="modal-archive" class="overlay" hidden aria-modal="true" role="dialog" aria-label="أرشفة طالب">
+    <div class="sheet sheet-sm">
+      <div class="sheet-handle"></div>
+      <div class="sheet-hdr sheet-hdr-danger">
+        <div class="sheet-title">
+          <svg class="icon"><use href="#ic-trash"/></svg>
+          <span>أرشفة طالب</span>
+        </div>
+        <button class="icon-btn" id="btn-close-archive" aria-label="إغلاق">
+          <svg class="icon"><use href="#ic-x"/></svg>
+        </button>
+      </div>
+      <div class="sheet-body">
+        <p style="font-size:.85rem;color:#475569;margin-bottom:12px">
+          سيُؤرشف الطالب <strong id="archive-name">—</strong> ويُخفى من القوائم دون حذف بياناته أو سجلّه.
+        </p>
+        <div class="field-group">
+          <label for="archive-reason">سبب الأرشفة <span class="optional">(اختياري)</span></label>
+          <textarea id="archive-reason" class="field-input" rows="2"
+                    placeholder="مثال: انتقل إلى مدرسة أخرى" maxlength="300"></textarea>
+        </div>
+        <div id="archive-error" class="msg msg-error" hidden></div>
+        <button type="button" class="btn btn-danger btn-full" id="btn-confirm-archive">
+          <svg class="icon icon-sm"><use href="#ic-trash"/></svg>
+          <span>تأكيد الأرشفة</span>
+          <span class="spinner" id="archive-spinner" hidden></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Bulk import modal (CSV) ══════════════════════════════════════════════ -->
+  <div id="modal-import" class="overlay" hidden aria-modal="true" role="dialog" aria-label="استيراد طلاب">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-hdr">
+        <div class="sheet-title">
+          <svg class="icon"><use href="#ic-clipboard"/></svg>
+          <span>استيراد طلاب (CSV)</span>
+        </div>
+        <button class="icon-btn" id="btn-close-import" aria-label="إغلاق">
+          <svg class="icon"><use href="#ic-x"/></svg>
+        </button>
+      </div>
+      <div class="sheet-body">
+        <p class="mng-hint">الأعمدة: الاسم، الأب، الكنية، الجنس (male/female)، تاريخ الميلاد (YYYY-MM-DD)، الرقم الوطني، رقم المقعد. السطر الأول عناوين.</p>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-download-template">
+          <svg class="icon icon-sm"><use href="#ic-receipt"/></svg>
+          تنزيل قالب CSV
+        </button>
+        <div class="field-group" style="margin-top:10px">
+          <label for="import-file">ملف CSV</label>
+          <input id="import-file" class="field-input" type="file" accept=".csv,text/csv" />
+        </div>
+        <div id="import-preview" hidden></div>
+        <div id="import-error" class="msg msg-error" hidden></div>
+        <button type="button" class="btn btn-primary btn-full" id="btn-confirm-import" hidden style="margin-top:10px">
+          <svg class="icon icon-sm"><use href="#ic-check"/></svg>
+          <span id="import-btn-label">استيراد</span>
+          <span class="spinner" id="import-spinner" hidden></span>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- ═══ Subjects management ═══════════════════════════════════════════════ -->
   <main class="page" id="view-subjects" role="tabpanel" aria-labelledby="tab-subjects" hidden>
@@ -1041,6 +1568,37 @@
 .comp-sum { font-size: .82rem; font-weight: 700; margin-top: 8px; color: #475569; }
 .comp-sum.bad { color: #DC2626; }
 .comp-sum.ok  { color: #059669; }
+
+/* ── Students (SIS) ──────────────────────────────────── */
+.stu-actions-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+.stu-optional { margin-top:10px; border:1px solid var(--clr-border-lt,#E2E8F0); border-radius:10px; padding:0 12px; }
+.stu-optional > summary { cursor:pointer; font-weight:700; font-size:.85rem; color:var(--clr-primary,#0B2B5E);
+  padding:12px 0; list-style:none; }
+.stu-optional > summary::-webkit-details-marker { display:none; }
+.stu-optional[open] > summary { border-bottom:1px solid var(--clr-border-lt,#E2E8F0); margin-bottom:10px; }
+.stu-row { display:flex; align-items:center; gap:10px; padding:11px 4px;
+  border-bottom:1px solid var(--clr-border-lt,#E2E8F0); }
+.stu-row:last-child { border-bottom:none; }
+.stu-seat { min-width:28px; height:28px; border-radius:6px;
+  background:var(--clr-primary-dim, rgba(11,43,94,.1)); color:var(--clr-primary,#0B2B5E);
+  display:flex; align-items:center; justify-content:center; font-weight:800; font-size:.72rem; flex-shrink:0; }
+.stu-info { flex:1; min-width:0; }
+.stu-name { font-weight:700; color:#0F172A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.stu-meta { font-size:.72rem; color:#94A3B8; margin-top:1px; }
+.stu-acts { display:flex; gap:6px; flex-shrink:0; }
+.import-sum { font-size:.82rem; font-weight:700; margin:10px 0 6px; color:#475569; }
+.import-fail { font-size:.78rem; color:#DC2626; margin-top:2px; }
+
+/* ── Teacher login credentials ───────────────────────── */
+.cred-row { display:flex; align-items:flex-start; gap:10px; padding:11px 4px;
+  border-bottom:1px solid var(--clr-border-lt,#E2E8F0); }
+.cred-row:last-child { border-bottom:none; }
+.cred-main { flex:1; min-width:0; }
+.cred-name { font-weight:700; color:#0F172A; }
+.cred-line { font-size:.78rem; color:#475569; margin-top:2px; }
+.cred-line code { background:#F1F5F9; border:1px solid #E2E8F0; border-radius:5px;
+  padding:1px 6px; font-family:ui-monospace,monospace; color:#0F172A; }
+.cred-acts { display:flex; gap:6px; flex-shrink:0; }
 </style>
 
 <!-- Toast zone -->

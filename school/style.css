@@ -639,6 +639,54 @@ select.field-input option:disabled { color: var(--clr-text-3); }
 }
 .add-row input { flex: 1; padding: 9px 12px; }
 
+/* ── Staff attendance (دوام الموظفين) ─────────────────────────────────────── */
+.staff-group-label {
+  padding: 10px 14px 6px;
+  font-size: .82rem; font-weight: 700; color: var(--clr-text-2);
+  background: var(--clr-bg);
+}
+.staff-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; row-gap: 6px;
+  padding: 11px 14px; border-bottom: 1px solid var(--clr-border-lt);
+  font-size: .84rem;
+}
+.staff-row .staff-name { font-weight: 600; flex: 1 1 40%; min-width: 0; }
+.staff-row .staff-times { color: var(--clr-text-2); font-size: .8rem; }
+.staff-badge {
+  flex-shrink: 0; padding: 3px 9px; border-radius: 999px;
+  font-size: .72rem; font-weight: 700;
+}
+.staff-badge-present { background: var(--clr-success-bg); color: var(--clr-success); }
+.staff-badge-late    { background: var(--clr-warning-bg); color: var(--clr-warning); }
+.staff-badge-absent  { background: var(--clr-danger-bg);  color: var(--clr-danger); }
+.staff-badge-leave   { background: var(--clr-primary-dim); color: var(--clr-primary); }
+.staff-badge-none    { background: var(--clr-bg); color: var(--clr-text-3); }
+.staff-src {
+  font-size: .68rem; color: var(--clr-text-3); flex-shrink: 0;
+}
+.staff-edit-btn {
+  margin-inline-start: auto; flex-shrink: 0;
+  padding: 5px 12px; border-radius: var(--r-sm);
+  border: 1.5px solid var(--clr-border); color: var(--clr-primary);
+  font-size: .76rem; font-weight: 700;
+}
+.staff-edit-btn:hover { background: var(--clr-primary-dim); }
+
+.staff-roster { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.staff-roster-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; background: var(--clr-bg);
+  border: 1px solid var(--clr-border-lt); border-radius: var(--r-sm);
+  font-size: .85rem;
+}
+.staff-roster-item .sr-name { flex: 1; }
+.staff-roster-item .sr-kind { font-size: .72rem; color: var(--clr-text-3); }
+.staff-roster-del {
+  display: flex; align-items: center; padding: 3px;
+  border-radius: var(--r-xs); color: var(--clr-danger);
+}
+.staff-roster-del:hover { background: var(--clr-danger); color: #fff; }
+
 /* Twin fields */
 .twin-fields {
   display: grid;

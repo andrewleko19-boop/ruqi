@@ -76,6 +76,16 @@ function normaliseSchool(row) {
     type:          row.school_type ?? 'primary',
     // Minimum yearly attendance % required to pass (grades 5+). Editable.
     minAttendancePct: row.min_attendance_pct ?? 75,
+    // Raw passthroughs needed by staff/identity settings (kept on S.school so
+    // they survive caching). Safe when the columns are missing (⇒ undefined).
+    work_start_time: row.work_start_time ?? null,
+    complex_name:    row.complex_name    ?? null,
+    classification:  row.classification  ?? null,
+    education_type:  row.education_type  ?? null,
+    shift:           row.shift           ?? null,
+    student_type:    row.student_type    ?? null,
+    lat:             row.lat ?? null,
+    lng:             row.lng ?? null,
   };
 }
 
@@ -244,6 +254,10 @@ const inAbsent      = el('in-absent');
 const btnAddAbsent  = el('btn-add-absent');
 const inStuPresent  = el('in-stu-present');
 const inStuAbsent   = el('in-stu-absent');
+const inAdminPresent  = el('in-admin-present');
+const inAdminAbsent   = el('in-admin-absent');
+const inWorkerPresent = el('in-worker-present');
+const inWorkerAbsent  = el('in-worker-absent');
 const inNotes       = el('in-notes');
 const btnSubmitAtt  = el('btn-submit-att');
 const attCard       = el('att-card');
@@ -478,6 +492,10 @@ btnSubmitAtt.addEventListener('click', async () => {
     date:             todayISO(),
     teachers_present: Math.max(0, total - absentCount),
     teachers_absent:  absentCount,
+    admins_present:   parseInt(inAdminPresent.value,  10) || 0,
+    admins_absent:    parseInt(inAdminAbsent.value,   10) || 0,
+    workers_present:  parseInt(inWorkerPresent.value, 10) || 0,
+    workers_absent:   parseInt(inWorkerAbsent.value,  10) || 0,
     students_present: studPresent,
     // NOTE: daily_attendance has no students_absent column — do not send it,
     // or the upsert fails and silently falls back to the offline queue forever.
@@ -757,6 +775,7 @@ async function initApp() {
   _manageLoaded   = false;
   _subjectsLoaded = false;
   _reportsLoaded  = false;
+  _staffLoaded    = false;
 
   // Kick off sync of any offline-queued records
   await doSync();
@@ -765,6 +784,7 @@ async function initApp() {
   // (Previously triggered by a fragile MutationObserver that could fire before
   //  school data was ready; called directly here instead.)
   await loadClassSummaries();
+  loadStaffDailyCounts();   // auto-fill admin/worker counts from the staff register
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
@@ -1243,10 +1263,14 @@ const NDB = window.NSAMS_DB;
 
 const tabAttendance   = el('tab-attendance');
 const tabManage       = el('tab-manage');
+const tabStudents     = el('tab-students');
+const tabStaff        = el('tab-staff');
 const tabSubjects     = el('tab-subjects');
 const tabReports      = el('tab-reports');
 const viewAttendance  = el('view-attendance');
 const viewManage      = el('view-manage');
+const viewStudents    = el('view-students');
+const viewStaff       = el('view-staff');
 const viewSubjects    = el('view-subjects');
 const viewReports     = el('view-reports');
 const fabReport       = el('btn-open-report');
@@ -1277,6 +1301,8 @@ let _mngBusy      = false;
 const TABS = {
   attendance: { tab: tabAttendance, view: viewAttendance },
   manage:     { tab: tabManage,     view: viewManage },
+  students:   { tab: tabStudents,   view: viewStudents },
+  staff:      { tab: tabStaff,      view: viewStaff },
   subjects:   { tab: tabSubjects,   view: viewSubjects },
   reports:    { tab: tabReports,    view: viewReports },
 };
@@ -1294,12 +1320,16 @@ function switchTab(tab) {
   if (fabReport) fabReport.hidden = tab !== 'attendance';
 
   if (tab === 'manage'   && !_manageLoaded)  loadManageClasses();
+  if (tab === 'students' && !_studentsLoaded) initStudentsTab();
+  if (tab === 'staff'    && !_staffLoaded)   initStaffTab();
   if (tab === 'subjects' && !_subjectsLoaded) initSubjectsTab();
   if (tab === 'reports'  && !_reportsLoaded)  initReportsTab();
 }
 
 tabAttendance.addEventListener('click', () => switchTab('attendance'));
 tabManage.addEventListener('click',     () => switchTab('manage'));
+tabStudents.addEventListener('click',   () => switchTab('students'));
+tabStaff.addEventListener('click',      () => switchTab('staff'));
 tabSubjects.addEventListener('click',   () => switchTab('subjects'));
 tabReports.addEventListener('click',    () => switchTab('reports'));
 
@@ -2414,7 +2444,821 @@ btnSaveGrace.addEventListener('click', async () => {
   }
 });
 
+// ═══ Staff attendance (دوام الموظفين) ════════════════════════════════════════
+let _staffLoaded = false;
+let _staffData   = { teachers: [], admins: [], workers: [] };
+let _staffEdit   = null;  // { kind, refId, name, record } currently being edited
+
+// Refs — work-start + register + roster
+const inWorkStart       = el('in-work-start');
+const btnSaveWorkStart  = el('btn-save-work-start');
+const workStartMsg      = el('work-start-msg');
+const btnRefreshStaff   = el('btn-refresh-staff');
+const staffRefreshIcon  = el('staff-refresh-icon');
+const staffLoading      = el('staff-loading');
+const staffListEl       = el('staff-list');
+const staffErrorEl      = el('staff-error');
+const inPersonnelName   = el('in-personnel-name');
+const inPersonnelKind   = el('in-personnel-kind');
+const btnAddPersonnel   = el('btn-add-personnel');
+const personnelErrorEl  = el('personnel-error');
+const personnelListEl   = el('personnel-list');
+
+// Refs — staff edit modal
+const modalStaff        = el('modal-staff');
+const btnCloseStaff     = el('btn-close-staff');
+const staffEditName     = el('staff-edit-name');
+const staffStatusSel    = el('staff-status');
+const staffCheckinInp   = el('staff-checkin');
+const staffCheckoutInp  = el('staff-checkout');
+const staffReasonInp    = el('staff-reason');
+const staffNoteInp      = el('staff-note');
+const staffEditError    = el('staff-edit-error');
+const btnSaveStaff      = el('btn-save-staff');
+const staffSaveLabel    = el('staff-save-label');
+const staffSaveSpinner  = el('staff-save-spinner');
+
+const STAFF_STATUS_AR    = { present: 'حاضر', late: 'متأخر', absent: 'غائب', leave: 'إجازة' };
+const PERSONNEL_KIND_AR  = { admin: 'إداري', worker: 'عامل' };
+
+function staffWorkStart() { return S.school?.work_start_time || null; }
+
+function isoToLocalHHMM(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+function hhmmToISO(hhmm, dateISO) {
+  if (!hhmm) return null;
+  const d = new Date(`${dateISO}T${hhmm}:00`);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+function fmtHHMM(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleTimeString('ar-SY', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+async function initStaffTab() {
+  _staffLoaded = true;
+  if (inWorkStart) inWorkStart.value = staffWorkStart() ? String(staffWorkStart()).slice(0, 5) : '';
+  populateIdentityCard();
+  await Promise.all([loadStaffAttendance(), loadPersonnelRoster(), loadStaffCredentials()]);
+}
+
+async function loadStaffAttendance() {
+  if (!S.school?.id) return;
+  show(staffLoading); hide(staffListEl); hide(staffErrorEl);
+  staffRefreshIcon.classList.add('syncing');
+  try {
+    _staffData = await window.NSAMS_DB.getStaffAttendanceForDate(S.school.id, todayISO());
+    renderStaffGroups();
+    hide(staffLoading); show(staffListEl);
+  } catch (err) {
+    console.error('[NSAMS] loadStaffAttendance', err);
+    hide(staffLoading);
+    staffErrorEl.textContent = 'تعذّر تحميل دوام الموظفين.'; show(staffErrorEl);
+  } finally {
+    staffRefreshIcon.classList.remove('syncing');
+  }
+}
+
+function staffRowHtml(entry) {
+  const r = entry.record;
+  const status   = r?.status;
+  const badgeCls = status ? `staff-badge-${status}` : 'staff-badge-none';
+  const badgeTxt = status ? STAFF_STATUS_AR[status] : 'لم يُسجّل';
+  const inT = r ? (r.checkInAdjusted ?? r.checkInOriginal) : null;
+  let times = '';
+  if (inT)                times += `دخول ${fmtHHMM(inT)}`;
+  if (r?.checkOut)        times += `${times ? ' · ' : ''}خروج ${fmtHHMM(r.checkOut)}`;
+  if (r?.lateMinutes > 0) times += `${times ? ' · ' : ''}تأخّر ${r.lateMinutes}د`;
+  const src = r ? (r.source === 'self' ? 'معلم' : 'مدير') : '';
+  return (
+    `<div class="staff-row" data-kind="${entry.kind}" data-ref="${entry.refId}">` +
+      `<span class="staff-name">${escapeHtml(entry.name)}</span>` +
+      `<span class="staff-badge ${badgeCls}">${badgeTxt}</span>` +
+      (times ? `<span class="staff-times">${times}</span>` : '') +
+      (src ? `<span class="staff-src">${src}</span>` : '') +
+      `<button class="staff-edit-btn" data-act="edit-staff">تعديل</button>` +
+    `</div>`
+  );
+}
+
+function renderStaffGroups() {
+  const groups = [
+    ['المعلمون', _staffData.teachers],
+    ['الإداريون', _staffData.admins],
+    ['العمال',    _staffData.workers],
+  ];
+  let html = '';
+  for (const [label, list] of groups) {
+    if (!list || list.length === 0) continue;
+    html += `<div class="staff-group-label">${label}</div>`;
+    html += list.map(staffRowHtml).join('');
+  }
+  staffListEl.innerHTML = html ||
+    '<div style="padding:24px 16px;text-align:center;color:#94A3B8;font-size:.85rem">لا يوجد موظفون.</div>';
+}
+
+if (staffListEl) staffListEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-act="edit-staff"]');
+  if (!btn) return;
+  const row  = btn.closest('.staff-row');
+  const kind = row.dataset.kind, refId = row.dataset.ref;
+  const list = kind === 'teacher' ? _staffData.teachers
+             : kind === 'admin'   ? _staffData.admins
+             : _staffData.workers;
+  const entry = list.find(x => String(x.refId) === String(refId));
+  if (entry) openStaffModal(entry);
+});
+
+function openStaffModal(entry) {
+  _staffEdit = entry;
+  const r = entry.record;
+  staffEditName.textContent = entry.name;
+  staffStatusSel.value = r?.status || 'present';
+  CustomSelect.refresh(staffStatusSel);
+  staffCheckinInp.value  = isoToLocalHHMM(r ? (r.checkInAdjusted ?? r.checkInOriginal) : null);
+  staffCheckoutInp.value = isoToLocalHHMM(r?.checkOut);
+  staffReasonInp.value   = r?.adjustReason || '';
+  staffNoteInp.value     = r?.note || '';
+  hide(staffEditError);
+  show(modalStaff);
+  document.body.style.overflow = 'hidden';
+}
+function closeStaffModal() {
+  hide(modalStaff);
+  document.body.style.overflow = '';
+  _staffEdit = null;
+}
+if (btnCloseStaff) btnCloseStaff.addEventListener('click', closeStaffModal);
+if (modalStaff) modalStaff.addEventListener('click', (e) => { if (e.target === modalStaff) closeStaffModal(); });
+
+if (btnSaveStaff) btnSaveStaff.addEventListener('click', async () => {
+  if (!_staffEdit) return;
+  if (!navigator.onLine) { staffEditError.textContent = 'التعديل يحتاج اتصالاً بالإنترنت'; show(staffEditError); return; }
+  const reason = staffReasonInp.value.trim();
+  if (!reason) { staffEditError.textContent = 'يرجى كتابة سبب التعديل'; show(staffEditError); staffReasonInp.focus(); return; }
+
+  const date    = todayISO();
+  const status  = staffStatusSel.value;
+  const isAway  = status === 'absent' || status === 'leave';
+  const checkInTime = isAway ? null : hhmmToISO(staffCheckinInp.value,  date);
+  const checkOut    = isAway ? null : hhmmToISO(staffCheckoutInp.value, date);
+
+  hide(staffEditError);
+  btnSaveStaff.disabled = true; staffSaveLabel.hidden = true; staffSaveSpinner.hidden = false;
+  try {
+    await window.NSAMS_DB.upsertStaffAttendance({
+      schoolId:    S.school.id, date,
+      kind:        _staffEdit.kind,
+      teacherId:   _staffEdit.kind === 'teacher' ? _staffEdit.refId : null,
+      personnelId: _staffEdit.kind === 'teacher' ? null : _staffEdit.refId,
+      status, checkInTime, checkOut,
+      adjustReason:  reason,
+      note:          staffNoteInp.value.trim() || null,
+      workStartTime: staffWorkStart(),
+      adjustedBy:    S.user?.user?.id ?? null,
+    });
+    closeStaffModal();
+    toast('تم حفظ الدوام', 'success');
+    await loadStaffAttendance();
+    loadStaffDailyCounts();
+  } catch (err) {
+    console.error('[NSAMS] upsertStaffAttendance', err);
+    staffEditError.textContent = 'تعذّر الحفظ، حاول مجدداً'; show(staffEditError);
+  } finally {
+    btnSaveStaff.disabled = false; staffSaveLabel.hidden = false; staffSaveSpinner.hidden = true;
+  }
+});
+
+// ── Personnel roster (admins & workers) ──
+async function loadPersonnelRoster() {
+  if (!S.school?.id) return;
+  try {
+    const list = await window.NSAMS_DB.getSchoolPersonnel(S.school.id);
+    personnelListEl.innerHTML = list.filter(p => p.isActive).map(p =>
+      `<li class="staff-roster-item" data-id="${p.id}">` +
+        `<span class="sr-name">${escapeHtml(p.fullName)}</span>` +
+        `<span class="sr-kind">${PERSONNEL_KIND_AR[p.kind] || ''}</span>` +
+        `<button class="staff-roster-del" data-act="del-personnel" aria-label="إزالة">` +
+          `<svg class="icon icon-sm"><use href="#ic-x"/></svg></button>` +
+      `</li>`
+    ).join('');
+  } catch (err) {
+    console.error('[NSAMS] loadPersonnelRoster', err);
+  }
+}
+
+async function addPersonnelHandler() {
+  const name = inPersonnelName.value.trim();
+  const kind = inPersonnelKind.value;
+  hide(personnelErrorEl);
+  if (!name) { personnelErrorEl.textContent = 'يرجى إدخال الاسم'; show(personnelErrorEl); return; }
+  if (!navigator.onLine) { personnelErrorEl.textContent = 'الإضافة تحتاج اتصالاً بالإنترنت'; show(personnelErrorEl); return; }
+  btnAddPersonnel.disabled = true;
+  try {
+    await window.NSAMS_DB.addPersonnel({ schoolId: S.school.id, fullName: name, kind });
+    inPersonnelName.value = '';
+    await loadPersonnelRoster();
+    await loadStaffAttendance();
+    toast('تمت الإضافة', 'success');
+  } catch (err) {
+    console.error('[NSAMS] addPersonnel', err);
+    personnelErrorEl.textContent = 'تعذّرت الإضافة'; show(personnelErrorEl);
+  } finally {
+    btnAddPersonnel.disabled = false;
+  }
+}
+if (btnAddPersonnel) btnAddPersonnel.addEventListener('click', addPersonnelHandler);
+if (inPersonnelName) inPersonnelName.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); addPersonnelHandler(); }
+});
+
+if (personnelListEl) personnelListEl.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-act="del-personnel"]');
+  if (!btn) return;
+  const id = btn.closest('.staff-roster-item').dataset.id;
+  if (!confirm('إزالة هذا الموظف من السجل؟')) return;
+  try {
+    await window.NSAMS_DB.setPersonnelActive(id, false);
+    await loadPersonnelRoster();
+    await loadStaffAttendance();
+    loadStaffDailyCounts();
+  } catch (err) {
+    console.error('[NSAMS] setPersonnelActive', err);
+    toast('تعذّرت الإزالة', 'error');
+  }
+});
+
+// ── Work-start time ──
+if (btnSaveWorkStart) btnSaveWorkStart.addEventListener('click', async () => {
+  if (!navigator.onLine) {
+    workStartMsg.className = 'msg msg-error'; workStartMsg.textContent = 'الحفظ يحتاج اتصالاً'; show(workStartMsg); return;
+  }
+  const val = inWorkStart.value || null;
+  btnSaveWorkStart.disabled = true;
+  try {
+    await window.NSAMS_DB.updateSchool(S.school.id, { workStartTime: val });
+    if (S.school) S.school.work_start_time = val;
+    workStartMsg.className = 'msg msg-success'; workStartMsg.textContent = 'تم حفظ بداية الدوام'; show(workStartMsg);
+    setTimeout(() => hide(workStartMsg), 2500);
+  } catch (err) {
+    console.error('[NSAMS] updateSchool workStart', err);
+    workStartMsg.className = 'msg msg-error'; workStartMsg.textContent = 'تعذّر الحفظ'; show(workStartMsg);
+  } finally {
+    btnSaveWorkStart.disabled = false;
+  }
+});
+
+if (btnRefreshStaff) btnRefreshStaff.addEventListener('click', () => loadStaffAttendance());
+
+// Auto-fill the daily-record admin/worker counts from the staff register.
+async function loadStaffDailyCounts() {
+  if (!S.school?.id || !window.NSAMS_DB?.computeStaffDailyCounts) return;
+  try {
+    const c = await window.NSAMS_DB.computeStaffDailyCounts(S.school.id, todayISO());
+    if (inAdminPresent)  inAdminPresent.value  = c.admins.present;
+    if (inAdminAbsent)   inAdminAbsent.value   = c.admins.absent;
+    if (inWorkerPresent) inWorkerPresent.value = c.workers.present;
+    if (inWorkerAbsent)  inWorkerAbsent.value  = c.workers.absent;
+  } catch (err) {
+    console.warn('[NSAMS] loadStaffDailyCounts', err);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Students (سجل الطلاب / SIS): roster, editor, transfer, archive, CSV import
+// ════════════════════════════════════════════════════════════════════════════
+let _studentsLoaded = false;
+let _stuClassId = '';
+let _stuList    = [];          // raw student rows for the selected class
+let _stuEditId  = null;        // student id being edited (null = create)
+let _stuActionStudent = null;  // student targeted by transfer / archive
+let _stuImportRows = [];       // parsed+validated rows ready to import
+
+const stuClassSelect = el('stu-class-select');
+const stuTools       = el('stu-tools');
+const stuSearch      = el('stu-search');
+const stuLoading     = el('stu-loading');
+const stuListEl      = el('stu-list');
+const stuEmpty       = el('stu-empty');
+const stuNoResults   = el('stu-noresults');
+
+const STU_FIELDS = {
+  firstName:'stu-first', fatherName:'stu-father', familyName:'stu-family',
+  gender:'stu-gender', birthDate:'stu-birth', nationalId:'stu-natid', seatNumber:'stu-seat',
+  motherName:'stu-mother', motherFamily:'stu-mother-family', grandfatherName:'stu-grandfather',
+  cardNumber:'stu-card', birthPlace:'stu-birthplace', contactPhone:'stu-phone',
+  resGovernorate:'stu-gov', resRegion:'stu-region', resSubdistrict:'stu-subdistrict',
+  resTown:'stu-town', resSector:'stu-sector', resBlock:'stu-block', resRecord:'stu-record',
+};
+
+function actorId() { return S.user?.user?.id ?? null; }
+function schoolId() { return S.school?.id ?? S.user?.schoolId ?? null; }
+
+async function initStudentsTab() {
+  _studentsLoaded = true;
+  await loadStuClasses();
+}
+
+async function loadStuClasses() {
+  if (!S.school?.id) return;
+  try {
+    const classes = await NDB.getSchoolClasses(S.school.id);
+    _stuClasses = classes;
+    const opts = '<option value="">— اختر صفاً —</option>' + classes.map(c => {
+      const label = c.name || `${gradeLabel(c.grade)} / ${c.section ?? ''}`.trim();
+      return `<option value="${escapeHtml(c.id)}">${escapeHtml(label)}</option>`;
+    }).join('');
+    stuClassSelect.innerHTML = opts;
+    CustomSelect.refresh(stuClassSelect);
+  } catch (err) {
+    console.error('[NSAMS] loadStuClasses', err);
+    toast('تعذّر تحميل قائمة الصفوف', 'error');
+  }
+}
+let _stuClasses = [];
+
+stuClassSelect.addEventListener('change', async () => {
+  _stuClassId = stuClassSelect.value;
+  if (!_stuClassId) { stuTools.hidden = true; stuListEl.innerHTML = ''; hide(stuEmpty); hide(stuNoResults); return; }
+  stuTools.hidden = false;
+  await loadStudents();
+});
+
+async function loadStudents() {
+  if (!_stuClassId) return;
+  show(stuLoading); stuListEl.innerHTML = ''; hide(stuEmpty); hide(stuNoResults);
+  try {
+    _stuList = await NDB.getClassStudents(_stuClassId);
+    renderStudents();
+  } catch (err) {
+    console.error('[NSAMS] loadStudents', err);
+    toast('تعذّر تحميل الطلاب', 'error');
+  } finally {
+    hide(stuLoading);
+  }
+}
+
+function renderStudents() {
+  const q = (stuSearch.value || '').trim();
+  const list = q
+    ? _stuList.filter(s => (s.full_name || '').includes(q) || (s.national_id || '').includes(q))
+    : _stuList;
+  hide(stuEmpty); hide(stuNoResults);
+  if (_stuList.length === 0) { stuListEl.innerHTML = ''; show(stuEmpty); return; }
+  if (list.length === 0)     { stuListEl.innerHTML = ''; show(stuNoResults); return; }
+  stuListEl.innerHTML = list.map(s => {
+    const seat = s.seat_number != null ? s.seat_number : '—';
+    const meta = [s.national_id ? `الوطني: ${escapeHtml(s.national_id)}` : null,
+                  s.gender === 'male' ? 'ذكر' : s.gender === 'female' ? 'أنثى' : null]
+                  .filter(Boolean).join(' · ');
+    return (
+      `<li class="stu-row" data-id="${escapeHtml(s.id)}">` +
+        `<span class="stu-seat">${escapeHtml(String(seat))}</span>` +
+        `<span class="stu-info"><span class="stu-name">${escapeHtml(s.full_name || '—')}</span>` +
+          (meta ? `<span class="stu-meta">${meta}</span>` : '') + `</span>` +
+        `<span class="stu-acts">` +
+          `<button class="icon-btn-sm" data-act="edit" title="تعديل"><svg class="icon icon-sm"><use href="#ic-edit"/></svg></button>` +
+          `<button class="icon-btn-sm" data-act="transfer" title="نقل"><svg class="icon icon-sm"><use href="#ic-arrow-right"/></svg></button>` +
+          `<button class="icon-btn-sm danger" data-act="archive" title="أرشفة"><svg class="icon icon-sm"><use href="#ic-trash"/></svg></button>` +
+        `</span>` +
+      `</li>`
+    );
+  }).join('');
+}
+
+stuSearch.addEventListener('input', renderStudents);
+el('btn-refresh-students').addEventListener('click', () => { if (_stuClassId) loadStudents(); });
+
+stuListEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const id = btn.closest('.stu-row')?.dataset.id;
+  const student = _stuList.find(s => s.id === id);
+  if (!student) return;
+  if (btn.dataset.act === 'edit')     openStudentForm(student);
+  if (btn.dataset.act === 'transfer') openTransfer(student);
+  if (btn.dataset.act === 'archive')  openArchive(student);
+});
+
+// ── Student editor ──────────────────────────────────────────────────────────
+const modalStudent = el('modal-student');
+const stuFormError = el('stu-form-error');
+
+function openStudentForm(student) {
+  _stuEditId = student?.id ?? null;
+  el('stu-modal-title').textContent = student ? 'تعديل بيانات الطالب' : 'طالب جديد';
+  for (const [key, id] of Object.entries(STU_FIELDS)) {
+    const node = el(id); if (!node) continue;
+    const col = ({ firstName:'first_name', fatherName:'father_name', familyName:'family_name',
+      gender:'gender', birthDate:'birth_date', nationalId:'national_id', seatNumber:'seat_number',
+      motherName:'mother_name', motherFamily:'mother_family', grandfatherName:'grandfather_name',
+      cardNumber:'card_number', birthPlace:'birth_place', contactPhone:'contact_phone',
+      resGovernorate:'res_governorate', resRegion:'res_region', resSubdistrict:'res_subdistrict',
+      resTown:'res_town', resSector:'res_sector', resBlock:'res_block', resRecord:'res_record' })[key];
+    node.value = student && student[col] != null ? student[col] : '';
+  }
+  CustomSelect.refresh(el('stu-gender'));
+  hide(stuFormError);
+  show(modalStudent);
+}
+function closeStudentForm() { hide(modalStudent); }
+el('btn-close-student').addEventListener('click', closeStudentForm);
+
+el('btn-save-student').addEventListener('click', async () => {
+  hide(stuFormError);
+  const input = {};
+  for (const key of Object.keys(STU_FIELDS)) input[key] = el(STU_FIELDS[key]).value.trim();
+  if (!input.firstName || !input.fatherName || !input.familyName) {
+    stuFormError.textContent = 'الاسم واسم الأب والكنية حقول إلزامية.'; show(stuFormError); return;
+  }
+  if (input.nationalId && !/^\d{6,20}$/.test(input.nationalId)) {
+    stuFormError.textContent = 'الرقم الوطني يجب أن يكون أرقاماً (٦–٢٠ خانة).'; show(stuFormError); return;
+  }
+  const btn = el('btn-save-student'); btn.disabled = true; show(el('stu-save-spinner'));
+  try {
+    if (input.nationalId && navigator.onLine) {
+      const dup = await NDB.findDuplicateStudent(schoolId(), input.nationalId, _stuEditId);
+      if (dup) {
+        stuFormError.textContent = `الرقم الوطني مُستخدم لطالب آخر: ${dup.full_name || ''}`.trim();
+        show(stuFormError); btn.disabled = false; hide(el('stu-save-spinner')); return;
+      }
+    }
+    const res = await NDB.saveStudent({
+      ...input, id: _stuEditId || undefined,
+      schoolId: schoolId(), classId: _stuClassId, actorId: actorId(),
+    });
+    closeStudentForm();
+    toast(res.synced ? (_stuEditId ? 'تم تحديث الطالب' : 'تمت إضافة الطالب')
+                     : 'حُفظ محلياً وسيُزامن عند الاتصال', res.synced ? 'success' : 'warning');
+    await loadStudents();
+  } catch (err) {
+    console.error('[NSAMS] saveStudent', err);
+    stuFormError.textContent = 'تعذّر الحفظ.'; show(stuFormError);
+  } finally {
+    btn.disabled = false; hide(el('stu-save-spinner'));
+  }
+});
+
+el('btn-add-student').addEventListener('click', () => openStudentForm(null));
+
+// ── Transfer ────────────────────────────────────────────────────────────────
+const modalTransfer = el('modal-transfer');
+function openTransfer(student) {
+  _stuActionStudent = student;
+  el('transfer-name').textContent = student.full_name || '—';
+  el('transfer-reason').value = '';
+  hide(el('transfer-error'));
+  const sel = el('transfer-class');
+  sel.innerHTML = '<option value="">— اختر صفاً —</option>' + _stuClasses
+    .filter(c => c.id !== _stuClassId)
+    .map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name || `${gradeLabel(c.grade)} / ${c.section ?? ''}`.trim())}</option>`)
+    .join('');
+  CustomSelect.refresh(sel);
+  show(modalTransfer);
+}
+el('btn-close-transfer').addEventListener('click', () => hide(modalTransfer));
+el('btn-confirm-transfer').addEventListener('click', async () => {
+  const toClassId = el('transfer-class').value;
+  if (!toClassId) { el('transfer-error').textContent = 'اختر الصف الجديد.'; show(el('transfer-error')); return; }
+  const btn = el('btn-confirm-transfer'); btn.disabled = true; show(el('transfer-spinner'));
+  try {
+    const res = await NDB.transferStudent({
+      id: _stuActionStudent.id, schoolId: schoolId(),
+      fromClassId: _stuClassId, toClassId,
+      reason: el('transfer-reason').value.trim() || null, actorId: actorId(),
+    });
+    hide(modalTransfer);
+    toast(res.synced ? 'تم نقل الطالب' : 'سيُنقل عند الاتصال', res.synced ? 'success' : 'warning');
+    await loadStudents();
+  } catch (err) {
+    console.error('[NSAMS] transferStudent', err);
+    el('transfer-error').textContent = 'تعذّر النقل.'; show(el('transfer-error'));
+  } finally {
+    btn.disabled = false; hide(el('transfer-spinner'));
+  }
+});
+
+// ── Archive (soft-delete) ─────────────────────────────────────────────────────
+const modalArchive = el('modal-archive');
+function openArchive(student) {
+  _stuActionStudent = student;
+  el('archive-name').textContent = student.full_name || '—';
+  el('archive-reason').value = '';
+  hide(el('archive-error'));
+  show(modalArchive);
+}
+el('btn-close-archive').addEventListener('click', () => hide(modalArchive));
+el('btn-confirm-archive').addEventListener('click', async () => {
+  const btn = el('btn-confirm-archive'); btn.disabled = true; show(el('archive-spinner'));
+  try {
+    const res = await NDB.archiveStudent({
+      id: _stuActionStudent.id, schoolId: schoolId(), classId: _stuClassId,
+      reason: el('archive-reason').value.trim() || null, actorId: actorId(),
+    });
+    hide(modalArchive);
+    toast(res.synced ? 'تمت أرشفة الطالب' : 'ستُؤرشف عند الاتصال', res.synced ? 'success' : 'warning');
+    await loadStudents();
+  } catch (err) {
+    console.error('[NSAMS] archiveStudent', err);
+    el('archive-error').textContent = 'تعذّرت الأرشفة.'; show(el('archive-error'));
+  } finally {
+    btn.disabled = false; hide(el('archive-spinner'));
+  }
+});
+
+// ── CSV bulk import ───────────────────────────────────────────────────────────
+const modalImport = el('modal-import');
+el('btn-import-students').addEventListener('click', () => {
+  _stuImportRows = [];
+  el('import-file').value = '';
+  el('import-preview').hidden = true; el('import-preview').innerHTML = '';
+  el('btn-confirm-import').hidden = true;
+  hide(el('import-error'));
+  show(modalImport);
+});
+el('btn-close-import').addEventListener('click', () => hide(modalImport));
+
+el('btn-download-template').addEventListener('click', () => {
+  const csv = 'الاسم,الأب,الكنية,الجنس,تاريخ الميلاد,الرقم الوطني,رقم المقعد\n'
+            + 'أحمد,محمد,العلي,male,2015-03-01,,1\n';
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'students-template.csv';
+  a.click(); URL.revokeObjectURL(a.href);
+});
+
+function parseCSV(text) {
+  const rows = []; let field = '', row = [], inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) {
+      if (ch === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += ch;
+    } else if (ch === '"') inQ = true;
+    else if (ch === ',') { row.push(field); field = ''; }
+    else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+    else if (ch !== '\r') field += ch;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim() !== ''));
+}
+
+function normGender(v) {
+  const s = (v || '').trim().toLowerCase();
+  if (['male', 'm', 'ذكر'].includes(s)) return 'male';
+  if (['female', 'f', 'أنثى', 'انثى'].includes(s)) return 'female';
+  return '';
+}
+
+el('import-file').addEventListener('change', async (e) => {
+  hide(el('import-error'));
+  const file = e.target.files?.[0]; if (!file) return;
+  try {
+    const text = await file.text();
+    const rows = parseCSV(text);
+    if (rows.length <= 1) throw new Error('الملف فارغ أو لا يحوي بيانات.');
+    const dataRows = rows.slice(1); // skip header
+    const parsed = []; const errors = [];
+    dataRows.forEach((cols, idx) => {
+      const [firstName, fatherName, familyName, gender, birthDate, nationalId, seat] =
+        cols.map(c => (c || '').trim());
+      if (!firstName || !fatherName || !familyName) {
+        errors.push(`السطر ${idx + 2}: الاسم/الأب/الكنية مطلوبة`); return;
+      }
+      parsed.push({
+        firstName, fatherName, familyName, gender: normGender(gender),
+        birthDate: birthDate || '', nationalId: nationalId || '', seatNumber: seat || '',
+      });
+    });
+    _stuImportRows = parsed;
+    const prev = el('import-preview');
+    prev.innerHTML =
+      `<div class="import-sum">جاهز للاستيراد: ${parsed.length} طالب${errors.length ? ` — تخطّي ${errors.length} سطر` : ''}</div>` +
+      parsed.slice(0, 20).map(p => `<div class="stu-meta">• ${escapeHtml([p.firstName, p.fatherName, p.familyName].join(' '))}</div>`).join('') +
+      (parsed.length > 20 ? `<div class="stu-meta">… و${parsed.length - 20} غيرهم</div>` : '') +
+      errors.slice(0, 10).map(er => `<div class="import-fail">${escapeHtml(er)}</div>`).join('');
+    prev.hidden = false;
+    el('import-btn-label').textContent = `استيراد ${parsed.length} طالب`;
+    el('btn-confirm-import').hidden = parsed.length === 0;
+  } catch (err) {
+    el('import-error').textContent = err.message || 'تعذّرت قراءة الملف.'; show(el('import-error'));
+  }
+});
+
+el('btn-confirm-import').addEventListener('click', async () => {
+  if (!_stuImportRows.length || !_stuClassId) return;
+  const btn = el('btn-confirm-import'); btn.disabled = true; show(el('import-spinner'));
+  hide(el('import-error'));
+  try {
+    const sum = await NDB.bulkImportStudents({
+      schoolId: schoolId(), classId: _stuClassId, rows: _stuImportRows, actorId: actorId(),
+    });
+    hide(modalImport);
+    let msg = `تم استيراد ${sum.inserted} طالب`;
+    if (sum.duplicate) msg += ` · ${sum.duplicate} مكرّر`;
+    if (sum.failed.length) msg += ` · ${sum.failed.length} فشل`;
+    toast(msg, sum.failed.length ? 'warning' : 'success', 5000);
+    await loadStudents();
+  } catch (err) {
+    console.error('[NSAMS] bulkImportStudents', err);
+    el('import-error').textContent = err.message || 'تعذّر الاستيراد.'; show(el('import-error'));
+  } finally {
+    btn.disabled = false; hide(el('import-spinner'));
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+//  School identity + GPS (هوية المدرسة والموقع)
+// ════════════════════════════════════════════════════════════════════════════
+function populateIdentityCard() {
+  const s = S.school; if (!s) return;
+  if (el('sch-complex'))        el('sch-complex').value        = s.complex_name   ?? '';
+  if (el('sch-classification')) el('sch-classification').value = s.classification ?? '';
+  if (el('sch-edutype'))        el('sch-edutype').value        = s.education_type ?? '';
+  if (el('sch-shift'))        { el('sch-shift').value          = s.shift ?? ''; CustomSelect.refresh(el('sch-shift')); }
+  if (el('sch-studenttype'))    el('sch-studenttype').value    = s.student_type   ?? '';
+  if (el('sch-lat'))            el('sch-lat').value            = s.lat ?? '';
+  if (el('sch-lng'))            el('sch-lng').value            = s.lng ?? '';
+}
+
+el('btn-locate')?.addEventListener('click', () => {
+  if (!navigator.geolocation) { toast('المتصفّح لا يدعم تحديد الموقع', 'error'); return; }
+  toast('جارٍ تحديد الموقع…', 'info');
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      el('sch-lat').value = pos.coords.latitude.toFixed(6);
+      el('sch-lng').value = pos.coords.longitude.toFixed(6);
+      toast('تم تحديد الموقع — لا تنسَ الحفظ', 'success');
+    },
+    (err) => { console.warn('[NSAMS] geolocation', err); toast('تعذّر تحديد الموقع. أدخله يدوياً أو امنح الإذن.', 'error', 4500); },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+});
+
+el('btn-save-identity')?.addEventListener('click', async () => {
+  const msg = el('sch-identity-msg');
+  const latRaw = el('sch-lat').value.trim(), lngRaw = el('sch-lng').value.trim();
+  const patch = {
+    complexName:   el('sch-complex').value.trim(),
+    classification:el('sch-classification').value.trim(),
+    educationType: el('sch-edutype').value.trim(),
+    shift:         el('sch-shift').value,
+    studentType:   el('sch-studenttype').value.trim(),
+    lat: latRaw === '' ? null : Number(latRaw),
+    lng: lngRaw === '' ? null : Number(lngRaw),
+  };
+  if ((latRaw && Number.isNaN(patch.lat)) || (lngRaw && Number.isNaN(patch.lng))) {
+    msg.className = 'msg msg-error'; msg.textContent = 'إحداثيات GPS غير صحيحة.'; show(msg); return;
+  }
+  const btn = el('btn-save-identity'); btn.disabled = true;
+  try {
+    await NDB.updateSchool(S.school.id, patch);
+    // Reflect on the cached school object so the card persists across tabs.
+    Object.assign(S.school, {
+      complex_name: patch.complexName || null, classification: patch.classification || null,
+      education_type: patch.educationType || null, shift: patch.shift || null,
+      student_type: patch.studentType || null, lat: patch.lat, lng: patch.lng,
+    });
+    cacheSchool(S.school.id, S.school);
+    msg.className = 'msg msg-success'; msg.textContent = 'تم حفظ هوية المدرسة'; show(msg);
+    setTimeout(() => hide(msg), 2500);
+  } catch (err) {
+    console.error('[NSAMS] saveIdentity', err);
+    msg.className = 'msg msg-error'; msg.textContent = 'تعذّر الحفظ.'; show(msg);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Teacher accounts (معلومات تسجيل الكادر) — principal-created logins
+// ════════════════════════════════════════════════════════════════════════════
+let _credList = [];        // [{ id, userId, username, password, createdAt }]
+let _teacherNames = {};    // userId → fullName (from getTeachersBySchool)
+let _credEditUserId = null;
+
+const credListEl = el('cred-list');
+const modalTeacher = el('modal-teacher');
+
+async function loadStaffCredentials() {
+  if (!S.school?.id || !NDB.getStaffCredentials) return;
+  show(el('cred-loading')); hide(el('cred-empty'));
+  try {
+    const [creds, teachers] = await Promise.all([
+      NDB.getStaffCredentials(S.school.id),
+      NDB.getTeachersBySchool(S.school.id).catch(() => []),
+    ]);
+    _credList = creds;
+    _teacherNames = {};
+    for (const t of teachers) _teacherNames[t.id] = t.fullName;
+    renderCredentials();
+  } catch (err) {
+    console.error('[NSAMS] loadStaffCredentials', err);
+    toast('تعذّر تحميل بيانات تسجيل الكادر', 'error');
+  } finally {
+    hide(el('cred-loading'));
+  }
+}
+
+function renderCredentials() {
+  if (_credList.length === 0) { credListEl.innerHTML = ''; show(el('cred-empty')); return; }
+  hide(el('cred-empty'));
+  credListEl.innerHTML = _credList.map(c => {
+    const name = _teacherNames[c.userId] || '—';
+    return (
+      `<li class="cred-row" data-uid="${escapeHtml(c.userId)}">` +
+        `<div class="cred-main">` +
+          `<div class="cred-name">${escapeHtml(name)}</div>` +
+          `<div class="cred-line">اسم المستخدم: <code>${escapeHtml(c.username)}</code></div>` +
+          `<div class="cred-line">كلمة المرور: <code class="cred-pw" data-pw="${escapeHtml(c.password)}">••••••••</code></div>` +
+        `</div>` +
+        `<div class="cred-acts">` +
+          `<button class="icon-btn-sm" data-act="reveal" title="إظهار/إخفاء"><svg class="icon icon-sm"><use href="#ic-eye"/></svg></button>` +
+          `<button class="icon-btn-sm" data-act="copy" title="نسخ"><svg class="icon icon-sm"><use href="#ic-clipboard"/></svg></button>` +
+          `<button class="icon-btn-sm" data-act="reset" title="تغيير كلمة المرور"><svg class="icon icon-sm"><use href="#ic-edit"/></svg></button>` +
+        `</div>` +
+      `</li>`
+    );
+  }).join('');
+}
+
+credListEl.addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-act]'); if (!btn) return;
+  const row = btn.closest('.cred-row'); const uid = row?.dataset.uid;
+  const cred = _credList.find(c => c.userId === uid); if (!cred) return;
+  const pwNode = row.querySelector('.cred-pw');
+  if (btn.dataset.act === 'reveal') {
+    const shown = pwNode.dataset.shown === '1';
+    pwNode.textContent = shown ? '••••••••' : pwNode.dataset.pw;
+    pwNode.dataset.shown = shown ? '0' : '1';
+  } else if (btn.dataset.act === 'copy') {
+    try { await navigator.clipboard.writeText(cred.password); toast('تم نسخ كلمة المرور', 'success'); }
+    catch { toast('تعذّر النسخ', 'error'); }
+  } else if (btn.dataset.act === 'reset') {
+    openTeacherModal(cred);
+  }
+});
+
+el('btn-refresh-cred')?.addEventListener('click', () => loadStaffCredentials());
+
+function openTeacherModal(cred) {
+  _credEditUserId = cred?.userId ?? null;
+  const editing = !!cred;
+  el('tch-modal-title').textContent = editing ? 'تغيير كلمة المرور' : 'إضافة معلّم';
+  el('tch-save-label').textContent  = editing ? 'حفظ كلمة المرور' : 'إنشاء الحساب';
+  el('tch-name').value = editing ? (_teacherNames[cred.userId] || '') : '';
+  el('tch-username').value = editing ? cred.username : '';
+  el('tch-password').value = '';
+  // When editing we only reset the password — hide name/username inputs.
+  el('tch-name-group').hidden = editing;
+  el('tch-username-group').hidden = editing;
+  hide(el('tch-error'));
+  show(modalTeacher);
+}
+el('btn-add-teacher').addEventListener('click', () => openTeacherModal(null));
+el('btn-close-teacher').addEventListener('click', () => hide(modalTeacher));
+
+el('btn-save-teacher').addEventListener('click', async () => {
+  hide(el('tch-error'));
+  const editing  = !!_credEditUserId;
+  const fullName = el('tch-name').value.trim();
+  const username = el('tch-username').value.trim().toLowerCase();
+  const password = el('tch-password').value;
+  if (!editing) {
+    if (!fullName) { return showTchErr('الاسم الكامل مطلوب.'); }
+    if (!/^[a-z0-9._-]{3,40}$/.test(username)) { return showTchErr('اسم المستخدم: أحرف لاتينية/أرقام (٣–٤٠) بدون فراغات.'); }
+  }
+  if (password.length < 6) { return showTchErr('كلمة المرور ٦ أحرف على الأقل.'); }
+  const btn = el('btn-save-teacher'); btn.disabled = true; show(el('tch-spinner'));
+  try {
+    if (editing) {
+      await NDB.updateTeacherCredential({ userId: _credEditUserId, password });
+      toast('تم تحديث كلمة المرور', 'success');
+    } else {
+      await NDB.createTeacherAccount({ fullName, username, password });
+      toast('تم إنشاء حساب المعلّم', 'success');
+    }
+    hide(modalTeacher);
+    await loadStaffCredentials();
+  } catch (err) {
+    console.error('[NSAMS] save teacher account', err);
+    showTchErr(err.message || 'تعذّر الحفظ.');
+  } finally {
+    btn.disabled = false; hide(el('tch-spinner'));
+  }
+});
+function showTchErr(msg) { el('tch-error').textContent = msg; show(el('tch-error')); el('btn-save-teacher').disabled = false; hide(el('tch-spinner')); }
+
 // Enhance the school-admin selects once the DOM is parsed.
+CustomSelect.enhance('stu-class-select');
+CustomSelect.enhance('stu-gender');
+CustomSelect.enhance('transfer-class');
+CustomSelect.enhance('sch-shift');
+CustomSelect.enhance('staff-status');
+CustomSelect.enhance('in-personnel-kind');
 CustomSelect.enhance('mng-class-select');
 CustomSelect.enhance('mng-role-select');
 CustomSelect.enhance('mng-sup-select');

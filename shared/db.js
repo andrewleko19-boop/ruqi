@@ -25,6 +25,12 @@ const QUEUE_REPORTS    = "nsams_pending_reports";
 const QUEUE_STU_ATT    = 'nsams_pending_stu_att';
 const QUEUE_GRADES     = 'nsams_pending_grades';
 const QUEUE_CONDUCT    = 'nsams_pending_conduct';
+const QUEUE_STAFF_ATT  = 'nsams_pending_staff_att';
+const QUEUE_STUDENTS   = 'nsams_pending_students';
+
+// Default work-start time used for the lateness calculation when a school has
+// not configured `schools.work_start_time`.
+const DEFAULT_WORK_START = '07:30';
 
 function readQueue(key) {
   try { return JSON.parse(localStorage.getItem(key) || "[]"); }
@@ -103,7 +109,17 @@ function localDateISO(d = new Date()) {
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
-async function login(email, password) {
+// Teachers are provisioned centrally by the principal with a USERNAME (no email).
+// A username (no '@') is mapped to a synthetic email so Supabase auth — which is
+// email-based — can authenticate it. Admins/directorate keep using their email.
+const STAFF_EMAIL_DOMAIN = 'staff.nsams.local';
+function identifierToEmail(identifier) {
+  const id = (identifier || '').trim();
+  return id.includes('@') ? id : `${id.toLowerCase()}@${STAFF_EMAIL_DOMAIN}`;
+}
+
+async function login(identifier, password) {
+  const email = identifierToEmail(identifier);
   const { data: authData, error: authError } =
     await db.auth.signInWithPassword({ email, password });
 
@@ -196,6 +212,15 @@ async function getSchoolById(schoolId) {
 async function updateSchool(schoolId, patch) {
   const row = {};
   if (patch.minAttendancePct !== undefined) row.min_attendance_pct = patch.minAttendancePct;
+  if (patch.workStartTime    !== undefined) row.work_start_time     = patch.workStartTime || null;
+  // School identity (هوية المدرسة) + GPS — reuses the existing lat/lng columns.
+  if (patch.complexName   !== undefined) row.complex_name   = patch.complexName   || null;
+  if (patch.classification!== undefined) row.classification = patch.classification|| null;
+  if (patch.educationType !== undefined) row.education_type = patch.educationType || null;
+  if (patch.shift         !== undefined) row.shift          = patch.shift         || null;
+  if (patch.studentType   !== undefined) row.student_type   = patch.studentType   || null;
+  if (patch.lat           !== undefined) row.lat            = patch.lat;
+  if (patch.lng           !== undefined) row.lng            = patch.lng;
   if (Object.keys(row).length === 0) return true;
   const { error } = await db.from('schools').update(row).eq('id', schoolId);
   if (error) throw error;
@@ -353,9 +378,9 @@ async function getTodaySummary(directorateId) {
       .select("school_id, status")
       .eq("date", today)
       .in("school_id", schoolIds.length ? schoolIds : ["__none__"]),
-    // دوام المعلمين — لا يزال من المجمّع (لم يُوحّد، مصدره الوحيد daily_attendance)
+    // دوام الموظفين (معلمون/إداريون/عمال) — من المجمّع daily_attendance
     db.from("daily_attendance")
-      .select("school_id, teachers_present")
+      .select("school_id, teachers_present, admins_present, workers_present")
       .eq("date", today)
       .in("school_id", schoolIds.length ? schoolIds : ["__none__"]),
     // البلاغات المعلّقة (دون تغيير)
@@ -385,6 +410,8 @@ async function getTodaySummary(directorateId) {
 
   return {
     totalTeachersPresent: (daRes.data || []).reduce((s, r) => s + (r.teachers_present || 0), 0),
+    totalAdminsPresent:   (daRes.data || []).reduce((s, r) => s + (r.admins_present  || 0), 0),
+    totalWorkersPresent:  (daRes.data || []).reduce((s, r) => s + (r.workers_present || 0), 0),
     totalStudentsPresent: attendingStudents,            // الآن حضور طلاب حقيقي
     topPendingReports: (reportsRes.data || []).map((r) => ({
       id: r.id, type: r.type, status: r.status,
@@ -492,7 +519,7 @@ async function getMinistryAttendanceSummary(date) {
 
   const { data: attendance, error: attErr } = await db
     .from("daily_attendance")
-    .select("school_id, students_present, teachers_present")
+    .select("school_id, students_present, teachers_present, admins_present, workers_present")
     .eq("date", isoDate)
     .in("school_id", allSchoolIds.length > 0 ? allSchoolIds : ["__none__"]);
   if (attErr) throw attErr;
@@ -510,6 +537,8 @@ async function getMinistryAttendanceSummary(date) {
     dirAgg[d.id] = {
       studentsPresent: 0,
       teachersPresent: 0,
+      adminsPresent:   0,
+      workersPresent:  0,
       schoolsReported: 0,
       totalSchools:    dirToSchools[d.id]?.size || 0,
     };
@@ -519,6 +548,8 @@ async function getMinistryAttendanceSummary(date) {
     if (dirId && dirAgg[dirId]) {
       dirAgg[dirId].studentsPresent += rec.students_present || 0;
       dirAgg[dirId].teachersPresent += rec.teachers_present || 0;
+      dirAgg[dirId].adminsPresent   += rec.admins_present   || 0;
+      dirAgg[dirId].workersPresent  += rec.workers_present  || 0;
       dirAgg[dirId].schoolsReported++;
     }
   }
@@ -531,6 +562,8 @@ async function getMinistryAttendanceSummary(date) {
         governorate:     gov,
         studentsPresent: 0,
         teachersPresent: 0,
+        adminsPresent:   0,
+        workersPresent:  0,
         schoolsReported: 0,
         totalSchools:    0,
         dirCount:        0,
@@ -539,6 +572,8 @@ async function getMinistryAttendanceSummary(date) {
     const agg = dirAgg[d.id];
     govMap[gov].studentsPresent += agg.studentsPresent;
     govMap[gov].teachersPresent += agg.teachersPresent;
+    govMap[gov].adminsPresent   += agg.adminsPresent;
+    govMap[gov].workersPresent  += agg.workersPresent;
     govMap[gov].schoolsReported += agg.schoolsReported;
     govMap[gov].totalSchools    += agg.totalSchools;
     govMap[gov].dirCount++;
@@ -586,7 +621,7 @@ async function getTeacherClasses(teacherId) {
       class_id, role, subject_ids,
       classes:class_id (
         id, grade, section, school_id,
-        schools:school_id ( name )
+        schools:school_id ( name, work_start_time )
       )
     `)
     .eq('teacher_id',    teacherId)
@@ -602,6 +637,7 @@ async function getTeacherClasses(teacherId) {
       section:     c.section,
       schoolId:    c.school_id,
       schoolName:  c.schools?.name ?? '',
+      workStartTime: c.schools?.work_start_time ?? null,
       role:        row.role ?? 'homeroom',
       subjectIds:  Array.isArray(row.subject_ids) ? row.subject_ids : [],
       academicYear,
@@ -632,6 +668,11 @@ function setCachedStudents(classId, data) {
   } catch { /* storage quota — non-fatal */ }
 }
 
+function clearCachedStudents(classId) {
+  if (!classId) return;
+  try { localStorage.removeItem(STUDENTS_CACHE_PFX + classId); } catch { /* non-fatal */ }
+}
+
 // ─── Teacher: get students for a class ───────────────────────────────────────
 async function getClassStudents(classId) {
   if (!isOnline()) {
@@ -640,9 +681,13 @@ async function getClassStudents(classId) {
     throw new Error('لا يوجد اتصال ولا توجد بيانات محفوظة لهذا الصف');
   }
 
+  // select('*') (not an explicit column list) so the new SIS columns are
+  // included once the migration runs, while staying safe if it hasn't yet —
+  // same rationale as getSchoolById. Existing consumers keep reading
+  // full_name / national_id / gender / seat_number unchanged.
   const { data, error } = await db
     .from('students')
-    .select('id, full_name, national_id, gender, seat_number')
+    .select('*')
     .eq('class_id',  classId)
     .eq('is_active', true)
     .order('seat_number', { ascending: true,  nullsFirst: false })
@@ -653,6 +698,203 @@ async function getClassStudents(classId) {
   const students = data ?? [];
   setCachedStudents(classId, students);
   return students;
+}
+
+// ─── Student records (SIS): create / edit / transfer / archive ───────────────
+// Offline-first, mirroring saveStudentAttendance: every mutation is wrapped in
+// a queue item synced by syncStudentRecord (online path + syncPendingV2). Each
+// item carries an audit payload written (best-effort) to audit_log on sync.
+
+// camelCase student object (from the form) → snake_case students row.
+function studentRowFromInput(p) {
+  const fullName = [p.firstName, p.fatherName, p.familyName]
+    .map(s => (s ?? '').trim()).filter(Boolean).join(' ');
+  return {
+    id:               p.id,
+    school_id:        p.schoolId,
+    class_id:         p.classId ?? null,
+    first_name:       (p.firstName  ?? '').trim() || null,
+    father_name:      (p.fatherName ?? '').trim() || null,
+    family_name:      (p.familyName ?? '').trim() || null,
+    full_name:        fullName,
+    gender:           p.gender || null,
+    birth_date:       p.birthDate || null,
+    national_id:      (p.nationalId ?? '').trim() || null,
+    seat_number:      p.seatNumber === '' || p.seatNumber == null ? null : Number(p.seatNumber),
+    mother_name:      (p.motherName     ?? '').trim() || null,
+    mother_family:    (p.motherFamily   ?? '').trim() || null,
+    grandfather_name: (p.grandfatherName?? '').trim() || null,
+    card_number:      (p.cardNumber     ?? '').trim() || null,
+    birth_place:      (p.birthPlace     ?? '').trim() || null,
+    contact_phone:    (p.contactPhone   ?? '').trim() || null,
+    res_governorate:  (p.resGovernorate ?? '').trim() || null,
+    res_region:       (p.resRegion      ?? '').trim() || null,
+    res_subdistrict:  (p.resSubdistrict ?? '').trim() || null,
+    res_town:         (p.resTown        ?? '').trim() || null,
+    res_sector:       (p.resSector      ?? '').trim() || null,
+    res_block:        (p.resBlock       ?? '').trim() || null,
+    res_record:       (p.resRecord      ?? '').trim() || null,
+    is_active:        p.isActive !== false,
+    recorded_by:      p.actorId ?? null,
+    updated_at:       new Date().toISOString(),
+  };
+}
+
+function newStudentId() {
+  return (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID() : generateLocalId();
+}
+
+// Best-effort audit write (online direct path + sync path). Never throws —
+// auditing must not block or fail a mutation the user already committed.
+async function writeAudit({ schoolId, entity, entityId, action, changes = null, reason = null, actorId = null }) {
+  try {
+    if (!isOnline()) return false;
+    const { error } = await db.from('audit_log').insert({
+      school_id: schoolId, actor_id: actorId, entity,
+      entity_id: entityId, action, changes, reason,
+    });
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.warn('[NSAMS] writeAudit failed (non-fatal)', e);
+    return false;
+  }
+}
+
+// Core sync — runs the actual DB mutation for one queued student item, then
+// records the audit row. Called on the online path and by syncPendingV2.
+async function syncStudentRecord(item) {
+  if (item.op === 'save') {
+    const { error } = await db.from('students')
+      .upsert(item.row, { onConflict: 'id', ignoreDuplicates: false });
+    if (error) throw error;
+  } else if (item.op === 'archive') {
+    const { error } = await db.from('students')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('id', item.id);
+    if (error) throw error;
+  } else if (item.op === 'transfer') {
+    const { error } = await db.from('students')
+      .update({ class_id: item.classId, updated_at: new Date().toISOString() })
+      .eq('id', item.id);
+    if (error) throw error;
+  }
+  if (item.audit) await writeAudit(item.audit);
+  return true;
+}
+
+function getPendingStudents() {
+  return readQueue(QUEUE_STUDENTS).filter(r => !r.synced);
+}
+
+function markStudentSynced(localId) {
+  writeQueue(QUEUE_STUDENTS, readQueue(QUEUE_STUDENTS).map(r =>
+    r.localId === localId ? { ...r, synced: true } : r));
+}
+
+// Shared offline-or-sync path for a single student mutation item.
+async function enqueueOrSyncStudent(item) {
+  [item.classId, item.fromClassId].forEach(clearCachedStudents);
+
+  if (!isOnline()) {
+    const q = readQueue(QUEUE_STUDENTS); q.push(item); writeQueue(QUEUE_STUDENTS, q);
+    return { success: true, id: item.id, synced: false };
+  }
+  try {
+    await syncStudentRecord(item);
+    return { success: true, id: item.id, synced: true };
+  } catch (err) {
+    const q = readQueue(QUEUE_STUDENTS); q.push(item); writeQueue(QUEUE_STUDENTS, q);
+    console.warn('[NSAMS] saveStudent: falling back to queue', err);
+    return { success: true, id: item.id, synced: false };
+  }
+}
+
+// Create or update one student. `input.id` present ⇒ update, absent ⇒ create.
+async function saveStudent(input) {
+  const isCreate = !input.id;
+  const id  = input.id || newStudentId();
+  const row = studentRowFromInput({ ...input, id });
+  const item = {
+    localId: generateLocalId(), op: 'save', id, classId: row.class_id,
+    row,
+    audit: {
+      schoolId: row.school_id, entity: 'student', entityId: id,
+      action: isCreate ? 'create' : 'update', changes: row,
+      reason: input.reason ?? null, actorId: input.actorId ?? null,
+    },
+    synced: false, createdAt: new Date().toISOString(),
+  };
+  return enqueueOrSyncStudent(item);
+}
+
+// Soft-delete (never a hard DELETE) — keeps history & references intact.
+async function archiveStudent({ id, schoolId, classId, reason, actorId }) {
+  const item = {
+    localId: generateLocalId(), op: 'archive', id, classId,
+    audit: { schoolId, entity: 'student', entityId: id, action: 'archive',
+             changes: null, reason: reason ?? null, actorId: actorId ?? null },
+    synced: false, createdAt: new Date().toISOString(),
+  };
+  return enqueueOrSyncStudent(item);
+}
+
+// Move a student to another class/section (the official «نقل طالب»).
+async function transferStudent({ id, schoolId, fromClassId, toClassId, reason, actorId }) {
+  const item = {
+    localId: generateLocalId(), op: 'transfer', id,
+    classId: toClassId, fromClassId,
+    audit: { schoolId, entity: 'student', entityId: id, action: 'transfer',
+             changes: { from: fromClassId, to: toClassId },
+             reason: reason ?? null, actorId: actorId ?? null },
+    synced: false, createdAt: new Date().toISOString(),
+  };
+  return enqueueOrSyncStudent(item);
+}
+
+// Duplicate guard: is there an active student with this national_id in the
+// school? Backs the unique partial index; surfaced in the form & bulk import.
+async function findDuplicateStudent(schoolId, nationalId, excludeId = null) {
+  const nid = (nationalId ?? '').trim();
+  if (!nid) return null;
+  let q = db.from('students')
+    .select('id, full_name, class_id')
+    .eq('school_id', schoolId).eq('national_id', nid).eq('is_active', true);
+  if (excludeId) q = q.neq('id', excludeId);
+  const { data, error } = await q.limit(1);
+  if (error) throw error;
+  return (data && data[0]) || null;
+}
+
+// Bulk import a parsed/validated batch of students into one class. Requires a
+// connection (large op). Inserts row-by-row so one bad row can't drop the rest;
+// returns a per-row summary for the preview UI.
+async function bulkImportStudents({ schoolId, classId, rows, actorId }) {
+  if (!isOnline()) throw new Error('الاستيراد الجماعي يتطلّب اتصالاً بالإنترنت.');
+  const summary = { inserted: 0, duplicate: 0, failed: [] };
+  for (let i = 0; i < rows.length; i++) {
+    const input = rows[i];
+    try {
+      const dup = await findDuplicateStudent(schoolId, input.nationalId);
+      if (dup) { summary.duplicate++; continue; }
+      const id  = newStudentId();
+      const row = studentRowFromInput({ ...input, id, schoolId, classId, actorId });
+      const { error } = await db.from('students').insert(row);
+      if (error) throw error;
+      summary.inserted++;
+    } catch (err) {
+      summary.failed.push({ line: i + 1, name: input.firstName || input.fullName || '—',
+                            error: err?.message || 'خطأ' });
+    }
+  }
+  clearCachedStudents(classId);
+  if (summary.inserted > 0) {
+    await writeAudit({ schoolId, entity: 'student', entityId: null,
+      action: 'bulk_import', changes: { class_id: classId, count: summary.inserted },
+      reason: null, actorId });
+  }
+  return summary;
 }
 
 // ─── Teacher: check submission status for a class + date ─────────────────────
@@ -948,6 +1190,252 @@ async function saveStudentAttendance({ records, classId, schoolId, date, teacher
     console.warn('[NSAMS] saveStudentAttendance: falling back to queue', err);
     return { success: true, localId, synced: false };
   }
+}
+
+// ─── Staff attendance (دوام الموظفين) ─────────────────────────────────────────
+// Three categories roll up to the directorate/ministry: teachers (self check-in,
+// "trust but verify"), admins and workers (no app login → recorded by the
+// manager). The teacher's self-recorded time is kept as `check_in_original`; a
+// manager correction lands in `check_in_adjusted`. Penalties are deliberately
+// out of scope for now — the schema only measures (status + lateness).
+
+function parseTimeToMinutes(t) {
+  if (!t) return null;
+  const [h, m] = String(t).split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+// Minutes a check-in is past the school's work-start time (0 if on time/early).
+function computeLateMinutes(checkInISO, workStartTime) {
+  if (!checkInISO) return null;
+  const start = parseTimeToMinutes(workStartTime || DEFAULT_WORK_START);
+  const d = new Date(checkInISO);
+  const mins = d.getHours() * 60 + d.getMinutes();
+  return Math.max(0, mins - start);
+}
+
+function staffStatusForLate(lateMinutes) {
+  return lateMinutes && lateMinutes > 0 ? 'late' : 'present';
+}
+
+// ── Personnel roster (admins / workers — no app login) ──
+async function getSchoolPersonnel(schoolId) {
+  const { data, error } = await db
+    .from('school_personnel')
+    .select('id, full_name, kind, national_id, is_active')
+    .eq('school_id', schoolId)
+    .order('kind', { ascending: true })
+    .order('full_name', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(p => ({
+    id: p.id, fullName: p.full_name, kind: p.kind,
+    nationalId: p.national_id ?? null, isActive: p.is_active !== false,
+  }));
+}
+
+async function addPersonnel({ schoolId, fullName, kind, nationalId = null }) {
+  const { data, error } = await db
+    .from('school_personnel')
+    .insert({ school_id: schoolId, full_name: fullName, kind, national_id: nationalId })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data.id;
+}
+
+async function updatePersonnel(id, patch) {
+  const row = {};
+  if (patch.fullName   !== undefined) row.full_name   = patch.fullName;
+  if (patch.kind       !== undefined) row.kind        = patch.kind;
+  if (patch.nationalId !== undefined) row.national_id = patch.nationalId;
+  if (patch.isActive   !== undefined) row.is_active   = patch.isActive;
+  if (Object.keys(row).length === 0) return true;
+  const { error } = await db.from('school_personnel').update(row).eq('id', id);
+  if (error) throw error;
+  return true;
+}
+
+function setPersonnelActive(id, active) {
+  return updatePersonnel(id, { isActive: active });
+}
+
+// ── Teacher self check-in / out (offline-capable, mirrors student attendance) ──
+function getPendingStaffAttendance() {
+  return readQueue(QUEUE_STAFF_ATT).filter(r => !r.synced);
+}
+
+function markStaffAttSynced(localId) {
+  const queue = readQueue(QUEUE_STAFF_ATT).map(r =>
+    r.localId === localId ? { ...r, synced: true } : r
+  );
+  writeQueue(QUEUE_STAFF_ATT, queue);
+}
+
+// Core sync — replays a teacher self check-in/out by upserting the stored row.
+async function syncStaffAttendanceRecord(payload) {
+  const { error } = await db
+    .from('staff_attendance')
+    .upsert(payload.row, { onConflict: 'teacher_id,date', ignoreDuplicates: false });
+  if (error) throw error;
+  return true;
+}
+
+async function queueOrSyncStaff(payload) {
+  const localId  = generateLocalId();
+  const enriched = { ...payload, localId, synced: false, createdAt: new Date().toISOString() };
+  if (!isOnline()) {
+    const q = readQueue(QUEUE_STAFF_ATT); q.push(enriched); writeQueue(QUEUE_STAFF_ATT, q);
+    return { success: true, localId, synced: false };
+  }
+  try {
+    await syncStaffAttendanceRecord(enriched);
+    return { success: true, localId, synced: true };
+  } catch (err) {
+    const q = readQueue(QUEUE_STAFF_ATT); q.push(enriched); writeQueue(QUEUE_STAFF_ATT, q);
+    console.warn('[NSAMS] staff attendance: falling back to queue', err);
+    return { success: true, localId, synced: false };
+  }
+}
+
+async function teacherCheckIn(teacherId, schoolId, workStartTime = null) {
+  const now  = new Date().toISOString();
+  const date = localDateISO();
+  const lateMinutes = computeLateMinutes(now, workStartTime);
+  const row = {
+    school_id: schoolId, date, kind: 'teacher', teacher_id: teacherId,
+    status: staffStatusForLate(lateMinutes),
+    check_in_original: now, late_minutes: lateMinutes,
+    source: 'self', recorded_by: teacherId, updated_at: now,
+  };
+  return queueOrSyncStaff({ op: 'checkin', row });
+}
+
+async function teacherCheckOut(teacherId, schoolId) {
+  const now  = new Date().toISOString();
+  const date = localDateISO();
+  // Only check_out is included → an upsert ON CONFLICT keeps check_in_original.
+  const row = {
+    school_id: schoolId, date, kind: 'teacher', teacher_id: teacherId,
+    check_out: now, updated_at: now,
+  };
+  return queueOrSyncStaff({ op: 'checkout', row });
+}
+
+async function getMyStaffAttendanceToday(teacherId) {
+  const date = localDateISO();
+  const { data, error } = await db
+    .from('staff_attendance')
+    .select('status, check_in_original, check_in_adjusted, check_out, late_minutes, source')
+    .eq('teacher_id', teacherId)
+    .eq('date', date)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    status:          data.status,
+    checkInOriginal: data.check_in_original,
+    checkInAdjusted: data.check_in_adjusted,
+    checkOut:        data.check_out,
+    lateMinutes:     data.late_minutes,
+    source:          data.source,
+  };
+}
+
+// ── Manager view: every staff member for a date, grouped by category ──
+async function getStaffAttendanceForDate(schoolId, date) {
+  const isoDate = date instanceof Date ? localDateISO(date) : date;
+  const [teachers, personnel, attRes] = await Promise.all([
+    getTeachersBySchool(schoolId),
+    getSchoolPersonnel(schoolId),
+    db.from('staff_attendance')
+      .select('id, kind, teacher_id, personnel_id, status, check_in_original, check_in_adjusted, check_out, late_minutes, source, adjust_reason, note')
+      .eq('school_id', schoolId)
+      .eq('date', isoDate),
+  ]);
+  if (attRes.error) throw attRes.error;
+
+  const byTeacher = {}, byPersonnel = {};
+  for (const r of attRes.data || []) {
+    if (r.teacher_id)        byTeacher[r.teacher_id]    = r;
+    else if (r.personnel_id) byPersonnel[r.personnel_id] = r;
+  }
+  const mapRow = (rec) => rec ? {
+    id: rec.id, status: rec.status,
+    checkInOriginal: rec.check_in_original, checkInAdjusted: rec.check_in_adjusted,
+    checkOut: rec.check_out, lateMinutes: rec.late_minutes, source: rec.source,
+    adjustReason: rec.adjust_reason, note: rec.note,
+  } : null;
+
+  const teacherRows = teachers.map(t => ({
+    kind: 'teacher', refId: t.id, name: t.fullName, record: mapRow(byTeacher[t.id]),
+  }));
+  const activePersonnel = personnel.filter(p => p.isActive);
+  return {
+    teachers: teacherRows,
+    admins:   activePersonnel.filter(p => p.kind === 'admin')
+                .map(p => ({ kind: 'admin', refId: p.id, name: p.fullName, record: mapRow(byPersonnel[p.id]) })),
+    workers:  activePersonnel.filter(p => p.kind === 'worker')
+                .map(p => ({ kind: 'worker', refId: p.id, name: p.fullName, record: mapRow(byPersonnel[p.id]) })),
+  };
+}
+
+// Manager create/edit of a single staff row (online — like confirm/reject).
+async function upsertStaffAttendance({
+  schoolId, date, kind, teacherId = null, personnelId = null,
+  status, checkInTime = null, checkOut = null,
+  adjustReason = null, note = null, workStartTime = null, adjustedBy,
+}) {
+  const isoDate = date instanceof Date ? localDateISO(date) : date;
+  // Teachers keep their self-recorded original; a manager edit lands in the
+  // adjusted column. Personnel have no self time → the manager value IS original.
+  const timeCol = kind === 'teacher' ? 'check_in_adjusted' : 'check_in_original';
+  const row = {
+    school_id:    schoolId,
+    date:         isoDate,
+    kind,
+    teacher_id:   kind === 'teacher' ? teacherId   : null,
+    personnel_id: kind === 'teacher' ? null        : personnelId,
+    status,
+    [timeCol]:    checkInTime,
+    check_out:    checkOut,
+    source:       'manager',
+    adjusted_by:  adjustedBy,
+    adjust_reason: adjustReason,
+    note,
+    recorded_by:  adjustedBy,
+    updated_at:   new Date().toISOString(),
+  };
+  // Lateness: cleared for absent/leave; recomputed when a time is given;
+  // otherwise omitted so a teacher's self-computed value is preserved.
+  if (status === 'absent' || status === 'leave') {
+    row.late_minutes = null;
+  } else if (checkInTime) {
+    row.late_minutes = computeLateMinutes(checkInTime, workStartTime);
+  } else if (kind !== 'teacher') {
+    row.late_minutes = null;
+  }
+
+  const onConflict = kind === 'teacher' ? 'teacher_id,date' : 'personnel_id,date';
+  const { error } = await db
+    .from('staff_attendance')
+    .upsert(row, { onConflict, ignoreDuplicates: false });
+  if (error) throw error;
+  return true;
+}
+
+// Present/absent tallies per category, to auto-fill the daily aggregate record.
+async function computeStaffDailyCounts(schoolId, date) {
+  const { teachers, admins, workers } = await getStaffAttendanceForDate(schoolId, date);
+  const tally = (list) => {
+    let present = 0, absent = 0;
+    for (const p of list) {
+      const st = p.record?.status;
+      if (st === 'present' || st === 'late') present++;
+      else if (st === 'absent')              absent++;
+    }
+    return { present, absent };
+  };
+  return { teachers: tally(teachers), admins: tally(admins), workers: tally(workers) };
 }
 
 // ─── School admin: daily summary per class ───────────────────────────────────
@@ -1587,6 +2075,8 @@ async function syncPendingV2() {
     studentAtt: { synced: 0, failed: 0 },
     grades:     { synced: 0, failed: 0 },
     conduct:    { synced: 0, failed: 0 },
+    staffAtt:   { synced: 0, failed: 0 },
+    students:   { synced: 0, failed: 0 },
   };
 
   for (const record of getPendingAttendance()) {
@@ -1629,7 +2119,69 @@ async function syncPendingV2() {
     } catch { results.conduct.failed++; }
   }
 
+  for (const payload of getPendingStaffAttendance()) {
+    try {
+      await syncStaffAttendanceRecord(payload);
+      markStaffAttSynced(payload.localId);
+      results.staffAtt.synced++;
+    } catch { results.staffAtt.failed++; }
+  }
+
+  for (const item of getPendingStudents()) {
+    try {
+      await syncStudentRecord(item);
+      markStudentSynced(item.localId);
+      results.students.synced++;
+    } catch { results.students.failed++; }
+  }
+
   return results;
+}
+
+// ─── Staff accounts (teacher provisioning by the principal) ──────────────────
+// Account creation needs the service-role key → it runs in the admin-create-staff
+// Edge Function. These wrappers invoke it (online-only) and surface its Arabic
+// error messages. Credentials are read directly (RLS limits them to the school's
+// own admin).
+async function invokeAdminStaff(payload) {
+  const { data, error } = await db.functions.invoke('admin-create-staff', { body: payload });
+  if (error) {
+    let msg = 'تعذّر تنفيذ العملية على الخادم.';
+    try { const j = await error.context?.json?.(); if (j?.error) msg = j.error; } catch { /* ignore */ }
+    throw new Error(msg);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+async function createTeacherAccount({ fullName, username, password }) {
+  if (!isOnline()) throw new Error('إنشاء الحساب يتطلّب اتصالاً بالإنترنت.');
+  return invokeAdminStaff({ action: 'create', fullName, username, password });
+}
+
+async function updateTeacherCredential({ userId, password, fullName }) {
+  if (!isOnline()) throw new Error('التعديل يتطلّب اتصالاً بالإنترنت.');
+  return invokeAdminStaff({ action: 'update', userId, password, fullName });
+}
+
+async function deactivateTeacherAccount(userId) {
+  if (!isOnline()) throw new Error('التعطيل يتطلّب اتصالاً بالإنترنت.');
+  return invokeAdminStaff({ action: 'deactivate', userId });
+}
+
+// Login info for the «معلومات تسجيل الكادر» section — RLS restricts the table to
+// the school's own admin, so this only ever returns the caller's school.
+async function getStaffCredentials(schoolId) {
+  const { data, error } = await db
+    .from('staff_credentials')
+    .select('id, user_id, username, password, created_at')
+    .eq('school_id', schoolId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(r => ({
+    id: r.id, userId: r.user_id, username: r.username,
+    password: r.password, createdAt: r.created_at,
+  }));
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────
@@ -1684,6 +2236,34 @@ window.NSAMS_DB = {
   hasTodayAttendance,
   saveStudentAttendance,
   getPendingStudentAttendance,
+
+  // Student records (SIS) — create / edit / transfer / archive / import
+  saveStudent,
+  archiveStudent,
+  transferStudent,
+  findDuplicateStudent,
+  bulkImportStudents,
+  getPendingStudents,
+  writeAudit,
+
+  // Teacher account provisioning (principal-created logins)
+  createTeacherAccount,
+  updateTeacherCredential,
+  deactivateTeacherAccount,
+  getStaffCredentials,
+
+  // Staff attendance (دوام الموظفين)
+  getSchoolPersonnel,
+  addPersonnel,
+  updatePersonnel,
+  setPersonnelActive,
+  teacherCheckIn,
+  teacherCheckOut,
+  getMyStaffAttendanceToday,
+  getStaffAttendanceForDate,
+  upsertStaffAttendance,
+  computeStaffDailyCounts,
+  getPendingStaffAttendance,
 
   // School admin — class management
   getSchoolDailySummary,

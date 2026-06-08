@@ -242,6 +242,8 @@ async function loadStats() {
     };
 
     set('stat-teachers-val', summary.totalTeachersPresent);
+    set('stat-admins-val',   summary.totalAdminsPresent ?? 0);
+    set('stat-workers-val',  summary.totalWorkersPresent ?? 0);
     set('stat-students-val', summary.totalStudentsPresent);
     set('stat-schools-val',  summary.reportingSchoolsCount ?? 0);
     set('stat-reports-val', summary.topPendingReports?.length ?? 0);

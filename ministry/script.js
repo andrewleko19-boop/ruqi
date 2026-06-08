@@ -34,6 +34,8 @@ const statTotal   = document.getElementById('stat-total');        // إجمال�
 const statPresent = document.getElementById('stat-present');      // الحاضرون (present+late+excused)
 const statAbsent  = document.getElementById('stat-absent');       // الغائبون (absent)
 const statRate    = document.getElementById('stat-rate');         // نسبة الحضور الوطنية
+const statAdmins  = document.getElementById('stat-admins');       // الإداريون الحاضرون
+const statWorkers = document.getElementById('stat-workers');      // العمال الحاضرون
 
 // Table
 const tableLoading = document.getElementById('table-loading');
@@ -170,7 +172,7 @@ async function loadAllData() {
   tableLoading.classList.remove('hidden');
   tableWrapper.classList.add('hidden');
   tableEmpty.classList.add('hidden');
-  [statGov, statTotal, statPresent, statAbsent, statRate].forEach(el => el.textContent = '—');
+  [statGov, statTotal, statPresent, statAbsent, statRate, statAdmins, statWorkers].forEach(el => el.textContent = '—');
 
   try {
     // 1. كل المديريات
@@ -196,6 +198,21 @@ async function loadAllData() {
       .eq('date', today())
       .in('school_id', allSchoolIds.length > 0 ? allSchoolIds : ['__none__']);
     if (attErr) throw attErr;
+
+    // 3ب. دوام الإداريين والعمال (مجمّع المدرسة daily_attendance) — للبطاقات الوطنية
+    const { data: staffAgg, error: staffErr } = await supabase
+      .from('daily_attendance')
+      .select('admins_present, workers_present')
+      .eq('date', today())
+      .in('school_id', allSchoolIds.length > 0 ? allSchoolIds : ['__none__']);
+    if (staffErr) throw staffErr;
+    let adminsPresent = 0, workersPresent = 0;
+    for (const r of staffAgg || []) {
+      adminsPresent  += r.admins_present  || 0;
+      workersPresent += r.workers_present || 0;
+    }
+    statAdmins.textContent  = fmt(adminsPresent);
+    statWorkers.textContent = fmt(workersPresent);
 
     // خرائط البحث: school → directorate
     const schoolToDir = {};
