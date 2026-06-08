@@ -626,6 +626,69 @@
       </div>
     </section>
 
+    <!-- Teacher accounts — created centrally by the principal (username + password) -->
+    <section class="card">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-user"/></svg>
+        <span>معلومات تسجيل الكادر المدرسي</span>
+        <button class="hdr-btn" id="btn-refresh-cred" aria-label="تحديث" style="margin-inline-start:auto">
+          <svg class="icon icon-sm" id="cred-refresh-icon"><use href="#ic-refresh"/></svg>
+        </button>
+      </div>
+      <div class="card-body">
+        <button type="button" class="btn btn-primary btn-sm" id="btn-add-teacher">
+          <svg class="icon icon-sm"><use href="#ic-plus"/></svg>
+          إضافة معلّم
+        </button>
+        <p class="mng-hint" style="margin-top:8px">
+          يُنشئ المدير حساب كل معلّم (اسم مستخدم وكلمة مرور). تظهر بيانات الدخول هنا لك وحدك.
+        </p>
+        <div id="cred-loading" hidden style="padding:8px 0"><div class="dskel"></div></div>
+        <ul id="cred-list" class="mng-list" role="list"></ul>
+        <p id="cred-empty" class="mng-empty" hidden>لا توجد حسابات معلّمين بعد.</p>
+      </div>
+    </section>
+
+    <!-- Add / edit teacher account modal -->
+    <div id="modal-teacher" class="overlay" hidden aria-modal="true" role="dialog" aria-label="حساب معلّم">
+      <div class="sheet sheet-sm">
+        <div class="sheet-handle"></div>
+        <div class="sheet-hdr">
+          <div class="sheet-title">
+            <svg class="icon"><use href="#ic-user"/></svg>
+            <span id="tch-modal-title">إضافة معلّم</span>
+          </div>
+          <button class="icon-btn" id="btn-close-teacher" aria-label="إغلاق">
+            <svg class="icon"><use href="#ic-x"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body">
+          <div class="field-group" id="tch-name-group">
+            <label for="tch-name">الاسم الكامل <span class="req">*</span></label>
+            <input id="tch-name" class="field-input" type="text" maxlength="80" />
+          </div>
+          <div class="field-group" id="tch-username-group">
+            <label for="tch-username">اسم المستخدم <span class="req">*</span></label>
+            <input id="tch-username" class="field-input" type="text"
+                   autocomplete="off" dir="ltr" placeholder="أحرف لاتينية/أرقام بدون فراغات" maxlength="40" />
+          </div>
+          <div class="field-group">
+            <label for="tch-password" id="tch-password-label">كلمة المرور <span class="req">*</span></label>
+            <div class="input-wrap">
+              <input id="tch-password" class="field-input" type="text" autocomplete="off"
+                     placeholder="٦ أحرف على الأقل" maxlength="64" />
+            </div>
+          </div>
+          <div id="tch-error" class="msg msg-error" hidden></div>
+          <button type="button" class="btn btn-primary btn-full" id="btn-save-teacher">
+            <svg class="icon icon-sm"><use href="#ic-check"/></svg>
+            <span id="tch-save-label">إنشاء الحساب</span>
+            <span class="spinner" id="tch-spinner" hidden></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Staff attendance edit modal -->
     <div id="modal-staff" class="overlay" hidden aria-modal="true" role="dialog">
       <div class="sheet sheet-sm">
@@ -1525,6 +1588,17 @@
 .stu-acts { display:flex; gap:6px; flex-shrink:0; }
 .import-sum { font-size:.82rem; font-weight:700; margin:10px 0 6px; color:#475569; }
 .import-fail { font-size:.78rem; color:#DC2626; margin-top:2px; }
+
+/* ── Teacher login credentials ───────────────────────── */
+.cred-row { display:flex; align-items:flex-start; gap:10px; padding:11px 4px;
+  border-bottom:1px solid var(--clr-border-lt,#E2E8F0); }
+.cred-row:last-child { border-bottom:none; }
+.cred-main { flex:1; min-width:0; }
+.cred-name { font-weight:700; color:#0F172A; }
+.cred-line { font-size:.78rem; color:#475569; margin-top:2px; }
+.cred-line code { background:#F1F5F9; border:1px solid #E2E8F0; border-radius:5px;
+  padding:1px 6px; font-family:ui-monospace,monospace; color:#0F172A; }
+.cred-acts { display:flex; gap:6px; flex-shrink:0; }
 </style>
 
 <!-- Toast zone -->

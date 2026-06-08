@@ -2501,7 +2501,8 @@ function fmtHHMM(iso) {
 async function initStaffTab() {
   _staffLoaded = true;
   if (inWorkStart) inWorkStart.value = staffWorkStart() ? String(staffWorkStart()).slice(0, 5) : '';
-  await Promise.all([loadStaffAttendance(), loadPersonnelRoster()]);
+  populateIdentityCard();
+  await Promise.all([loadStaffAttendance(), loadPersonnelRoster(), loadStaffCredentials()]);
 }
 
 async function loadStaffAttendance() {
@@ -2758,7 +2759,6 @@ function schoolId() { return S.school?.id ?? S.user?.schoolId ?? null; }
 
 async function initStudentsTab() {
   _studentsLoaded = true;
-  populateIdentityCard();
   await loadStuClasses();
 }
 
@@ -3132,6 +3132,125 @@ el('btn-save-identity')?.addEventListener('click', async () => {
     btn.disabled = false;
   }
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Teacher accounts (معلومات تسجيل الكادر) — principal-created logins
+// ════════════════════════════════════════════════════════════════════════════
+let _credList = [];        // [{ id, userId, username, password, createdAt }]
+let _teacherNames = {};    // userId → fullName (from getTeachersBySchool)
+let _credEditUserId = null;
+
+const credListEl = el('cred-list');
+const modalTeacher = el('modal-teacher');
+
+async function loadStaffCredentials() {
+  if (!S.school?.id || !NDB.getStaffCredentials) return;
+  show(el('cred-loading')); hide(el('cred-empty'));
+  try {
+    const [creds, teachers] = await Promise.all([
+      NDB.getStaffCredentials(S.school.id),
+      NDB.getTeachersBySchool(S.school.id).catch(() => []),
+    ]);
+    _credList = creds;
+    _teacherNames = {};
+    for (const t of teachers) _teacherNames[t.id] = t.fullName;
+    renderCredentials();
+  } catch (err) {
+    console.error('[NSAMS] loadStaffCredentials', err);
+    toast('تعذّر تحميل بيانات تسجيل الكادر', 'error');
+  } finally {
+    hide(el('cred-loading'));
+  }
+}
+
+function renderCredentials() {
+  if (_credList.length === 0) { credListEl.innerHTML = ''; show(el('cred-empty')); return; }
+  hide(el('cred-empty'));
+  credListEl.innerHTML = _credList.map(c => {
+    const name = _teacherNames[c.userId] || '—';
+    return (
+      `<li class="cred-row" data-uid="${escapeHtml(c.userId)}">` +
+        `<div class="cred-main">` +
+          `<div class="cred-name">${escapeHtml(name)}</div>` +
+          `<div class="cred-line">اسم المستخدم: <code>${escapeHtml(c.username)}</code></div>` +
+          `<div class="cred-line">كلمة المرور: <code class="cred-pw" data-pw="${escapeHtml(c.password)}">••••••••</code></div>` +
+        `</div>` +
+        `<div class="cred-acts">` +
+          `<button class="icon-btn-sm" data-act="reveal" title="إظهار/إخفاء"><svg class="icon icon-sm"><use href="#ic-eye"/></svg></button>` +
+          `<button class="icon-btn-sm" data-act="copy" title="نسخ"><svg class="icon icon-sm"><use href="#ic-clipboard"/></svg></button>` +
+          `<button class="icon-btn-sm" data-act="reset" title="تغيير كلمة المرور"><svg class="icon icon-sm"><use href="#ic-edit"/></svg></button>` +
+        `</div>` +
+      `</li>`
+    );
+  }).join('');
+}
+
+credListEl.addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-act]'); if (!btn) return;
+  const row = btn.closest('.cred-row'); const uid = row?.dataset.uid;
+  const cred = _credList.find(c => c.userId === uid); if (!cred) return;
+  const pwNode = row.querySelector('.cred-pw');
+  if (btn.dataset.act === 'reveal') {
+    const shown = pwNode.dataset.shown === '1';
+    pwNode.textContent = shown ? '••••••••' : pwNode.dataset.pw;
+    pwNode.dataset.shown = shown ? '0' : '1';
+  } else if (btn.dataset.act === 'copy') {
+    try { await navigator.clipboard.writeText(cred.password); toast('تم نسخ كلمة المرور', 'success'); }
+    catch { toast('تعذّر النسخ', 'error'); }
+  } else if (btn.dataset.act === 'reset') {
+    openTeacherModal(cred);
+  }
+});
+
+el('btn-refresh-cred')?.addEventListener('click', () => loadStaffCredentials());
+
+function openTeacherModal(cred) {
+  _credEditUserId = cred?.userId ?? null;
+  const editing = !!cred;
+  el('tch-modal-title').textContent = editing ? 'تغيير كلمة المرور' : 'إضافة معلّم';
+  el('tch-save-label').textContent  = editing ? 'حفظ كلمة المرور' : 'إنشاء الحساب';
+  el('tch-name').value = editing ? (_teacherNames[cred.userId] || '') : '';
+  el('tch-username').value = editing ? cred.username : '';
+  el('tch-password').value = '';
+  // When editing we only reset the password — hide name/username inputs.
+  el('tch-name-group').hidden = editing;
+  el('tch-username-group').hidden = editing;
+  hide(el('tch-error'));
+  show(modalTeacher);
+}
+el('btn-add-teacher').addEventListener('click', () => openTeacherModal(null));
+el('btn-close-teacher').addEventListener('click', () => hide(modalTeacher));
+
+el('btn-save-teacher').addEventListener('click', async () => {
+  hide(el('tch-error'));
+  const editing  = !!_credEditUserId;
+  const fullName = el('tch-name').value.trim();
+  const username = el('tch-username').value.trim().toLowerCase();
+  const password = el('tch-password').value;
+  if (!editing) {
+    if (!fullName) { return showTchErr('الاسم الكامل مطلوب.'); }
+    if (!/^[a-z0-9._-]{3,40}$/.test(username)) { return showTchErr('اسم المستخدم: أحرف لاتينية/أرقام (٣–٤٠) بدون فراغات.'); }
+  }
+  if (password.length < 6) { return showTchErr('كلمة المرور ٦ أحرف على الأقل.'); }
+  const btn = el('btn-save-teacher'); btn.disabled = true; show(el('tch-spinner'));
+  try {
+    if (editing) {
+      await NDB.updateTeacherCredential({ userId: _credEditUserId, password });
+      toast('تم تحديث كلمة المرور', 'success');
+    } else {
+      await NDB.createTeacherAccount({ fullName, username, password });
+      toast('تم إنشاء حساب المعلّم', 'success');
+    }
+    hide(modalTeacher);
+    await loadStaffCredentials();
+  } catch (err) {
+    console.error('[NSAMS] save teacher account', err);
+    showTchErr(err.message || 'تعذّر الحفظ.');
+  } finally {
+    btn.disabled = false; hide(el('tch-spinner'));
+  }
+});
+function showTchErr(msg) { el('tch-error').textContent = msg; show(el('tch-error')); el('btn-save-teacher').disabled = false; hide(el('tch-spinner')); }
 
 // Enhance the school-admin selects once the DOM is parsed.
 CustomSelect.enhance('stu-class-select');

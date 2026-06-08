@@ -6,3 +6,9 @@ Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+
+# Supabase CLI local artifacts / secrets (never commit the service-role key)
+supabase/.temp/
+supabase/.branches/
+supabase/.env
+**/.env.local

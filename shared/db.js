@@ -109,7 +109,17 @@ function localDateISO(d = new Date()) {
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
-async function login(email, password) {
+// Teachers are provisioned centrally by the principal with a USERNAME (no email).
+// A username (no '@') is mapped to a synthetic email so Supabase auth — which is
+// email-based — can authenticate it. Admins/directorate keep using their email.
+const STAFF_EMAIL_DOMAIN = 'staff.nsams.local';
+function identifierToEmail(identifier) {
+  const id = (identifier || '').trim();
+  return id.includes('@') ? id : `${id.toLowerCase()}@${STAFF_EMAIL_DOMAIN}`;
+}
+
+async function login(identifier, password) {
+  const email = identifierToEmail(identifier);
   const { data: authData, error: authError } =
     await db.auth.signInWithPassword({ email, password });
 
@@ -2128,6 +2138,52 @@ async function syncPendingV2() {
   return results;
 }
 
+// ─── Staff accounts (teacher provisioning by the principal) ──────────────────
+// Account creation needs the service-role key → it runs in the admin-create-staff
+// Edge Function. These wrappers invoke it (online-only) and surface its Arabic
+// error messages. Credentials are read directly (RLS limits them to the school's
+// own admin).
+async function invokeAdminStaff(payload) {
+  const { data, error } = await db.functions.invoke('admin-create-staff', { body: payload });
+  if (error) {
+    let msg = 'تعذّر تنفيذ العملية على الخادم.';
+    try { const j = await error.context?.json?.(); if (j?.error) msg = j.error; } catch { /* ignore */ }
+    throw new Error(msg);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+async function createTeacherAccount({ fullName, username, password }) {
+  if (!isOnline()) throw new Error('إنشاء الحساب يتطلّب اتصالاً بالإنترنت.');
+  return invokeAdminStaff({ action: 'create', fullName, username, password });
+}
+
+async function updateTeacherCredential({ userId, password, fullName }) {
+  if (!isOnline()) throw new Error('التعديل يتطلّب اتصالاً بالإنترنت.');
+  return invokeAdminStaff({ action: 'update', userId, password, fullName });
+}
+
+async function deactivateTeacherAccount(userId) {
+  if (!isOnline()) throw new Error('التعطيل يتطلّب اتصالاً بالإنترنت.');
+  return invokeAdminStaff({ action: 'deactivate', userId });
+}
+
+// Login info for the «معلومات تسجيل الكادر» section — RLS restricts the table to
+// the school's own admin, so this only ever returns the caller's school.
+async function getStaffCredentials(schoolId) {
+  const { data, error } = await db
+    .from('staff_credentials')
+    .select('id, user_id, username, password, created_at')
+    .eq('school_id', schoolId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(r => ({
+    id: r.id, userId: r.user_id, username: r.username,
+    password: r.password, createdAt: r.created_at,
+  }));
+}
+
 // ─── Export ───────────────────────────────────────────────────────────────────
 window.NSAMS_DB = {
   // Auth
@@ -2189,6 +2245,12 @@ window.NSAMS_DB = {
   bulkImportStudents,
   getPendingStudents,
   writeAudit,
+
+  // Teacher account provisioning (principal-created logins)
+  createTeacherAccount,
+  updateTeacherCredential,
+  deactivateTeacherAccount,
+  getStaffCredentials,
 
   // Staff attendance (دوام الموظفين)
   getSchoolPersonnel,
