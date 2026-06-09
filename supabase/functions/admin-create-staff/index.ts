@@ -44,17 +44,19 @@ Deno.serve(async (req) => {
     if (!SERVICE_KEY) return json({ error: "الخادم غير مهيّأ — SUPABASE_SERVICE_ROLE_KEY مفقود" }, 500);
 
     const authHeader = req.headers.get("Authorization") ?? "";
-    if (!authHeader) return json({ error: "غير مصرّح" }, 401);
+    if (!authHeader.startsWith("Bearer ")) return json({ error: "غير مصرّح" }, 401);
+    const jwt = authHeader.slice(7);
 
-    // 1) Identify the caller from their JWT.
+    // 1) Identify the caller — pass JWT directly to getUser() (recommended Edge Function pattern).
+    const anonClient = createClient(SUPABASE_URL, ANON_KEY);
+    const { data: { user }, error: userErr } = await anonClient.auth.getUser(jwt);
+    if (userErr || !user) return json({ error: `جلسة غير صالحة: ${userErr?.message ?? "no user"}` }, 401);
+
+    // 2) Verify the caller is a school_admin — use a client carrying the user's JWT
+    //    so RLS on public.users applies normally; no service-role needed for this read.
     const userClient = createClient(SUPABASE_URL, ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: { user }, error: userErr } = await userClient.auth.getUser();
-    if (userErr || !user) return json({ error: "جلسة غير صالحة" }, 401);
-
-    // 2) Verify the caller is a school_admin — use userClient (same JWT the browser
-    //    uses on login) so RLS on public.users applies normally; no service-role needed here.
     const { data: profile, error: profErr } = await userClient
       .from("users").select("role, school_id").eq("id", user.id).maybeSingle();
     if (profErr)  return json({ error: `تعذّر التحقّق من الصلاحية: ${profErr.message}` }, 500);
