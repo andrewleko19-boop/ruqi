@@ -39,7 +39,9 @@ Deno.serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const ANON_KEY     = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!SERVICE_KEY) return json({ error: "الخادم غير مهيّأ — SUPABASE_SERVICE_ROLE_KEY مفقود" }, 500);
 
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader) return json({ error: "غير مصرّح" }, 401);
@@ -51,16 +53,19 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userErr } = await userClient.auth.getUser();
     if (userErr || !user) return json({ error: "جلسة غير صالحة" }, 401);
 
-    // 2) Verify the caller is a school_admin and read their school FROM THE DB.
-    const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data: profile, error: profErr } = await admin
+    // 2) Verify the caller is a school_admin — use userClient (same JWT the browser
+    //    uses on login) so RLS on public.users applies normally; no service-role needed here.
+    const { data: profile, error: profErr } = await userClient
       .from("users").select("role, school_id").eq("id", user.id).maybeSingle();
-    if (profErr)  return json({ error: "تعذّر التحقّق من الصلاحية" }, 500);
+    if (profErr)  return json({ error: `تعذّر التحقّق من الصلاحية: ${profErr.message}` }, 500);
     if (!profile || profile.role !== "school_admin")
       return json({ error: "هذا الإجراء مخصّص لمدير المدرسة فقط" }, 403);
     const schoolId = profile.school_id;
+
+    // 3) Admin client (service-role) — only used for auth.admin.* operations.
+    const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
 
     const body = await req.json().catch(() => ({}));
     const action = body.action ?? "create";
