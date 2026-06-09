@@ -205,3 +205,17 @@ create policy staff_cred_admin on public.staff_credentials
          and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'school_admin'));
 
 grant select, insert, update, delete on public.staff_credentials to authenticated;
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+--  SECTION 4 — Edge Function (service_role) grants
+--
+--  The admin-create-staff Edge Function runs as service_role and writes to
+--  public.users and public.staff_credentials. service_role bypasses RLS but
+--  still needs table-level GRANTs. Without these the insert fails with
+--  "permission denied for table users".
+-- ════════════════════════════════════════════════════════════════════════════
+
+grant select, insert, update, delete on public.users             to service_role;
+grant select, insert, update, delete on public.staff_credentials to service_role;
+
