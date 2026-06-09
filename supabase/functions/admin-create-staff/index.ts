@@ -94,12 +94,14 @@ Deno.serve(async (req) => {
       }
       const newId = created.user.id;
 
-      const { error: uErr } = await admin.from("users").insert({
-        id: newId, role: "teacher", school_id: schoolId, full_name: fullName,
-      });
+      // upsert handles the case where a DB trigger already created the row;
+      // email is provided in case public.users has a NOT NULL email column.
+      const { error: uErr } = await admin.from("users").upsert({
+        id: newId, role: "teacher", school_id: schoolId, full_name: fullName, email,
+      }, { onConflict: "id" });
       if (uErr) {
-        await admin.auth.admin.deleteUser(newId);   // rollback — no orphan auth user
-        return json({ error: "تعذّر إنشاء الملف الشخصي للمعلّم" }, 500);
+        await admin.auth.admin.deleteUser(newId);
+        return json({ error: `تعذّر إنشاء الملف الشخصي: ${uErr.message}` }, 500);
       }
 
       const { error: cErr } = await admin.from("staff_credentials").insert({
@@ -107,9 +109,9 @@ Deno.serve(async (req) => {
       });
       if (cErr) {
         await admin.from("users").delete().eq("id", newId);
-        await admin.auth.admin.deleteUser(newId);   // rollback fully
+        await admin.auth.admin.deleteUser(newId);
         const dup = /duplicate|unique/i.test(cErr.message ?? "");
-        return json({ error: dup ? "اسم المستخدم مُستخدم مسبقاً" : "تعذّر حفظ بيانات الدخول" },
+        return json({ error: dup ? "اسم المستخدم مُستخدم مسبقاً" : `تعذّر حفظ بيانات الدخول: ${cErr.message}` },
                     dup ? 409 : 500);
       }
       return json({ ok: true, id: newId, username });
