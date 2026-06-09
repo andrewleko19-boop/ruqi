@@ -175,6 +175,15 @@ alter table public.schools
   add column if not exists shift          text,
   add column if not exists student_type   text;
 
+-- 2.4  School UPDATE policy — without it, the admin's UPDATE silently affects
+--      0 rows (identity/GPS edits appear to save then vanish on reload).
+alter table public.schools enable row level security;
+drop policy if exists schools_admin_update on public.schools;
+create policy schools_admin_update on public.schools
+  for update to authenticated
+  using      (id = current_user_school_id())
+  with check (id = current_user_school_id());
+
 
 -- ════════════════════════════════════════════════════════════════════════════
 --  SECTION 3 — Teacher account credentials (principal-provisioned logins)

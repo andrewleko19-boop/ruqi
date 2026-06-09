@@ -3263,6 +3263,7 @@ function renderCredentials() {
           `<button class="icon-btn-sm" data-act="reveal" title="إظهار/إخفاء"><svg class="icon icon-sm"><use href="#ic-eye"/></svg></button>` +
           `<button class="icon-btn-sm" data-act="copy" title="نسخ"><svg class="icon icon-sm"><use href="#ic-clipboard"/></svg></button>` +
           `<button class="icon-btn-sm" data-act="reset" title="تغيير كلمة المرور"><svg class="icon icon-sm"><use href="#ic-edit"/></svg></button>` +
+          `<button class="icon-btn-sm danger" data-act="delete" title="حذف الحساب"><svg class="icon icon-sm"><use href="#ic-trash"/></svg></button>` +
         `</div>` +
       `</li>`
     );
@@ -3283,10 +3284,42 @@ credListEl.addEventListener('click', async (e) => {
     catch { toast('تعذّر النسخ', 'error'); }
   } else if (btn.dataset.act === 'reset') {
     openTeacherModal(cred);
+  } else if (btn.dataset.act === 'delete') {
+    openDeleteTeacherModal(cred);
   }
 });
 
 el('btn-refresh-cred')?.addEventListener('click', () => loadStaffCredentials());
+
+// ── Permanent teacher-account deletion (with confirmation) ──────────────────
+let _credDeleteUserId = null;
+const modalDelTeacher = el('modal-del-teacher');
+
+function openDeleteTeacherModal(cred) {
+  _credDeleteUserId = cred.userId;
+  el('del-teacher-name').textContent = _teacherNames[cred.userId] || cred.username || '—';
+  hide(el('del-teacher-error'));
+  show(modalDelTeacher);
+}
+el('btn-close-del-teacher')?.addEventListener('click', () => hide(modalDelTeacher));
+modalDelTeacher?.addEventListener('click', (e) => { if (e.target === modalDelTeacher) hide(modalDelTeacher); });
+
+el('btn-confirm-del-teacher')?.addEventListener('click', async () => {
+  if (!_credDeleteUserId) return;
+  hide(el('del-teacher-error'));
+  const btn = el('btn-confirm-del-teacher'); btn.disabled = true; show(el('del-teacher-spinner'));
+  try {
+    await NDB.deleteTeacherAccount(_credDeleteUserId);
+    hide(modalDelTeacher);
+    toast('تم حذف الحساب نهائياً', 'success');
+    await loadStaffCredentials();
+  } catch (err) {
+    console.error('[NSAMS] delete teacher account', err);
+    el('del-teacher-error').textContent = err.message || 'تعذّر الحذف.'; show(el('del-teacher-error'));
+  } finally {
+    btn.disabled = false; hide(el('del-teacher-spinner'));
+  }
+});
 
 function openTeacherModal(cred) {
   _credEditUserId = cred?.userId ?? null;

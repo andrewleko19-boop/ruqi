@@ -150,6 +150,21 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    // ── delete (permanent) ─────────────────────────────────────────────────────
+    if (action === "delete") {
+      const userId = String(body.userId ?? "");
+      const { data: target } = await admin.from("users")
+        .select("school_id").eq("id", userId).maybeSingle();
+      if (!target || target.school_id !== schoolId) return json({ error: "غير مصرّح" }, 403);
+      // Remove dependent rows first so no orphans remain, then the auth user.
+      await admin.from("staff_credentials").delete().eq("user_id", userId);
+      await admin.from("class_teacher").delete().eq("teacher_id", userId);
+      await admin.from("users").delete().eq("id", userId);
+      const { error } = await admin.auth.admin.deleteUser(userId);
+      if (error) return json({ error: error.message }, 400);
+      return json({ ok: true });
+    }
+
     return json({ error: "إجراء غير معروف" }, 400);
   } catch (e) {
     return json({ error: String((e as Error)?.message ?? e) }, 500);

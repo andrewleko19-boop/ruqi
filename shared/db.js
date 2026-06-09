@@ -222,8 +222,12 @@ async function updateSchool(schoolId, patch) {
   if (patch.lat           !== undefined) row.lat            = patch.lat;
   if (patch.lng           !== undefined) row.lng            = patch.lng;
   if (Object.keys(row).length === 0) return true;
-  const { error } = await db.from('schools').update(row).eq('id', schoolId);
+  const { data, error } = await db.from('schools').update(row).eq('id', schoolId).select('id');
   if (error) throw error;
+  // RLS may silently update 0 rows (no UPDATE policy) without raising an error —
+  // surface that as a clear failure instead of a false success.
+  if (!data || data.length === 0)
+    throw new Error('لم تُحفظ التعديلات — تحقق من صلاحيات قاعدة البيانات (RLS) لجدول المدرسة.');
   return true;
 }
 
@@ -1448,6 +1452,7 @@ async function getSchoolDailySummary(schoolId, date) {
     .select(`
       id, grade, section,
       class_teacher!left (
+        role,
         teacher_id,
         users:teacher_id ( full_name )
       )
@@ -1501,7 +1506,9 @@ async function getSchoolDailySummary(schoolId, date) {
   }
 
   return (classRows ?? []).map(c => {
-    const ct = c.class_teacher?.[0];
+    // Only the homeroom teacher / supervisor is the attendance source — never a
+    // subject teacher (أستاذ مادة), who has no attendance responsibility.
+    const ct = (c.class_teacher ?? []).find(t => t.role === 'homeroom' || t.role === 'supervisor');
     return {
       classId:       c.id,
       displayName:   `الصف ${gradeNameAr(c.grade)} / شعبة ${c.section}`,
@@ -2169,6 +2176,11 @@ async function deactivateTeacherAccount(userId) {
   return invokeAdminStaff({ action: 'deactivate', userId });
 }
 
+async function deleteTeacherAccount(userId) {
+  if (!isOnline()) throw new Error('الحذف يتطلّب اتصالاً بالإنترنت.');
+  return invokeAdminStaff({ action: 'delete', userId });
+}
+
 // Login info for the «معلومات تسجيل الكادر» section — RLS restricts the table to
 // the school's own admin, so this only ever returns the caller's school.
 async function getStaffCredentials(schoolId) {
@@ -2250,6 +2262,7 @@ window.NSAMS_DB = {
   createTeacherAccount,
   updateTeacherCredential,
   deactivateTeacherAccount,
+  deleteTeacherAccount,
   getStaffCredentials,
 
   // Staff attendance (دوام الموظفين)
