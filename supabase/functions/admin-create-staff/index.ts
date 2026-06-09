@@ -94,10 +94,9 @@ Deno.serve(async (req) => {
       }
       const newId = created.user.id;
 
-      // upsert handles the case where a DB trigger already created the row;
-      // email is provided in case public.users has a NOT NULL email column.
+      // upsert handles the case where a DB trigger already created the row.
       const { error: uErr } = await admin.from("users").upsert({
-        id: newId, role: "teacher", school_id: schoolId, full_name: fullName, email,
+        id: newId, role: "teacher", school_id: schoolId, full_name: fullName,
       }, { onConflict: "id" });
       if (uErr) {
         await admin.auth.admin.deleteUser(newId);
