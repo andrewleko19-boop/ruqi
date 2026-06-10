@@ -4,10 +4,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#0B2B5E" />
+  <meta name="theme-color" content="#1a2744" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>NSAMS – سجل الحضور</title>
   <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" />
   <link rel="icon" href="../icons/favicon.ico" sizes="any" />
   <link rel="icon" type="image/png" sizes="32x32" href="../icons/favicon-32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="../icons/favicon-16.png" />
@@ -248,61 +251,39 @@
     <span id="pending-text">سجلات في انتظار المزامنة</span>
   </div>
 
-  <!-- Tab bar (school admin) — primary «الدوام» + a «المزيد» menu for the rest -->
+  <!-- Tab bar (school admin) — 6 tabs, horizontally scrollable -->
   <nav class="tabbar" role="tablist" aria-label="أقسام لوحة المدير">
     <button class="tab-btn is-active" id="tab-attendance" role="tab"
             aria-selected="true" data-tab="attendance">
-      <svg class="icon icon-sm"><use href="#ic-clipboard"/></svg>
+      <svg class="icon"><use href="#ic-clipboard"/></svg>
       الدوام
     </button>
-    <button class="tab-more-btn" id="btn-more" aria-haspopup="true" aria-expanded="false"
-            aria-label="المزيد من الأقسام">
-      <svg class="icon icon-sm"><use href="#ic-menu"/></svg>
+    <button class="tab-btn" id="tab-manage" role="tab"
+            aria-selected="false" data-tab="manage">
+      <svg class="icon"><use href="#ic-users"/></svg>
+      الصفوف
+    </button>
+    <button class="tab-btn" id="tab-students" role="tab"
+            aria-selected="false" data-tab="students">
+      <svg class="icon"><use href="#ic-user"/></svg>
+      الطلاب
+    </button>
+    <button class="tab-btn" id="tab-staff" role="tab"
+            aria-selected="false" data-tab="staff">
+      <svg class="icon"><use href="#ic-school"/></svg>
+      الإعدادات
+    </button>
+    <button class="tab-btn" id="tab-subjects" role="tab"
+            aria-selected="false" data-tab="subjects">
+      <svg class="icon"><use href="#ic-book"/></svg>
+      المواد
+    </button>
+    <button class="tab-btn" id="tab-reports" role="tab"
+            aria-selected="false" data-tab="reports">
+      <svg class="icon"><use href="#ic-award"/></svg>
+      الشهادات
     </button>
   </nav>
-
-  <!-- «المزيد» menu (bottom sheet) — holds the non-primary sections -->
-  <div id="menu-more" class="overlay" hidden aria-modal="true" role="dialog" aria-label="الأقسام">
-    <div class="sheet sheet-sm menu-sheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-hdr">
-        <div class="sheet-title">
-          <svg class="icon"><use href="#ic-menu"/></svg>
-          <span>الأقسام</span>
-        </div>
-        <button class="icon-btn" id="btn-close-more" aria-label="إغلاق">
-          <svg class="icon"><use href="#ic-x"/></svg>
-        </button>
-      </div>
-      <div class="menu-list" role="tablist">
-        <button class="menu-item" id="tab-manage" role="tab"
-                aria-selected="false" data-tab="manage">
-          <svg class="icon icon-sm"><use href="#ic-users"/></svg>
-          إدارة الصفوف
-        </button>
-        <button class="menu-item" id="tab-students" role="tab"
-                aria-selected="false" data-tab="students">
-          <svg class="icon icon-sm"><use href="#ic-user"/></svg>
-          الطلاب
-        </button>
-        <button class="menu-item" id="tab-staff" role="tab"
-                aria-selected="false" data-tab="staff">
-          <svg class="icon icon-sm"><use href="#ic-clock"/></svg>
-          دوام الموظفين
-        </button>
-        <button class="menu-item" id="tab-subjects" role="tab"
-                aria-selected="false" data-tab="subjects">
-          <svg class="icon icon-sm"><use href="#ic-book"/></svg>
-          المواد
-        </button>
-        <button class="menu-item" id="tab-reports" role="tab"
-                aria-selected="false" data-tab="reports">
-          <svg class="icon icon-sm"><use href="#ic-award"/></svg>
-          الشهادات
-        </button>
-      </div>
-    </div>
-  </div>
 
   <main class="page" id="view-attendance" role="tabpanel" aria-labelledby="tab-attendance">
 
