@@ -530,7 +530,7 @@ select.field-input option:disabled { color: var(--clr-text-3); }
   border: 1px solid var(--clr-border-lt);
   border-right: 4px solid var(--clr-primary);
   box-shadow: var(--sh-sm);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .card-hdr {
@@ -542,6 +542,7 @@ select.field-input option:disabled { color: var(--clr-text-3); }
   color: #fff;
   font-weight: 700;
   font-size: 0.95rem;
+  border-radius: var(--r-md) var(--r-md) 0 0;
 }
 
 .card-body {
