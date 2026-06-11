@@ -412,3 +412,58 @@ tfoot td {
   display: inline-block;
   text-align: center;
 }
+
+/* ══════════════════════════════════════════════
+   PHASE 2 — NATIONAL CHARTS
+══════════════════════════════════════════════ */
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.chart-box {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  min-width: 0;
+}
+.chart-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-bottom: 8px;
+}
+/* ارتفاع ثابت إلزامي مع maintainAspectRatio:false */
+.chart-canvas-wrap {
+  position: relative;
+  height: 260px;
+}
+.chart-canvas-wrap--tall {
+  height: 360px;
+}
+.period-group {
+  display: flex;
+  gap: 6px;
+}
+.period-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: #94a3b8;
+  border-radius: 8px;
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+.period-btn.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+@media (max-width: 700px) {
+  .charts-grid { grid-template-columns: 1fr; }
+  .chart-canvas-wrap { height: 220px; }
+  .chart-canvas-wrap--tall { height: 320px; }
+}

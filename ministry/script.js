@@ -45,8 +45,15 @@ let tableData     = [];
 let autoRefreshId = null;
 let countdownId   = null;
 let countdown     = 60;
+let lastData      = null;   // {directorates, schools, dirAgg, perSchool} للتعمق
+let trendDays     = 14;
+const charts      = {};
+let drill         = { level: 'national', gov: null, dirId: null };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+const esc = (str) => String(str ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const fmt  = (n) => (n === null || n === undefined) ? '—' : Number(n).toLocaleString();
 const pct  = (part, total) => total > 0 ? ((part / total) * 100).toFixed(1) + '%' : '—';
 const today = () => new Date().toISOString().split('T')[0];
@@ -225,7 +232,7 @@ async function loadAllData() {
 
     const { data: schools, error: schErr } = await supabase
       .from('schools')
-      .select('id, directorate_id, total_students');
+      .select('id, name, directorate_id, total_students');
     if (schErr) throw schErr;
 
     const allSchoolIds = (schools || []).map(s => s.id);
@@ -260,23 +267,28 @@ async function loadAllData() {
       dirTotalSchools[s.directorate_id] = (dirTotalSchools[s.directorate_id] || 0) + 1;
     }
 
-    // تجميع الحضور حسب المديرية
+    // تجميع الحضور حسب المديرية + لكل مدرسة (للتعمق)
     const dirAgg = {};
     for (const d of directorates) {
       dirAgg[d.id] = {
+        name: d.name,
+        governorate: d.governorate || 'غير محدد',
         present: 0, late: 0, absent: 0, excused: 0,
         reportingSchools: new Set(),
         totalSchools: dirTotalSchools[d.id] || 0,
       };
     }
+    const perSchool = {};
     for (const rec of attendance || []) {
       const dirId = schoolToDir[rec.school_id];
       if (!dirId || !dirAgg[dirId]) continue;
       const a = dirAgg[dirId];
-      if      (rec.status === 'present')  a.present++;
-      else if (rec.status === 'late')     a.late++;
-      else if (rec.status === 'absent')   a.absent++;
-      else if (rec.status === 'excused')  a.excused++;
+      const p = perSchool[rec.school_id] ||
+        (perSchool[rec.school_id] = { present: 0, late: 0, absent: 0, excused: 0 });
+      if      (rec.status === 'present')  { a.present++;  p.present++; }
+      else if (rec.status === 'late')     { a.late++;     p.late++; }
+      else if (rec.status === 'absent')   { a.absent++;   p.absent++; }
+      else if (rec.status === 'excused')  { a.excused++;  p.excused++; }
       a.reportingSchools.add(rec.school_id);
     }
 
@@ -303,8 +315,12 @@ async function loadAllData() {
     const rows = Object.values(govMap).sort((a, b) => a.governorate.localeCompare(b.governorate, 'ar'));
     if (rows.length === 0) { showEmpty('لا تتوفر بيانات.'); return; }
 
+    lastData = { directorates, schools: schools || [], dirAgg, perSchool };
+
     renderStats(rows);
     renderTable(rows);
+    renderGovRankChart(rows);
+    loadNationalTrend();   // try/catch داخلي — فشل RPC لا يمسّ اللوحة
     setLastUpdated();
 
   } catch (err) {
@@ -415,6 +431,168 @@ function renderTable(rows) {
 
   tableWrapper.classList.remove('hidden');
 }
+
+// ── Charts (Chart.js — dark/RTL) ──────────────────────────────────────────────
+const CHART_FONT = "'Segoe UI', system-ui, sans-serif";
+const CH = {
+  grid:      'rgba(30, 48, 88, 0.55)',
+  tick:      '#94a3b8',
+  tooltipBg: '#111d36',
+  line:      '#60a5fa',
+  lineFill:  'rgba(26, 86, 219, 0.18)',
+};
+
+function chartBaseOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,          // الارتفاع من .chart-canvas-wrap
+    animation: { duration: 500 },
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: {
+        rtl: true,
+        labels: { color: CH.tick, font: { family: CHART_FONT, size: 12 }, usePointStyle: true, boxWidth: 8 },
+      },
+      tooltip: {
+        rtl: true, textDirection: 'rtl',
+        backgroundColor: CH.tooltipBg, borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1,
+        titleColor: '#e2e8f0', bodyColor: '#94a3b8', padding: 10,
+        titleFont: { family: CHART_FONT }, bodyFont: { family: CHART_FONT },
+      },
+    },
+    scales: {
+      x: { grid: { color: CH.grid, drawTicks: false }, ticks: { color: CH.tick, font: { family: CHART_FONT, size: 11 }, maxRotation: 0, autoSkip: true } },
+      y: { beginAtZero: true, grid: { color: CH.grid, drawTicks: false }, ticks: { color: CH.tick, font: { family: CHART_FONT, size: 11 } } },
+    },
+  };
+}
+
+// إنشاء مرة واحدة ثم تحديث — لا destroy (انتقالات حية ناعمة عبر auto-refresh)
+function upsertChart(holder, key, canvasId, configFactory, labels, datasetsData) {
+  if (typeof Chart === 'undefined') return null;   // فشل CDN — تدهور صامت
+  const existing = holder[key];
+  if (existing) {
+    existing.data.labels = labels;
+    existing.data.datasets.forEach((ds, i) => { ds.data = datasetsData[i]; });
+    existing.update();
+    return existing;
+  }
+  const el = document.getElementById(canvasId);
+  if (!el) return null;
+  holder[key] = new Chart(el.getContext('2d'), configFactory(labels, datasetsData));
+  return holder[key];
+}
+
+// مرساة الظهيرة تمنع انزياح اليوم في UTC+3
+const trendLabel = (isoDay) =>
+  new Date(isoDay + 'T12:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+
+function natRateConfig(labels, datasetsData) {
+  const opts = chartBaseOptions();
+  opts.scales.y.suggestedMax = 100;
+  opts.scales.y.ticks.callback = (v) => v + '%';
+  opts.plugins.tooltip.callbacks = {
+    label: (ctx) => ` نسبة الحضور: ${ctx.parsed.y !== null ? ctx.parsed.y + '%' : '—'}`,
+  };
+  return {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'نسبة الحضور الوطنية',
+        data: datasetsData[0],
+        borderColor: CH.line,
+        backgroundColor: CH.lineFill,
+        fill: true,
+        tension: 0.35,
+        spanGaps: false,
+        pointRadius: 3,
+        pointBackgroundColor: CH.line,
+      }],
+    },
+    options: opts,
+  };
+}
+
+async function loadNationalTrend() {
+  const emptyEl = document.getElementById('trend-empty');
+  try {
+    const { data, error } = await supabase.rpc('get_ministry_trend', { p_days: trendDays });
+    if (error) throw error;
+    const rows = data || [];
+    if (emptyEl) emptyEl.classList.add('hidden');
+
+    const labels = rows.map(r => trendLabel(r.day));
+    const rates  = rows.map(r => {
+      const en = r.present + r.late + r.absent + r.excused;
+      return en ? +(((r.present + r.late + r.excused) / en) * 100).toFixed(1) : null;
+    });
+    upsertChart(charts, 'nat', 'nat-rate-chart', natRateConfig, labels, [rates]);
+  } catch (err) {
+    console.warn('[NatTrend] RPC unavailable:', err);
+    if (emptyEl) emptyEl.classList.remove('hidden');
+  }
+}
+
+// ترتيب المحافظات اليوم — من بيانات الجدول القائمة، بلا جلب إضافي
+function renderGovRankChart(rows) {
+  if (typeof Chart === 'undefined') return;
+
+  const ranked = rows.map(r => {
+    const enrolled  = r.present + r.late + r.absent + r.excused;
+    const attending = r.present + r.late + r.excused;
+    return {
+      gov:  r.governorate,
+      rate: enrolled > 0 ? +((attending / enrolled) * 100).toFixed(1) : null,
+    };
+  }).sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1));
+
+  const labels = ranked.map(s => s.gov);
+  const data   = ranked.map(s => s.rate);
+  const colors = ranked.map(s => {
+    if (s.rate === null) return '#64748b';
+    if (s.rate >= 90)    return '#4ade80';
+    if (s.rate >= 75)    return '#fde047';
+    return '#f87171';
+  });
+
+  const existing = charts.rank;
+  if (existing) {
+    existing.data.labels = labels;
+    existing.data.datasets[0].data = data;
+    existing.data.datasets[0].backgroundColor = colors;
+    existing.update();
+    return;
+  }
+
+  const el = document.getElementById('gov-rank-chart');
+  if (!el) return;
+  const opts = chartBaseOptions();
+  opts.indexAxis = 'y';
+  opts.plugins.legend.display = false;
+  opts.scales.x.max = 100;
+  opts.scales.x.ticks.callback = (v) => v + '%';
+  opts.plugins.tooltip.callbacks = {
+    label: (ctx) => ` ${ctx.parsed.x !== null ? ctx.parsed.x + '%' : '—'}`,
+  };
+  charts.rank = new Chart(el.getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 4, maxBarThickness: 18 }] },
+    options: opts,
+  });
+}
+
+// أزرار الفترة (٧/١٤/٣٠)
+document.getElementById('trend-period')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.period-btn');
+  if (!btn) return;
+  const days = parseInt(btn.dataset.days, 10);
+  if (!days || days === trendDays) return;
+  trendDays = days;
+  document.querySelectorAll('#trend-period .period-btn')
+    .forEach(b => b.classList.toggle('is-active', b === btn));
+  loadNationalTrend();
+});
 
 // ── Refresh (manual) ──────────────────────────────────────────────────────────
 refreshBtn.addEventListener('click', async () => {

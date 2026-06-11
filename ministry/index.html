@@ -178,9 +178,47 @@
         </div>
       </section>
 
+      <!-- المخططات الوطنية -->
+      <section class="section-card" id="charts-card">
+        <div class="section-header">
+          <h2>الاتجاه الوطني</h2>
+          <div class="period-group" id="trend-period">
+            <button class="period-btn" data-days="7">٧ أيام</button>
+            <button class="period-btn is-active" data-days="14">١٤ يوماً</button>
+            <button class="period-btn" data-days="30">٣٠ يوماً</button>
+          </div>
+        </div>
+        <div class="charts-grid">
+          <div class="chart-box">
+            <h3 class="chart-title">نسبة الحضور الوطنية يومياً ٪</h3>
+            <div class="chart-canvas-wrap"><canvas id="nat-rate-chart"></canvas></div>
+          </div>
+          <div class="chart-box">
+            <h3 class="chart-title">ترتيب المحافظات اليوم (نسبة الحضور ٪)</h3>
+            <div class="chart-canvas-wrap chart-canvas-wrap--tall"><canvas id="gov-rank-chart"></canvas></div>
+          </div>
+        </div>
+        <p id="trend-empty" class="table-empty hidden">شغّل القسم 7 من database-setup.sql لتفعيل مخطط الاتجاه.</p>
+      </section>
+
+      <!-- التعمق: محافظة ← مديرية ← مدرسة -->
+      <section class="section-card hidden" id="drill-card">
+        <div class="section-header">
+          <nav class="breadcrumb" id="drill-breadcrumb"></nav>
+          <button id="drill-close" class="btn btn-icon" title="إغلاق">✕</button>
+        </div>
+        <div class="table-wrapper">
+          <table id="drill-table">
+            <thead id="drill-thead"></thead>
+            <tbody id="drill-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
     </main>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script type="module" src="script.js"></script>
 </body>
 </html>
