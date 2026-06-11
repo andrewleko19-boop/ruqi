@@ -336,7 +336,7 @@ function markReportSynced(localId) {
 async function getReportsForDirectorate(directorateId) {
   const { data, error } = await db
     .from("emergency_reports")
-    .select("id, type, description, status, receipt_number, created_at, school:schools!inner(id, name)")
+    .select("id, type, description, severity, media_urls, status, receipt_number, created_at, school:schools!inner(id, name)")
     .eq("schools.directorate_id", directorateId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -501,6 +501,21 @@ async function getSchoolsAttendanceStatus(directorateId, date) {
     };
   }
   return result;
+}
+
+// التزام آخر N يوم لكل مدرسة في مديرية المستخدم الحالي
+// returns [{ school_id, days_reported, reported_today }]
+async function getDirectorateCompliance(days = 30) {
+  const { data, error } = await db.rpc('get_directorate_compliance', { p_days: days });
+  if (error) throw error;
+  return data || [];
+}
+
+// تذكير مدراء مدرسة لم تُرسل الحضور — يعيد عدد من أُرسل إليهم (0 = أُرسل مؤخراً)
+async function sendAttendanceReminder(schoolId) {
+  const { data, error } = await db.rpc('send_attendance_reminder', { p_school_id: schoolId });
+  if (error) throw error;
+  return data ?? 0;
 }
 
 // ─── Ministry ─────────────────────────────────────────────────────────────────
@@ -2292,6 +2307,8 @@ window.NSAMS_DB = {
   updateReportStatus,
   getTodaySummary,
   getSchoolsAttendanceStatus,
+  getDirectorateCompliance,
+  sendAttendanceReminder,
 
   // Ministry
   getMinistryAttendanceSummary,

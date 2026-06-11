@@ -8,6 +8,9 @@ const {
   getSchoolsAttendanceStatus,
   getReportsForDirectorate,
   updateReportStatus,
+  getSchools,
+  getDirectorateCompliance,
+  sendAttendanceReminder,
   localDateISO,
 } = window.NSAMS_DB;
 
@@ -22,20 +25,36 @@ function todayLocalISO() {
 //  State
 // ══════════════════════════════════════════════
 let map;
-let markersLayer = {};
-let allReports   = [];
+let markersLayer      = {};
+let allReports        = [];
+let knownReportIds    = null;   // null = first load, no flash
+let flashIds          = new Set();
+let complianceRows    = [];     // للتصدير CSV
+let lightboxState     = { urls: [], idx: 0 };
 let refreshTimer;
 let countdownInterval;
-let currentUser  = null;
+let currentUser = null;
 const REFRESH_INTERVAL = 30;
 
-// Arabic labels for the map status colours returned by getSchoolsAttendanceStatus.
+// Arabic labels for map status colours
 const MAP_STATUS_LABELS = {
   green:   'طبيعي',
   amber:   'تغطية ناقصة',
   red:     'حضور منخفض / طارئ',
   no_data: 'لم تُسجّل اليوم',
 };
+
+// Severity labels (same scale as school portal sev-btn 1–5)
+const SEV = {
+  1: { label: 'منخفض', cls: 'sev-1' },
+  2: { label: 'متوسط', cls: 'sev-2' },
+  3: { label: 'مرتفع', cls: 'sev-3' },
+  4: { label: 'شديد',  cls: 'sev-4' },
+  5: { label: 'حرج',   cls: 'sev-5' },
+};
+
+// SLA thresholds in hours: sev≥4 = high, sev3 = mid, sev≤2 = low
+const SLA_HOURS = { high: 24, mid: 48, low: 72 };
 
 // ══════════════════════════════════════════════
 //  Bootstrap
@@ -122,6 +141,9 @@ function showApp(session) {
   setupFilters();
   setupManualRefresh();
   setupReportActionDelegation();
+  setupComplianceActions();
+  setupCSVExports();
+  setupLightbox();
 }
 
 // ══════════════════════════════════════════════
@@ -172,60 +194,47 @@ function makeMarkerIcon(color) {
   });
 }
 
-async function loadMap() {
-  if (!currentUser?.directorateId) return;
-  try {
-    const today     = todayLocalISO();
-    const statusMap = await getSchoolsAttendanceStatus(currentUser.directorateId, today);
-    // statusMap[schoolId] = { color, reason, attendanceRate, coverageRate, enrolled }
+function renderMap(schools, statusMap) {
+  if (!schools || schools.length === 0) return;
 
-    const { getSchools } = window.NSAMS_DB;
-    const schools = await getSchools(currentUser.directorateId);
-    if (!schools || schools.length === 0) return;
+  const currentIds = new Set(schools.map(s => s.id));
+  for (const [id, marker] of Object.entries(markersLayer)) {
+    if (!currentIds.has(id)) { map.removeLayer(marker); delete markersLayer[id]; }
+  }
 
-    const currentIds = new Set(schools.map(s => s.id));
-    for (const [id, marker] of Object.entries(markersLayer)) {
-      if (!currentIds.has(id)) { map.removeLayer(marker); delete markersLayer[id]; }
+  for (const school of schools) {
+    const info  = statusMap[school.id] || { color: 'no_data', reason: 'no_data', attendanceRate: null, coverageRate: null, enrolled: 0 };
+    const color = info.color;
+    const icon  = makeMarkerIcon(color);
+    const lat   = school.lat;
+    const lng   = school.lng;
+    if (!lat || !lng) continue;
+
+    const statusLabel = MAP_STATUS_LABELS[color] || color;
+
+    let detailRow = '';
+    if (info.reason === 'ok' || info.reason === 'low_coverage' || info.reason === 'low_attendance') {
+      const attTxt = info.attendanceRate !== null ? `${info.attendanceRate}%` : '—';
+      const covTxt = info.coverageRate   !== null ? `${info.coverageRate}%`   : '—';
+      detailRow =
+        `<div class="popup-row"><span>نسبة الحضور</span><span>${attTxt}</span></div>` +
+        `<div class="popup-row"><span>نسبة التغطية</span><span>${covTxt}</span></div>` +
+        `<div class="popup-row"><span>طلاب مُسجّلون اليوم</span><span>${esc(String(info.enrolled))}</span></div>`;
     }
 
-    for (const school of schools) {
-      const info  = statusMap[school.id] || { color: 'no_data', reason: 'no_data', attendanceRate: null, coverageRate: null, enrolled: 0 };
-      const color = info.color;
-      const icon  = makeMarkerIcon(color);
-      const lat   = school.lat;
-      const lng   = school.lng;
-      if (!lat || !lng) continue;
+    const popup = `
+      <div class="popup-school-name">${esc(school.name)}</div>
+      <div class="popup-row"><span>الحالة</span><span>${esc(statusLabel)}</span></div>
+      ${detailRow}`;
 
-      const statusLabel = MAP_STATUS_LABELS[color] || color;
-
-      // سطر تفصيلي يوضّح سبب اللون (يحلّ غموض الأصفر)
-      let detailRow = '';
-      if (info.reason === 'ok' || info.reason === 'low_coverage' || info.reason === 'low_attendance') {
-        const attTxt = info.attendanceRate !== null ? `${info.attendanceRate}%` : '—';
-        const covTxt = info.coverageRate   !== null ? `${info.coverageRate}%`   : '—';
-        detailRow =
-          `<div class="popup-row"><span>نسبة الحضور</span><span>${attTxt}</span></div>` +
-          `<div class="popup-row"><span>نسبة التغطية</span><span>${covTxt}</span></div>` +
-          `<div class="popup-row"><span>طلاب مُسجّلون اليوم</span><span>${esc(String(info.enrolled))}</span></div>`;
-      }
-
-      const popup = `
-        <div class="popup-school-name">${esc(school.name)}</div>
-        <div class="popup-row"><span>الحالة</span><span>${esc(statusLabel)}</span></div>
-        ${detailRow}`;
-
-      if (markersLayer[school.id]) {
-        markersLayer[school.id].setIcon(icon);
-        markersLayer[school.id].setPopupContent(popup);
-      } else {
-        markersLayer[school.id] = L.marker([lat, lng], { icon })
-          .bindPopup(popup)
-          .addTo(map);
-      }
+    if (markersLayer[school.id]) {
+      markersLayer[school.id].setIcon(icon);
+      markersLayer[school.id].setPopupContent(popup);
+    } else {
+      markersLayer[school.id] = L.marker([lat, lng], { icon })
+        .bindPopup(popup)
+        .addTo(map);
     }
-  } catch (err) {
-    console.error('[Map] Failed:', err);
-    showToast('خطأ في الخريطة', 'تعذّر تحميل مواقع المدارس.', 'error');
   }
 }
 
@@ -238,22 +247,197 @@ async function loadStats() {
     const summary = await getTodaySummary(currentUser.directorateId);
     if (!summary) return;
 
-    const set = (id, val) => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = val ?? '—';
-    };
-
-    set('stat-teachers-val', summary.totalTeachersPresent);
-    set('stat-admins-val',   summary.totalAdminsPresent ?? 0);
-    set('stat-workers-val',  summary.totalWorkersPresent ?? 0);
-    set('stat-students-val', summary.totalStudentsPresent);
-    set('stat-schools-val',  summary.reportingSchoolsCount ?? 0);
-    set('stat-reports-val', summary.topPendingReports?.length ?? 0);
-    set('stat-reports-sub', 'التقارير النشطة');
+    animateStatEl('stat-teachers-val', summary.totalTeachersPresent);
+    animateStatEl('stat-admins-val',   summary.totalAdminsPresent ?? 0);
+    animateStatEl('stat-workers-val',  summary.totalWorkersPresent ?? 0);
+    animateStatEl('stat-students-val', summary.totalStudentsPresent);
+    animateStatEl('stat-schools-val',  summary.reportingSchoolsCount ?? 0);
+    animateStatEl('stat-reports-val',  summary.topPendingReports?.length ?? 0);
+    const subEl = document.getElementById('stat-reports-sub');
+    if (subEl) subEl.textContent = 'التقارير النشطة';
   } catch (err) {
     console.error('[Stats] Failed:', err);
     showToast('خطأ في الإحصائيات', 'تعذّر تحميل الملخص.', 'error');
   }
+}
+
+// ══════════════════════════════════════════════
+//  Map + Compliance combined load
+// ══════════════════════════════════════════════
+async function loadMapAndCompliance() {
+  if (!currentUser?.directorateId) return;
+
+  try {
+    const today = todayLocalISO();
+    const [schools, statusMap] = await Promise.all([
+      getSchools(currentUser.directorateId),
+      getSchoolsAttendanceStatus(currentUser.directorateId, today),
+    ]);
+    renderMap(schools, statusMap);
+
+    // لوحة الالتزام — try/catch مستقل لئلا يُسقط فشل RPC الخريطةَ
+    try {
+      const compliance = await getDirectorateCompliance(30);
+      renderCompliance(schools, compliance);
+    } catch (compErr) {
+      console.warn('[Compliance] RPC unavailable:', compErr);
+      const tbody = document.getElementById('compliance-tbody');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="empty-state">شغّل القسم 6 من database-setup.sql لتفعيل لوحة الالتزام.</td></tr>';
+      showToast('لوحة الالتزام', 'شغّل القسم 6 من database-setup.sql لتفعيل هذه الميزة.', 'warning');
+    }
+  } catch (err) {
+    console.error('[Map] Failed:', err);
+    showToast('خطأ في الخريطة', 'تعذّر تحميل مواقع المدارس.', 'error');
+  }
+}
+
+// ══════════════════════════════════════════════
+//  Compliance
+// ══════════════════════════════════════════════
+function countWorkingDays(daysBack) {
+  let count = 0;
+  const d = new Date();
+  for (let i = 1; i <= daysBack; i++) {
+    d.setDate(d.getDate() - 1);
+    const dow = d.getDay(); // 0=Sun … 5=Fri 6=Sat
+    if (dow !== 5 && dow !== 6) count++;
+  }
+  return count;
+}
+
+function renderCompliance(schools, compliance) {
+  const byId = Object.fromEntries((compliance || []).map(c => [c.school_id, c]));
+  const workingDays = countWorkingDays(30) || 1;
+
+  const total     = schools.length;
+  const submitted = schools.filter(s => byId[s.id]?.reported_today === true).length;
+  const pct       = total > 0 ? Math.round(submitted / total * 100) : 0;
+
+  // شريط التقدم
+  const countEl = document.getElementById('compliance-count');
+  const totalEl = document.getElementById('compliance-total');
+  const barEl   = document.getElementById('compliance-bar');
+  const pctEl   = document.getElementById('compliance-pct');
+  if (countEl) countEl.textContent = submitted;
+  if (totalEl) totalEl.textContent = total;
+  if (pctEl)   pctEl.textContent   = pct + '%';
+  if (barEl) {
+    barEl.style.width = pct + '%';
+    barEl.className   = 'progress-fill' + (pct >= 90 ? '' : pct >= 60 ? ' yellow' : ' red');
+  }
+
+  // شارات المدارس الصامتة
+  const silent  = schools.filter(s => !byId[s.id]?.reported_today);
+  const silentEl = document.getElementById('silent-schools');
+  if (silentEl) {
+    if (silent.length === 0) {
+      silentEl.innerHTML = '<p class="empty-state" style="padding:10px 18px">جميع المدارس أرسلت حضور اليوم ✓</p>';
+    } else {
+      silentEl.innerHTML = silent.map(s =>
+        `<span class="silent-chip">
+          ${esc(s.name)}
+          <button class="btn btn-warning btn-sm" data-action="remind" data-school="${esc(s.id)}"
+            style="margin-inline-start:4px">تذكير</button>
+        </span>`
+      ).join('');
+    }
+  }
+
+  // جدول الالتزام
+  const rows = schools.map(s => {
+    const c   = byId[s.id];
+    const dr  = c ? c.days_reported : 0;
+    const mp  = Math.min(100, Math.round(dr / workingDays * 100));
+    return { id: s.id, name: s.name, today: !!c?.reported_today, daysReported: dr, monthPct: mp };
+  }).sort((a, b) => {
+    if (a.today !== b.today) return a.today ? 1 : -1;
+    return a.monthPct - b.monthPct;
+  });
+
+  complianceRows = rows;
+
+  const tbody = document.getElementById('compliance-tbody');
+  if (!tbody) return;
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">لا توجد مدارس.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td class="td-primary">${esc(r.name)}</td>
+      <td>
+        ${r.today
+          ? '<span class="badge badge--green">أرسلت</span>'
+          : '<span class="badge badge--amber">لم تُرسل</span>'}
+      </td>
+      <td>${r.daysReported} / ${workingDays}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="bar-mini"><span style="width:${r.monthPct}%;display:block;height:100%;background:var(--blue);border-radius:999px"></span></span>
+          <span style="font-size:.82rem">${r.monthPct}%</span>
+        </div>
+      </td>
+      <td>
+        ${!r.today
+          ? `<button class="btn btn-warning btn-sm" data-action="remind" data-school="${esc(r.id)}">تذكير</button>`
+          : ''}
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ══════════════════════════════════════════════
+//  Compliance actions (remind / remind-all)
+// ══════════════════════════════════════════════
+function setupComplianceActions() {
+  const panel = document.getElementById('compliance-panel');
+  if (!panel) return;
+
+  panel.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-action="remind"][data-school]');
+    if (!btn) return;
+    await handleRemind(btn.dataset.school, btn);
+  });
+
+  document.getElementById('remind-all-btn')?.addEventListener('click', remindAllSilent);
+}
+
+async function handleRemind(schoolId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const n = await sendAttendanceReminder(schoolId);
+    if (n > 0) {
+      showToast('تذكير مُرسَل', `أُرسل التذكير إلى ${n} مدير.`, 'success');
+      if (btn) { btn.textContent = 'تم ✓'; }
+    } else {
+      showToast('تذكير مسبق', 'أُرسل تذكير إلى هذه المدرسة خلال آخر 30 دقيقة.', 'info');
+      if (btn) { btn.disabled = false; btn.textContent = 'تذكير'; }
+    }
+  } catch (err) {
+    console.error('[Remind] Failed:', err);
+    showToast('خطأ في التذكير', err.message || 'تعذّر إرسال التذكير.', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'تذكير'; }
+  }
+}
+
+async function remindAllSilent() {
+  const silent = complianceRows.filter(r => !r.today);
+  if (silent.length === 0) {
+    showToast('لا يوجد متأخر', 'جميع المدارس أرسلت حضور اليوم.', 'info');
+    return;
+  }
+  const btn = document.getElementById('remind-all-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '…جاري الإرسال'; }
+  let sent = 0;
+  for (const row of silent) {
+    try {
+      const n = await sendAttendanceReminder(row.id);
+      if (n > 0) sent++;
+    } catch (_) { /* تجاهل — التالية */ }
+  }
+  showToast('اكتمل التذكير', `أُرسل التذكير لـ ${sent} من ${silent.length} مدرسة.`, 'success');
+  if (btn) { btn.disabled = false; btn.textContent = 'تذكير جميع المتأخرة'; }
 }
 
 // ══════════════════════════════════════════════
@@ -262,43 +446,89 @@ async function loadStats() {
 async function loadReports() {
   if (!currentUser?.directorateId) return;
   try {
-    allReports = await getReportsForDirectorate(currentUser.directorateId) || [];
+    const fresh = await getReportsForDirectorate(currentUser.directorateId) || [];
+
+    // تتبع الصفوف الجديدة للوميض
+    const freshIds = new Set(fresh.map(r => r.id));
+    flashIds = knownReportIds
+      ? new Set([...freshIds].filter(id => !knownReportIds.has(id)))
+      : new Set();
+    knownReportIds = freshIds;
+
+    allReports = fresh;
     renderReportsTable();
     renderPendingList();
   } catch (err) {
     console.error('[Reports] Failed:', err);
     showToast('خطأ في التقارير', 'تعذّر تحميل التقارير.', 'error');
     document.getElementById('reports-tbody').innerHTML =
-      '<tr><td colspan="6" class="empty-state">تعذّر تحميل التقارير.</td></tr>';
+      '<tr><td colspan="7" class="empty-state">تعذّر تحميل التقارير.</td></tr>';
   }
 }
 
-function renderReportsTable() {
-  const statusFilter = document.getElementById('filter-status').value;
-  const typeFilter   = document.getElementById('filter-type').value;
+// مساعدات الخطورة والصور والـ SLA
+function sevBadge(sev) {
+  const s = SEV[sev];
+  return s
+    ? `<span class="sev-badge ${s.cls}">${sev} · ${s.label}</span>`
+    : '<span class="sev-badge sev-none">—</span>';
+}
 
-  const filtered = allReports.filter(r => {
-    if (statusFilter && r.status !== statusFilter) return false;
-    if (typeFilter   && r.type   !== typeFilter)   return false;
+function isOverdue(r) {
+  if (r.status === 'resolved') return false;
+  const h = (Date.now() - new Date(r.created_at).getTime()) / 3_600_000;
+  const limit = (r.severity >= 4) ? SLA_HOURS.high
+              : (r.severity === 3) ? SLA_HOURS.mid
+              : SLA_HOURS.low;
+  return h > limit;
+}
+
+function photoBtn(r) {
+  const n = r.media_urls?.length || 0;
+  if (!n) return '';
+  return `<button class="btn btn-ghost btn-sm" data-action="photos" data-id="${esc(r.id)}" style="margin-inline-end:4px">📷 ${n}</button>`;
+}
+
+function getFilteredReports() {
+  const statusFilter   = document.getElementById('filter-status')?.value   || '';
+  const typeFilter     = document.getElementById('filter-type')?.value     || '';
+  const severityFilter = document.getElementById('filter-severity')?.value || '';
+
+  return allReports.filter(r => {
+    if (statusFilter   && r.status          !== statusFilter)       return false;
+    if (typeFilter     && r.type            !== typeFilter)         return false;
+    if (severityFilter && String(r.severity ?? '') !== severityFilter) return false;
     return true;
   });
+}
 
-  const tbody = document.getElementById('reports-tbody');
+function renderReportsTable() {
+  const filtered = getFilteredReports();
+  const tbody    = document.getElementById('reports-tbody');
+
   if (filtered.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="6" class="empty-state">لا توجد تقارير مطابقة للفلاتر الحالية.</td></tr>';
+      '<tr><td colspan="7" class="empty-state">لا توجد تقارير مطابقة للفلاتر الحالية.</td></tr>';
     return;
   }
 
-  tbody.innerHTML = filtered.map(r => `
-    <tr data-id="${esc(r.id)}">
+  tbody.innerHTML = filtered.map(r => {
+    const overdue    = isOverdue(r);
+    const isNew      = flashIds.has(r.id);
+    const rowClass   = [overdue ? 'row-overdue' : '', isNew ? 'row-flash' : ''].filter(Boolean).join(' ');
+    const overdueTag = overdue ? '<span class="overdue-tag">متأخر</span>' : '';
+
+    return `
+    <tr data-id="${esc(r.id)}"${rowClass ? ` class="${rowClass}"` : ''}>
       <td class="td-primary">${esc(r.schoolName ?? '—')}</td>
       <td><span class="type-badge type-${esc(r.type)}">${esc(formatType(r.type))}</span></td>
+      <td>${sevBadge(r.severity)}</td>
       <td class="td-desc" title="${esc(r.description ?? '')}">${esc(r.description ?? '—')}</td>
       <td>${esc(formatDate(r.created_at))}</td>
-      <td><span class="status-badge status-${esc(r.status)}">${esc(formatStatus(r.status))}</span></td>
+      <td><span class="status-badge status-${esc(r.status)}">${esc(formatStatus(r.status))}</span>${overdueTag}</td>
       <td>
         <div class="table-actions">
+          ${photoBtn(r)}
           ${r.status === 'open'
             ? `<button class="btn btn-warning btn-sm" data-action="acknowledged" data-id="${esc(r.id)}">مراجعة</button>`
             : ''}
@@ -307,12 +537,15 @@ function renderReportsTable() {
             : `<button class="btn btn-ghost btn-sm" disabled>تم الحل</button>`}
         </div>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 function renderPendingList() {
-  const pending = allReports.filter(r => r.status === 'open' || r.status === 'acknowledged');
+  const pending = allReports
+    .filter(r => r.status === 'open' || r.status === 'acknowledged')
+    .sort((a, b) => (b.severity ?? 0) - (a.severity ?? 0) || new Date(a.created_at) - new Date(b.created_at));
+
   const countEl = document.getElementById('pending-count');
   countEl.textContent = pending.length;
   countEl.className   = `badge ${pending.length > 0 ? 'badge--amber' : 'badge--green'}`;
@@ -323,20 +556,31 @@ function renderPendingList() {
     return;
   }
 
-  container.innerHTML = pending.map(r => `
-    <div class="pending-card" data-id="${esc(r.id)}">
-      <div class="pending-school">${esc(r.schoolName ?? '—')}</div>
+  container.innerHTML = pending.map(r => {
+    const overdue   = isOverdue(r);
+    const isNew     = flashIds.has(r.id);
+    const cardClass = ['pending-card', overdue ? 'row-overdue' : '', isNew ? 'row-flash' : ''].filter(Boolean).join(' ');
+    const overdueTag = overdue ? '<span class="overdue-tag">متأخر</span>' : '';
+
+    return `
+    <div class="${cardClass}" data-id="${esc(r.id)}">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span class="pending-school">${esc(r.schoolName ?? '—')}</span>
+        ${sevBadge(r.severity)}
+        ${overdueTag}
+      </div>
       <span class="type-badge type-${esc(r.type)}">${esc(formatType(r.type))}</span>
       <div class="pending-desc">${esc(r.description ?? '—')}</div>
       <div class="pending-time">${esc(formatDate(r.created_at))}</div>
       <div class="pending-actions">
+        ${photoBtn(r)}
         ${r.status === 'open'
           ? `<button class="btn btn-warning btn-sm" data-action="acknowledged" data-id="${esc(r.id)}">تمت المراجعة</button>`
           : ''}
         <button class="btn btn-success btn-sm" data-action="resolved" data-id="${esc(r.id)}">حل</button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 async function handleStatusUpdate(reportId, newStatus) {
@@ -354,28 +598,146 @@ async function handleStatusUpdate(reportId, newStatus) {
   }
 }
 
-// Event delegation: both the table and the pending list use [data-action]+[data-id]
-// buttons instead of inline onclick (safer, no HTML injection via id).
 function setupReportActionDelegation() {
   const handler = (e) => {
     const btn = e.target.closest('button[data-action][data-id]');
     if (!btn) return;
-    handleStatusUpdate(btn.dataset.id, btn.dataset.action);
+    const { action, id } = btn.dataset;
+    if (action === 'photos') {
+      const r = allReports.find(x => x.id === id);
+      if (r?.media_urls?.length) openLightbox(r.media_urls, 0);
+      return;
+    }
+    handleStatusUpdate(id, action);
   };
   document.getElementById('reports-tbody').addEventListener('click', handler);
   document.getElementById('pending-list').addEventListener('click', handler);
 }
 
 function setupFilters() {
-  document.getElementById('filter-status').addEventListener('change', renderReportsTable);
-  document.getElementById('filter-type').addEventListener('change', renderReportsTable);
+  document.getElementById('filter-status')?.addEventListener('change', renderReportsTable);
+  document.getElementById('filter-type')?.addEventListener('change', renderReportsTable);
+  document.getElementById('filter-severity')?.addEventListener('change', renderReportsTable);
+}
+
+// ══════════════════════════════════════════════
+//  Lightbox
+// ══════════════════════════════════════════════
+function setupLightbox() {
+  const lb      = document.getElementById('lightbox');
+  const closeBtn = document.getElementById('lightbox-close');
+  const prevBtn  = document.getElementById('lightbox-prev');
+  const nextBtn  = document.getElementById('lightbox-next');
+  if (!lb) return;
+
+  closeBtn?.addEventListener('click', closeLightbox);
+  lb.addEventListener('click', e => { if (e.target === lb) closeLightbox(); });
+
+  // RTL: ArrowRight = السابق، ArrowLeft = التالي
+  const keyHandler = (e) => {
+    if (lb.hidden) return;
+    if (e.key === 'Escape')      { closeLightbox(); return; }
+    if (e.key === 'ArrowRight')  { moveLightbox(-1); return; }
+    if (e.key === 'ArrowLeft')   { moveLightbox(+1); return; }
+  };
+  lb.addEventListener('keydown', keyHandler, false);
+
+  prevBtn?.addEventListener('click', () => moveLightbox(-1));
+  nextBtn?.addEventListener('click', () => moveLightbox(+1));
+}
+
+function openLightbox(urls, idx) {
+  lightboxState = { urls, idx };
+  const lb = document.getElementById('lightbox');
+  if (!lb) return;
+  lb.hidden = false;
+  lb.focus?.();
+  updateLightboxFrame();
+}
+
+function closeLightbox() {
+  const lb = document.getElementById('lightbox');
+  if (lb) lb.hidden = true;
+}
+
+function moveLightbox(delta) {
+  const { urls, idx } = lightboxState;
+  const newIdx = (idx + delta + urls.length) % urls.length;
+  lightboxState.idx = newIdx;
+  updateLightboxFrame();
+}
+
+function updateLightboxFrame() {
+  const { urls, idx } = lightboxState;
+  const img     = document.getElementById('lightbox-img');
+  const counter = document.getElementById('lightbox-counter');
+  const prev    = document.getElementById('lightbox-prev');
+  const next    = document.getElementById('lightbox-next');
+  if (img)     img.src = urls[idx];
+  if (counter) counter.textContent = `${idx + 1} / ${urls.length}`;
+  const single = urls.length <= 1;
+  if (prev) prev.style.visibility = single ? 'hidden' : '';
+  if (next) next.style.visibility = single ? 'hidden' : '';
+}
+
+// ══════════════════════════════════════════════
+//  CSV exports
+// ══════════════════════════════════════════════
+function downloadCSV(filename, rows) {
+  const escCell = v => `"${String(v ?? '').replace(/"/g, '""').replace(/\r?\n/g, ' ')}"`;
+  const csv = rows.map(r => r.map(escCell).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportReportsCSV() {
+  const filtered = getFilteredReports();
+  if (!filtered.length) { showToast('تصدير', 'لا توجد تقارير لتصديرها.', 'info'); return; }
+
+  const headers = ['المدرسة', 'النوع', 'الخطورة', 'الوصف', 'الحالة', 'رقم الإيصال', 'تاريخ الإرسال', 'عدد المرفقات'];
+  const dataRows = filtered.map(r => [
+    r.schoolName ?? '',
+    formatType(r.type),
+    r.severity != null ? `${r.severity} - ${SEV[r.severity]?.label ?? ''}` : '—',
+    r.description ?? '',
+    formatStatus(r.status),
+    r.receipt_number ?? '',
+    r.created_at ? new Date(r.created_at).toLocaleString('en-GB') : '',
+    r.media_urls?.length ?? 0,
+  ]);
+
+  downloadCSV(`nsams_reports_${todayLocalISO()}.csv`, [headers, ...dataRows]);
+}
+
+function exportComplianceCSV() {
+  if (!complianceRows.length) { showToast('تصدير', 'بيانات الالتزام غير متوفرة.', 'info'); return; }
+
+  const workingDays = countWorkingDays(30) || 1;
+  const headers     = ['المدرسة', 'أرسلت اليوم', 'أيام مُرسلة', 'أيام العمل (30ي)', 'نسبة الالتزام %'];
+  const dataRows    = complianceRows.map(r => [
+    r.name,
+    r.today ? 'نعم' : 'لا',
+    r.daysReported,
+    workingDays,
+    r.monthPct,
+  ]);
+
+  downloadCSV(`nsams_compliance_${todayLocalISO()}.csv`, [headers, ...dataRows]);
+}
+
+function setupCSVExports() {
+  document.getElementById('export-reports-btn')?.addEventListener('click', exportReportsCSV);
+  document.getElementById('export-compliance-btn')?.addEventListener('click', exportComplianceCSV);
 }
 
 // ══════════════════════════════════════════════
 //  Orchestrator
 // ══════════════════════════════════════════════
 async function loadAll() {
-  await Promise.allSettled([loadStats(), loadMap(), loadReports()]);
+  await Promise.allSettled([loadStats(), loadMapAndCompliance(), loadReports()]);
 }
 
 // ══════════════════════════════════════════════
@@ -394,6 +756,7 @@ function startAutoRefresh() {
 
   refreshTimer = setInterval(async () => {
     remaining = REFRESH_INTERVAL;
+    if (document.visibilityState !== 'visible') return;
     await loadAll();
   }, REFRESH_INTERVAL * 1000);
 }
@@ -404,7 +767,7 @@ function clearAutoRefresh() {
 }
 
 function setupManualRefresh() {
-  document.getElementById('manual-refresh-btn').addEventListener('click', async () => {
+  document.getElementById('manual-refresh-btn')?.addEventListener('click', async () => {
     clearAutoRefresh();
     await loadAll();
     const el = document.getElementById('countdown-val');
@@ -441,23 +804,19 @@ function capitalize(str) {
 }
 
 function formatStatus(status) {
-  const map = {
-    open:         'مفتوح',
-    acknowledged: 'تمت المراجعة',
-    resolved:     'تم الحل',
-  };
+  const map = { open: 'مفتوح', acknowledged: 'تمت المراجعة', resolved: 'تم الحل' };
   return map[status] ?? capitalize(status ?? '');
 }
 
 function formatType(type) {
   const types = {
-  security_threat:      'تهديد أمني',
-  infrastructure_damage:'أضرار في البنية التحتية',
-  health_emergency:     'طارئ صحي',
-  natural_disaster:     'كارثة طبيعية',
-  teacher_shortage:     'نقص في الكوادر التدريسية',
-  other:                'أخرى',
-};
+    security_threat:       'تهديد أمني',
+    infrastructure_damage: 'أضرار في البنية التحتية',
+    health_emergency:      'طارئ صحي',
+    natural_disaster:      'كارثة طبيعية',
+    teacher_shortage:      'نقص في الكوادر التدريسية',
+    other:                 'أخرى',
+  };
   return types[type] ?? capitalize(type ?? '');
 }
 
@@ -467,6 +826,26 @@ function formatDate(iso) {
     day: '2-digit', month: 'short', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   });
+}
+
+// عدّاد متحرك لقيمة رقمية (لا يُحرِّك النص أو القيم المتساوية)
+function animateValue(el, target, dur = 600) {
+  if (!el) return;
+  if (!Number.isFinite(target)) { el.textContent = target ?? '—'; return; }
+  const from = parseInt(String(el.textContent).replace(/[^\d]/g, ''), 10);
+  if (!Number.isFinite(from) || from === target) { el.textContent = target; return; }
+  const t0 = performance.now();
+  (function tick(t) {
+    const k = Math.min(1, (t - t0) / dur);
+    const e = 1 - Math.pow(1 - k, 3);
+    el.textContent = Math.round(from + (target - from) * e);
+    if (k < 1) requestAnimationFrame(tick);
+  })(t0);
+}
+
+function animateStatEl(id, value) {
+  const el = document.getElementById(id);
+  if (el) animateValue(el, value);
 }
 
 // ══════════════════════════════════════════════
@@ -519,9 +898,9 @@ async function loadDirNotifList() {
     }
     list.innerHTML = items.map(n => {
       const diff = Date.now() - new Date(n.created_at).getTime();
-      const m = Math.floor(diff / 60000);
-      const ago = m < 1 ? 'الآن' : m < 60 ? `منذ ${m} دقيقة` : m < 1440 ? `منذ ${Math.floor(m/60)} ساعة` : `منذ ${Math.floor(m/1440)} يوم`;
-      const bg = !n.read_at ? 'background:rgba(11,43,94,.06);' : '';
+      const m    = Math.floor(diff / 60000);
+      const ago  = m < 1 ? 'الآن' : m < 60 ? `منذ ${m} دقيقة` : m < 1440 ? `منذ ${Math.floor(m/60)} ساعة` : `منذ ${Math.floor(m/1440)} يوم`;
+      const bg   = !n.read_at ? 'background:rgba(11,43,94,.06);' : '';
       return `<li style="${bg}padding:12px 16px;border-bottom:1px solid #E2E8F0;direction:rtl">
         <div style="font-weight:600;font-size:.9rem">${n.title}</div>
         ${n.body ? `<div style="font-size:.82rem;color:#64748B;margin-top:2px">${n.body}</div>` : ''}
@@ -532,17 +911,17 @@ async function loadDirNotifList() {
 }
 
 function initNotificationsDir(userId) {
-  const modal   = document.getElementById('modal-notif');
-  const btnOpen = document.getElementById('btn-notif');
+  const modal    = document.getElementById('modal-notif');
+  const btnOpen  = document.getElementById('btn-notif');
 
-  if (btnOpen) btnOpen.addEventListener('click', () => {
+  btnOpen?.addEventListener('click', () => {
     if (modal) { modal.style.display = 'flex'; loadDirNotifList(); }
   });
-  const btnClose = document.getElementById('btn-notif-close');
-  if (btnClose) btnClose.addEventListener('click', () => { if (modal) modal.style.display = 'none'; });
-  if (modal)   modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
-  const btnReadAll = document.getElementById('btn-notif-read-all');
-  if (btnReadAll) btnReadAll.addEventListener('click', async () => {
+  document.getElementById('btn-notif-close')?.addEventListener('click', () => {
+    if (modal) modal.style.display = 'none';
+  });
+  modal?.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+  document.getElementById('btn-notif-read-all')?.addEventListener('click', async () => {
     await window.NSAMS_DB.markAllNotificationsRead().catch(() => {});
     updateDirNotifBadge(0);
     loadDirNotifList();
