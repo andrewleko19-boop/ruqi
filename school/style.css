@@ -195,7 +195,9 @@ ul { list-style: none; }
 .field-input:focus {
   outline: none;
   border-color: var(--clr-primary-int);
-  background: #fff;
+  /* background-color (NOT the shorthand): the shorthand resets
+     background-repeat/size and makes the select chevron tile on focus. */
+  background-color: #fff;
   box-shadow: 0 0 0 3px rgba(30,74,122,.15);
 }
 
@@ -217,8 +219,12 @@ select.field-input {
   padding-right: 12px;
 }
 select.field-input:focus {
-  /* Chevron turns brand colour on focus. */
+  /* Chevron turns brand colour on focus. Longhands re-asserted so no
+     shorthand `background:` elsewhere can make the chevron tile. */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%231E4A7A' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 12px center;
+  background-size: 16px 16px;
 }
 /* The OS popup uses these on most engines (closed-box option text fallback). */
 select.field-input option {
