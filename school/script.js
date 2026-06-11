@@ -2434,6 +2434,16 @@ btnSaveGrace.addEventListener('click', async () => {
 let _staffLoaded = false;
 let _staffData   = { teachers: [], admins: [], workers: [] };
 let _staffEdit   = null;  // { kind, refId, name, record } currently being edited
+let _rosterAll   = [];
+
+// Refs — roster card
+const rosterSearchInp   = el('roster-search');
+const rosterCounts      = el('roster-counts');
+const rosterLoading     = el('roster-loading');
+const rosterListEl      = el('roster-list');
+const rosterErrorEl     = el('roster-error');
+const btnRefreshRoster  = el('btn-refresh-roster');
+const rosterRefreshIcon = el('roster-refresh-icon');
 
 // Refs — work-start + register + roster
 const inWorkStart       = el('in-work-start');
@@ -2488,8 +2498,75 @@ async function initStaffTab() {
   _staffLoaded = true;
   if (inWorkStart) inWorkStart.value = staffWorkStart() ? String(staffWorkStart()).slice(0, 5) : '';
   populateIdentityCard();
-  await Promise.all([loadStaffAttendance(), loadPersonnelRoster(), loadStaffCredentials()]);
+  await Promise.all([loadRosterCard(), loadStaffAttendance(), loadPersonnelRoster(), loadStaffCredentials()]);
 }
+
+// ── Roster card (الكوادر المدرسية) ─────────────────────────────────────────
+const ROSTER_KIND_AR = { teacher: 'معلم', admin: 'إداري', worker: 'عامل' };
+
+async function loadRosterCard() {
+  if (!S.school?.id) return;
+  show(rosterLoading); hide(rosterListEl); hide(rosterErrorEl);
+  if (rosterRefreshIcon) rosterRefreshIcon.classList.add('syncing');
+  try {
+    _rosterAll = await window.NSAMS_DB.getFullStaffRoster(S.school.id);
+    renderRoster(rosterSearchInp ? rosterSearchInp.value : '');
+    hide(rosterLoading); show(rosterListEl);
+  } catch (err) {
+    console.error('[NSAMS] loadRosterCard', err);
+    hide(rosterLoading);
+    if (rosterErrorEl) { rosterErrorEl.textContent = 'تعذّر تحميل الكوادر.'; show(rosterErrorEl); }
+  } finally {
+    if (rosterRefreshIcon) rosterRefreshIcon.classList.remove('syncing');
+  }
+}
+
+function renderRoster(query) {
+  const q = (query ?? '').trim().toLowerCase();
+  const filtered = q
+    ? _rosterAll.filter(m =>
+        m.fullName.toLowerCase().includes(q) ||
+        (m.username && m.username.toLowerCase().includes(q))
+      )
+    : _rosterAll;
+
+  const teachers = filtered.filter(m => m.kind === 'teacher');
+  const admins   = filtered.filter(m => m.kind === 'admin');
+  const workers  = filtered.filter(m => m.kind === 'worker');
+
+  if (rosterCounts) {
+    const t = _rosterAll.filter(m => m.kind === 'teacher').length;
+    const a = _rosterAll.filter(m => m.kind === 'admin').length;
+    const w = _rosterAll.filter(m => m.kind === 'worker').length;
+    rosterCounts.textContent = `${t} معلم · ${a} إداري · ${w} عامل`;
+  }
+
+  const buildGroup = (label, list) => {
+    if (!list.length) return '';
+    return (
+      `<li class="roster-group-lbl">${label}</li>` +
+      list.map(m =>
+        `<li class="roster-item">` +
+          `<span class="roster-kind roster-kind-${m.kind}">${ROSTER_KIND_AR[m.kind] || ''}</span>` +
+          `<span class="roster-name">${escapeHtml(m.fullName)}</span>` +
+          (m.username ? `<span class="roster-username">${escapeHtml(m.username)}</span>` : '') +
+        `</li>`
+      ).join('')
+    );
+  };
+
+  const html = buildGroup('المعلمون', teachers) +
+               buildGroup('الإداريون', admins) +
+               buildGroup('العمال', workers);
+
+  if (rosterListEl) {
+    rosterListEl.innerHTML = html ||
+      `<li style="padding:24px 16px;text-align:center;color:#94A3B8;font-size:.85rem">لا توجد نتائج.</li>`;
+  }
+}
+
+if (rosterSearchInp) rosterSearchInp.addEventListener('input', () => renderRoster(rosterSearchInp.value));
+if (btnRefreshRoster) btnRefreshRoster.addEventListener('click', () => loadRosterCard());
 
 async function loadStaffAttendance() {
   if (!S.school?.id) return;
@@ -2646,7 +2723,7 @@ async function addPersonnelHandler() {
   try {
     await window.NSAMS_DB.addPersonnel({ schoolId: S.school.id, fullName: name, kind });
     inPersonnelName.value = '';
-    await loadPersonnelRoster();
+    await Promise.all([loadPersonnelRoster(), loadRosterCard()]);
     await loadStaffAttendance();
     toast('تمت الإضافة', 'success');
   } catch (err) {
@@ -2668,7 +2745,7 @@ if (personnelListEl) personnelListEl.addEventListener('click', async (e) => {
   if (!confirm('إزالة هذا الموظف من السجل؟')) return;
   try {
     await window.NSAMS_DB.setPersonnelActive(id, false);
-    await loadPersonnelRoster();
+    await Promise.all([loadPersonnelRoster(), loadRosterCard()]);
     await loadStaffAttendance();
     loadStaffDailyCounts();
   } catch (err) {
@@ -3370,7 +3447,7 @@ el('btn-save-teacher').addEventListener('click', async () => {
       toast('تم إنشاء حساب المعلّم', 'success');
     }
     hide(modalTeacher);
-    await loadStaffCredentials();
+    await Promise.all([loadStaffCredentials(), loadRosterCard()]);
   } catch (err) {
     console.error('[NSAMS] save teacher account', err);
     showTchErr(err.message || 'تعذّر الحفظ.');

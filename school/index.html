@@ -547,6 +547,30 @@
   <!-- ═══ Staff attendance view (دوام الموظفين) ═══════════════════════════════ -->
   <main class="page" id="view-staff" role="tabpanel" aria-labelledby="tab-staff" hidden>
 
+    <!-- Unified staff roster (الكوادر المدرسية) -->
+    <section class="card">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-users"/></svg>
+        <span>الكوادر المدرسية</span>
+        <span id="roster-counts" class="hdr-note"></span>
+        <button class="hdr-btn" id="btn-refresh-roster" aria-label="تحديث" style="margin-inline-start:auto">
+          <svg class="icon icon-sm" id="roster-refresh-icon"><use href="#ic-refresh"/></svg>
+        </button>
+      </div>
+      <div style="padding:8px 12px 0">
+        <input type="search" id="roster-search" class="field-input"
+               placeholder="بحث بالاسم أو اسم المستخدم…" maxlength="80" />
+      </div>
+      <div class="card-body" style="padding:0;margin-top:8px">
+        <div id="roster-loading" style="padding:16px 14px">
+          <div style="height:13px;border-radius:6px;background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);background-size:200% 100%;animation:shimmer 1.4s ease-in-out infinite;margin-bottom:10px"></div>
+          <div style="height:13px;width:70%;border-radius:6px;background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);background-size:200% 100%;animation:shimmer 1.4s ease-in-out infinite"></div>
+        </div>
+        <div id="roster-error" class="msg msg-error" hidden style="margin:12px 14px"></div>
+        <ul id="roster-list" class="roster-list" hidden role="list"></ul>
+      </div>
+    </section>
+
     <!-- Work-start time (drives the lateness calc) -->
     <section class="card">
       <div class="card-hdr">

@@ -2352,6 +2352,37 @@ async function registerPushSubscription() {
   }
 }
 
+// Unified roster: all teachers (from users) + admins/workers (from school_personnel),
+// merged with credential usernames for teachers.
+async function getFullStaffRoster(schoolId) {
+  const [teachersRes, credRes, personnel] = await Promise.all([
+    db.from('users')
+      .select('id, full_name')
+      .eq('role', 'teacher')
+      .eq('school_id', schoolId)
+      .order('full_name', { ascending: true }),
+    db.from('staff_credentials')
+      .select('user_id, username')
+      .eq('school_id', schoolId),
+    getSchoolPersonnel(schoolId),
+  ]);
+  if (teachersRes.error) throw teachersRes.error;
+  if (credRes.error)     throw credRes.error;
+
+  const credMap = Object.fromEntries((credRes.data ?? []).map(c => [c.user_id, c.username]));
+
+  const teachers = (teachersRes.data ?? []).map(t => ({
+    id: t.id, fullName: t.full_name, kind: 'teacher',
+    username: credMap[t.id] ?? null,
+  }));
+
+  const others = personnel
+    .filter(p => p.isActive)
+    .map(p => ({ id: p.id, fullName: p.fullName, kind: p.kind, username: null }));
+
+  return [...teachers, ...others];
+}
+
 // ─── Export ───────────────────────────────────────────────────────────────────
 window.NSAMS_DB = {
   // Auth
@@ -2430,6 +2461,7 @@ window.NSAMS_DB = {
   deactivateTeacherAccount,
   deleteTeacherAccount,
   getStaffCredentials,
+  getFullStaffRoster,
 
   // Staff attendance (دوام الموظفين)
   getSchoolPersonnel,

@@ -658,6 +658,37 @@ select.field-input option:disabled { color: var(--clr-text-3); }
 }
 .add-row input { flex: 1; padding: 9px 12px; }
 
+/* ── Staff roster (الكوادر المدرسية) ──────────────────────────────────────── */
+.hdr-note {
+  font-size: .72rem; color: var(--clr-text-3); margin-inline-start: 6px;
+}
+.roster-list { list-style: none; padding: 0; margin: 0; }
+.roster-group-lbl {
+  padding: 6px 14px; font-size: .72rem; font-weight: 700; letter-spacing: .4px;
+  color: var(--clr-text-3); background: var(--clr-bg);
+  border-bottom: 1px solid var(--clr-border-lt);
+}
+.roster-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-bottom: 1px solid var(--clr-border-lt);
+  font-size: .88rem;
+}
+.roster-item:last-child { border-bottom: none; }
+.roster-kind {
+  flex-shrink: 0; padding: 2px 8px; border-radius: 999px;
+  font-size: .68rem; font-weight: 700;
+}
+.roster-kind-teacher { background: var(--clr-primary-dim); color: var(--clr-primary); }
+.roster-kind-admin   { background: #ede9fe; color: #7c3aed; }
+.roster-kind-worker  { background: var(--clr-bg); color: var(--clr-text-3); border: 1px solid var(--clr-border); }
+.roster-name { flex: 1; min-width: 0; font-weight: 600; color: var(--clr-text-1); }
+.roster-username {
+  flex-shrink: 0; font-size: .72rem; font-family: monospace;
+  color: var(--clr-text-2); background: var(--clr-surface);
+  border: 1px solid var(--clr-border-lt); border-radius: var(--r-sm);
+  padding: 2px 6px;
+}
+
 /* ── Staff attendance (دوام الموظفين) ─────────────────────────────────────── */
 .staff-group-label {
   padding: 10px 14px 6px;
