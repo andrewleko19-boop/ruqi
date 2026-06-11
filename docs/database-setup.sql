@@ -798,8 +798,12 @@ create index if not exists idx_school_req_dir_status
 create index if not exists idx_school_req_school
   on public.school_requests(school_id, created_at desc);
 
--- 8.2  RLS
+-- 8.2  RLS + صلاحيات الجدول
 alter table public.school_requests enable row level security;
+
+-- صلاحيات الجدول الصريحة (RLS وحدها لا تكفي في Supabase)
+grant select, insert on public.school_requests to authenticated;
+grant update on public.school_requests to authenticated;
 
 -- مدير المدرسة: يُنشئ ويقرأ طلبات مدرسته فقط
 drop policy if exists school_req_admin_insert on public.school_requests;
@@ -971,3 +975,9 @@ drop trigger if exists trg_notify_dir_new_request on public.school_requests;
 create trigger trg_notify_dir_new_request
   after insert on public.school_requests
   for each row execute function public._notify_dir_new_request();
+
+-- ════════════════════════════════════════════════════════
+--  تنظيف لمرة واحدة: مسح أعداد المعلمين/الطلاب الوهمية
+--  شغّل هذا بعد تشغيل القسم 8 إذا كانت القيم الحالية وهمية.
+-- ════════════════════════════════════════════════════════
+-- update public.schools set total_teachers = null, total_students = null;

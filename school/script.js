@@ -70,8 +70,8 @@ function normaliseSchool(row) {
     id:             row.id,
     name:           row.name,
     directorate_id: row.directorate_id ?? null,
-    totalTeachers:  row.total_teachers ?? 0,
-    totalStudents:  row.total_students ?? 0,
+    totalTeachers:  row.total_teachers ?? null,
+    totalStudents:  row.total_students ?? null,
     // 'primary' (ابتدائي) | 'middle_high' (إعدادي/ثانوي). Drives معلم↔موجه labels.
     // Falls back to 'primary' if the column is missing (e.g. migration not run yet).
     type:          row.school_type ?? 'primary',
@@ -420,19 +420,19 @@ function animateBump(numEl) {
 }
 
 function refreshTeacherUI() {
-  const total   = S.school?.totalTeachers ?? 0;
+  const total   = S.school?.totalTeachers;
   const absent  = S.absentTeachers.length;
-  const present = Math.max(0, total - absent);
+  const present = total != null ? Math.max(0, total - absent) : null;
 
   const prevAbsent  = tAbsent.textContent;
   const prevPresent = tPresent.textContent;
 
-  tTotal.textContent   = total;
+  tTotal.textContent   = total   != null ? total   : '—';
   tAbsent.textContent  = absent;
-  tPresent.textContent = present;
+  tPresent.textContent = present != null ? present : '—';
 
   if (String(absent)  !== prevAbsent)  animateBump(tAbsent);
-  if (String(present) !== prevPresent) animateBump(tPresent);
+  if (present != null && String(present) !== prevPresent) animateBump(tPresent);
 }
 
 // ── Absent teachers list ──────────────────────────────────────────────────────
@@ -3211,8 +3211,8 @@ el('btn-save-counts')?.addEventListener('click', async () => {
       btn.disabled = false; return;
     }
     await NDB.updateSchool(S.school.id, patch);
-    S.school.totalTeachers = patch.totalTeachers ?? 0;
-    S.school.totalStudents = patch.totalStudents ?? 0;
+    S.school.totalTeachers = patch.totalTeachers ?? null;
+    S.school.totalStudents = patch.totalStudents ?? null;
     cacheSchool(S.school.id, S.school);
     // Dismiss banner now that counts are set
     const bannerKey = `nsams_setup_done_${S.school.id}`;
