@@ -2199,7 +2199,7 @@ async function getStaffCredentials(schoolId) {
 // ─── Notifications ───────────────────────────────────────────────────────────
 // VAPID_PUBLIC_KEY: replace with the output of `npx web-push generate-vapid-keys`
 // after generating your keys, also add them to Supabase Edge Function secrets.
-const VAPID_PUBLIC_KEY = 'BExampleVapidPublicKeyReplaceWithYourActualKey_ChangeMe_npx_web-push_generate-vapid-keys';
+const VAPID_PUBLIC_KEY = 'BJPKEruYPsOjR7X34522QTExr7FNilujlkD1SHgR7vWAGFswsWSnFrezgA5yQvP3gQdu_j54t20UFiR9IS4YnUw';
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
