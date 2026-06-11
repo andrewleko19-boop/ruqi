@@ -1205,12 +1205,15 @@
       <div class="card-body">
         <div class="field-group">
           <label for="req-type-select">نوع الطلب</label>
-          <select id="req-type-select" class="field-input">
-            <option value="">— اختر نوع الطلب —</option>
-            <option value="add_class">إضافة شعبة جديدة</option>
-            <option value="add_student">تسجيل طالب جديد</option>
-            <option value="correct_student">تصحيح بيانات طالب</option>
-          </select>
+          <div class="select-wrap">
+            <select id="req-type-select" class="field-input">
+              <option value="">— اختر نوع الطلب —</option>
+              <option value="add_class">إضافة شعبة جديدة</option>
+              <option value="add_student">تسجيل طالب جديد</option>
+              <option value="correct_student">تصحيح بيانات طالب</option>
+            </select>
+            <svg class="select-arrow icon icon-sm"><use href="#ic-chevron-down"/></svg>
+          </div>
         </div>
 
         <!-- حقول: إضافة شعبة -->
@@ -1218,9 +1221,12 @@
           <div class="twin-fields">
             <div class="field-group">
               <label for="req-class-grade">الصف <span class="req">*</span></label>
-              <select id="req-class-grade" class="field-input">
-                <option value="">— اختر —</option>
-              </select>
+              <div class="select-wrap">
+                <select id="req-class-grade" class="field-input">
+                  <option value="">— اختر —</option>
+                </select>
+                <svg class="select-arrow icon icon-sm"><use href="#ic-chevron-down"/></svg>
+              </div>
             </div>
             <div class="field-group">
               <label for="req-class-section">الشعبة <span class="req">*</span></label>
@@ -1237,9 +1243,12 @@
         <div id="req-fields-add-student" class="req-fields" hidden>
           <div class="field-group">
             <label for="req-stu-class">الصف المطلوب التسجيل فيه <span class="req">*</span></label>
-            <select id="req-stu-class" class="field-input">
-              <option value="">— اختر صفاً —</option>
-            </select>
+            <div class="select-wrap">
+              <select id="req-stu-class" class="field-input">
+                <option value="">— اختر صفاً —</option>
+              </select>
+              <svg class="select-arrow icon icon-sm"><use href="#ic-chevron-down"/></svg>
+            </div>
           </div>
           <div class="twin-fields">
             <div class="field-group">
@@ -1258,11 +1267,14 @@
             </div>
             <div class="field-group">
               <label for="req-stu-gender">الجنس</label>
-              <select id="req-stu-gender" class="field-input">
-                <option value="">—</option>
-                <option value="male">ذكر</option>
-                <option value="female">أنثى</option>
-              </select>
+              <div class="select-wrap">
+                <select id="req-stu-gender" class="field-input">
+                  <option value="">—</option>
+                  <option value="male">ذكر</option>
+                  <option value="female">أنثى</option>
+                </select>
+                <svg class="select-arrow icon icon-sm"><use href="#ic-chevron-down"/></svg>
+              </div>
             </div>
           </div>
           <div class="twin-fields">
@@ -1281,26 +1293,35 @@
         <div id="req-fields-correct-stu" class="req-fields" hidden>
           <div class="field-group">
             <label for="req-cor-class">الصف</label>
-            <select id="req-cor-class" class="field-input">
-              <option value="">— اختر صفاً —</option>
-            </select>
+            <div class="select-wrap">
+              <select id="req-cor-class" class="field-input">
+                <option value="">— اختر صفاً —</option>
+              </select>
+              <svg class="select-arrow icon icon-sm"><use href="#ic-chevron-down"/></svg>
+            </div>
           </div>
           <div class="field-group">
             <label for="req-cor-student">الطالب <span class="req">*</span></label>
-            <select id="req-cor-student" class="field-input" disabled>
-              <option value="">— اختر الطالب —</option>
-            </select>
+            <div class="select-wrap">
+              <select id="req-cor-student" class="field-input" disabled>
+                <option value="">— اختر الطالب —</option>
+              </select>
+              <svg class="select-arrow icon icon-sm"><use href="#ic-chevron-down"/></svg>
+            </div>
           </div>
           <div class="field-group">
             <label for="req-cor-field">الحقل المراد تصحيحه <span class="req">*</span></label>
-            <select id="req-cor-field" class="field-input">
-              <option value="">— اختر —</option>
-              <option value="first_name">الاسم الأول</option>
-              <option value="father_name">اسم الأب</option>
-              <option value="family_name">الكنية</option>
-              <option value="national_id">الرقم الوطني</option>
-              <option value="birth_date">تاريخ الميلاد</option>
-            </select>
+            <div class="select-wrap">
+              <select id="req-cor-field" class="field-input">
+                <option value="">— اختر —</option>
+                <option value="first_name">الاسم الأول</option>
+                <option value="father_name">اسم الأب</option>
+                <option value="family_name">الكنية</option>
+                <option value="national_id">الرقم الوطني</option>
+                <option value="birth_date">تاريخ الميلاد</option>
+              </select>
+              <svg class="select-arrow icon icon-sm"><use href="#ic-chevron-down"/></svg>
+            </div>
           </div>
           <div class="field-group">
             <label for="req-cor-value">القيمة الجديدة <span class="req">*</span></label>
