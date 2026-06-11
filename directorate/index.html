@@ -226,6 +226,45 @@
 
       </div>
 
+      <!-- لوحة الالتزام اليومي -->
+      <section class="panel" id="compliance-panel">
+        <div class="panel-header">
+          <h2>
+            <svg class="icon"><use href="#icon-check"/></svg>
+            تقرير الالتزام اليومي
+            <span class="live-indicator"><span class="live-dot"></span>مباشر</span>
+          </h2>
+          <div class="table-filters">
+            <button id="remind-all-btn" class="btn btn-warning btn-sm">تذكير جميع المتأخرة</button>
+            <button id="export-compliance-btn" class="btn btn-ghost btn-sm">تصدير CSV</button>
+          </div>
+        </div>
+        <div class="compliance-progress">
+          <div class="compliance-progress-label">
+            <span><strong id="compliance-count">—</strong> من <strong id="compliance-total">—</strong> مدرسة أرسلت حضور اليوم</span>
+            <span id="compliance-pct" class="compliance-pct">—</span>
+          </div>
+          <div class="progress-track"><div id="compliance-bar" class="progress-fill" style="width:0%"></div></div>
+        </div>
+        <div id="silent-schools" class="silent-list"></div>
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>المدرسة</th>
+                <th>اليوم</th>
+                <th>أيام مُرسلة (٣٠ يوماً)</th>
+                <th>نسبة الالتزام</th>
+                <th>الإجراء</th>
+              </tr>
+            </thead>
+            <tbody id="compliance-tbody">
+              <tr><td colspan="5" class="empty-state">جارٍ التحميل…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- جدول التقارير الكامل -->
       <section class="panel">
         <div class="panel-header">
@@ -249,6 +288,15 @@
               <option value="teacher_shortage">نقص في الكوادر التدريسية</option>
               <option value="other">أخرى</option>
             </select>
+            <select id="filter-severity" class="select-sm">
+              <option value="">جميع درجات الخطورة</option>
+              <option value="5">5 — حرج</option>
+              <option value="4">4 — شديد</option>
+              <option value="3">3 — مرتفع</option>
+              <option value="2">2 — متوسط</option>
+              <option value="1">1 — منخفض</option>
+            </select>
+            <button id="export-reports-btn" class="btn btn-ghost btn-sm">تصدير CSV</button>
           </div>
         </div>
         <div class="table-wrapper">
@@ -257,6 +305,7 @@
               <tr>
                 <th>المدرسة</th>
                 <th>النوع</th>
+                <th>الخطورة</th>
                 <th>الوصف</th>
                 <th>تاريخ الإرسال</th>
                 <th>الحالة</th>
@@ -264,7 +313,7 @@
               </tr>
             </thead>
             <tbody id="reports-tbody">
-              <tr><td colspan="6" class="empty-state">جارٍ تحميل التقارير…</td></tr>
+              <tr><td colspan="7" class="empty-state">جارٍ تحميل التقارير…</td></tr>
             </tbody>
           </table>
         </div>
@@ -292,6 +341,19 @@
         <li style="padding:32px 16px;text-align:center;color:#94A3B8;font-size:.9rem">لا توجد إشعارات</li>
       </ul>
     </div>
+  </div>
+
+  <!-- معرض صور البلاغات -->
+  <div id="lightbox" class="lightbox" hidden role="dialog" aria-modal="true" aria-label="مرفقات البلاغ">
+    <button class="lightbox-close" id="lightbox-close" aria-label="إغلاق">
+      <svg class="icon"><use href="#icon-x"/></svg>
+    </button>
+    <button class="lightbox-nav lightbox-nav--prev" id="lightbox-prev" aria-label="السابق">&#10095;</button>
+    <figure class="lightbox-stage">
+      <img id="lightbox-img" alt="مرفق البلاغ" />
+      <figcaption id="lightbox-counter" class="lightbox-counter">1 / 1</figcaption>
+    </figure>
+    <button class="lightbox-nav lightbox-nav--next" id="lightbox-next" aria-label="التالي">&#10094;</button>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
