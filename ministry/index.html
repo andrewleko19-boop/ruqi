@@ -82,6 +82,8 @@
         </div>
       </div>
       <div class="topbar-right">
+        <span class="live-indicator"><span class="live-dot"></span>مباشر</span>
+        <span class="refresh-badge" id="refresh-badge">تحديث خلال <span id="countdown-val">60</span>ث</span>
         <span id="user-email" class="user-email"></span>
         <button id="refresh-btn" class="btn btn-icon" title="تحديث">
           <svg width="18" height="18"><use href="#icon-refresh"/></svg>
@@ -117,6 +119,10 @@
         <div class="stat-card accent-red">
           <span class="stat-label">الغائبون اليوم</span>
           <span class="stat-value" id="stat-absent">—</span>
+        </div>
+        <div class="stat-card accent-red">
+          <span class="stat-label">مدارس لم تُسجّل</span>
+          <span class="stat-value" id="stat-silent">—</span>
         </div>
         <div class="stat-card accent-blue">
           <span class="stat-label">الإداريون الحاضرون</span>
@@ -154,6 +160,7 @@
                 <th>#</th>
                 <th>المحافظة</th>
                 <th>المدارس المُسجّلة</th>
+                <th>لم تُسجّل</th>
                 <th>إجمالي الطلاب</th>
                 <th>الحاضرون</th>
                 <th>الغائبون</th>

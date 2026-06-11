@@ -2,42 +2,38 @@
 //  NSAMS — لوحة تحكم الوزارة (script.js)
 //  مصدر الحضور: daily_student_attendance (سجل فردي لكل طالب) — المصدر الحقيقي.
 //
-//  ⚠️ إعادة كتابة جذرية: النسخة السابقة كانت تقرأ من daily_attendance (رقم مجمّع
-//     لكل مدرسة) وتخلط مقياسين: "schoolsReported" (عدد مدارس) تحت اسم "إجمالي الطلاب".
-//     النظام فعلياً يعتمد التعليم الفردي (تأكدنا: 61 سجل فردي مقابل 1 مجمّع).
-//
-//  تعريف المقاييس (مُقرّر مع المستخدم):
+//  المقاييس:
 //   • الحاضر  = present + late + excused   (الغائب الحقيقي = absent فقط)
-//   • النسبة  = الحاضرون ÷ المسجّلين فعلاً اليوم (المعياري — لا يعاقب المدارس الصامتة)
-//   • "مدارس لم تُسجّل" = مؤشّر منفصل، لا يُخلط بالنسبة
+//   • النسبة  = الحاضرون ÷ المسجّلين فعلاً اليوم
+//   • "مدارس لم تُسجّل" = إجمالي المدارس − المدارس المُسجّلة اليوم
 // ════════════════════════════════════════════════════════════════════════════
 
 import { supabase } from '../shared/db.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
-const loginScreen   = document.getElementById('login-screen');
-const dashboard     = document.getElementById('dashboard');
-const loginBtn      = document.getElementById('login-btn');
-const logoutBtn     = document.getElementById('logout-btn');
-const refreshBtn    = document.getElementById('refresh-btn');
-const exportBtn     = document.getElementById('export-btn');
-const emailInput    = document.getElementById('email');
-const passwordInput = document.getElementById('password');
-const loginError    = document.getElementById('login-error');
-const userEmailEl   = document.getElementById('user-email');
-const todayLabel    = document.getElementById('today-label');
-const lastUpdated   = document.getElementById('last-updated');
+const loginScreen    = document.getElementById('login-screen');
+const dashboard      = document.getElementById('dashboard');
+const loginBtn       = document.getElementById('login-btn');
+const logoutBtn      = document.getElementById('logout-btn');
+const refreshBtn     = document.getElementById('refresh-btn');
+const exportBtn      = document.getElementById('export-btn');
+const emailInput     = document.getElementById('email');
+const passwordInput  = document.getElementById('password');
+const loginError     = document.getElementById('login-error');
+const userEmailEl    = document.getElementById('user-email');
+const todayLabel     = document.getElementById('today-label');
+const lastUpdated    = document.getElementById('last-updated');
+const countdownEl    = document.getElementById('countdown-val');
 
-// Stats — المعرّفات نفسها في index.html (التسميات تُصحّح في HTML، انظر الملاحظة أسفل)
-const statGov     = document.getElementById('stat-governorates'); // عدد المحافظات
-const statTotal   = document.getElementById('stat-total');        // إجمالي الطلاب المسجّلين اليوم
-const statPresent = document.getElementById('stat-present');      // الحاضرون (present+late+excused)
-const statAbsent  = document.getElementById('stat-absent');       // الغائبون (absent)
-const statRate    = document.getElementById('stat-rate');         // نسبة الحضور الوطنية
-const statAdmins  = document.getElementById('stat-admins');       // الإداريون الحاضرون
-const statWorkers = document.getElementById('stat-workers');      // العمال الحاضرون
+const statGov     = document.getElementById('stat-governorates');
+const statTotal   = document.getElementById('stat-total');
+const statPresent = document.getElementById('stat-present');
+const statAbsent  = document.getElementById('stat-absent');
+const statSilent  = document.getElementById('stat-silent');
+const statRate    = document.getElementById('stat-rate');
+const statAdmins  = document.getElementById('stat-admins');
+const statWorkers = document.getElementById('stat-workers');
 
-// Table
 const tableLoading = document.getElementById('table-loading');
 const tableWrapper = document.getElementById('table-wrapper');
 const tableEmpty   = document.getElementById('table-empty');
@@ -45,17 +41,40 @@ const govTbody     = document.getElementById('gov-tbody');
 const govTfoot     = document.getElementById('gov-tfoot');
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let tableData = [];
+let tableData     = [];
+let autoRefreshId = null;
+let countdownId   = null;
+let countdown     = 60;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const fmt = (n) => (n === null || n === undefined) ? '—' : Number(n).toLocaleString();
-const pct = (part, total) => total > 0 ? ((part / total) * 100).toFixed(1) + '%' : '—';
+const fmt  = (n) => (n === null || n === undefined) ? '—' : Number(n).toLocaleString();
+const pct  = (part, total) => total > 0 ? ((part / total) * 100).toFixed(1) + '%' : '—';
 const today = () => new Date().toISOString().split('T')[0];
 
-// الحاضر = حاضر + متأخر + مأذون (قرار المستخدم)
-const presentOf = (agg) => agg.present + agg.late + agg.excused;
-// إجمالي المسجّلين اليوم = كل الحالات الأربع
+const presentOf  = (agg) => agg.present + agg.late + agg.excused;
 const enrolledOf = (agg) => agg.present + agg.late + agg.excused + agg.absent;
+
+// Animated count-up (300 ms, linear steps)
+function animateValue(el, target) {
+  if (!el) return;
+  const numTarget = typeof target === 'number' ? target : parseInt(String(target).replace(/,/g, ''), 10);
+  if (isNaN(numTarget)) { el.textContent = target; return; }
+  const start = parseInt(el.textContent.replace(/[^0-9]/g, ''), 10) || 0;
+  if (start === numTarget) return;
+  const steps  = 20;
+  const delay  = 300 / steps;
+  let step     = 0;
+  clearInterval(el._animId);
+  el._animId = setInterval(() => {
+    step++;
+    const value = Math.round(start + (numTarget - start) * (step / steps));
+    el.textContent = value.toLocaleString();
+    if (step >= steps) {
+      clearInterval(el._animId);
+      el.textContent = numTarget.toLocaleString();
+    }
+  }, delay);
+}
 
 function showError(msg) {
   loginError.textContent = msg;
@@ -69,11 +88,10 @@ function setLastUpdated() {
 }
 function setTodayLabel() {
   todayLabel.textContent = new Date().toLocaleDateString('ar-SY', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
 }
 
-// شارة حسب نسبة الحضور
 function rateBadge(rate) {
   if (rate === null) return '<span class="badge badge-none">لا بيانات</span>';
   const n = parseFloat(rate);
@@ -87,6 +105,37 @@ function rateBarClass(rate) {
   if (n >= 90) return 'green';
   if (n >= 75) return 'yellow';
   return 'red';
+}
+
+// ── Auto-refresh (60 s countdown) ────────────────────────────────────────────
+function startAutoRefresh() {
+  stopAutoRefresh();
+  countdown = 60;
+  if (countdownEl) countdownEl.textContent = countdown;
+
+  countdownId = setInterval(() => {
+    if (document.visibilityState === 'hidden') return;
+    countdown--;
+    if (countdownEl) countdownEl.textContent = countdown;
+    if (countdown <= 0) {
+      countdown = 60;
+      if (countdownEl) countdownEl.textContent = countdown;
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) loadAllData();
+      });
+    }
+  }, 1000);
+}
+
+function stopAutoRefresh() {
+  clearInterval(countdownId);
+  clearInterval(autoRefreshId);
+  countdownId = autoRefreshId = null;
+}
+
+function resetCountdown() {
+  countdown = 60;
+  if (countdownEl) countdownEl.textContent = countdown;
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -138,6 +187,7 @@ loginBtn.addEventListener('click', async () => {
 });
 
 logoutBtn.addEventListener('click', async () => {
+  stopAutoRefresh();
   await supabase.auth.signOut();
   dashboard.classList.add('hidden');
   loginScreen.classList.remove('hidden');
@@ -154,28 +204,18 @@ function showDashboard(email) {
   userEmailEl.textContent = email;
   setTodayLabel();
   loadAllData();
+  startAutoRefresh();
 }
 
 // ── Data Fetching ─────────────────────────────────────────────────────────────
-//
-// الـ schema (مؤكّد هذه الجلسة):
-//   directorates(id, name, governorate)
-//   schools(id, directorate_id, total_students)
-//   daily_student_attendance(school_id, status, date)  status∈present|late|absent|excused
-//
-// المقياس الجديد (حضور طلاب حقيقي، تجميع لكل محافظة):
-//   present/late/absent/excused = عدّ السجلات الفردية لهذا اليوم
-//   schoolsReporting = عدد المدارس التي سجّلت ولو طالباً واحداً اليوم
-//   النسبة = (present+late+excused) ÷ (كل المسجّلين اليوم)
-//
 async function loadAllData() {
   tableLoading.classList.remove('hidden');
   tableWrapper.classList.add('hidden');
   tableEmpty.classList.add('hidden');
-  [statGov, statTotal, statPresent, statAbsent, statRate, statAdmins, statWorkers].forEach(el => el.textContent = '—');
+  [statGov, statTotal, statPresent, statAbsent, statSilent, statRate, statAdmins, statWorkers]
+    .forEach(el => { if (el) el.textContent = '—'; });
 
   try {
-    // 1. كل المديريات
     const { data: directorates, error: dirErr } = await supabase
       .from('directorates')
       .select('id, name, governorate')
@@ -183,7 +223,6 @@ async function loadAllData() {
     if (dirErr) throw dirErr;
     if (!directorates || directorates.length === 0) { showEmpty('لا توجد مديريات.'); return; }
 
-    // 2. كل المدارس (id + directorate_id + total_students للمرجع)
     const { data: schools, error: schErr } = await supabase
       .from('schools')
       .select('id, directorate_id, total_students');
@@ -191,7 +230,6 @@ async function loadAllData() {
 
     const allSchoolIds = (schools || []).map(s => s.id);
 
-    // 3. سجلات الحضور الفردية لهذا اليوم (المصدر الحقيقي)
     const { data: attendance, error: attErr } = await supabase
       .from('daily_student_attendance')
       .select('school_id, status')
@@ -199,41 +237,46 @@ async function loadAllData() {
       .in('school_id', allSchoolIds.length > 0 ? allSchoolIds : ['__none__']);
     if (attErr) throw attErr;
 
-    // 3ب. دوام الإداريين والعمال (مجمّع المدرسة daily_attendance) — للبطاقات الوطنية
     const { data: staffAgg, error: staffErr } = await supabase
       .from('daily_attendance')
       .select('admins_present, workers_present')
       .eq('date', today())
       .in('school_id', allSchoolIds.length > 0 ? allSchoolIds : ['__none__']);
     if (staffErr) throw staffErr;
+
     let adminsPresent = 0, workersPresent = 0;
     for (const r of staffAgg || []) {
       adminsPresent  += r.admins_present  || 0;
       workersPresent += r.workers_present || 0;
     }
-    statAdmins.textContent  = fmt(adminsPresent);
-    statWorkers.textContent = fmt(workersPresent);
+    animateValue(statAdmins,  adminsPresent);
+    animateValue(statWorkers, workersPresent);
 
-    // خرائط البحث: school → directorate
-    const schoolToDir = {};
-    for (const s of schools || []) schoolToDir[s.id] = s.directorate_id;
+    // school → directorate lookup; also count total schools per directorate
+    const schoolToDir   = {};
+    const dirTotalSchools = {};
+    for (const s of schools || []) {
+      schoolToDir[s.id] = s.directorate_id;
+      dirTotalSchools[s.directorate_id] = (dirTotalSchools[s.directorate_id] || 0) + 1;
+    }
 
-    // تجميع حسب المديرية: عدّ الحالات + مجموعة المدارس المُسجّلة
+    // تجميع الحضور حسب المديرية
     const dirAgg = {};
     for (const d of directorates) {
       dirAgg[d.id] = {
         present: 0, late: 0, absent: 0, excused: 0,
         reportingSchools: new Set(),
+        totalSchools: dirTotalSchools[d.id] || 0,
       };
     }
     for (const rec of attendance || []) {
       const dirId = schoolToDir[rec.school_id];
       if (!dirId || !dirAgg[dirId]) continue;
       const a = dirAgg[dirId];
-      if (rec.status === 'present')      a.present++;
-      else if (rec.status === 'late')    a.late++;
-      else if (rec.status === 'absent')  a.absent++;
-      else if (rec.status === 'excused') a.excused++;
+      if      (rec.status === 'present')  a.present++;
+      else if (rec.status === 'late')     a.late++;
+      else if (rec.status === 'absent')   a.absent++;
+      else if (rec.status === 'excused')  a.excused++;
       a.reportingSchools.add(rec.school_id);
     }
 
@@ -242,7 +285,11 @@ async function loadAllData() {
     for (const d of directorates) {
       const gov = d.governorate || 'غير محدد';
       if (!govMap[gov]) {
-        govMap[gov] = { governorate: gov, present: 0, late: 0, absent: 0, excused: 0, reportingSchools: 0 };
+        govMap[gov] = {
+          governorate: gov,
+          present: 0, late: 0, absent: 0, excused: 0,
+          reportingSchools: 0, totalSchools: 0,
+        };
       }
       const a = dirAgg[d.id];
       govMap[gov].present          += a.present;
@@ -250,6 +297,7 @@ async function loadAllData() {
       govMap[gov].absent           += a.absent;
       govMap[gov].excused          += a.excused;
       govMap[gov].reportingSchools += a.reportingSchools.size;
+      govMap[gov].totalSchools     += a.totalSchools;
     }
 
     const rows = Object.values(govMap).sort((a, b) => a.governorate.localeCompare(b.governorate, 'ar'));
@@ -273,28 +321,38 @@ function showEmpty(msg = 'لا تتوفر بيانات حضور لهذا الي�
   tableEmpty.classList.remove('hidden');
 }
 
-// ── Render Stats (الكروت العلوية) ─────────────────────────────────────────────
+// ── Render Stats ──────────────────────────────────────────────────────────────
 function renderStats(rows) {
   let present = 0, late = 0, absent = 0, excused = 0;
+  let totalSchools = 0, reportingSchools = 0;
   for (const r of rows) {
-    present += r.present; late += r.late; absent += r.absent; excused += r.excused;
+    present         += r.present;
+    late            += r.late;
+    absent          += r.absent;
+    excused         += r.excused;
+    totalSchools    += r.totalSchools;
+    reportingSchools += r.reportingSchools;
   }
-  const enrolled  = present + late + absent + excused;   // كل المسجّلين اليوم
-  const attending = present + late + excused;            // الحاضرون (قرار المستخدم)
+  const enrolled  = present + late + absent + excused;
+  const attending = present + late + excused;
+  const silent    = Math.max(0, totalSchools - reportingSchools);
 
-  statGov.textContent     = rows.length;                 // المحافظات
-  statTotal.textContent   = fmt(enrolled);               // إجمالي الطلاب (المسجّلون اليوم)
-  statPresent.textContent = fmt(attending);              // الحاضرون
-  statAbsent.textContent  = fmt(absent);                 // الغائبون
-  statRate.textContent    = pct(attending, enrolled);    // نسبة الحضور الوطنية الحقيقية
+  animateValue(statGov,     rows.length);
+  animateValue(statTotal,   enrolled);
+  animateValue(statPresent, attending);
+  animateValue(statAbsent,  absent);
+  animateValue(statSilent,  silent);
+  // نسبة الحضور نصية — بلا تحريك
+  if (statRate) statRate.textContent = pct(attending, enrolled);
 }
 
-// ── Render Table (جدول المحافظات) ─────────────────────────────────────────────
+// ── Render Table ──────────────────────────────────────────────────────────────
 function renderTable(rows) {
   tableLoading.classList.add('hidden');
   tableData = rows;
 
-  let tPresent = 0, tLate = 0, tAbsent = 0, tExcused = 0, tReporting = 0;
+  let tPresent = 0, tLate = 0, tAbsent = 0, tExcused = 0;
+  let tReporting = 0, tTotal = 0;
 
   govTbody.innerHTML = rows.map((row, i) => {
     const enrolled  = row.present + row.late + row.absent + row.excused;
@@ -303,15 +361,19 @@ function renderTable(rows) {
     const rateStr   = rate !== null ? rate.toFixed(1) : null;
     const barClass  = rateBarClass(rateStr);
     const barWidth  = rate !== null ? rate.toFixed(1) : 0;
+    const silent    = Math.max(0, row.totalSchools - row.reportingSchools);
 
-    tPresent += row.present; tLate += row.late; tAbsent += row.absent;
-    tExcused += row.excused; tReporting += row.reportingSchools;
+    tPresent   += row.present; tLate   += row.late;
+    tAbsent    += row.absent;  tExcused += row.excused;
+    tReporting += row.reportingSchools;
+    tTotal     += row.totalSchools;
 
     return `
       <tr>
         <td>${i + 1}</td>
         <td><strong>${row.governorate}</strong></td>
         <td>${fmt(row.reportingSchools)}</td>
+        <td style="color:#f87171">${silent > 0 ? fmt(silent) : '<span style="color:#4ade80">0</span>'}</td>
         <td>${fmt(enrolled)}</td>
         <td style="color:#4ade80">${fmt(attending)}</td>
         <td style="color:#f87171">${fmt(row.absent)}</td>
@@ -335,6 +397,7 @@ function renderTable(rows) {
 
   const totEnrolled  = tPresent + tLate + tAbsent + tExcused;
   const totAttending = tPresent + tLate + tExcused;
+  const totSilent    = Math.max(0, tTotal - tReporting);
   const nationalRate = totEnrolled > 0 ? (totAttending / totEnrolled * 100).toFixed(1) : null;
 
   govTfoot.innerHTML = `
@@ -342,6 +405,7 @@ function renderTable(rows) {
       <td></td>
       <td>الإجمالي الوطني</td>
       <td>${fmt(tReporting)}</td>
+      <td style="color:#f87171">${totSilent > 0 ? fmt(totSilent) : '<span style="color:#4ade80">0</span>'}</td>
       <td>${fmt(totEnrolled)}</td>
       <td style="color:#4ade80">${fmt(totAttending)}</td>
       <td style="color:#f87171">${fmt(tAbsent)}</td>
@@ -352,8 +416,9 @@ function renderTable(rows) {
   tableWrapper.classList.remove('hidden');
 }
 
-// ── Refresh ───────────────────────────────────────────────────────────────────
+// ── Refresh (manual) ──────────────────────────────────────────────────────────
 refreshBtn.addEventListener('click', async () => {
+  resetCountdown();
   const { data: { session } } = await supabase.auth.getSession();
   if (session) loadAllData();
 });
@@ -363,41 +428,51 @@ exportBtn.addEventListener('click', () => {
   if (!tableData.length) return;
 
   const dateStr = today();
-  const headers = ['المحافظة', 'المدارس المُسجّلة', 'إجمالي الطلاب', 'الحاضرون', 'الغائبون', 'نسبة الحضور (%)'];
+  const headers = [
+    '"المحافظة"', '"المدارس المُسجّلة"', '"لم تُسجّل"',
+    '"إجمالي الطلاب"', '"الحاضرون"', '"الغائبون"', '"نسبة الحضور (%)"',
+  ];
+
+  const q = (v) => `"${String(v).replace(/"/g, '""')}"`;
 
   const dataLines = tableData.map(row => {
     const enrolled  = row.present + row.late + row.absent + row.excused;
     const attending = row.present + row.late + row.excused;
     const rate      = enrolled > 0 ? (attending / enrolled * 100).toFixed(1) : '';
+    const silent    = Math.max(0, row.totalSchools - row.reportingSchools);
     return [
-      `"${row.governorate}"`,
-      row.reportingSchools,
-      enrolled,
-      attending,
-      row.absent,
-      rate,
+      q(row.governorate),
+      q(row.reportingSchools),
+      q(silent),
+      q(enrolled),
+      q(attending),
+      q(row.absent),
+      q(rate),
     ].join(',');
   });
 
-  // سطر المجاميع
-  let tPresent = 0, tLate = 0, tAbsent = 0, tExcused = 0, tReporting = 0;
+  let tPresent = 0, tLate = 0, tAbsent = 0, tExcused = 0;
+  let tReporting = 0, tTotal = 0;
   tableData.forEach(r => {
     tPresent += r.present; tLate += r.late; tAbsent += r.absent;
-    tExcused += r.excused; tReporting += r.reportingSchools;
+    tExcused += r.excused; tReporting += r.reportingSchools; tTotal += r.totalSchools;
   });
   const totEnrolled  = tPresent + tLate + tAbsent + tExcused;
   const totAttending = tPresent + tLate + tExcused;
-  const totRate = totEnrolled > 0 ? (totAttending / totEnrolled * 100).toFixed(1) : '';
+  const totSilent    = Math.max(0, tTotal - tReporting);
+  const totRate      = totEnrolled > 0 ? (totAttending / totEnrolled * 100).toFixed(1) : '';
 
   const csvRows = [
     `# تقرير الحضور الوطني NSAMS — ${dateStr}`,
     headers.join(','),
     ...dataLines,
-    ['"الإجمالي الوطني"', tReporting, totEnrolled, totAttending, tAbsent, totRate].join(','),
+    [
+      q('الإجمالي الوطني'), q(tReporting), q(totSilent),
+      q(totEnrolled), q(totAttending), q(tAbsent), q(totRate),
+    ].join(','),
   ];
 
-  // BOM لضمان عرض العربية صحيحاً في Excel
-  const blob = new Blob(['\uFEFF' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob(['﻿' + csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
