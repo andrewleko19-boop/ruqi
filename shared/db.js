@@ -221,6 +221,9 @@ async function updateSchool(schoolId, patch) {
   if (patch.studentType   !== undefined) row.student_type   = patch.studentType   || null;
   if (patch.lat           !== undefined) row.lat            = patch.lat;
   if (patch.lng           !== undefined) row.lng            = patch.lng;
+  // Staff & enrolment counts — school admin enters real figures in settings.
+  if (patch.totalTeachers !== undefined) row.total_teachers = patch.totalTeachers === '' ? null : Number(patch.totalTeachers);
+  if (patch.totalStudents !== undefined) row.total_students = patch.totalStudents === '' ? null : Number(patch.totalStudents);
   if (Object.keys(row).length === 0) return true;
   const { data, error } = await db.from('schools').update(row).eq('id', schoolId).select('id');
   if (error) throw error;
@@ -228,6 +231,58 @@ async function updateSchool(schoolId, patch) {
   // surface that as a clear failure instead of a false success.
   if (!data || data.length === 0)
     throw new Error('لم تُحفظ التعديلات — تحقق من صلاحيات قاعدة البيانات (RLS) لجدول المدرسة.');
+  return true;
+}
+
+// ─── Workflow requests (school ↔ directorate) ────────────────────────────────
+
+// School-admin: create a new request to the directorate.
+async function createSchoolRequest(schoolId, directorateId, type, payload) {
+  const { data: sess } = await db.auth.getSession();
+  const uid = sess?.session?.user?.id;
+  if (!uid) throw new Error('غير مسجّل الدخول');
+  const { data, error } = await db
+    .from('school_requests')
+    .insert({ school_id: schoolId, directorate_id: directorateId, type, payload, created_by: uid })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data.id;
+}
+
+// School-admin: list all requests for this school, newest first.
+async function getSchoolRequests(schoolId) {
+  const { data, error } = await db
+    .from('school_requests')
+    .select('id, type, status, payload, review_reason, created_at, applied_at')
+    .eq('school_id', schoolId)
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return data ?? [];
+}
+
+// Directorate: list pending/recent requests for a directorate (raw RLS select).
+async function getDirectorateRequests(directorateId) {
+  const { data, error } = await db
+    .from('school_requests')
+    .select('id, type, status, payload, review_reason, created_at, applied_at, school:schools(name)')
+    .eq('directorate_id', directorateId)
+    .order('status')                        // pending first (alphabetically)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  return data ?? [];
+}
+
+// Directorate: approve or reject a request (calls SECURITY DEFINER RPC).
+async function reviewSchoolRequest(requestId, decision, reason = null) {
+  const { error } = await db.rpc('review_school_request', {
+    p_request_id: requestId,
+    p_decision:   decision,
+    p_reason:     reason || null,
+  });
+  if (error) throw error;
   return true;
 }
 
@@ -2309,6 +2364,12 @@ window.NSAMS_DB = {
   getSchoolStatus,
   getSchoolById,
   updateSchool,
+
+  // Workflow requests (school ↔ directorate)
+  createSchoolRequest,
+  getSchoolRequests,
+  getDirectorateRequests,
+  reviewSchoolRequest,
 
   // School-level attendance & reports
   saveAttendance,

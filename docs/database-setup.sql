@@ -770,3 +770,204 @@ end; $$;
 
 revoke all on function public.get_school_trend(uuid, integer) from public, anon;
 grant execute on function public.get_school_trend(uuid, integer) to authenticated;
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 8. طلبات سير العمل — المدرسة ↔ المديرية (المرحلة الثالثة)
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- 8.1  جدول school_requests
+create table if not exists public.school_requests (
+  id             uuid        primary key default gen_random_uuid(),
+  school_id      uuid        not null references public.schools(id) on delete cascade,
+  directorate_id uuid        not null,
+  type           text        not null
+                             check (type in ('add_class','add_student','correct_student')),
+  status         text        not null default 'pending'
+                             check (status in ('pending','approved','rejected')),
+  payload        jsonb       not null default '{}',
+  created_by     uuid        not null references auth.users(id),
+  reviewed_by    uuid        references auth.users(id),
+  review_reason  text,
+  applied_at     timestamptz,
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
+);
+
+create index if not exists idx_school_req_dir_status
+  on public.school_requests(directorate_id, status, created_at desc);
+create index if not exists idx_school_req_school
+  on public.school_requests(school_id, created_at desc);
+
+-- 8.2  RLS
+alter table public.school_requests enable row level security;
+
+-- مدير المدرسة: يُنشئ ويقرأ طلبات مدرسته فقط
+drop policy if exists school_req_admin_insert on public.school_requests;
+create policy school_req_admin_insert on public.school_requests
+  for insert to authenticated
+  with check (school_id = current_user_school_id());
+
+drop policy if exists school_req_admin_select on public.school_requests;
+create policy school_req_admin_select on public.school_requests
+  for select to authenticated
+  using (school_id = current_user_school_id());
+
+-- مستخدم المديرية: يقرأ ويُحدّث طلبات مديريته
+drop policy if exists school_req_dir_select on public.school_requests;
+create policy school_req_dir_select on public.school_requests
+  for select to authenticated
+  using (directorate_id = current_user_directorate_id());
+
+drop policy if exists school_req_dir_update on public.school_requests;
+create policy school_req_dir_update on public.school_requests
+  for update to authenticated
+  using (directorate_id = current_user_directorate_id());
+
+-- 8.3  دالة المراجعة والتطبيق التلقائي — SECURITY DEFINER
+create or replace function public.review_school_request(
+  p_request_id uuid,
+  p_decision   text,
+  p_reason     text default null
+) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  v_dir     uuid;
+  v_req     public.school_requests;
+  v_payload jsonb;
+begin
+  -- تحقق من الدور
+  select u.directorate_id into v_dir
+  from public.users u
+  where u.id = auth.uid() and u.role = 'directorate_user';
+  if v_dir is null then
+    raise exception 'غير مصرّح: هذه الدالة لمستخدمي المديرية فقط';
+  end if;
+
+  if p_decision not in ('approved','rejected') then
+    raise exception 'قيمة القرار غير صالحة';
+  end if;
+
+  -- جلب الطلب وتحقق من الملكية
+  select * into v_req
+  from public.school_requests r
+  where r.id = p_request_id
+    and r.directorate_id = v_dir
+    and r.status = 'pending';
+  if not found then
+    raise exception 'الطلب غير موجود أو ليس ضمن نطاق صلاحيتك أو ليس معلقاً';
+  end if;
+
+  -- تحديث الحالة
+  update public.school_requests set
+    status        = p_decision,
+    reviewed_by   = auth.uid(),
+    review_reason = p_reason,
+    updated_at    = now()
+  where id = p_request_id;
+
+  -- تطبيق تلقائي عند الموافقة
+  if p_decision = 'approved' then
+    v_payload := v_req.payload;
+
+    if v_req.type = 'add_class' then
+      insert into public.classes(id, school_id, grade, section, academic_year, name)
+      values (
+        gen_random_uuid(),
+        v_req.school_id,
+        (v_payload->>'grade')::int,
+        v_payload->>'section',
+        coalesce(nullif(v_payload->>'academic_year',''),
+                 extract(year from now())::text),
+        coalesce(nullif(v_payload->>'name',''), '')
+      )
+      on conflict do nothing;
+
+    elsif v_req.type = 'add_student' then
+      insert into public.students(
+        id, school_id, class_id,
+        first_name, father_name, family_name, full_name,
+        national_id, gender, birth_date,
+        is_active, recorded_by, updated_at
+      ) values (
+        gen_random_uuid(),
+        v_req.school_id,
+        nullif(v_payload->>'class_id','')::uuid,
+        nullif(trim(v_payload->>'first_name'),''),
+        nullif(trim(v_payload->>'father_name'),''),
+        nullif(trim(v_payload->>'family_name'),''),
+        trim(concat_ws(' ',
+          nullif(trim(v_payload->>'first_name'),''),
+          nullif(trim(v_payload->>'father_name'),''),
+          nullif(trim(v_payload->>'family_name'),'')))::text,
+        nullif(trim(v_payload->>'national_id'),''),
+        nullif(v_payload->>'gender',''),
+        nullif(v_payload->>'birth_date','')::date,
+        true, auth.uid(), now()
+      );
+
+    elsif v_req.type = 'correct_student' then
+      update public.students set
+        first_name  = coalesce(nullif(trim(v_payload->>'first_name'), ''),  first_name),
+        father_name = coalesce(nullif(trim(v_payload->>'father_name'),''), father_name),
+        family_name = coalesce(nullif(trim(v_payload->>'family_name'),''), family_name),
+        birth_date  = coalesce(nullif(v_payload->>'birth_date','')::date,   birth_date),
+        national_id = coalesce(nullif(trim(v_payload->>'national_id'),''),  national_id),
+        updated_at  = now()
+      where id      = (v_payload->>'student_id')::uuid
+        and school_id = v_req.school_id;
+    end if;
+
+    update public.school_requests
+      set applied_at = now()
+    where id = p_request_id;
+  end if;
+
+  -- إشعار المدرسة بالنتيجة
+  perform public.notify_user(
+    v_req.created_by,
+    case p_decision
+      when 'approved' then 'request_approved'
+      else                 'request_rejected'
+    end,
+    case p_decision
+      when 'approved' then 'طلبك قُبل ✓'
+      else                 'طلبك رُفض'
+    end,
+    coalesce(p_reason,
+      case p_decision
+        when 'approved' then 'تمت الموافقة على الطلب وتطبيقه.'
+        else                 'رُفض الطلب من قِبل المديرية.'
+      end),
+    'school_requests',
+    p_request_id
+  );
+end; $$;
+
+revoke all on function public.review_school_request(uuid, text, text) from public, anon;
+grant execute on function public.review_school_request(uuid, text, text) to authenticated;
+
+-- 8.4  إشعار المديرية عند وصول طلب جديد
+create or replace function public._notify_dir_new_request()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_school_name text;
+begin
+  select name into v_school_name from public.schools where id = NEW.school_id;
+  perform public.notify_user(
+    u.id,
+    'request_new',
+    'طلب جديد من مدرسة',
+    coalesce(v_school_name, 'مدرسة'),
+    'school_requests',
+    NEW.id
+  )
+  from public.users u
+  where u.directorate_id = NEW.directorate_id
+    and u.role = 'directorate_user';
+  return NEW;
+end; $$;
+
+drop trigger if exists trg_notify_dir_new_request on public.school_requests;
+create trigger trg_notify_dir_new_request
+  after insert on public.school_requests
+  for each row execute function public._notify_dir_new_request();
