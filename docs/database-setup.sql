@@ -251,10 +251,7 @@ grant select, insert, update, delete on public.staff_credentials to service_role
 create extension if not exists pg_net    schema extensions;
 create extension if not exists pg_cron   schema pg_catalog;
 
--- 5.0b  إعدادات التطبيق في DB (يُعدّلها المستخدم)
--- ⚠️  استبدل القيمتين أدناه
-alter database postgres set app.settings.supabase_url        to 'https://xocrzpjfvizgnsybegwr.supabase.co';
-alter database postgres set app.settings.service_role_key    to 'YOUR_SERVICE_ROLE_KEY_HERE';
+-- 5.0b  (تم حذف ALTER DATABASE — غير مدعوم في Supabase المُدار)
 
 -- 5.1  جدول اشتراكات Web Push
 create table if not exists public.push_subscriptions (
@@ -324,8 +321,10 @@ begin
 
   -- استدعاء Edge Function لإرسال Web Push (fire-and-forget — لا يوقف الـ trigger)
   begin
-    v_url := current_setting('app.settings.supabase_url',     true);
-    v_key := current_setting('app.settings.service_role_key', true);
+    -- ⚠️ استبدل القيمة الثانية بمفتاح secret من Settings → API قبل التشغيل
+    --    (لا تحفظ المفتاح الحقيقي في المستودع — GitHub يحظر دفعه)
+    v_url := 'https://xocrzpjfvizgnsybegwr.supabase.co';
+    v_key := 'YOUR_SB_SECRET_KEY_HERE';
     if v_url is not null and v_key is not null then
       perform extensions.http_post(
         url     := v_url || '/functions/v1/send-push',
