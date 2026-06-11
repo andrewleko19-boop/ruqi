@@ -115,7 +115,8 @@ function renderIdentity() {
   if (school.student_type)   chips.push(school.student_type);
   if (school.classification) chips.push(school.classification);
   if (school.complex_name)   chips.push(`مجمع ${school.complex_name}`);
-  if (Number.isFinite(school.total_students)) chips.push(`إجمالي الطلاب: ${school.total_students}`);
+  if (Number.isFinite(school.total_teachers)) chips.push(`المعلمون: ${school.total_teachers}`);
+  if (Number.isFinite(school.total_students)) chips.push(`الطلاب: ${school.total_students}`);
 
   document.getElementById('school-chips').innerHTML =
     chips.map(c => `<span class="chip">${esc(String(c))}</span>`).join('');

@@ -12,6 +12,8 @@ const {
   getDirectorateCompliance,
   sendAttendanceReminder,
   getDirectorateTrend,
+  getDirectorateRequests,
+  reviewSchoolRequest,
   localDateISO,
 } = window.NSAMS_DB;
 
@@ -896,7 +898,7 @@ function setupTrendPeriod() {
 //  Orchestrator
 // ══════════════════════════════════════════════
 async function loadAll() {
-  await Promise.allSettled([loadStats(), loadMapAndCompliance(), loadReports(), loadTrend()]);
+  await Promise.allSettled([loadStats(), loadMapAndCompliance(), loadReports(), loadTrend(), loadRequests()]);
 }
 
 // ══════════════════════════════════════════════
@@ -1101,4 +1103,158 @@ function initNotificationsDir(userId) {
   Notification.requestPermission().then((perm) => {
     if (perm === 'granted') window.NSAMS_DB.registerPushSubscription().catch(() => {});
   });
+}
+
+// ══════════════════════════════════════════════
+//  Workflow requests (طلبات المدارس)
+// ══════════════════════════════════════════════
+
+const REQ_TYPE_AR = {
+  add_class:       'إضافة شعبة',
+  add_student:     'تسجيل طالب',
+  correct_student: 'تصحيح بيانات',
+};
+
+let _reviewingReqId = null;
+
+async function loadRequests() {
+  if (!currentUser?.directorateId) return;
+  const listEl    = document.getElementById('dir-req-list');
+  const loadEl    = document.getElementById('dir-req-loading');
+  const wrapEl    = document.getElementById('dir-req-table-wrap');
+  const emptyEl   = document.getElementById('dir-req-empty');
+  const countEl   = document.getElementById('dir-req-count');
+  if (!listEl) return;
+
+  if (loadEl) loadEl.hidden = false;
+  if (wrapEl) wrapEl.hidden = true;
+  listEl.innerHTML = '';
+  if (emptyEl) emptyEl.hidden = true;
+
+  try {
+    const reqs = await getDirectorateRequests(currentUser.directorateId);
+    if (loadEl) loadEl.hidden = true;
+    const pending = reqs.filter(r => r.status === 'pending').length;
+    if (countEl) {
+      countEl.textContent = pending ? `${pending} طلب معلّق` : '';
+      countEl.hidden = !pending;
+    }
+    if (!reqs.length) { if (emptyEl) emptyEl.hidden = false; return; }
+    reqs.forEach(r => listEl.appendChild(buildReqRow(r)));
+    if (wrapEl) wrapEl.hidden = false;
+  } catch (err) {
+    console.error('[DirRequests] load', err);
+    if (loadEl) loadEl.hidden = true;
+  }
+}
+
+function buildReqRow(r) {
+  const tr   = document.createElement('tr');
+  const date = r.created_at
+    ? new Date(r.created_at).toLocaleDateString('ar-SY', { day: 'numeric', month: 'short' })
+    : '—';
+  const schoolName = r.school?.name ?? '—';
+  const typeLabel  = REQ_TYPE_AR[r.type] ?? r.type;
+  const statusHtml = r.status === 'pending'
+    ? `<span class="dir-req-badge dir-req-badge--pending">بانتظار المراجعة</span>`
+    : r.status === 'approved'
+      ? `<span class="dir-req-badge dir-req-badge--approved">مقبول ✓</span>`
+      : `<span class="dir-req-badge dir-req-badge--rejected">مرفوض ✗</span>`;
+
+  const reviewBtn = r.status === 'pending'
+    ? `<button class="btn btn-sm btn-primary dir-req-review-btn" data-id="${esc(r.id)}"
+         data-type="${esc(r.type)}" data-school="${esc(schoolName)}"
+         data-payload='${esc(JSON.stringify(r.payload))}'>مراجعة</button>`
+    : `<span class="dir-req-reason">${r.review_reason ? esc(r.review_reason) : '—'}</span>`;
+
+  tr.innerHTML = `
+    <td>${esc(schoolName)}</td>
+    <td>${esc(typeLabel)}</td>
+    <td>${esc(date)}</td>
+    <td>${statusHtml}</td>
+    <td>${reviewBtn}</td>
+  `;
+  return tr;
+}
+
+// Open review modal
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.dir-req-review-btn');
+  if (!btn) return;
+  _reviewingReqId = btn.dataset.id;
+  const type     = btn.dataset.type;
+  const school   = btn.dataset.school;
+  const payload  = JSON.parse(btn.dataset.payload || '{}');
+
+  document.getElementById('dir-review-title').textContent =
+    `مراجعة طلب: ${REQ_TYPE_AR[type] ?? type} — ${school}`;
+  document.getElementById('dir-review-body').innerHTML = buildPayloadSummary(type, payload);
+  document.getElementById('dir-review-reason').value   = '';
+  document.getElementById('dir-review-msg').hidden     = true;
+  document.getElementById('dir-review-modal').classList.remove('hidden');
+});
+
+function buildPayloadSummary(type, p) {
+  const rows = [];
+  if (type === 'add_class') {
+    rows.push(['الصف', p.grade ? `الصف ${p.grade}` : '—']);
+    rows.push(['الشعبة', p.section ?? '—']);
+    if (p.note) rows.push(['ملاحظة', p.note]);
+  } else if (type === 'add_student') {
+    rows.push(['الاسم', [p.first_name, p.father_name, p.family_name].filter(Boolean).join(' ')]);
+    if (p.national_id) rows.push(['الرقم الوطني', p.national_id]);
+    if (p.gender)      rows.push(['الجنس', p.gender === 'male' ? 'ذكر' : 'أنثى']);
+    if (p.birth_date)  rows.push(['تاريخ الميلاد', p.birth_date]);
+  } else if (type === 'correct_student') {
+    const FIELD_AR = { first_name:'الاسم', father_name:'اسم الأب', family_name:'الكنية',
+                       national_id:'الرقم الوطني', birth_date:'تاريخ الميلاد' };
+    const field = Object.keys(FIELD_AR).find(k => p[k] !== undefined && k !== 'student_id' && k !== 'reason');
+    if (field) rows.push([`تصحيح ${FIELD_AR[field] ?? field}`, p[field]]);
+    if (p.reason) rows.push(['السبب', p.reason]);
+  }
+  return rows.map(([k,v]) =>
+    `<div class="dir-req-detail"><span>${esc(k)}</span><strong>${esc(String(v ?? '—'))}</strong></div>`
+  ).join('');
+}
+
+// Approve / reject buttons
+document.getElementById('dir-btn-approve')?.addEventListener('click', () => doReview('approved'));
+document.getElementById('dir-btn-reject')?.addEventListener('click',  () => doReview('rejected'));
+
+async function doReview(decision) {
+  if (!_reviewingReqId) return;
+  const reason  = document.getElementById('dir-review-reason')?.value.trim() || null;
+  const msgEl   = document.getElementById('dir-review-msg');
+  const approveBtn = document.getElementById('dir-btn-approve');
+  const rejectBtn  = document.getElementById('dir-btn-reject');
+  if (approveBtn) approveBtn.disabled = true;
+  if (rejectBtn)  rejectBtn.disabled  = true;
+  msgEl.hidden = true;
+  try {
+    await reviewSchoolRequest(_reviewingReqId, decision, reason);
+    closeReviewModal();
+    showToast(
+      decision === 'approved' ? 'تمت الموافقة وتطبيق الطلب ✓' : 'تم رفض الطلب',
+      '', decision === 'approved' ? 'success' : 'info'
+    );
+    loadRequests();
+  } catch (err) {
+    console.error('[DirRequests] review', err);
+    msgEl.className = 'msg msg-error';
+    msgEl.textContent = err?.message ?? 'تعذّرت المراجعة';
+    msgEl.hidden = false;
+  } finally {
+    if (approveBtn) approveBtn.disabled = false;
+    if (rejectBtn)  rejectBtn.disabled  = false;
+  }
+}
+
+document.getElementById('dir-btn-review-cancel')?.addEventListener('click', closeReviewModal);
+document.getElementById('dir-review-modal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'dir-review-modal') closeReviewModal();
+});
+
+function closeReviewModal() {
+  _reviewingReqId = null;
+  document.getElementById('dir-review-modal')?.classList.add('hidden');
 }

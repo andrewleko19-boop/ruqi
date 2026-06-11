@@ -920,6 +920,110 @@ tr.row-flash {
   color: var(--blue);
 }
 
+/* ══════════════════════════════════════════════
+   PHASE 3 — WORKFLOW REQUESTS (طلبات المدارس)
+══════════════════════════════════════════════ */
+.dir-req-loading {
+  display: flex;
+  justify-content: center;
+  padding: 1.5rem;
+}
+.spinner {
+  width: 28px; height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.dir-req-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.dir-req-badge--pending  { background: var(--amber-dim); color: var(--amber); }
+.dir-req-badge--approved { background: var(--green-dim); color: var(--green); }
+.dir-req-badge--rejected { background: var(--red-dim);   color: var(--red); }
+
+.dir-req-reason {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Review modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 9800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.hidden { display: none; }
+
+.modal-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 22px 24px;
+  width: min(480px, 94vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow);
+}
+.modal-box h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 14px;
+}
+
+.dir-review-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.dir-req-detail {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+}
+.dir-req-detail span { color: var(--text-secondary); }
+.dir-req-detail strong { color: var(--text-primary); }
+
+.dir-review-msg {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  background: var(--red-dim);
+  color: var(--red);
+}
+.dir-review-msg.msg-success {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
 /* روابط ملف المدرسة */
 .school-link {
   color: var(--text-primary);
