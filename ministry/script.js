@@ -524,7 +524,12 @@ async function loadNationalTrend() {
     const { data, error } = await supabase.rpc('get_ministry_trend', { p_days: trendDays });
     if (error) throw error;
     const rows = data || [];
-    if (emptyEl) emptyEl.classList.add('hidden');
+    const hasData = rows.some(r => (r.present + r.late + r.absent + r.excused) > 0);
+    if (emptyEl) {
+      // الـ RPC يعمل — الفراغ هنا يعني فترة بلا تسجيل، لا قسماً ناقصاً
+      emptyEl.textContent = 'لا يوجد حضور مسجّل خلال هذه الفترة — تظهر المنحنيات فور تسجيل المدارس للحضور.';
+      emptyEl.classList.toggle('hidden', hasData);
+    }
 
     const labels = rows.map(r => trendLabel(r.day));
     const rates  = rows.map(r => {
@@ -534,7 +539,10 @@ async function loadNationalTrend() {
     upsertChart(charts, 'nat', 'nat-rate-chart', natRateConfig, labels, [rates]);
   } catch (err) {
     console.warn('[NatTrend] RPC unavailable:', err);
-    if (emptyEl) emptyEl.classList.remove('hidden');
+    if (emptyEl) {
+      emptyEl.textContent = 'تعذّر جلب الاتجاه — تأكد من تشغيل القسم 7 من database-setup.sql.';
+      emptyEl.classList.remove('hidden');
+    }
   }
 }
 

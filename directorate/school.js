@@ -244,7 +244,11 @@ async function loadTrendAndToday() {
   try {
     const rows = await getSchoolTrend(schoolId, trendDays);
     const hasData = rows.some(r => (r.present + r.late + r.absent + r.excused) > 0);
-    if (emptyEl) emptyEl.hidden = hasData;
+    if (emptyEl) {
+      // الـ RPC يعمل — الفراغ هنا يعني فترة بلا تسجيل، لا قسماً ناقصاً
+      emptyEl.textContent = 'لا يوجد حضور مسجّل لهذه المدرسة خلال هذه الفترة.';
+      emptyEl.hidden = hasData;
+    }
 
     const labels = rows.map(r => trendLabel(r.day));
     const rates  = rows.map(r => {
@@ -263,7 +267,10 @@ async function loadTrendAndToday() {
     renderTodayCards(rows);
   } catch (err) {
     console.warn('[SchoolTrend] RPC unavailable:', err);
-    if (emptyEl) emptyEl.hidden = false;
+    if (emptyEl) {
+      emptyEl.textContent = 'تعذّر جلب الاتجاه — تأكد من تشغيل القسم 7 من database-setup.sql.';
+      emptyEl.hidden = false;
+    }
   }
 }
 

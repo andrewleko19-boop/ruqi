@@ -850,7 +850,11 @@ async function loadTrend() {
   try {
     const rows = await getDirectorateTrend(trendDays);
     const hasData = rows.some(r => (r.present + r.late + r.absent + r.excused) > 0);
-    if (emptyEl) emptyEl.hidden = hasData;
+    if (emptyEl) {
+      // الـ RPC يعمل — الفراغ هنا يعني فترة بلا تسجيل، لا قسماً ناقصاً
+      emptyEl.textContent = 'لا يوجد حضور مسجّل خلال هذه الفترة — تظهر المنحنيات فور تسجيل المدارس للحضور.';
+      emptyEl.hidden = hasData;
+    }
 
     const labels = rows.map(r => trendLabel(r.day));
     const rates  = rows.map(r => {
@@ -867,7 +871,10 @@ async function loadTrend() {
     ]);
   } catch (err) {
     console.warn('[Trend] RPC unavailable:', err);
-    if (emptyEl) emptyEl.hidden = false;
+    if (emptyEl) {
+      emptyEl.textContent = 'تعذّر جلب الاتجاه — تأكد من تشغيل القسم 7 من database-setup.sql.';
+      emptyEl.hidden = false;
+    }
   }
 }
 
