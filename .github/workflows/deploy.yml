@@ -31,29 +31,6 @@ jobs:
       - run: node tools/check-versions.mjs
       - run: node tools/check-manifest.mjs
 
-  deploy-functions:
-    name: Deploy Edge Functions
-    needs: validate
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
-      - name: Deploy admin-create-staff
-        run: supabase functions deploy admin-create-staff --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      - name: Deploy send-push
-        run: supabase functions deploy send-push --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      - name: Deploy save-push-subscription
-        run: supabase functions deploy save-push-subscription --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
   deploy:
     name: Deploy to GitHub Pages
     needs: validate

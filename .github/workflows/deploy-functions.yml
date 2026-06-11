@@ -1,0 +1,42 @@
+name: Deploy Edge Functions
+
+# Runs only when Edge Function source (or this workflow) actually changes.
+# Frontend-only pushes no longer trigger a Supabase CLI download, which used to
+# hit GitHub's unauthenticated API rate limit while resolving "latest".
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - '.github/workflows/deploy-functions.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-functions:
+    name: Deploy Edge Functions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+        env:
+          # Authenticated requests raise GitHub's API limit 60/hr -> 5000/hr,
+          # so resolving the latest CLI release no longer rate-limits.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Deploy admin-create-staff
+        run: supabase functions deploy admin-create-staff --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      - name: Deploy send-push
+        run: supabase functions deploy send-push --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      - name: Deploy save-push-subscription
+        run: supabase functions deploy save-push-subscription --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
