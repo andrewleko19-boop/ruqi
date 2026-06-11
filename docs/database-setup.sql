@@ -979,5 +979,9 @@ create trigger trg_notify_dir_new_request
 -- ════════════════════════════════════════════════════════
 --  تنظيف لمرة واحدة: مسح أعداد المعلمين/الطلاب الوهمية
 --  شغّل هذا بعد تشغيل القسم 8 إذا كانت القيم الحالية وهمية.
+--  الخطوة 1: إزالة قيد NOT NULL من العمودين (إذا وُجد)
+--  الخطوة 2: مسح القيم
 -- ════════════════════════════════════════════════════════
+-- alter table public.schools alter column total_teachers drop not null;
+-- alter table public.schools alter column total_students  drop not null;
 -- update public.schools set total_teachers = null, total_students = null;
