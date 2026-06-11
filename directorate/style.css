@@ -620,3 +620,18 @@ input::placeholder { color: var(--text-muted); }
   .topnav-brand em { display: none; }
   .nav-date { display: none; }
 }
+/* ── Notification badge ───────────────────────────────────────────────────── */
+.notif-badge {
+  position: absolute;
+  top: 2px; right: 2px;
+  min-width: 16px; height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #EF4444;
+  color: #fff;
+  font-size: .65rem;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+}

@@ -1153,3 +1153,41 @@ select.csel-native {
   opacity: .7;
 }
 .csel-option.is-disabled:hover { background: transparent; }
+/* ── Notification bell ────────────────────────────────────────────────────── */
+.hdr-btn-notif { position: relative; }
+.notif-badge {
+  position: absolute;
+  top: 2px; right: 2px;
+  min-width: 16px; height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #EF4444;
+  color: #fff;
+  font-size: .65rem;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* ── Notifications list ───────────────────────────────────────────────────── */
+.notif-list {
+  list-style: none;
+  margin: 0; padding: 0 0 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.notif-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--clr-text-3);
+  font-size: .9rem;
+}
+.notif-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--clr-border-lt, #E2E8F0);
+}
+.notif-item--unread { background: rgba(26,39,68,.05); }
+.notif-item-title { font-size: .9rem; font-weight: 600; color: var(--clr-text-1); }
+.notif-item-body  { font-size: .82rem; color: var(--clr-text-2); margin-top: 2px; }
+.notif-item-time  { font-size: .75rem; color: var(--clr-text-3); margin-top: 4px; }

@@ -50,6 +50,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     showApp(user);
     await loadAll();
     startAutoRefresh();
+    initNotificationsDir(user.user.id);
   } else if (user) {
     showLoginError('هذه البوابة مخصصة لموظفي المديرية فقط.');
     await logout();
@@ -88,6 +89,7 @@ function setupLoginForm() {
       showApp(session);
       await loadAll();
       startAutoRefresh();
+      initNotificationsDir(session.user.id);
     } catch (err) {
       showLoginError(err.message || 'فشل تسجيل الدخول، يرجى المحاولة مجدداً.');
     } finally {
@@ -489,4 +491,76 @@ function showToast(title, message, type = 'info') {
     toast.style.transform  = 'translateY(8px)';
     setTimeout(() => toast.remove(), 320);
   }, duration);
+}
+
+// ══════════════════════════════════════════════
+//  Notifications
+// ══════════════════════════════════════════════
+let _dirUnreadCount = 0;
+let _dirUnsubNotif  = null;
+
+function updateDirNotifBadge(n) {
+  _dirUnreadCount = n;
+  const badge = document.getElementById('notif-badge');
+  if (!badge) return;
+  badge.textContent = n > 0 ? String(Math.min(n, 99)) : '';
+  badge.style.display = n > 0 ? 'block' : 'none';
+  badge.hidden = n <= 0;
+}
+
+async function loadDirNotifList() {
+  const list = document.getElementById('notif-list');
+  if (!list) return;
+  try {
+    const items = await window.NSAMS_DB.getNotifications(30);
+    if (!items.length) {
+      list.innerHTML = '<li style="padding:32px 16px;text-align:center;color:#94A3B8;font-size:.9rem">لا توجد إشعارات</li>';
+      return;
+    }
+    list.innerHTML = items.map(n => {
+      const diff = Date.now() - new Date(n.created_at).getTime();
+      const m = Math.floor(diff / 60000);
+      const ago = m < 1 ? 'الآن' : m < 60 ? `منذ ${m} دقيقة` : m < 1440 ? `منذ ${Math.floor(m/60)} ساعة` : `منذ ${Math.floor(m/1440)} يوم`;
+      const bg = !n.read_at ? 'background:rgba(11,43,94,.06);' : '';
+      return `<li style="${bg}padding:12px 16px;border-bottom:1px solid #E2E8F0;direction:rtl">
+        <div style="font-weight:600;font-size:.9rem">${n.title}</div>
+        ${n.body ? `<div style="font-size:.82rem;color:#64748B;margin-top:2px">${n.body}</div>` : ''}
+        <div style="font-size:.75rem;color:#94A3B8;margin-top:4px">${ago}</div>
+      </li>`;
+    }).join('');
+  } catch (e) { console.warn('[NSAMS-D] loadDirNotifList', e); }
+}
+
+function initNotificationsDir(userId) {
+  const modal   = document.getElementById('modal-notif');
+  const btnOpen = document.getElementById('btn-notif');
+
+  if (btnOpen) btnOpen.addEventListener('click', () => {
+    if (modal) { modal.style.display = 'flex'; loadDirNotifList(); }
+  });
+  const btnClose = document.getElementById('btn-notif-close');
+  if (btnClose) btnClose.addEventListener('click', () => { if (modal) modal.style.display = 'none'; });
+  if (modal)   modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+  const btnReadAll = document.getElementById('btn-notif-read-all');
+  if (btnReadAll) btnReadAll.addEventListener('click', async () => {
+    await window.NSAMS_DB.markAllNotificationsRead().catch(() => {});
+    updateDirNotifBadge(0);
+    loadDirNotifList();
+  });
+
+  window.NSAMS_DB.getUnreadNotificationsCount().then(updateDirNotifBadge).catch(() => {});
+
+  if (_dirUnsubNotif) _dirUnsubNotif();
+  _dirUnsubNotif = window.NSAMS_DB.subscribeNotifications(userId, (notif) => {
+    updateDirNotifBadge(_dirUnreadCount + 1);
+    showToast(notif.title, notif.body ?? '', 'info');
+    if (Notification.permission === 'granted') {
+      new Notification(notif.title, { body: notif.body ?? '', dir: 'rtl', lang: 'ar' });
+    }
+    if (notif.type === 'report_new') loadReports().catch(() => {});
+  });
+
+  Notification.requestPermission().then((perm) => {
+    if (perm === 'granted') window.NSAMS_DB.registerPushSubscription().catch(() => {});
+  });
 }

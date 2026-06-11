@@ -2196,6 +2196,76 @@ async function getStaffCredentials(schoolId) {
   }));
 }
 
+// ─── Notifications ───────────────────────────────────────────────────────────
+// VAPID_PUBLIC_KEY: replace with the output of `npx web-push generate-vapid-keys`
+// after generating your keys, also add them to Supabase Edge Function secrets.
+const VAPID_PUBLIC_KEY = 'BExampleVapidPublicKeyReplaceWithYourActualKey_ChangeMe_npx_web-push_generate-vapid-keys';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64  = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw     = atob(base64);
+  const output  = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i);
+  return output;
+}
+
+async function getNotifications(limit = 30) {
+  const { data, error } = await db
+    .from('notifications')
+    .select('id, type, title, body, entity, entity_id, read_at, created_at')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function getUnreadNotificationsCount() {
+  const { count, error } = await db
+    .from('notifications')
+    .select('id', { count: 'exact', head: true })
+    .is('read_at', null);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+async function markAllNotificationsRead() {
+  const { error } = await db
+    .from('notifications')
+    .update({ read_at: new Date().toISOString() })
+    .is('read_at', null);
+  if (error) throw error;
+}
+
+function subscribeNotifications(userId, onNew) {
+  const ch = db.channel('notif-' + userId)
+    .on('postgres_changes', {
+      event: 'INSERT', schema: 'public', table: 'notifications',
+      filter: `recipient_id=eq.${userId}`,
+    }, (payload) => onNew(payload.new))
+    .subscribe();
+  return () => db.removeChannel(ch);
+}
+
+async function registerPushSubscription() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (!VAPID_PUBLIC_KEY.startsWith('B') || VAPID_PUBLIC_KEY.includes('Replace')) return; // placeholder guard
+  try {
+    const reg      = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    const sub      = existing ?? await reg.pushManager.subscribe({
+      userVisibleOnly:      true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+    const { error } = await db.functions.invoke('save-push-subscription', {
+      body: { subscription: sub.toJSON() },
+    });
+    if (error) console.warn('[NSAMS] push subscription save failed', error);
+  } catch (e) {
+    console.warn('[NSAMS] registerPushSubscription failed', e);
+  }
+}
+
 // ─── Export ───────────────────────────────────────────────────────────────────
 window.NSAMS_DB = {
   // Auth
@@ -2305,4 +2375,11 @@ window.NSAMS_DB = {
 
   // Sync
   syncPending: syncPendingV2,
+
+  // Notifications & Web Push
+  getNotifications,
+  getUnreadNotificationsCount,
+  markAllNotificationsRead,
+  subscribeNotifications,
+  registerPushSubscription,
 };

@@ -10,7 +10,7 @@
  * which avoids serving a half-updated mix of old HTML + new JS mid-session.
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'nsams-v33';
+const CACHE = 'nsams-v34';
 
 const PRECACHE = [
   './',
@@ -79,4 +79,23 @@ self.addEventListener('fetch', (event) => {
       return cached || network;
     })
   );
+});
+
+self.addEventListener('push', (event) => {
+  const data = event.data?.json() ?? {};
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'NSAMS', {
+      body:  data.body || '',
+      icon:  './icons/apple-touch-icon-180.png',
+      badge: './icons/favicon-32.png',
+      dir:   'rtl',
+      lang:  'ar',
+      data:  { url: self.location.origin },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(clients.openWindow(event.notification.data?.url || '/'));
 });

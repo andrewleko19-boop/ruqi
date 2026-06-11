@@ -228,3 +228,251 @@ grant select, insert, update, delete on public.staff_credentials to authenticate
 grant select, insert, update, delete on public.users             to service_role;
 grant select, insert, update, delete on public.staff_credentials to service_role;
 
+
+-- ════════════════════════════════════════════════════════════════════════════
+--  SECTION 5 — Notifications & Web Push
+--
+--  طبقتا الإشعارات:
+--    أ) داخل التطبيق (مفتوح)  : جدول notifications + Supabase Realtime.
+--    ب) خارج التطبيق (مغلق)   : Web Push عبر Edge Function send-push
+--                                مُستدعاة من notify_user() عبر pg_net.
+--
+--  يُنشئ الإشعار: DB Trigger → notify_user() → notifications + send-push.
+--  التذكير اليومي: pg_cron يعمل الساعة 09:30 بتوقيت سوريا (06:30 UTC).
+--
+--  ⚠️  قبل التشغيل:
+--    1. ولّد مفاتيح VAPID:  npx web-push generate-vapid-keys
+--    2. أضف الأسرار في Supabase → Settings → Edge Functions:
+--         VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
+--    3. استبدل القيمتين في ALTER DATABASE أدناه بالقيم الحقيقية.
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- 5.0  امتدادات مطلوبة
+create extension if not exists pg_net    schema extensions;
+create extension if not exists pg_cron   schema pg_catalog;
+
+-- 5.0b  إعدادات التطبيق في DB (يُعدّلها المستخدم)
+-- ⚠️  استبدل القيمتين أدناه
+alter database postgres set app.settings.supabase_url        to 'https://xocrzpjfvizgnsybegwr.supabase.co';
+alter database postgres set app.settings.service_role_key    to 'YOUR_SERVICE_ROLE_KEY_HERE';
+
+-- 5.1  جدول اشتراكات Web Push
+create table if not exists public.push_subscriptions (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references public.users(id) on delete cascade,
+  endpoint   text not null unique,
+  p256dh     text not null,
+  auth_key   text not null,
+  user_agent text,
+  created_at timestamptz not null default now()
+);
+alter table public.push_subscriptions enable row level security;
+
+drop policy if exists ps_owner on public.push_subscriptions;
+create policy ps_owner on public.push_subscriptions
+  for all to authenticated
+  using      (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+grant select, insert, delete on public.push_subscriptions to authenticated;
+grant select                  on public.push_subscriptions to service_role;
+
+-- 5.2  جدول صندوق الإشعارات
+create table if not exists public.notifications (
+  id           uuid primary key default gen_random_uuid(),
+  recipient_id uuid not null references public.users(id) on delete cascade,
+  type         text not null,  -- report_new | report_status | duty_adjusted | attendance_reminder
+  title        text not null,
+  body         text,
+  entity       text,
+  entity_id    uuid,
+  read_at      timestamptz,
+  push_sent_at timestamptz,
+  created_at   timestamptz not null default now()
+);
+alter table public.notifications enable row level security;
+
+drop policy if exists notif_owner on public.notifications;
+create policy notif_owner on public.notifications
+  for all to authenticated
+  using      (recipient_id = auth.uid())
+  with check (recipient_id = auth.uid());
+
+grant select, update on public.notifications to authenticated;
+grant select, insert, update on public.notifications to service_role;
+
+-- تفعيل Realtime (يُرسل INSERT للعميل المشترك فوراً)
+alter publication supabase_realtime add table public.notifications;
+
+-- 5.3  دالة مساعدة: إدراج إشعار + استدعاء send-push عبر pg_net
+create or replace function public.notify_user(
+  p_recipient_id uuid,
+  p_type         text,
+  p_title        text,
+  p_body         text,
+  p_entity       text    default null,
+  p_entity_id    uuid    default null
+) returns void language plpgsql security definer as $$
+declare
+  v_notif_id uuid;
+  v_url      text;
+  v_key      text;
+begin
+  insert into public.notifications(recipient_id, type, title, body, entity, entity_id)
+  values (p_recipient_id, p_type, p_title, p_body, p_entity, p_entity_id)
+  returning id into v_notif_id;
+
+  -- استدعاء Edge Function لإرسال Web Push (fire-and-forget — لا يوقف الـ trigger)
+  begin
+    v_url := current_setting('app.settings.supabase_url',     true);
+    v_key := current_setting('app.settings.service_role_key', true);
+    if v_url is not null and v_key is not null then
+      perform extensions.http_post(
+        url     := v_url || '/functions/v1/send-push',
+        headers := jsonb_build_object(
+                     'Content-Type',  'application/json',
+                     'Authorization', 'Bearer ' || v_key
+                   ),
+        body    := convert_to(
+                     jsonb_build_object(
+                       'notificationId', v_notif_id,
+                       'recipientId',    p_recipient_id
+                     )::text,
+                     'utf8'
+                   ),
+        timeout_milliseconds := 3000
+      );
+    end if;
+  exception when others then
+    null;  -- لا نوقف الـ trigger إذا فشل pg_net
+  end;
+end; $$;
+
+-- 5.4  Trigger ١ — بلاغ جديد → مستخدمو المديرية
+create or replace function public.trg_report_new()
+returns trigger language plpgsql security definer as $$
+declare
+  v_school_name text;
+  v_dir_id      uuid;
+begin
+  select s.name, s.directorate_id
+  into   v_school_name, v_dir_id
+  from   public.schools s
+  where  s.id = new.school_id;
+
+  perform public.notify_user(
+    u.id,
+    'report_new',
+    'بلاغ جديد من ' || coalesce(v_school_name, 'مدرسة'),
+    coalesce(left(new.description, 120), ''),
+    'emergency_reports',
+    new.id
+  )
+  from public.users u
+  where u.role = 'directorate_user'
+    and u.directorate_id = v_dir_id;
+
+  return new;
+end; $$;
+
+drop trigger if exists t_report_new on public.emergency_reports;
+create trigger t_report_new
+  after insert on public.emergency_reports
+  for each row execute function public.trg_report_new();
+
+-- 5.5  Trigger ٢ — تحديث حالة البلاغ → مدير المدرسة
+create or replace function public.trg_report_status()
+returns trigger language plpgsql security definer as $$
+declare v_title text;
+begin
+  if old.status is not distinct from new.status then return new; end if;
+
+  v_title := case new.status
+    when 'acknowledged' then 'تمت مراجعة بلاغك'
+    when 'resolved'     then 'تم حل بلاغك'
+    else null
+  end;
+  if v_title is null then return new; end if;
+
+  perform public.notify_user(
+    u.id,
+    'report_status',
+    v_title,
+    'رقم البلاغ: ' || coalesce(new.receipt_number, new.id::text),
+    'emergency_reports',
+    new.id
+  )
+  from public.users u
+  where u.role = 'school_admin'
+    and u.school_id = new.school_id;
+
+  return new;
+end; $$;
+
+drop trigger if exists t_report_status on public.emergency_reports;
+create trigger t_report_status
+  after update on public.emergency_reports
+  for each row execute function public.trg_report_status();
+
+-- 5.6  Trigger ٣ — تعديل دوام المعلم → إشعار للمعلم
+create or replace function public.trg_duty_adjusted()
+returns trigger language plpgsql security definer as $$
+declare v_status_ar text;
+begin
+  if new.teacher_id is null then return new; end if;
+  if new.adjusted_by is null or new.adjusted_by = new.teacher_id then return new; end if;
+  -- في UPDATE نُرسل فقط إذا تغيّر الحقل الفعلي
+  if TG_OP = 'UPDATE'
+    and old.status               is not distinct from new.status
+    and old.check_in_adjusted    is not distinct from new.check_in_adjusted
+    and old.check_out            is not distinct from new.check_out
+  then return new; end if;
+
+  v_status_ar := case new.status
+    when 'present' then 'حاضر'
+    when 'absent'  then 'غائب'
+    when 'late'    then 'متأخر'
+    when 'leave'   then 'إجازة'
+    else new.status
+  end;
+
+  perform public.notify_user(
+    new.teacher_id,
+    'duty_adjusted',
+    'تعديل سجل دوامك',
+    'قام المدير بتعديل دوامك ليوم ' || new.date::text
+    || ' — الحالة: ' || v_status_ar,
+    'staff_attendance',
+    new.id
+  );
+  return new;
+end; $$;
+
+drop trigger if exists t_duty_adjusted on public.staff_attendance;
+create trigger t_duty_adjusted
+  after insert or update on public.staff_attendance
+  for each row execute function public.trg_duty_adjusted();
+
+-- 5.7  pg_cron — تذكير الدوام اليومي (09:30 بتوقيت سوريا = 06:30 UTC)
+select cron.schedule(
+  'attendance-daily-reminder',
+  '30 6 * * *',
+  $$
+  select public.notify_user(
+    u.id,
+    'attendance_reminder',
+    'تذكير: لم يُرسل سجل الحضور',
+    'يرجى إرسال سجل حضور اليوم قبل نهاية الدوام',
+    'school',
+    s.id
+  )
+  from public.schools s
+  join public.users u
+       on u.school_id = s.id and u.role = 'school_admin'
+  where not exists (
+    select 1 from public.daily_attendance da
+    where da.school_id = s.id and da.date = current_date
+  );
+  $$
+);
+

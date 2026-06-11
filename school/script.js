@@ -780,6 +780,9 @@ async function initApp() {
   // Kick off sync of any offline-queued records
   await doSync();
 
+  // Notifications (badge + realtime + push registration + attendance reminder)
+  initNotifications(S.user.user.id);
+
   // Load teacher submissions now that S.school is populated.
   // (Previously triggered by a fragile MutationObserver that could fire before
   //  school data was ready; called directly here instead.)
@@ -2493,7 +2496,7 @@ const staffSaveLabel    = el('staff-save-label');
 const staffSaveSpinner  = el('staff-save-spinner');
 
 const STAFF_STATUS_AR    = { present: 'حاضر', late: 'متأخر', absent: 'غائب', leave: 'إجازة' };
-const PERSONNEL_KIND_AR  = { admin: 'إداري', worker: 'عامل' };
+const PERSONNEL_KIND_AR  = { admin: 'إداري', worker: 'مستخدم' };
 
 function staffWorkStart() { return S.school?.work_start_time || null; }
 
@@ -2562,7 +2565,7 @@ function renderStaffGroups() {
   const groups = [
     ['المعلمون', _staffData.teachers],
     ['الإداريون', _staffData.admins],
-    ['العمال',    _staffData.workers],
+    ['المستخدمون', _staffData.workers],
   ];
   let html = '';
   for (const [label, list] of groups) {
@@ -3368,6 +3371,108 @@ el('btn-save-teacher').addEventListener('click', async () => {
   }
 });
 function showTchErr(msg) { el('tch-error').textContent = msg; show(el('tch-error')); el('btn-save-teacher').disabled = false; hide(el('tch-spinner')); }
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+const btnNotif      = el('btn-notif');
+const notifBadge    = el('notif-badge');
+const modalNotif    = el('modal-notif');
+let   _unreadCount  = 0;
+let   _unsubNotif   = null;
+
+function updateNotifBadge(n) {
+  _unreadCount = n;
+  notifBadge.textContent = n > 0 ? String(Math.min(n, 99)) : '';
+  notifBadge.hidden = n <= 0;
+}
+
+async function loadNotifList() {
+  const notifList = el('notif-list');
+  try {
+    const items = await window.NSAMS_DB.getNotifications(30);
+    if (!items.length) {
+      notifList.innerHTML = '<li class="notif-empty">لا توجد إشعارات</li>';
+      return;
+    }
+    notifList.innerHTML = items.map(n => {
+      const ago = formatTimeAgoAr(n.created_at);
+      const unread = !n.read_at ? ' notif-item--unread' : '';
+      return `<li class="notif-item${unread}" data-id="${n.id}">
+        <div class="notif-item-title">${n.title}</div>
+        ${n.body ? `<div class="notif-item-body">${n.body}</div>` : ''}
+        <div class="notif-item-time">${ago}</div>
+      </li>`;
+    }).join('');
+  } catch (e) {
+    console.warn('[NSAMS] loadNotifList', e);
+  }
+}
+
+function formatTimeAgoAr(isoStr) {
+  if (!isoStr) return '';
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)  return 'الآن';
+  if (m < 60) return `منذ ${m} دقيقة`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `منذ ${h} ساعة`;
+  return `منذ ${Math.floor(h / 24)} يوم`;
+}
+
+function openNotifModal() {
+  modalNotif.hidden = false;
+  loadNotifList();
+}
+
+function closeNotifModal() {
+  modalNotif.hidden = true;
+}
+
+if (btnNotif)       btnNotif.addEventListener('click', openNotifModal);
+if (el('btn-notif-close')) el('btn-notif-close').addEventListener('click', closeNotifModal);
+if (modalNotif)     modalNotif.addEventListener('click', (e) => { if (e.target === modalNotif) closeNotifModal(); });
+
+if (el('btn-notif-read-all')) el('btn-notif-read-all').addEventListener('click', async () => {
+  await window.NSAMS_DB.markAllNotificationsRead().catch(() => {});
+  updateNotifBadge(0);
+  loadNotifList();
+});
+
+function initNotifications(userId) {
+  // Seed badge with current unread count (async, non-blocking)
+  window.NSAMS_DB.getUnreadNotificationsCount().then(updateNotifBadge).catch(() => {});
+
+  // Real-time subscription — fires when a new notification arrives for this user
+  if (_unsubNotif) _unsubNotif();
+  _unsubNotif = window.NSAMS_DB.subscribeNotifications(userId, (notif) => {
+    updateNotifBadge(_unreadCount + 1);
+    toast(notif.title, 'info', 5000);
+    if (Notification.permission === 'granted') {
+      new Notification(notif.title, { body: notif.body ?? '', dir: 'rtl', lang: 'ar' });
+    }
+  });
+
+  // Web Push registration (fire-and-forget)
+  Notification.requestPermission().then((perm) => {
+    if (perm === 'granted') window.NSAMS_DB.registerPushSubscription().catch(() => {});
+  });
+
+  // Attendance reminder
+  checkAttendanceReminder();
+  setInterval(checkAttendanceReminder, 10 * 60 * 1000);
+}
+
+function checkAttendanceReminder() {
+  const key = `nsams_reminder_${localDateISO()}`;
+  if (S.attSubmitted || localStorage.getItem(key)) return;
+  const now = new Date();
+  const threshold = new Date(); threshold.setHours(9, 30, 0, 0);
+  if (now < threshold) return;
+  localStorage.setItem(key, '1');
+  toast('لم يُرسل سجل الحضور بعد — يرجى الإرسال قبل نهاية الدوام', 'warning', 7000);
+  if (Notification.permission === 'granted') {
+    new Notification('NSAMS — تذكير', { body: 'لم يُرسل سجل الحضور اليوم', dir: 'rtl', lang: 'ar' });
+  }
+}
 
 // Enhance the school-admin selects once the DOM is parsed.
 CustomSelect.enhance('stu-class-select');

@@ -365,6 +365,7 @@ async function initApp() {
   await loadClasses();
   await loadDutyCard();
   await doSync();
+  initNotificationsTeacher(S.user.user.id);
 }
 
 // ── Load Classes ──────────────────────────────────────────────────────────────
@@ -1711,6 +1712,68 @@ btnConductBack.addEventListener('click', () => {
 });
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
+// ── Notifications (teacher) ───────────────────────────────────────────────────
+let _unsubNotifT  = null;
+let _unreadCountT = 0;
+
+function updateNotifBadgeT(n) {
+  _unreadCountT = n;
+  const badge = $('notif-badge');
+  if (!badge) return;
+  badge.textContent = n > 0 ? String(Math.min(n, 99)) : '';
+  badge.hidden = n <= 0;
+}
+
+async function loadNotifListT() {
+  const notifList = $('notif-list');
+  if (!notifList) return;
+  try {
+    const items = await window.NSAMS_DB.getNotifications(30);
+    if (!items.length) { notifList.innerHTML = '<li class="notif-empty">لا توجد إشعارات</li>'; return; }
+    notifList.innerHTML = items.map(n => {
+      const diff = Date.now() - new Date(n.created_at).getTime();
+      const m = Math.floor(diff / 60000);
+      const ago = m < 1 ? 'الآن' : m < 60 ? `منذ ${m} دقيقة` : m < 1440 ? `منذ ${Math.floor(m/60)} ساعة` : `منذ ${Math.floor(m/1440)} يوم`;
+      const unread = !n.read_at ? ' notif-item--unread' : '';
+      return `<li class="notif-item${unread}">
+        <div class="notif-item-title">${n.title}</div>
+        ${n.body ? `<div class="notif-item-body">${n.body}</div>` : ''}
+        <div class="notif-item-time">${ago}</div>
+      </li>`;
+    }).join('');
+  } catch (e) { console.warn('[NSAMS-T] loadNotifList', e); }
+}
+
+function initNotificationsTeacher(userId) {
+  const btnNotif   = $('btn-notif');
+  const modalNotif = $('modal-notif');
+
+  if (btnNotif)   btnNotif.addEventListener('click', () => { if (modalNotif) modalNotif.hidden = false; loadNotifListT(); });
+  if ($('btn-notif-close'))  $('btn-notif-close').addEventListener('click',  () => { if (modalNotif) modalNotif.hidden = true; });
+  if (modalNotif) modalNotif.addEventListener('click', (e) => { if (e.target === modalNotif) modalNotif.hidden = true; });
+  if ($('btn-notif-read-all')) $('btn-notif-read-all').addEventListener('click', async () => {
+    await window.NSAMS_DB.markAllNotificationsRead().catch(() => {});
+    updateNotifBadgeT(0);
+    loadNotifListT();
+  });
+
+  window.NSAMS_DB.getUnreadNotificationsCount().then(updateNotifBadgeT).catch(() => {});
+
+  if (_unsubNotifT) _unsubNotifT();
+  _unsubNotifT = window.NSAMS_DB.subscribeNotifications(userId, (notif) => {
+    updateNotifBadgeT(_unreadCountT + 1);
+    toast(notif.title, 'info', 5000);
+    if (Notification.permission === 'granted') {
+      new Notification(notif.title, { body: notif.body ?? '', dir: 'rtl', lang: 'ar' });
+    }
+    if (notif.type === 'duty_adjusted') loadDutyCard().catch(() => {});
+  });
+
+  Notification.requestPermission().then((perm) => {
+    if (perm === 'granted') window.NSAMS_DB.registerPushSubscription().catch(() => {});
+  });
+}
+
 async function bootstrap() {
   try {
     const session = await getCurrentUser();
