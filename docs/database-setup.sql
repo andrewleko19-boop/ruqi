@@ -475,3 +475,107 @@ select cron.schedule(
   $$
 );
 
+-- ════════════════════════════════════════════════════════════════════════════
+-- 6. التزام المدارس اليومي + تذكير يدوي من المديرية (Phase 1)
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- 6.1  التزام آخر N يوم لكل مدرسة في مديرية المستخدم الحالي.
+--      days_reported يستثني الجمعة والسبت (isodow 5 و6 — عطلة سوريا).
+--      reported_today = هل توجد سجلات حضور طلابية اليوم
+--      (متوافق مع منطق no_data في getSchoolsAttendanceStatus).
+create or replace function public.get_directorate_compliance(p_days integer default 30)
+returns table (
+  school_id      uuid,
+  days_reported  integer,
+  reported_today boolean
+)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_dir uuid;
+begin
+  select u.directorate_id into v_dir
+  from public.users u
+  where u.id = auth.uid() and u.role = 'directorate_user';
+
+  if v_dir is null then
+    raise exception 'غير مصرّح: هذه الدالة لمستخدمي المديرية فقط';
+  end if;
+
+  if p_days is null or p_days < 1 or p_days > 92 then
+    p_days := 30;
+  end if;
+
+  return query
+  select
+    dsa.school_id,
+    count(distinct dsa.date)
+      filter (where extract(isodow from dsa.date) not in (5, 6))::integer,
+    bool_or(dsa.date = current_date)
+  from public.daily_student_attendance dsa
+  join public.schools s on s.id = dsa.school_id
+  where s.directorate_id = v_dir
+    and dsa.date >  current_date - p_days
+    and dsa.date <= current_date
+  group by dsa.school_id;
+end; $$;
+
+revoke all on function public.get_directorate_compliance(integer) from public, anon;
+grant execute on function public.get_directorate_compliance(integer) to authenticated;
+
+-- 6.2  تذكير يدوي من المديرية لمدراء مدرسة لم تُرسل الحضور.
+--      يتحقق أن المستدعي directorate_user وأن المدرسة ضمن مديريته.
+--      يمنع التكرار: لا يُرسل لنفس المستلم أكثر من مرة كل 30 دقيقة.
+--      يعيد عدد المدراء الذين أُرسل إليهم فعلاً (0 = «أُرسل مؤخراً»).
+create or replace function public.send_attendance_reminder(p_school_id uuid)
+returns integer
+language plpgsql security definer set search_path = public as $$
+declare
+  v_dir         uuid;
+  v_school_name text;
+  v_school_dir  uuid;
+  v_sent        integer := 0;
+  r             record;
+begin
+  select u.directorate_id into v_dir
+  from public.users u
+  where u.id = auth.uid() and u.role = 'directorate_user';
+
+  if v_dir is null then
+    raise exception 'غير مصرّح: هذه الدالة لمستخدمي المديرية فقط';
+  end if;
+
+  select s.name, s.directorate_id into v_school_name, v_school_dir
+  from public.schools s where s.id = p_school_id;
+
+  if v_school_dir is null or v_school_dir is distinct from v_dir then
+    raise exception 'غير مصرّح: المدرسة ليست ضمن مديريتك';
+  end if;
+
+  for r in
+    select u.id
+    from public.users u
+    where u.role = 'school_admin'
+      and u.school_id = p_school_id
+      and not exists (
+        select 1 from public.notifications n
+        where n.recipient_id = u.id
+          and n.type = 'attendance_reminder'
+          and n.created_at > now() - interval '30 minutes'
+      )
+  loop
+    perform public.notify_user(
+      r.id,
+      'attendance_reminder',
+      'تذكير من المديرية: لم يصل سجل حضور اليوم',
+      'يرجى إرسال سجل حضور مدرسة ' || coalesce(v_school_name, '') || ' لهذا اليوم.',
+      'school',
+      p_school_id
+    );
+    v_sent := v_sent + 1;
+  end loop;
+
+  return v_sent;
+end; $$;
+
+revoke all on function public.send_attendance_reminder(uuid) from public, anon;
+grant execute on function public.send_attendance_reminder(uuid) to authenticated;
