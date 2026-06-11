@@ -1,0 +1,246 @@
+<!-- directorate/school.html — صفحة ملف المدرسة (drill-down من لوحة المديرية) -->
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NSAMS – ملف المدرسة</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- SVG Sprite -->
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+    <symbol id="icon-school" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+    </symbol>
+    <symbol id="icon-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+    </symbol>
+    <symbol id="icon-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+    </symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </symbol>
+    <symbol id="icon-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+    </symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+      <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+    </symbol>
+    <symbol id="icon-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
+    </symbol>
+    <symbol id="icon-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+    </symbol>
+    <symbol id="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+    </symbol>
+    <symbol id="icon-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+    </symbol>
+  </svg>
+  <link rel="icon" href="../icons/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../icons/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="../icons/favicon-16.png" />
+  <link rel="apple-touch-icon" href="../icons/apple-touch-icon-180.png" />
+  <link rel="manifest" href="../manifest.json" />
+  <meta name="theme-color" content="#0B2B5E" />
+</head>
+<body>
+
+  <!-- شاشة الحارس — لا نموذج دخول هنا؛ index.html يملك الدخول -->
+  <div id="guard-screen" class="login-overlay">
+    <div class="login-card">
+      <div class="login-logo">
+        <img src="../icons/eagle-mark.png" alt="شعار NSAMS" width="48" height="48" style="object-fit:contain;display:block" />
+      </div>
+      <h1>NSAMS</h1>
+      <p class="login-subtitle" id="guard-msg">جارٍ التحقق من الجلسة…</p>
+      <a id="guard-link" class="btn btn-primary btn-full" href="index.html" hidden>الانتقال إلى لوحة المديرية</a>
+    </div>
+  </div>
+
+  <!-- ═══════════════ ملف المدرسة ═══════════════ -->
+  <div id="app" class="hidden">
+
+    <header class="topnav">
+      <div class="topnav-brand">
+        <img src="../icons/eagle-mark.png" alt="شعار NSAMS" width="24" height="24" style="object-fit:contain;display:block" />
+        <span>NSAMS <em>ملف المدرسة</em></span>
+      </div>
+      <div class="topnav-meta">
+        <a href="index.html" class="btn btn-ghost btn-sm">← لوحة المديرية</a>
+        <span id="nav-date" class="nav-date"></span>
+        <span id="refresh-countdown" class="refresh-badge">
+          <svg class="icon icon-sm"><use href="#icon-clock"/></svg>
+          <span id="countdown-val">60</span>ث
+        </span>
+        <button id="manual-refresh-btn" class="btn btn-ghost btn-sm" title="تحديث الآن">
+          <svg class="icon icon-sm"><use href="#icon-refresh"/></svg>
+          تحديث
+        </button>
+        <span id="nav-user" class="nav-user"></span>
+        <button id="logout-btn" class="btn btn-ghost btn-sm">
+          <svg class="icon icon-sm"><use href="#icon-logout"/></svg>
+          تسجيل الخروج
+        </button>
+      </div>
+    </header>
+
+    <main class="main-content">
+
+      <!-- ترويسة هوية المدرسة -->
+      <section class="panel profile-header">
+        <div class="profile-title">
+          <svg class="icon"><use href="#icon-school"/></svg>
+          <h1 id="school-name">—</h1>
+          <span class="live-indicator"><span class="live-dot"></span>مباشر</span>
+        </div>
+        <div class="profile-chips" id="school-chips"></div>
+      </section>
+
+      <!-- بطاقات اليوم -->
+      <section class="stats-row" id="today-stats">
+        <div class="stat-card">
+          <div class="stat-icon stat-icon--green"><svg class="icon"><use href="#icon-users"/></svg></div>
+          <div class="stat-body">
+            <span class="stat-label">حاضرون اليوم</span>
+            <span class="stat-value" id="today-present-val">—</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon stat-icon--amber"><svg class="icon"><use href="#icon-clock"/></svg></div>
+          <div class="stat-body">
+            <span class="stat-label">متأخرون</span>
+            <span class="stat-value" id="today-late-val">—</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon stat-icon--purple"><svg class="icon"><use href="#icon-check"/></svg></div>
+          <div class="stat-body">
+            <span class="stat-label">مُجازون</span>
+            <span class="stat-value" id="today-excused-val">—</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon stat-icon--red"><svg class="icon"><use href="#icon-alert"/></svg></div>
+          <div class="stat-body">
+            <span class="stat-label">غائبون</span>
+            <span class="stat-value" id="today-absent-val">—</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon stat-icon--blue"><svg class="icon"><use href="#icon-eye"/></svg></div>
+          <div class="stat-body">
+            <span class="stat-label">نسبة الحضور اليوم</span>
+            <span class="stat-value" id="today-rate-val">—</span>
+            <span class="stat-sub" id="today-note"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- اتجاه الحضور -->
+      <section class="panel" id="trend-panel">
+        <div class="panel-header">
+          <h2>
+            <svg class="icon"><use href="#icon-clock"/></svg>
+            اتجاه الحضور
+          </h2>
+          <div class="table-filters" id="trend-period">
+            <button class="btn btn-ghost btn-sm trend-period-btn" data-days="7">٧ أيام</button>
+            <button class="btn btn-ghost btn-sm trend-period-btn" data-days="14">١٤ يوماً</button>
+            <button class="btn btn-ghost btn-sm trend-period-btn is-active" data-days="30">٣٠ يوماً</button>
+          </div>
+        </div>
+        <div class="charts-grid">
+          <div class="chart-box">
+            <h3 class="chart-title">نسبة الحضور اليومية ٪</h3>
+            <div class="chart-canvas-wrap"><canvas id="school-rate-chart"></canvas></div>
+          </div>
+          <div class="chart-box">
+            <h3 class="chart-title">توزيع حالات الطلاب يومياً</h3>
+            <div class="chart-canvas-wrap"><canvas id="school-stack-chart"></canvas></div>
+          </div>
+        </div>
+        <p id="trend-empty" class="empty-state" style="padding:14px 18px" hidden>لا توجد بيانات اتجاه — تأكد من تشغيل القسم 7 من database-setup.sql.</p>
+      </section>
+
+      <!-- الالتزام + الموقع -->
+      <div class="two-col">
+        <section class="panel">
+          <div class="panel-header">
+            <h2><svg class="icon"><use href="#icon-check"/></svg> الالتزام (٣٠ يوماً)</h2>
+          </div>
+          <div class="compliance-progress" id="school-compliance">
+            <div class="compliance-progress-label">
+              <span><strong id="comp-days">—</strong> من <strong id="comp-total">—</strong> يوم عمل</span>
+              <span id="comp-pct" class="compliance-pct">—</span>
+            </div>
+            <div class="progress-track"><div id="comp-bar" class="progress-fill" style="width:0%"></div></div>
+            <p class="stat-sub" id="comp-today" style="margin-top:8px"></p>
+          </div>
+        </section>
+        <section class="panel" id="school-map-panel">
+          <div class="panel-header">
+            <h2><svg class="icon"><use href="#icon-map"/></svg> الموقع</h2>
+          </div>
+          <div id="school-mini-map"></div>
+        </section>
+      </div>
+
+      <!-- بلاغات المدرسة -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2><svg class="icon"><use href="#icon-alert"/></svg> بلاغات المدرسة
+            <span class="badge badge--amber" id="school-reports-count">0</span>
+          </h2>
+        </div>
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>النوع</th>
+                <th>الخطورة</th>
+                <th>الوصف</th>
+                <th>تاريخ الإرسال</th>
+                <th>الحالة</th>
+                <th>مرفقات</th>
+              </tr>
+            </thead>
+            <tbody id="school-reports-tbody">
+              <tr><td colspan="6" class="empty-state">جارٍ التحميل…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Toasts -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- Lightbox -->
+  <div id="lightbox" class="lightbox" hidden role="dialog" aria-modal="true" aria-label="مرفقات البلاغ">
+    <button class="lightbox-close" id="lightbox-close" aria-label="إغلاق">
+      <svg class="icon"><use href="#icon-x"/></svg>
+    </button>
+    <button class="lightbox-nav lightbox-nav--prev" id="lightbox-prev" aria-label="السابق">&#10095;</button>
+    <figure class="lightbox-stage">
+      <img id="lightbox-img" alt="مرفق البلاغ" />
+      <figcaption id="lightbox-counter" class="lightbox-counter">1 / 1</figcaption>
+    </figure>
+    <button class="lightbox-nav lightbox-nav--next" id="lightbox-next" aria-label="التالي">&#10094;</button>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="../shared/db.js"></script>
+  <script type="module" src="school.js"></script>
+</body>
+</html>

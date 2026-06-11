@@ -229,7 +229,8 @@ function renderMap(schools, statusMap) {
     const popup = `
       <div class="popup-school-name">${esc(school.name)}</div>
       <div class="popup-row"><span>الحالة</span><span>${esc(statusLabel)}</span></div>
-      ${detailRow}`;
+      ${detailRow}
+      <div class="popup-row" style="margin-top:6px"><a class="popup-link" href="school.html?id=${esc(school.id)}">الملف الكامل ←</a></div>`;
 
     if (markersLayer[school.id]) {
       markersLayer[school.id].setIcon(icon);
@@ -369,7 +370,7 @@ function renderCompliance(schools, compliance) {
 
   tbody.innerHTML = rows.map(r => `
     <tr>
-      <td class="td-primary">${esc(r.name)}</td>
+      <td class="td-primary"><a class="school-link" href="school.html?id=${esc(r.id)}">${esc(r.name)}</a></td>
       <td>
         ${r.today
           ? '<span class="badge badge--green">أرسلت</span>'
@@ -524,7 +525,9 @@ function renderReportsTable() {
 
     return `
     <tr data-id="${esc(r.id)}"${rowClass ? ` class="${rowClass}"` : ''}>
-      <td class="td-primary">${esc(r.schoolName ?? '—')}</td>
+      <td class="td-primary">${r.school?.id
+        ? `<a class="school-link" href="school.html?id=${esc(r.school.id)}">${esc(r.schoolName ?? '—')}</a>`
+        : esc(r.schoolName ?? '—')}</td>
       <td><span class="type-badge type-${esc(r.type)}">${esc(formatType(r.type))}</span></td>
       <td>${sevBadge(r.severity)}</td>
       <td class="td-desc" title="${esc(r.description ?? '')}">${esc(r.description ?? '—')}</td>

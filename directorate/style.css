@@ -940,3 +940,47 @@ tr.row-flash {
   .charts-grid { grid-template-columns: 1fr; }
   .chart-canvas-wrap { height: 220px; }
 }
+
+/* ══════════════════════════════════════════════
+   PHASE 2 — SCHOOL PROFILE PAGE
+══════════════════════════════════════════════ */
+.profile-header {
+  padding: 18px;
+}
+.profile-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.profile-title h1 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+.profile-title .icon {
+  width: 22px;
+  height: 22px;
+  color: var(--blue);
+}
+.profile-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  background: var(--blue-dim);
+  color: var(--blue);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+#school-mini-map {
+  height: 220px;
+  border-radius: var(--radius);
+  margin: 0 18px 18px;
+}
