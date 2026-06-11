@@ -415,12 +415,12 @@ select.field-input option:disabled { color: var(--clr-text-3); }
 .header-meta { min-width: 0; }
 
 .header-school {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 180px;
+  max-width: min(48vw, 240px);
   color: #fff;
 }
 
@@ -469,6 +469,8 @@ select.field-input option:disabled { color: var(--clr-text-3); }
   cursor: pointer;
 }
 .hdr-btn:hover { background: rgba(255,255,255,.14); color: #fff; }
+/* Compact header buttons — reduces the 44px tap-target to 36px in the topbar */
+.hdr-btn.hdr-btn-sm { width: 36px; height: 36px; }
 
 /* Pending bar */
 .pending-bar {
@@ -1191,3 +1193,67 @@ select.csel-native {
 .notif-item-title { font-size: .9rem; font-weight: 600; color: var(--clr-text-1); }
 .notif-item-body  { font-size: .82rem; color: var(--clr-text-2); margin-top: 2px; }
 .notif-item-time  { font-size: .75rem; color: var(--clr-text-3); margin-top: 4px; }
+
+/* ─── Setup onboarding banner ─────────────────────────────────────────────── */
+.setup-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #fef9c3;
+  color: #713f12;
+  font-size: .82rem;
+  font-weight: 500;
+  border-bottom: 1px solid #fde68a;
+}
+.setup-banner .banner-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: #92400e;
+  cursor: pointer;
+  text-decoration: underline;
+}
+@media (prefers-color-scheme: dark) {
+  .setup-banner { background: #3b2300; color: #fde68a; border-color: #5a3800; }
+  .setup-banner .banner-link { color: #fbbf24; }
+}
+
+/* ─── Workflow requests tab styles ───────────────────────────────────────── */
+.req-list {
+  list-style: none;
+  margin: 0; padding: 0 16px 12px;
+}
+.req-card {
+  border: 1px solid var(--clr-border-lt, #E2E8F0);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  margin-top: 10px;
+  background: var(--clr-surface);
+}
+.req-card-hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.req-type-label {
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--clr-text-1);
+}
+.req-status {
+  font-size: .75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+}
+.req-status--pending  { background: #fef3c7; color: #92400e; }
+.req-status--approved { background: #d1fae5; color: #065f46; }
+.req-status--rejected { background: #fee2e2; color: #991b1b; }
+.req-date   { font-size: .75rem; color: var(--clr-text-3); }
+.req-reason { font-size: .78rem; color: #b91c1c; margin-top: 4px; }
+.req-fields { margin-top: 8px; }

@@ -67,10 +67,11 @@ function getCachedSchool(schoolId) {
  */
 function normaliseSchool(row) {
   return {
-    id:            row.id,
-    name:          row.name,
-    totalTeachers: row.total_teachers ?? 0,
-    totalStudents: row.total_students ?? 0,
+    id:             row.id,
+    name:           row.name,
+    directorate_id: row.directorate_id ?? null,
+    totalTeachers:  row.total_teachers ?? 0,
+    totalStudents:  row.total_students ?? 0,
     // 'primary' (ابتدائي) | 'middle_high' (إعدادي/ثانوي). Drives معلم↔موجه labels.
     // Falls back to 'primary' if the column is missing (e.g. migration not run yet).
     type:          row.school_type ?? 'primary',
@@ -754,6 +755,27 @@ async function initApp() {
   // Header — now uses the live DB name, not a hardcoded string
   hdrSchool.textContent = S.school?.name ?? '…';
   hdrDate.textContent   = formatDateAr(todayISO());
+
+  // Onboarding banner: shown once when teacher/student counts are missing
+  (function initSetupBanner() {
+    const banner    = el('setup-banner');
+    const bannerKey = `nsams_setup_done_${S.school?.id}`;
+    const missing   = !S.school?.totalTeachers && !S.school?.totalStudents;
+    if (banner && missing && !localStorage.getItem(bannerKey)) {
+      banner.hidden = false;
+      el('btn-dismiss-banner')?.addEventListener('click', () => {
+        localStorage.setItem(bannerKey, '1');
+        banner.hidden = true;
+      });
+      el('banner-goto-settings')?.addEventListener('click', () => {
+        switchTab('staff');
+        banner.hidden = true;
+        localStorage.setItem(bannerKey, '1');
+      });
+    } else if (banner) {
+      banner.hidden = true;
+    }
+  })();
 
   // Reset attendance state
   S.absentTeachers = [];
@@ -1831,247 +1853,194 @@ const CustomSelect = (() => {
 })();
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Subjects management (المواد)
+// Workflow requests tab (الطلبات)  — replaces the old المواد tab
 // ═══════════════════════════════════════════════════════════════════════════
-const subjGradeSelect    = el('subj-grade-select');
-const subjLoading        = el('subj-loading');
-const subjListEl         = el('subj-list');
-const subjEmpty          = el('subj-empty');
-const btnAddSubject      = el('btn-add-subject');
-const btnRefreshSubjects = el('btn-refresh-subjects');
-// editor modal
-const modalSubject   = el('modal-subject');
-const btnCloseSubject= el('btn-close-subject');
-const subjModalTitle = el('subj-modal-title');
-const subjNameIn     = el('subj-name');
-const subjMaxIn      = el('subj-max');
-const subjPassIn     = el('subj-pass');
-const subjArabicIn   = el('subj-arabic');
-const subjMathIn     = el('subj-math');
-const subjCompList   = el('subj-comp-list');
-const btnAddComp     = el('btn-add-comp');
-const subjCompSum    = el('subj-comp-sum');
-const subjError      = el('subj-error');
-const btnSaveSubject = el('btn-save-subject');
-const subjSaveLabel  = el('subj-save-label');
-const subjSpinner    = el('subj-spinner');
+let _subjectsLoaded = false;   // kept for the tab lazy-load guard (tab name = 'subjects')
 
-let _subjectsLoaded   = false;
-let _subjGrade        = 1;
-let _editingSubjectId = null;
+const REQ_TYPE_LABELS = {
+  add_class:       'إضافة شعبة',
+  add_student:     'تسجيل طالب',
+  correct_student: 'تصحيح بيانات',
+};
+const REQ_STATUS_LABELS = {
+  pending:  'بانتظار المديرية',
+  approved: 'مقبول ✓',
+  rejected: 'مرفوض ✗',
+};
+const REQ_STATUS_CLASS = { pending: 'req-status--pending', approved: 'req-status--approved', rejected: 'req-status--rejected' };
 
 function gradeNameLabel(grade) {
-  return (typeof NDB.gradeNameAr === 'function') ? `الصف ${NDB.gradeNameAr(grade)}` : gradeLabel(grade);
+  return (typeof NDB.gradeNameAr === 'function') ? `الصف ${NDB.gradeNameAr(grade)}` : `الصف ${grade}`;
 }
 
-// Map a Supabase error to a clear Arabic message. 42501 / "permission denied
-// for table" means the grades tables haven't been granted to the app role yet.
-function gradesErr(err, fallback) {
-  if (err?.code === '42501' || /permission denied/i.test(err?.message || '')) {
-    return 'لا تملك صلاحية الوصول إلى بيانات الدرجات على قاعدة البيانات (راجع إعداد الصلاحيات).';
-  }
-  return fallback;
-}
-
-function initSubjectsTab() {
+async function initSubjectsTab() {
   if (!S.school?.id) return;
-  subjGradeSelect.innerHTML = '';
-  for (let g = 1; g <= 12; g++) {
-    const opt = document.createElement('option');
-    opt.value = String(g);
-    opt.textContent = gradeNameLabel(g);
-    subjGradeSelect.appendChild(opt);
-  }
-  subjGradeSelect.value = String(_subjGrade);
-  CustomSelect.refresh(subjGradeSelect);
   _subjectsLoaded = true;
-  loadSubjects();
+  // populate grade dropdowns with grades 1-12
+  ['req-class-grade'].forEach(id => {
+    const sel = el(id);
+    if (!sel || sel.childElementCount > 1) return;
+    for (let g = 1; g <= 12; g++) {
+      const opt = document.createElement('option');
+      opt.value = String(g);
+      opt.textContent = gradeNameLabel(g);
+      sel.appendChild(opt);
+    }
+  });
+  // populate class dropdowns for add_student and correct_student
+  try {
+    const classes = await NDB.getSchoolClasses(S.school.id);
+    ['req-stu-class', 'req-cor-class'].forEach(id => {
+      const sel = el(id);
+      if (!sel) return;
+      classes.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name || gradeNameLabel(c.grade) + (c.section ? ` / شعبة ${c.section}` : '');
+        sel.appendChild(opt);
+      });
+    });
+  } catch (e) {
+    console.warn('[Requests] could not load classes', e);
+  }
+  loadRequests();
 }
 
-async function loadSubjects() {
-  if (!S.school?.id) return;
-  _subjGrade = Number(subjGradeSelect.value) || 1;
-  show(subjLoading);
-  subjListEl.innerHTML = '';
-  subjEmpty.hidden = true;
+// When correct_student class changes → load students for that class
+el('req-cor-class')?.addEventListener('change', async function () {
+  const stuSel = el('req-cor-student');
+  stuSel.innerHTML = '<option value="">— اختر الطالب —</option>';
+  stuSel.disabled = true;
+  if (!this.value) return;
   try {
-    const subjects = await NDB.getSchoolSubjects(S.school.id, _subjGrade);
-    hide(subjLoading);
-    if (!subjects.length) { subjEmpty.hidden = false; return; }
-    for (const sub of subjects) subjListEl.appendChild(buildSubjectRow(sub));
+    const students = await NDB.getClassStudents(this.value);
+    students.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.fullName ?? s.full_name ?? s.id;
+      stuSel.appendChild(opt);
+    });
+    stuSel.disabled = false;
+  } catch (e) { console.warn('[Requests] load students', e); }
+});
+
+// Show / hide dynamic fields based on request type
+el('req-type-select')?.addEventListener('change', function () {
+  ['req-fields-add-class', 'req-fields-add-student', 'req-fields-correct-stu'].forEach(id => {
+    const el2 = el(id); if (el2) el2.hidden = true;
+  });
+  el('btn-send-req').disabled = !this.value;
+  if (this.value === 'add_class')       { el('req-fields-add-class').hidden    = false; }
+  if (this.value === 'add_student')     { el('req-fields-add-student').hidden  = false; }
+  if (this.value === 'correct_student') { el('req-fields-correct-stu').hidden  = false; }
+});
+
+el('btn-send-req')?.addEventListener('click', submitRequest);
+
+async function submitRequest() {
+  const type    = el('req-type-select').value;
+  const msgEl   = el('req-submit-msg');
+  const btn     = el('btn-send-req');
+  if (!type) return;
+
+  let payload = {};
+  let validationErr = '';
+
+  if (type === 'add_class') {
+    const grade   = el('req-class-grade').value;
+    const section = el('req-class-section').value.trim();
+    if (!grade)   validationErr = 'اختر الصف';
+    if (!section) validationErr = 'أدخل رمز الشعبة';
+    payload = { grade: Number(grade), section, note: el('req-class-note')?.value.trim() ?? '' };
+  } else if (type === 'add_student') {
+    const classId    = el('req-stu-class').value;
+    const first_name = el('req-stu-first').value.trim();
+    const father_name= el('req-stu-father').value.trim();
+    const family_name= el('req-stu-family').value.trim();
+    if (!classId)    validationErr = 'اختر الصف';
+    else if (!first_name || !father_name || !family_name) validationErr = 'الاسم الثلاثي مطلوب';
+    payload = {
+      class_id: classId, first_name, father_name, family_name,
+      gender:     el('req-stu-gender').value,
+      national_id:el('req-stu-nid').value.trim(),
+      birth_date: el('req-stu-dob').value || '',
+    };
+  } else if (type === 'correct_student') {
+    const studentId = el('req-cor-student').value;
+    const field     = el('req-cor-field').value;
+    const value     = el('req-cor-value').value.trim();
+    if (!studentId) validationErr = 'اختر الطالب';
+    else if (!field)  validationErr = 'اختر الحقل المراد تصحيحه';
+    else if (!value)  validationErr = 'أدخل القيمة الجديدة';
+    payload = {
+      student_id: studentId, [field]: value,
+      reason: el('req-cor-reason')?.value.trim() ?? '',
+    };
+  }
+
+  if (validationErr) {
+    msgEl.className = 'msg msg-error'; msgEl.textContent = validationErr; show(msgEl); return;
+  }
+
+  btn.disabled = true;
+  msgEl.hidden = true;
+  try {
+    await NDB.createSchoolRequest(S.school.id, S.school.directorate_id, type, payload);
+    msgEl.className = 'msg msg-success';
+    msgEl.textContent = 'تم إرسال الطلب — ستُبلَّغ بالنتيجة عند مراجعة المديرية.';
+    show(msgEl);
+    // reset form
+    el('req-type-select').value = '';
+    ['req-fields-add-class','req-fields-add-student','req-fields-correct-stu']
+      .forEach(id => { const e = el(id); if (e) e.hidden = true; });
+    loadRequests();
   } catch (err) {
-    console.error('[NSAMS] loadSubjects', err);
-    hide(subjLoading);
-    toast(gradesErr(err, 'تعذّر تحميل المواد'), 'error');
+    console.error('[Requests] submit', err);
+    msgEl.className = 'msg msg-error'; msgEl.textContent = err?.message ?? 'تعذّر إرسال الطلب'; show(msgEl);
+  } finally {
+    btn.disabled = false;
   }
 }
 
-function buildSubjectRow(sub) {
+async function loadRequests() {
+  const listEl   = el('req-list');
+  const loadEl   = el('req-list-loading');
+  const emptyEl  = el('req-list-empty');
+  if (!listEl) return;
+  show(loadEl); listEl.innerHTML = ''; hide(emptyEl);
+  try {
+    const reqs = await NDB.getSchoolRequests(S.school.id);
+    hide(loadEl);
+    if (!reqs.length) { show(emptyEl); return; }
+    reqs.forEach(r => listEl.appendChild(buildRequestCard(r)));
+  } catch (err) {
+    console.error('[Requests] load', err);
+    hide(loadEl);
+    toast('تعذّر تحميل الطلبات', 'error');
+  }
+}
+
+function buildRequestCard(r) {
   const li = document.createElement('li');
-  li.className = 'subj-row';
-  const tag = (sub.is_core_arabic ? '<span class="subj-tag">عربي</span>' : '')
-            + (sub.is_core_math ? '<span class="subj-tag">رياضيات</span>' : '');
+  li.className = 'req-card';
+  const date = r.created_at ? new Date(r.created_at).toLocaleDateString('ar-SY', { day:'numeric', month:'short', year:'numeric' }) : '';
+  const statusLabel = REQ_STATUS_LABELS[r.status] ?? r.status;
+  const statusClass = REQ_STATUS_CLASS[r.status]  ?? '';
+  const typeLabel   = REQ_TYPE_LABELS[r.type]   ?? r.type;
+  const reasonHtml  = (r.status === 'rejected' && r.review_reason)
+    ? `<div class="req-reason">السبب: ${escapeHtml(r.review_reason)}</div>` : '';
   li.innerHTML = `
-    <div class="subj-info">
-      <div class="subj-name">${escapeHtml(sub.name)}${tag}</div>
-      <div class="subj-meta">العظمى ${escapeHtml(String(sub.max_total))} · النجاح ${escapeHtml(String(sub.pass_mark))}٪</div>
+    <div class="req-card-hdr">
+      <span class="req-type-label">${escapeHtml(typeLabel)}</span>
+      <span class="req-status ${escapeHtml(statusClass)}">${escapeHtml(statusLabel)}</span>
     </div>
-    <div class="subj-actions">
-      <button class="icon-btn-sm" data-act="edit" aria-label="تعديل">
-        <svg class="icon icon-sm"><use href="#ic-edit"/></svg>
-      </button>
-      <button class="icon-btn-sm danger" data-act="del" aria-label="حذف">
-        <svg class="icon icon-sm"><use href="#ic-trash"/></svg>
-      </button>
-    </div>
+    <div class="req-date">${escapeHtml(date)}</div>
+    ${reasonHtml}
   `;
-  li.querySelector('[data-act="edit"]').addEventListener('click', () => openSubjectModal(sub));
-  li.querySelector('[data-act="del"]').addEventListener('click', () => deleteSubjectRow(sub));
   return li;
 }
 
-async function deleteSubjectRow(sub) {
-  if (!confirm(`حذف المادة «${sub.name}»؟ ستُحذف درجاتها أيضاً.`)) return;
-  try {
-    await NDB.deleteSubject(sub.id);
-    toast('تم حذف المادة', 'success');
-    loadSubjects();
-  } catch (err) {
-    console.error('[NSAMS] deleteSubject', err);
-    toast('تعذّر حذف المادة', 'error');
-  }
-}
-
-subjGradeSelect.addEventListener('change', loadSubjects);
-btnRefreshSubjects.addEventListener('click', loadSubjects);
-btnAddSubject.addEventListener('click', () => openSubjectModal(null));
-
-// ── Subject editor modal ──
-function addCompRow(name = '', max = '') {
-  const li = document.createElement('li');
-  li.className = 'comp-row';
-  li.innerHTML = `
-    <input class="field-input comp-name" type="text" placeholder="اسم المكوّن (مذاكرة…)" maxlength="40" />
-    <input class="field-input comp-max"  type="number" min="0" step="1" placeholder="العظمى" />
-    <button type="button" class="icon-btn-sm danger" aria-label="حذف المكوّن">
-      <svg class="icon icon-sm"><use href="#ic-x"/></svg>
-    </button>
-  `;
-  li.querySelector('.comp-name').value = name;
-  li.querySelector('.comp-max').value  = max;
-  li.querySelector('.comp-max').addEventListener('input', updateCompSum);
-  li.querySelector('button').addEventListener('click', () => { li.remove(); updateCompSum(); });
-  subjCompList.appendChild(li);
-}
-
-function updateCompSum() {
-  let sum = 0;
-  subjCompList.querySelectorAll('.comp-max').forEach(i => { sum += Number(i.value) || 0; });
-  const max = Number(subjMaxIn.value) || 0;
-  subjCompSum.textContent = `مجموع المكوّنات: ${sum} / ${max}`;
-  subjCompSum.classList.toggle('ok',  sum === max && max > 0);
-  subjCompSum.classList.toggle('bad', sum !== max);
-}
-
-async function openSubjectModal(sub) {
-  _editingSubjectId = sub?.id ?? null;
-  subjModalTitle.textContent = sub ? 'تعديل مادة' : 'مادة جديدة';
-  subjError.hidden = true;
-  subjNameIn.value   = sub?.name ?? '';
-  subjMaxIn.value    = sub?.max_total ?? 100;
-  subjPassIn.value   = sub?.pass_mark ?? 40;
-  subjArabicIn.checked = !!sub?.is_core_arabic;
-  subjMathIn.checked   = !!sub?.is_core_math;
-  subjCompList.innerHTML = '';
-
-  show(modalSubject);
-  document.body.style.overflow = 'hidden';
-
-  if (sub) {
-    try {
-      const comps = await NDB.getSubjectComponents(sub.id);
-      if (comps.length) comps.forEach(c => addCompRow(c.name, c.max_mark));
-      else addCompRow();
-    } catch {
-      addCompRow();
-    }
-  } else {
-    // sensible starter components (the user can adjust per stage)
-    addCompRow('مذاكرة', '');
-    addCompRow('شفهي / وظائف', '');
-    addCompRow('امتحان فصلي', '');
-  }
-  updateCompSum();
-}
-
-function closeSubjectModal() {
-  hide(modalSubject);
-  document.body.style.overflow = '';
-}
-
-btnCloseSubject.addEventListener('click', closeSubjectModal);
-modalSubject.addEventListener('click', (e) => { if (e.target === modalSubject) closeSubjectModal(); });
-btnAddComp.addEventListener('click', () => { addCompRow(); updateCompSum(); });
-subjMaxIn.addEventListener('input', updateCompSum);
-subjArabicIn.addEventListener('change', () => {
-  // Convenience: Arabic parts pass at 50% by default.
-  if (subjArabicIn.checked && (Number(subjPassIn.value) || 0) < 50) subjPassIn.value = 50;
-});
-
-btnSaveSubject.addEventListener('click', async () => {
-  const name = subjNameIn.value.trim();
-  const maxTotal = Number(subjMaxIn.value) || 0;
-  const passMark = Number(subjPassIn.value);
-  subjError.hidden = true;
-
-  if (!name)        { subjError.textContent = 'يرجى إدخال اسم المادة'; show(subjError); return; }
-  if (maxTotal <= 0){ subjError.textContent = 'العلامة العظمى غير صحيحة'; show(subjError); return; }
-  if (!(passMark >= 0 && passMark <= 100)) { subjError.textContent = 'نسبة النجاح يجب أن تكون بين 0 و 100'; show(subjError); return; }
-
-  const comps = [];
-  subjCompList.querySelectorAll('.comp-row').forEach(row => {
-    const n = row.querySelector('.comp-name').value.trim();
-    const m = Number(row.querySelector('.comp-max').value) || 0;
-    if (n) comps.push({ name: n, maxMark: m });
-  });
-  if (comps.length === 0) { subjError.textContent = 'أضف مكوّناً واحداً على الأقل'; show(subjError); return; }
-  const compSum = comps.reduce((a, c) => a + c.maxMark, 0);
-  if (compSum !== maxTotal) {
-    subjError.textContent = `مجموع المكوّنات (${compSum}) يجب أن يساوي العلامة العظمى (${maxTotal})`;
-    show(subjError); return;
-  }
-
-  btnSaveSubject.disabled = true;
-  subjSaveLabel.hidden = true;
-  subjSpinner.hidden = false;
-  try {
-    let subjectId = _editingSubjectId;
-    if (subjectId) {
-      await NDB.updateSubject(subjectId, {
-        name, maxTotal, passMark,
-        isCoreArabic: subjArabicIn.checked, isCoreMath: subjMathIn.checked,
-      });
-    } else {
-      subjectId = await NDB.createSubject({
-        schoolId: S.school.id, grade: _subjGrade,
-        name, maxTotal, passMark,
-        isCoreArabic: subjArabicIn.checked, isCoreMath: subjMathIn.checked,
-      });
-    }
-    await NDB.setSubjectComponents(subjectId, comps);
-    closeSubjectModal();
-    toast('تم حفظ المادة', 'success');
-    loadSubjects();
-  } catch (err) {
-    console.error('[NSAMS] saveSubject', err);
-    subjError.textContent = err?.message ?? 'تعذّر حفظ المادة';
-    show(subjError);
-  } finally {
-    btnSaveSubject.disabled = false;
-    subjSaveLabel.hidden = false;
-    subjSpinner.hidden = true;
-  }
-});
+el('btn-refresh-requests')?.addEventListener('click', loadRequests);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Report cards (الشهادات)
@@ -3169,6 +3138,9 @@ function populateIdentityCard() {
   if (el('sch-studenttype'))    el('sch-studenttype').value    = s.student_type   ?? '';
   if (el('sch-lat'))            el('sch-lat').value            = s.lat ?? '';
   if (el('sch-lng'))            el('sch-lng').value            = s.lng ?? '';
+  // Staff & student counts
+  if (el('sch-total-teachers')) el('sch-total-teachers').value = s.totalTeachers || '';
+  if (el('sch-total-students')) el('sch-total-students').value = s.totalStudents || '';
 }
 
 el('btn-locate')?.addEventListener('click', () => {
@@ -3215,6 +3187,42 @@ el('btn-save-identity')?.addEventListener('click', async () => {
   } catch (err) {
     console.error('[NSAMS] saveIdentity', err);
     msg.className = 'msg msg-error'; msg.textContent = 'تعذّر الحفظ.'; show(msg);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Staff & student real counts (بيانات الكادر والطلاب)
+// ════════════════════════════════════════════════════════════════════════════
+el('btn-save-counts')?.addEventListener('click', async () => {
+  const teachersVal = el('sch-total-teachers')?.value.trim() ?? '';
+  const studentsVal = el('sch-total-students')?.value.trim() ?? '';
+  const msg = el('sch-counts-msg');
+  const btn = el('btn-save-counts'); btn.disabled = true;
+  try {
+    const patch = {
+      totalTeachers: teachersVal === '' ? null : Number(teachersVal),
+      totalStudents: studentsVal === '' ? null : Number(studentsVal),
+    };
+    if ((teachersVal !== '' && isNaN(patch.totalTeachers)) ||
+        (studentsVal !== '' && isNaN(patch.totalStudents))) {
+      msg.className = 'msg msg-error'; msg.textContent = 'الأرقام غير صحيحة.'; show(msg);
+      btn.disabled = false; return;
+    }
+    await NDB.updateSchool(S.school.id, patch);
+    S.school.totalTeachers = patch.totalTeachers ?? 0;
+    S.school.totalStudents = patch.totalStudents ?? 0;
+    cacheSchool(S.school.id, S.school);
+    // Dismiss banner now that counts are set
+    const bannerKey = `nsams_setup_done_${S.school.id}`;
+    localStorage.setItem(bannerKey, '1');
+    const banner = el('setup-banner'); if (banner) banner.hidden = true;
+    msg.className = 'msg msg-success'; msg.textContent = 'تم حفظ الأعداد'; show(msg);
+    setTimeout(() => hide(msg), 2500);
+  } catch (err) {
+    console.error('[NSAMS] saveCounts', err);
+    msg.className = 'msg msg-error'; msg.textContent = err?.message ?? 'تعذّر الحفظ.'; show(msg);
   } finally {
     btn.disabled = false;
   }
