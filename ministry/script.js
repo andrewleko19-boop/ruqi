@@ -203,6 +203,9 @@ logoutBtn.addEventListener('click', async () => {
   emailInput.value    = '';
   passwordInput.value = '';
   tableData = [];
+  lastData  = null;
+  drill     = { level: 'national', gov: null, dirId: null };
+  document.getElementById('drill-card')?.classList.add('hidden');
 });
 
 function showDashboard(email) {
@@ -320,6 +323,7 @@ async function loadAllData() {
     renderStats(rows);
     renderTable(rows);
     renderGovRankChart(rows);
+    renderDrill();         // يعيد رسم مستوى التعمق الحالي ببيانات طازجة
     loadNationalTrend();   // try/catch داخلي — فشل RPC لا يمسّ اللوحة
     setLastUpdated();
 
@@ -385,9 +389,9 @@ function renderTable(rows) {
     tTotal     += row.totalSchools;
 
     return `
-      <tr>
+      <tr class="row-clickable" data-gov="${esc(row.governorate)}" title="عرض مديريات المحافظة">
         <td>${i + 1}</td>
-        <td><strong>${row.governorate}</strong></td>
+        <td><strong>${esc(row.governorate)}</strong> <span class="drill-chevron">‹</span></td>
         <td>${fmt(row.reportingSchools)}</td>
         <td style="color:#f87171">${silent > 0 ? fmt(silent) : '<span style="color:#4ade80">0</span>'}</td>
         <td>${fmt(enrolled)}</td>
@@ -593,6 +597,158 @@ document.getElementById('trend-period')?.addEventListener('click', (e) => {
     .forEach(b => b.classList.toggle('is-active', b === btn));
   loadNationalTrend();
 });
+
+// ── Drill-down: محافظة ← مديرية ← مدرسة ──────────────────────────────────────
+const rateCellHTML = (rateStr, barClass) => `
+  <div class="rate-cell">
+    <div class="rate-bar-bg">
+      <div class="rate-bar-fill ${barClass}" style="width:${rateStr ?? 0}%"></div>
+    </div>
+    <span class="rate-text" style="color:${
+      barClass === 'green'  ? '#4ade80' :
+      barClass === 'yellow' ? '#fde047' :
+      barClass === 'red'    ? '#f87171' : '#64748b'
+    }">
+      ${rateStr !== null ? rateStr + '%' : '—'}
+    </span>
+  </div>`;
+
+function openDrillGov(gov) {
+  drill = { level: 'gov', gov, dirId: null };
+  renderDrill();
+  document.getElementById('drill-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeDrill() {
+  drill = { level: 'national', gov: null, dirId: null };
+  renderDrill();
+}
+
+function renderDrill() {
+  const card = document.getElementById('drill-card');
+  if (!card) return;
+  if (drill.level === 'national' || !lastData) { card.classList.add('hidden'); return; }
+
+  const dirs = lastData.directorates.filter(d => (d.governorate || 'غير محدد') === drill.gov);
+  if (dirs.length === 0) { closeDrill(); return; }   // اختفت المحافظة بعد تحديث
+
+  card.classList.remove('hidden');
+  renderBreadcrumb();
+
+  const thead = document.getElementById('drill-thead');
+  const tbody = document.getElementById('drill-tbody');
+
+  if (drill.level === 'gov') {
+    thead.innerHTML = `
+      <tr>
+        <th>#</th><th>المديرية</th><th>المدارس المُسجّلة</th><th>لم تُسجّل</th>
+        <th>إجمالي الطلاب</th><th>الحاضرون</th><th>الغائبون</th>
+        <th>نسبة الحضور</th><th>الحالة</th>
+      </tr>`;
+    tbody.innerHTML = dirs.map((d, i) => {
+      const a = lastData.dirAgg[d.id];
+      const enrolled  = a.present + a.late + a.absent + a.excused;
+      const attending = a.present + a.late + a.excused;
+      const rate      = enrolled > 0 ? (attending / enrolled * 100) : null;
+      const rateStr   = rate !== null ? rate.toFixed(1) : null;
+      const barClass  = rateBarClass(rateStr);
+      const silent    = Math.max(0, a.totalSchools - a.reportingSchools.size);
+      return `
+        <tr class="row-clickable" data-dir="${esc(d.id)}" title="عرض مدارس المديرية">
+          <td>${i + 1}</td>
+          <td><strong>${esc(a.name)}</strong> <span class="drill-chevron">‹</span></td>
+          <td>${fmt(a.reportingSchools.size)}</td>
+          <td style="color:#f87171">${silent > 0 ? fmt(silent) : '<span style="color:#4ade80">0</span>'}</td>
+          <td>${fmt(enrolled)}</td>
+          <td style="color:#4ade80">${fmt(attending)}</td>
+          <td style="color:#f87171">${fmt(a.absent)}</td>
+          <td>${rateCellHTML(rateStr, barClass)}</td>
+          <td>${rateBadge(rateStr)}</td>
+        </tr>`;
+    }).join('');
+    return;
+  }
+
+  // level === 'dir'
+  const dirInfo = lastData.dirAgg[drill.dirId];
+  if (!dirInfo) { drill = { level: 'gov', gov: drill.gov, dirId: null }; renderDrill(); return; }
+
+  const dirSchools = lastData.schools
+    .filter(s => s.directorate_id === drill.dirId)
+    .map(s => {
+      const p = lastData.perSchool[s.id] || null;   // null = لم تُسجّل اليوم
+      const enrolled  = p ? p.present + p.late + p.absent + p.excused : 0;
+      const attending = p ? p.present + p.late + p.excused : 0;
+      const rate      = enrolled > 0 ? (attending / enrolled * 100) : null;
+      return { name: s.name ?? '—', silent: !p, enrolled, attending, absent: p?.absent ?? 0, rate };
+    })
+    .sort((a, b) => {
+      if (a.silent !== b.silent) return a.silent ? -1 : 1;   // الصامتة أولاً
+      return (a.rate ?? 101) - (b.rate ?? 101);              // ثم النسبة تصاعدياً
+    });
+
+  thead.innerHTML = `
+    <tr>
+      <th>#</th><th>المدرسة</th><th>المسجّلون اليوم</th>
+      <th>الحاضرون</th><th>الغائبون</th><th>نسبة الحضور</th><th>الحالة</th>
+    </tr>`;
+
+  if (dirSchools.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#64748b;padding:18px">لا توجد مدارس في هذه المديرية.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = dirSchools.map((s, i) => {
+    const rateStr  = s.rate !== null ? s.rate.toFixed(1) : null;
+    const barClass = rateBarClass(rateStr);
+    return `
+      <tr${s.silent ? ' class="row-silent"' : ''}>
+        <td>${i + 1}</td>
+        <td><strong>${esc(s.name)}</strong></td>
+        <td>${s.silent ? '—' : fmt(s.enrolled)}</td>
+        <td style="color:#4ade80">${s.silent ? '—' : fmt(s.attending)}</td>
+        <td style="color:#f87171">${s.silent ? '—' : fmt(s.absent)}</td>
+        <td>${rateCellHTML(rateStr, barClass)}</td>
+        <td>${s.silent ? '<span class="badge badge-none">لم تُسجّل</span>' : rateBadge(rateStr)}</td>
+      </tr>`;
+  }).join('');
+}
+
+function renderBreadcrumb() {
+  const bc = document.getElementById('drill-breadcrumb');
+  if (!bc) return;
+  const parts = ['<button data-nav="national">الوطن</button>', '<span class="crumb-sep">›</span>'];
+  if (drill.level === 'gov') {
+    parts.push(`<span class="crumb-current">${esc(drill.gov)}</span>`);
+  } else {
+    parts.push(`<button data-nav="gov">${esc(drill.gov)}</button>`);
+    parts.push('<span class="crumb-sep">›</span>');
+    parts.push(`<span class="crumb-current">${esc(lastData?.dirAgg[drill.dirId]?.name ?? '—')}</span>`);
+  }
+  bc.innerHTML = parts.join('');
+}
+
+// تفويض النقر — يُسجَّل مرة واحدة عند الإقلاع
+govTbody.addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-gov]');
+  if (tr) openDrillGov(tr.dataset.gov);
+});
+
+document.getElementById('drill-tbody')?.addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-dir]');
+  if (!tr) return;
+  drill = { level: 'dir', gov: drill.gov, dirId: tr.dataset.dir };
+  renderDrill();
+});
+
+document.getElementById('drill-breadcrumb')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-nav]');
+  if (!btn) return;
+  if (btn.dataset.nav === 'national') closeDrill();
+  else { drill = { level: 'gov', gov: drill.gov, dirId: null }; renderDrill(); }
+});
+
+document.getElementById('drill-close')?.addEventListener('click', closeDrill);
 
 // ── Refresh (manual) ──────────────────────────────────────────────────────────
 refreshBtn.addEventListener('click', async () => {
