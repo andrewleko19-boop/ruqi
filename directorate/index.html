@@ -226,6 +226,33 @@
 
       </div>
 
+      <!-- لوحة اتجاه الحضور -->
+      <section class="panel" id="trend-panel">
+        <div class="panel-header">
+          <h2>
+            <svg class="icon"><use href="#icon-clock"/></svg>
+            اتجاه الحضور
+            <span class="live-indicator"><span class="live-dot"></span>مباشر</span>
+          </h2>
+          <div class="table-filters" id="trend-period">
+            <button class="btn btn-ghost btn-sm trend-period-btn" data-days="7">٧ أيام</button>
+            <button class="btn btn-ghost btn-sm trend-period-btn is-active" data-days="14">١٤ يوماً</button>
+            <button class="btn btn-ghost btn-sm trend-period-btn" data-days="30">٣٠ يوماً</button>
+          </div>
+        </div>
+        <div class="charts-grid">
+          <div class="chart-box">
+            <h3 class="chart-title">نسبة الحضور اليومية ٪</h3>
+            <div class="chart-canvas-wrap"><canvas id="trend-rate-chart"></canvas></div>
+          </div>
+          <div class="chart-box">
+            <h3 class="chart-title">توزيع حالات الطلاب يومياً</h3>
+            <div class="chart-canvas-wrap"><canvas id="trend-stack-chart"></canvas></div>
+          </div>
+        </div>
+        <p id="trend-empty" class="empty-state" style="padding:14px 18px" hidden>لا توجد بيانات اتجاه — تأكد من تشغيل القسم 7 من database-setup.sql.</p>
+      </section>
+
       <!-- لوحة الالتزام اليومي -->
       <section class="panel" id="compliance-panel">
         <div class="panel-header">
@@ -357,6 +384,7 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="../shared/db.js"></script>  <script type="module" src="script.js"></script>
 </body>

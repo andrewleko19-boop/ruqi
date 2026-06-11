@@ -887,3 +887,56 @@ tr.row-flash {
   display: inline-block;
   text-align: center;
 }
+
+/* ══════════════════════════════════════════════
+   PHASE 2 — TREND CHARTS
+══════════════════════════════════════════════ */
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  padding: 14px 18px;
+}
+.chart-box {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  min-width: 0;
+}
+.chart-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+/* ارتفاع ثابت إلزامي مع maintainAspectRatio:false */
+.chart-canvas-wrap {
+  position: relative;
+  height: 260px;
+}
+.trend-period-btn.is-active {
+  background: var(--blue-dim);
+  color: var(--blue);
+}
+
+/* روابط ملف المدرسة */
+.school-link {
+  color: var(--text-primary);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--text-muted);
+}
+.school-link:hover {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+}
+.popup-link {
+  color: var(--blue);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (max-width: 1100px) {
+  .charts-grid { grid-template-columns: 1fr; }
+  .chart-canvas-wrap { height: 220px; }
+}

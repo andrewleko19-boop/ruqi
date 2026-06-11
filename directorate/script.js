@@ -11,6 +11,7 @@ const {
   getSchools,
   getDirectorateCompliance,
   sendAttendanceReminder,
+  getDirectorateTrend,
   localDateISO,
 } = window.NSAMS_DB;
 
@@ -34,6 +35,8 @@ let lightboxState     = { urls: [], idx: 0 };
 let refreshTimer;
 let countdownInterval;
 let currentUser = null;
+let trendDays   = 14;
+const charts    = {};
 const REFRESH_INTERVAL = 30;
 
 // Arabic labels for map status colours
@@ -144,6 +147,7 @@ function showApp(session) {
   setupComplianceActions();
   setupCSVExports();
   setupLightbox();
+  setupTrendPeriod();
 }
 
 // ══════════════════════════════════════════════
@@ -734,10 +738,155 @@ function setupCSVExports() {
 }
 
 // ══════════════════════════════════════════════
+//  Trend charts (Chart.js — dark/RTL)
+// ══════════════════════════════════════════════
+const CHART_FONT = "'Segoe UI', system-ui, sans-serif";
+const CH = {
+  grid:      'rgba(38, 48, 72, 0.55)',
+  tick:      '#8a9bbf',
+  tooltipBg: '#131929',
+  green: '#22c55e', blue: '#4f8cff', amber: '#f59e0b', red: '#ef4444', purple: '#a855f7',
+};
+
+function chartBaseOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,          // الارتفاع من .chart-canvas-wrap
+    animation: { duration: 500 },
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: {
+        rtl: true,
+        labels: { color: CH.tick, font: { family: CHART_FONT, size: 12 }, usePointStyle: true, boxWidth: 8 },
+      },
+      tooltip: {
+        rtl: true, textDirection: 'rtl',
+        backgroundColor: CH.tooltipBg, borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1,
+        titleColor: '#e8edf7', bodyColor: '#8a9bbf', padding: 10,
+        titleFont: { family: CHART_FONT }, bodyFont: { family: CHART_FONT },
+      },
+    },
+    scales: {
+      x: { grid: { color: CH.grid, drawTicks: false }, ticks: { color: CH.tick, font: { family: CHART_FONT, size: 11 }, maxRotation: 0, autoSkip: true } },
+      y: { beginAtZero: true, grid: { color: CH.grid, drawTicks: false }, ticks: { color: CH.tick, font: { family: CHART_FONT, size: 11 } } },
+    },
+  };
+}
+
+// إنشاء مرة واحدة ثم تحديث — لا destroy (انتقالات حية ناعمة عبر auto-refresh)
+function upsertChart(holder, key, canvasId, configFactory, labels, datasetsData) {
+  if (typeof Chart === 'undefined') return null;   // فشل CDN — تدهور صامت
+  const existing = holder[key];
+  if (existing) {
+    existing.data.labels = labels;
+    existing.data.datasets.forEach((ds, i) => { ds.data = datasetsData[i]; });
+    existing.update();
+    return existing;
+  }
+  const el = document.getElementById(canvasId);
+  if (!el) return null;
+  holder[key] = new Chart(el.getContext('2d'), configFactory(labels, datasetsData));
+  return holder[key];
+}
+
+// مرساة الظهيرة تمنع انزياح اليوم في UTC+3
+const trendLabel = (isoDay) =>
+  new Date(isoDay + 'T12:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+
+function rateLineConfig(labels, datasetsData) {
+  const opts = chartBaseOptions();
+  opts.scales.y.suggestedMax = 100;
+  opts.scales.y.ticks.callback = (v) => v + '%';
+  opts.plugins.tooltip.callbacks = {
+    label: (ctx) => ` نسبة الحضور: ${ctx.parsed.y !== null ? ctx.parsed.y + '%' : '—'}`,
+  };
+  return {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'نسبة الحضور',
+        data: datasetsData[0],
+        borderColor: CH.blue,
+        backgroundColor: 'rgba(79,140,255,0.12)',
+        fill: true,
+        tension: 0.35,
+        spanGaps: false,
+        pointRadius: 3,
+        pointBackgroundColor: CH.blue,
+      }],
+    },
+    options: opts,
+  };
+}
+
+function stackBarConfig(labels, datasetsData) {
+  const opts = chartBaseOptions();
+  opts.scales.x.stacked = true;
+  opts.scales.y.stacked = true;
+  const mk = (label, color, data) => ({
+    label, data, backgroundColor: color, borderRadius: 3, maxBarThickness: 26,
+  });
+  return {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        mk('حاضر',  CH.green,  datasetsData[0]),
+        mk('متأخر', CH.amber,  datasetsData[1]),
+        mk('مُجاز', CH.purple, datasetsData[2]),
+        mk('غائب',  CH.red,    datasetsData[3]),
+      ],
+    },
+    options: opts,
+  };
+}
+
+async function loadTrend() {
+  const emptyEl = document.getElementById('trend-empty');
+  try {
+    const rows = await getDirectorateTrend(trendDays);
+    const hasData = rows.some(r => (r.present + r.late + r.absent + r.excused) > 0);
+    if (emptyEl) emptyEl.hidden = hasData;
+
+    const labels = rows.map(r => trendLabel(r.day));
+    const rates  = rows.map(r => {
+      const en = r.present + r.late + r.absent + r.excused;
+      return en ? +(((r.present + r.late + r.excused) / en) * 100).toFixed(1) : null;
+    });
+
+    upsertChart(charts, 'rate', 'trend-rate-chart', rateLineConfig, labels, [rates]);
+    upsertChart(charts, 'stack', 'trend-stack-chart', stackBarConfig, labels, [
+      rows.map(r => r.present),
+      rows.map(r => r.late),
+      rows.map(r => r.excused),
+      rows.map(r => r.absent),
+    ]);
+  } catch (err) {
+    console.warn('[Trend] RPC unavailable:', err);
+    if (emptyEl) emptyEl.hidden = false;
+  }
+}
+
+function setupTrendPeriod() {
+  const wrap = document.getElementById('trend-period');
+  if (!wrap) return;
+  wrap.addEventListener('click', (e) => {
+    const btn = e.target.closest('.trend-period-btn');
+    if (!btn) return;
+    const days = parseInt(btn.dataset.days, 10);
+    if (!days || days === trendDays) return;
+    trendDays = days;
+    wrap.querySelectorAll('.trend-period-btn').forEach(b => b.classList.toggle('is-active', b === btn));
+    loadTrend();
+  });
+}
+
+// ══════════════════════════════════════════════
 //  Orchestrator
 // ══════════════════════════════════════════════
 async function loadAll() {
-  await Promise.allSettled([loadStats(), loadMapAndCompliance(), loadReports()]);
+  await Promise.allSettled([loadStats(), loadMapAndCompliance(), loadReports(), loadTrend()]);
 }
 
 // ══════════════════════════════════════════════
