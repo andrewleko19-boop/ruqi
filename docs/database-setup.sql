@@ -579,3 +579,194 @@ end; $$;
 
 revoke all on function public.send_attendance_reminder(uuid) from public, anon;
 grant execute on function public.send_attendance_reminder(uuid) to authenticated;
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 7. اتجاهات الحضور — المرحلة الثانية (مديرية / وزارة / مدرسة)
+--    ثلاث دوال SECURITY DEFINER بنمط القسم 6:
+--    • فحص الدور عبر users + auth.uid() (استثناء لغير المصرّح لهم)
+--    • أيام العمل فقط: الجمعة والسبت مستثناة (isodow 5 و 6 — عطلة سوريا)
+--    • generate_series + LEFT JOIN كي تظهر الأيام بلا تسجيل كصفوف صفرية
+--      (استمرارية المنحنى في المخططات)
+--    • سقف p_days بين 1 و 92
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- 7.1  اتجاه حضور مديرية المستخدم الحالي عبر آخر N يوم عمل
+create or replace function public.get_directorate_trend(p_days integer default 14)
+returns table (
+  day              date,
+  present          integer,
+  late             integer,
+  absent           integer,
+  excused          integer,
+  schools_reported integer
+)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_dir uuid;
+begin
+  select u.directorate_id into v_dir
+  from public.users u
+  where u.id = auth.uid() and u.role = 'directorate_user';
+
+  if v_dir is null then
+    raise exception 'غير مصرّح: هذه الدالة لمستخدمي المديرية فقط';
+  end if;
+
+  if p_days is null or p_days < 1 or p_days > 92 then
+    p_days := 14;
+  end if;
+
+  return query
+  select
+    g.g_day,
+    coalesce(t.c_present, 0),
+    coalesce(t.c_late, 0),
+    coalesce(t.c_absent, 0),
+    coalesce(t.c_excused, 0),
+    coalesce(t.c_schools, 0)
+  from (
+    select gs::date as g_day
+    from generate_series(current_date - (p_days - 1), current_date, interval '1 day') gs
+    where extract(isodow from gs) not in (5, 6)
+  ) g
+  left join (
+    select
+      dsa.date                                                as t_day,
+      count(*) filter (where dsa.status = 'present')::integer as c_present,
+      count(*) filter (where dsa.status = 'late')::integer    as c_late,
+      count(*) filter (where dsa.status = 'absent')::integer  as c_absent,
+      count(*) filter (where dsa.status = 'excused')::integer as c_excused,
+      count(distinct dsa.school_id)::integer                  as c_schools
+    from public.daily_student_attendance dsa
+    join public.schools s on s.id = dsa.school_id
+    where s.directorate_id = v_dir
+      and dsa.date >  current_date - p_days
+      and dsa.date <= current_date
+    group by dsa.date
+  ) t on t.t_day = g.g_day
+  order by g.g_day;
+end; $$;
+
+revoke all on function public.get_directorate_trend(integer) from public, anon;
+grant execute on function public.get_directorate_trend(integer) to authenticated;
+
+-- 7.2  الاتجاه الوطني (الوزارة) — نفس الشكل، كل المدارس
+create or replace function public.get_ministry_trend(p_days integer default 14)
+returns table (
+  day              date,
+  present          integer,
+  late             integer,
+  absent           integer,
+  excused          integer,
+  schools_reported integer
+)
+language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (
+    select 1 from public.users u
+    where u.id = auth.uid() and u.role = 'ministry_user'
+  ) then
+    raise exception 'غير مصرّح: هذه الدالة لمستخدمي الوزارة فقط';
+  end if;
+
+  if p_days is null or p_days < 1 or p_days > 92 then
+    p_days := 14;
+  end if;
+
+  return query
+  select
+    g.g_day,
+    coalesce(t.c_present, 0),
+    coalesce(t.c_late, 0),
+    coalesce(t.c_absent, 0),
+    coalesce(t.c_excused, 0),
+    coalesce(t.c_schools, 0)
+  from (
+    select gs::date as g_day
+    from generate_series(current_date - (p_days - 1), current_date, interval '1 day') gs
+    where extract(isodow from gs) not in (5, 6)
+  ) g
+  left join (
+    select
+      dsa.date                                                as t_day,
+      count(*) filter (where dsa.status = 'present')::integer as c_present,
+      count(*) filter (where dsa.status = 'late')::integer    as c_late,
+      count(*) filter (where dsa.status = 'absent')::integer  as c_absent,
+      count(*) filter (where dsa.status = 'excused')::integer as c_excused,
+      count(distinct dsa.school_id)::integer                  as c_schools
+    from public.daily_student_attendance dsa
+    where dsa.date >  current_date - p_days
+      and dsa.date <= current_date
+    group by dsa.date
+  ) t on t.t_day = g.g_day
+  order by g.g_day;
+end; $$;
+
+revoke all on function public.get_ministry_trend(integer) from public, anon;
+grant execute on function public.get_ministry_trend(integer) to authenticated;
+
+-- 7.3  اتجاه مدرسة واحدة — للمديرية المالكة أو الوزارة
+create or replace function public.get_school_trend(p_school_id uuid, p_days integer default 30)
+returns table (
+  day     date,
+  present integer,
+  late    integer,
+  absent  integer,
+  excused integer
+)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_role       text;
+  v_dir        uuid;
+  v_school_dir uuid;
+begin
+  select u.role, u.directorate_id into v_role, v_dir
+  from public.users u
+  where u.id = auth.uid();
+
+  select s.directorate_id into v_school_dir
+  from public.schools s where s.id = p_school_id;
+
+  if v_school_dir is null then
+    raise exception 'المدرسة غير موجودة';
+  end if;
+
+  if not (v_role = 'ministry_user'
+          or (v_role = 'directorate_user' and v_dir = v_school_dir)) then
+    raise exception 'غير مصرّح: المدرسة ليست ضمن نطاق صلاحيتك';
+  end if;
+
+  if p_days is null or p_days < 1 or p_days > 92 then
+    p_days := 30;
+  end if;
+
+  return query
+  select
+    g.g_day,
+    coalesce(t.c_present, 0),
+    coalesce(t.c_late, 0),
+    coalesce(t.c_absent, 0),
+    coalesce(t.c_excused, 0)
+  from (
+    select gs::date as g_day
+    from generate_series(current_date - (p_days - 1), current_date, interval '1 day') gs
+    where extract(isodow from gs) not in (5, 6)
+  ) g
+  left join (
+    select
+      dsa.date                                                as t_day,
+      count(*) filter (where dsa.status = 'present')::integer as c_present,
+      count(*) filter (where dsa.status = 'late')::integer    as c_late,
+      count(*) filter (where dsa.status = 'absent')::integer  as c_absent,
+      count(*) filter (where dsa.status = 'excused')::integer as c_excused
+    from public.daily_student_attendance dsa
+    where dsa.school_id = p_school_id
+      and dsa.date >  current_date - p_days
+      and dsa.date <= current_date
+    group by dsa.date
+  ) t on t.t_day = g.g_day
+  order by g.g_day;
+end; $$;
+
+revoke all on function public.get_school_trend(uuid, integer) from public, anon;
+grant execute on function public.get_school_trend(uuid, integer) to authenticated;

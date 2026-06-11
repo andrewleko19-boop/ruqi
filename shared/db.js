@@ -518,6 +518,22 @@ async function sendAttendanceReminder(schoolId) {
   return data ?? 0;
 }
 
+// اتجاه حضور مديرية المستخدم الحالي — أيام العمل فقط (الجمعة/السبت مستثناة)
+// returns [{ day, present, late, absent, excused, schools_reported }]
+async function getDirectorateTrend(days = 14) {
+  const { data, error } = await db.rpc('get_directorate_trend', { p_days: days });
+  if (error) throw error;
+  return data || [];
+}
+
+// اتجاه حضور مدرسة واحدة (للمديرية المالكة أو الوزارة)
+// returns [{ day, present, late, absent, excused }]
+async function getSchoolTrend(schoolId, days = 30) {
+  const { data, error } = await db.rpc('get_school_trend', { p_school_id: schoolId, p_days: days });
+  if (error) throw error;
+  return data || [];
+}
+
 // ─── Ministry ─────────────────────────────────────────────────────────────────
 async function getMinistryAttendanceSummary(date) {
   const isoDate = date instanceof Date ? localDateISO(date) : date;
@@ -2309,6 +2325,8 @@ window.NSAMS_DB = {
   getSchoolsAttendanceStatus,
   getDirectorateCompliance,
   sendAttendanceReminder,
+  getDirectorateTrend,
+  getSchoolTrend,
 
   // Ministry
   getMinistryAttendanceSummary,
