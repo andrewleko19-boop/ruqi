@@ -1029,6 +1029,33 @@
         <p id="stu-noresults" class="mng-empty" hidden>لا نتائج مطابقة للبحث.</p>
       </div>
     </section>
+    <!-- إنذار التسرب المبكر — يظهر أسفل قائمة الطلاب -->
+    <section class="card" id="dropout-warning-card" style="margin-top:12px">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-alert"/></svg>
+        <span>إنذار التسرب المبكر</span>
+        <button class="hdr-btn" id="btn-refresh-dropout" aria-label="تحديث" style="margin-inline-start:auto">
+          <svg class="icon icon-sm"><use href="#ic-refresh"/></svg>
+        </button>
+      </div>
+      <div class="card-body">
+        <p class="mng-hint" id="dropout-hint">طلاب بلغوا حد الغياب المحدد في الفصل الحالي.</p>
+        <div id="dropout-loading" hidden style="padding:8px 0">
+          <div class="dskel"></div><div class="dskel" style="width:60%"></div>
+        </div>
+
+        <!-- طلاب في خطر: بلغوا الحد ولم يُرقَّن قيدهم بعد -->
+        <h4 class="det-section-title" id="dropout-risk-hdr" hidden>طلاب بلغوا حد الغياب</h4>
+        <ul id="dropout-risk-list" class="mng-list" role="list"></ul>
+        <p id="dropout-risk-empty" class="mng-empty" hidden>لا يوجد طلاب في خطر حالياً.</p>
+
+        <!-- طلاب مرقَّن قيدهم -->
+        <h4 class="det-section-title" id="dropout-flagged-hdr" hidden style="margin-top:16px">
+          مرقَّن قيدهم هذا الفصل
+        </h4>
+        <ul id="dropout-flagged-list" class="mng-list" role="list"></ul>
+      </div>
+    </section>
   </main><!-- /page (students) -->
 
   <!-- ═══ Student editor modal ═════════════════════════════════════════════════ -->

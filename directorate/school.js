@@ -301,13 +301,19 @@ function renderTodayCards(rows) {
 // ══════════════════════════════════════════════
 //  Compliance (30 يوماً)
 // ══════════════════════════════════════════════
-function countWorkingDays(daysBack) {
+async function countWorkingDays(daysBack) {
   let count = 0;
   const d = new Date();
+  let holidays = new Set();
+  try {
+    const rows = await window.NSAMS_DB.getHolidays();
+    holidays = new Set(rows.map(h => h.date));
+  } catch { /* fallback: no holidays */ }
   for (let i = 1; i <= daysBack; i++) {
     d.setDate(d.getDate() - 1);
     const dow = d.getDay(); // 0=Sun … 5=Fri 6=Sat
-    if (dow !== 5 && dow !== 6) count++;
+    const iso = d.toISOString().slice(0, 10);
+    if (dow !== 5 && dow !== 6 && !holidays.has(iso)) count++;
   }
   return count;
 }
@@ -316,7 +322,7 @@ async function loadCompliance() {
   try {
     const compliance = await getDirectorateCompliance(30);
     const mine = (compliance || []).find(c => c.school_id === schoolId);
-    const workingDays = countWorkingDays(30);
+    const workingDays = await countWorkingDays(30);
     const days = mine?.days_reported ?? 0;
     const pct  = workingDays ? Math.min(100, Math.round((days / workingDays) * 100)) : 0;
 

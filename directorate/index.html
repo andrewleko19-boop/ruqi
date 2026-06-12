@@ -292,6 +292,38 @@
         </div>
       </section>
 
+      <!-- إنذار التسرب المبكر -->
+      <section class="panel" id="dropout-panel">
+        <div class="panel-header">
+          <h2>
+            <svg class="icon"><use href="#icon-alert"/></svg>
+            إنذار التسرب المبكر
+          </h2>
+          <button id="reload-dropout-btn" class="btn btn-ghost btn-sm">
+            <svg class="icon icon-sm"><use href="#icon-refresh"/></svg>
+            تحديث
+          </button>
+        </div>
+        <div id="dropout-loading" class="table-loading hidden">
+          <div class="spinner"></div><span>جارٍ التحميل…</span>
+        </div>
+        <div class="table-wrapper" id="dropout-table-wrap" hidden>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>المدرسة</th>
+                <th title="طلاب بلغوا حد الغياب ولم يُرقَّن قيدهم بعد">في خطر</th>
+                <th title="طلاب مرقَّن قيدهم هذا الفصل">مرقَّن قيده</th>
+              </tr>
+            </thead>
+            <tbody id="dropout-tbody"></tbody>
+          </table>
+        </div>
+        <p id="dropout-empty" class="empty-state" style="padding:14px 18px" hidden>
+          لا توجد بيانات تسرب — تأكد من تشغيل القسم 10 من database-setup.sql.
+        </p>
+      </section>
+
       <!-- طلبات المدارس -->
       <section class="panel" id="requests-card">
         <div class="panel-header">

@@ -285,7 +285,7 @@ async function loadMapAndCompliance() {
     // لوحة الالتزام — try/catch مستقل لئلا يُسقط فشل RPC الخريطةَ
     try {
       const compliance = await getDirectorateCompliance(30);
-      renderCompliance(schools, compliance);
+      await renderCompliance(schools, compliance);
     } catch (compErr) {
       console.warn('[Compliance] RPC unavailable:', compErr);
       const tbody = document.getElementById('compliance-tbody');
@@ -301,20 +301,26 @@ async function loadMapAndCompliance() {
 // ══════════════════════════════════════════════
 //  Compliance
 // ══════════════════════════════════════════════
-function countWorkingDays(daysBack) {
+async function countWorkingDays(daysBack) {
   let count = 0;
   const d = new Date();
+  let holidays = new Set();
+  try {
+    const rows = await NSAMS_DB.getHolidays();
+    holidays = new Set(rows.map(h => h.date));
+  } catch { /* fallback: no holidays */ }
   for (let i = 1; i <= daysBack; i++) {
     d.setDate(d.getDate() - 1);
     const dow = d.getDay(); // 0=Sun … 5=Fri 6=Sat
-    if (dow !== 5 && dow !== 6) count++;
+    const iso = d.toISOString().slice(0, 10);
+    if (dow !== 5 && dow !== 6 && !holidays.has(iso)) count++;
   }
   return count;
 }
 
-function renderCompliance(schools, compliance) {
+async function renderCompliance(schools, compliance) {
   const byId = Object.fromEntries((compliance || []).map(c => [c.school_id, c]));
-  const workingDays = countWorkingDays(30) || 1;
+  const workingDays = (await countWorkingDays(30)) || 1;
 
   const total     = schools.length;
   const submitted = schools.filter(s => byId[s.id]?.reported_today === true).length;
@@ -897,8 +903,44 @@ function setupTrendPeriod() {
 // ══════════════════════════════════════════════
 //  Orchestrator
 // ══════════════════════════════════════════════
+async function loadDropoutSummary() {
+  const loadingEl   = document.getElementById('dropout-loading');
+  const tableWrap   = document.getElementById('dropout-table-wrap');
+  const emptyEl     = document.getElementById('dropout-empty');
+  const tbody       = document.getElementById('dropout-tbody');
+  if (!loadingEl) return;
+
+  loadingEl.hidden = false;
+  if (tableWrap) tableWrap.hidden = true;
+  if (emptyEl)   emptyEl.hidden   = true;
+
+  try {
+    const rows = await NSAMS_DB.getDirectorateDropoutSummary();
+    loadingEl.hidden = true;
+    if (!rows || rows.length === 0) {
+      if (emptyEl) emptyEl.hidden = false;
+      return;
+    }
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${esc(r.school_name)}</td>
+        <td style="color:${(r.at_risk_count || 0) > 0 ? 'var(--clr-danger,#EF4444)' : 'inherit'};font-weight:600">
+          ${r.at_risk_count ?? 0}
+        </td>
+        <td>${r.flagged_count ?? 0}</td>
+      </tr>`).join('');
+    if (tableWrap) tableWrap.hidden = false;
+  } catch (err) {
+    loadingEl.hidden = true;
+    if (emptyEl) { emptyEl.textContent = 'تعذّر تحميل بيانات التسرب.'; emptyEl.hidden = false; }
+    console.warn('[Dropout]', err);
+  }
+}
+
+document.getElementById('reload-dropout-btn')?.addEventListener('click', loadDropoutSummary);
+
 async function loadAll() {
-  await Promise.allSettled([loadStats(), loadMapAndCompliance(), loadReports(), loadTrend(), loadRequests()]);
+  await Promise.allSettled([loadStats(), loadMapAndCompliance(), loadReports(), loadTrend(), loadRequests(), loadDropoutSummary()]);
 }
 
 // ══════════════════════════════════════════════

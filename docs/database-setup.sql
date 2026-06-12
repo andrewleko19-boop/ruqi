@@ -1031,3 +1031,559 @@ create trigger trg_notify_dir_new_request
 -- alter table public.schools alter column total_teachers drop not null;
 -- alter table public.schools alter column total_students  drop not null;
 -- update public.schools set total_teachers = null, total_students = null;
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+--  SECTION 9 — تقويم العطل الرسمية (Holiday Calendar)
+--
+--  الجدول: school_holidays — كل مستخدم مصادق يقرأ، ministry_user فقط يكتب.
+--  الدالة: is_school_day(date) — تُعيد true إذا كان يوم عمل (ليس جمعة/سبت ولا في العطل).
+--  تُستخدم بعدها لاستبدال extract(isodow …) not in (5,6) في RPCs الاتجاهات.
+--
+--  ⚠️  شغّل هذا القسم أولاً قبل تشغيل القسم 10 (يعتمد على is_school_day).
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- 9.1  جدول العطل الرسمية
+create table if not exists public.school_holidays (
+  id         uuid primary key default gen_random_uuid(),
+  date       date not null unique,
+  name       text not null,
+  created_by uuid references public.users(id),
+  created_at timestamptz not null default now()
+);
+alter table public.school_holidays enable row level security;
+
+drop policy if exists holidays_read on public.school_holidays;
+create policy holidays_read on public.school_holidays
+  for select to authenticated using (true);
+
+drop policy if exists holidays_ministry_write on public.school_holidays;
+create policy holidays_ministry_write on public.school_holidays
+  for all to authenticated
+  using (
+    exists (select 1 from public.users u
+            where u.id = auth.uid() and u.role = 'ministry_user')
+  )
+  with check (
+    exists (select 1 from public.users u
+            where u.id = auth.uid() and u.role = 'ministry_user')
+  );
+
+grant select, insert, update, delete on public.school_holidays to authenticated;
+
+-- 9.2  دالة is_school_day — يوم عمل = ليس جمعة/سبت وليس في قائمة العطل
+create or replace function public.is_school_day(p_date date)
+returns boolean language sql stable security definer set search_path = public as $$
+  select extract(isodow from p_date) not in (5, 6)
+     and not exists (select 1 from public.school_holidays h where h.date = p_date);
+$$;
+grant execute on function public.is_school_day(date) to authenticated;
+
+-- 9.3  تحديث get_directorate_compliance — يستخدم is_school_day بدلاً من isodow
+create or replace function public.get_directorate_compliance(p_days integer default 30)
+returns table (
+  school_id      uuid,
+  days_reported  integer,
+  reported_today boolean
+)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_dir uuid;
+begin
+  select u.directorate_id into v_dir
+  from public.users u
+  where u.id = auth.uid() and u.role = 'directorate_user';
+
+  if v_dir is null then
+    raise exception 'غير مصرّح: هذه الدالة لمستخدمي المديرية فقط';
+  end if;
+
+  if p_days is null or p_days < 1 or p_days > 92 then
+    p_days := 30;
+  end if;
+
+  return query
+  select
+    dsa.school_id,
+    count(distinct dsa.date)
+      filter (where public.is_school_day(dsa.date))::integer,
+    bool_or(dsa.date = current_date)
+  from public.daily_student_attendance dsa
+  join public.schools s on s.id = dsa.school_id
+  where s.directorate_id = v_dir
+    and dsa.date >  current_date - p_days
+    and dsa.date <= current_date
+  group by dsa.school_id;
+end; $$;
+
+revoke all on function public.get_directorate_compliance(integer) from public, anon;
+grant execute on function public.get_directorate_compliance(integer) to authenticated;
+
+-- 9.4  تحديث get_directorate_trend — يستخدم is_school_day في generate_series
+create or replace function public.get_directorate_trend(p_days integer default 14)
+returns table (
+  day              date,
+  present          integer,
+  late             integer,
+  absent           integer,
+  excused          integer,
+  schools_reported integer
+)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_dir uuid;
+begin
+  select u.directorate_id into v_dir
+  from public.users u
+  where u.id = auth.uid() and u.role = 'directorate_user';
+
+  if v_dir is null then
+    raise exception 'غير مصرّح: هذه الدالة لمستخدمي المديرية فقط';
+  end if;
+
+  if p_days is null or p_days < 1 or p_days > 92 then
+    p_days := 14;
+  end if;
+
+  return query
+  select
+    g.g_day,
+    coalesce(t.c_present, 0),
+    coalesce(t.c_late, 0),
+    coalesce(t.c_absent, 0),
+    coalesce(t.c_excused, 0),
+    coalesce(t.c_schools, 0)
+  from (
+    select gs::date as g_day
+    from generate_series(current_date - (p_days - 1), current_date, interval '1 day') gs
+    where public.is_school_day(gs::date)
+  ) g
+  left join (
+    select
+      dsa.date                                                as t_day,
+      count(*) filter (where dsa.status = 'present')::integer as c_present,
+      count(*) filter (where dsa.status = 'late')::integer    as c_late,
+      count(*) filter (where dsa.status = 'absent')::integer  as c_absent,
+      count(*) filter (where dsa.status = 'excused')::integer as c_excused,
+      count(distinct dsa.school_id)::integer                  as c_schools
+    from public.daily_student_attendance dsa
+    join public.schools s on s.id = dsa.school_id
+    where s.directorate_id = v_dir
+      and dsa.date >  current_date - p_days
+      and dsa.date <= current_date
+    group by dsa.date
+  ) t on t.t_day = g.g_day
+  order by g.g_day;
+end; $$;
+
+revoke all on function public.get_directorate_trend(integer) from public, anon;
+grant execute on function public.get_directorate_trend(integer) to authenticated;
+
+-- 9.5  تحديث get_ministry_trend — يستخدم is_school_day
+create or replace function public.get_ministry_trend(p_days integer default 14)
+returns table (
+  day              date,
+  present          integer,
+  late             integer,
+  absent           integer,
+  excused          integer,
+  schools_reported integer
+)
+language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (
+    select 1 from public.users u
+    where u.id = auth.uid() and u.role = 'ministry_user'
+  ) then
+    raise exception 'غير مصرّح: هذه الدالة لمستخدمي الوزارة فقط';
+  end if;
+
+  if p_days is null or p_days < 1 or p_days > 92 then
+    p_days := 14;
+  end if;
+
+  return query
+  select
+    g.g_day,
+    coalesce(t.c_present, 0),
+    coalesce(t.c_late, 0),
+    coalesce(t.c_absent, 0),
+    coalesce(t.c_excused, 0),
+    coalesce(t.c_schools, 0)
+  from (
+    select gs::date as g_day
+    from generate_series(current_date - (p_days - 1), current_date, interval '1 day') gs
+    where public.is_school_day(gs::date)
+  ) g
+  left join (
+    select
+      dsa.date                                                as t_day,
+      count(*) filter (where dsa.status = 'present')::integer as c_present,
+      count(*) filter (where dsa.status = 'late')::integer    as c_late,
+      count(*) filter (where dsa.status = 'absent')::integer  as c_absent,
+      count(*) filter (where dsa.status = 'excused')::integer as c_excused,
+      count(distinct dsa.school_id)::integer                  as c_schools
+    from public.daily_student_attendance dsa
+    where dsa.date >  current_date - p_days
+      and dsa.date <= current_date
+    group by dsa.date
+  ) t on t.t_day = g.g_day
+  order by g.g_day;
+end; $$;
+
+revoke all on function public.get_ministry_trend(integer) from public, anon;
+grant execute on function public.get_ministry_trend(integer) to authenticated;
+
+-- 9.6  تحديث get_school_trend — يستخدم is_school_day
+create or replace function public.get_school_trend(p_school_id uuid, p_days integer default 30)
+returns table (
+  day     date,
+  present integer,
+  late    integer,
+  absent  integer,
+  excused integer
+)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_role       text;
+  v_dir        uuid;
+  v_school_dir uuid;
+begin
+  select u.role, u.directorate_id into v_role, v_dir
+  from public.users u
+  where u.id = auth.uid();
+
+  select s.directorate_id into v_school_dir
+  from public.schools s where s.id = p_school_id;
+
+  if v_school_dir is null then
+    raise exception 'المدرسة غير موجودة';
+  end if;
+
+  if not (v_role = 'ministry_user'
+          or (v_role = 'directorate_user' and v_dir = v_school_dir)) then
+    raise exception 'غير مصرّح: المدرسة ليست ضمن نطاق صلاحيتك';
+  end if;
+
+  if p_days is null or p_days < 1 or p_days > 92 then
+    p_days := 30;
+  end if;
+
+  return query
+  select
+    g.g_day,
+    coalesce(t.c_present, 0),
+    coalesce(t.c_late, 0),
+    coalesce(t.c_absent, 0),
+    coalesce(t.c_excused, 0)
+  from (
+    select gs::date as g_day
+    from generate_series(current_date - (p_days - 1), current_date, interval '1 day') gs
+    where public.is_school_day(gs::date)
+  ) g
+  left join (
+    select
+      dsa.date                                                as t_day,
+      count(*) filter (where dsa.status = 'present')::integer as c_present,
+      count(*) filter (where dsa.status = 'late')::integer    as c_late,
+      count(*) filter (where dsa.status = 'absent')::integer  as c_absent,
+      count(*) filter (where dsa.status = 'excused')::integer as c_excused
+    from public.daily_student_attendance dsa
+    where dsa.school_id = p_school_id
+      and dsa.date >  current_date - p_days
+      and dsa.date <= current_date
+    group by dsa.date
+  ) t on t.t_day = g.g_day
+  order by g.g_day;
+end; $$;
+
+revoke all on function public.get_school_trend(uuid, integer) from public, anon;
+grant execute on function public.get_school_trend(uuid, integer) to authenticated;
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+--  SECTION 10 — إنذار التسرب المبكر (Early Dropout Warning)
+--
+--  16 يوم غياب في الفصل الواحد → ترقين قيد (threshold قابل للضبط).
+--  الصفوف 1-9: يحق العودة بعد 15 يوماً.  الصفوف 10-12: انفصال نهائي.
+--  get_dropout_risk_students: يُعيد طلاباً لم يُرقَّن قيدهم بعد.
+--  get_directorate_dropout_summary: ملخص للمديرية.
+--  pg_cron يومي (06:15 UTC = 09:15 سوريا): فحص + إشعار push لمدير المدرسة.
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- 10.1  عمود حد الغياب في المدارس (قابل للتغيير لكل مدرسة)
+alter table public.schools
+  add column if not exists dropout_threshold_days int not null default 16;
+
+-- 10.2  أعمدة تتبع ترقين القيد في جدول الطلاب
+alter table public.students
+  add column if not exists dropout_flagged_at  timestamptz,
+  add column if not exists dropout_semester    text check (dropout_semester in ('1','2')),
+  add column if not exists dropout_grade       int,
+  add column if not exists dropout_return_at   date;
+
+-- 10.3  دالة get_dropout_risk_students — طلاب بلغوا حد الغياب ولم يُرقَّن قيدهم
+create or replace function public.get_dropout_risk_students(p_school_id uuid)
+returns table (
+  student_id   uuid,
+  full_name    text,
+  grade        int,
+  class_id     uuid,
+  class_name   text,
+  absent_days  bigint,
+  threshold    int,
+  semester     text
+)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_role       text;
+  v_caller_dir uuid;
+  v_school_dir uuid;
+  v_threshold  int;
+  v_semester   text;
+  v_sem_start  date;
+  v_sem_end    date;
+begin
+  select u.role, u.directorate_id into v_role, v_caller_dir
+  from public.users u where u.id = auth.uid();
+
+  select s.directorate_id into v_school_dir
+  from public.schools s where s.id = p_school_id;
+
+  if not (
+    v_role = 'ministry_user'
+    or (v_role = 'directorate_user' and v_caller_dir = v_school_dir)
+    or (v_role = 'school_admin' and exists (
+          select 1 from public.users u
+          where u.id = auth.uid() and u.school_id = p_school_id))
+  ) then
+    raise exception 'غير مصرّح';
+  end if;
+
+  select coalesce(s.dropout_threshold_days, 16) into v_threshold
+  from public.schools s where s.id = p_school_id;
+
+  if extract(month from current_date) >= 9 then
+    v_semester  := '1';
+    v_sem_start := make_date(extract(year from current_date)::int, 9, 1);
+    v_sem_end   := make_date(extract(year from current_date)::int + 1, 1, 31);
+  else
+    v_semester  := '2';
+    v_sem_start := make_date(extract(year from current_date)::int, 2, 1);
+    v_sem_end   := make_date(extract(year from current_date)::int, 6, 30);
+  end if;
+
+  return query
+  select
+    dsa.student_id,
+    stu.full_name,
+    c.grade,
+    c.id   as class_id,
+    c.name as class_name,
+    count(*) filter (where dsa.status = 'absent')::bigint as absent_days,
+    v_threshold,
+    v_semester
+  from public.daily_student_attendance dsa
+  join public.students stu on stu.id = dsa.student_id
+  join public.classes  c   on c.id   = dsa.class_id
+  where dsa.school_id = p_school_id
+    and dsa.date between v_sem_start and least(v_sem_end, current_date)
+    and stu.is_active
+    and stu.dropout_flagged_at is null
+  group by dsa.student_id, stu.full_name, c.grade, c.id, c.name
+  having count(*) filter (where dsa.status = 'absent') >= v_threshold
+  order by absent_days desc, c.grade, stu.full_name;
+end; $$;
+
+revoke all on function public.get_dropout_risk_students(uuid) from public, anon;
+grant execute on function public.get_dropout_risk_students(uuid) to authenticated;
+
+-- 10.4  دالة get_directorate_dropout_summary — ملخص التسرب لكل مدرسة في المديرية
+create or replace function public.get_directorate_dropout_summary()
+returns table (
+  school_id     uuid,
+  school_name   text,
+  at_risk_count bigint,
+  flagged_count bigint
+)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_dir       uuid;
+  v_semester  text;
+  v_sem_start date;
+  v_sem_end   date;
+begin
+  select u.directorate_id into v_dir
+  from public.users u where u.id = auth.uid() and u.role = 'directorate_user';
+  if v_dir is null then raise exception 'غير مصرّح'; end if;
+
+  if extract(month from current_date) >= 9 then
+    v_semester  := '1';
+    v_sem_start := make_date(extract(year from current_date)::int, 9, 1);
+    v_sem_end   := make_date(extract(year from current_date)::int + 1, 1, 31);
+  else
+    v_semester  := '2';
+    v_sem_start := make_date(extract(year from current_date)::int, 2, 1);
+    v_sem_end   := make_date(extract(year from current_date)::int, 6, 30);
+  end if;
+
+  return query
+  select
+    s.id                                                         as school_id,
+    s.name                                                       as school_name,
+    -- طلاب بلغوا الحد ولم يُرقَّن قيدهم بعد
+    (select count(distinct sub.student_id)
+     from public.daily_student_attendance sub
+     join public.students st2 on st2.id = sub.student_id
+                              and st2.is_active
+                              and st2.dropout_flagged_at is null
+     where sub.school_id = s.id
+       and sub.date between v_sem_start and least(v_sem_end, current_date)
+     group by sub.student_id
+     having count(*) filter (where sub.status = 'absent')
+            >= coalesce(s.dropout_threshold_days, 16)
+    )                                                            as at_risk_count,
+    -- طلاب مرقَّن قيدهم هذا الفصل
+    (select count(*)
+     from public.students st3
+     where st3.school_id    = s.id
+       and st3.dropout_flagged_at is not null
+       and st3.dropout_semester = v_semester
+    )                                                            as flagged_count
+  from public.schools s
+  where s.directorate_id = v_dir
+  order by s.name;
+end; $$;
+
+revoke all on function public.get_directorate_dropout_summary() from public, anon;
+grant execute on function public.get_directorate_dropout_summary() to authenticated;
+
+-- 10.5  pg_cron يومي — فحص التسرب وإشعار المدير (09:15 سوريا = 06:15 UTC)
+--       يتخطى أيام العطل (is_school_day).
+--       يُحدّث dropout_flagged_at فقط مرة واحدة لكل طالب.
+select cron.schedule(
+  'dropout-daily-check',
+  '15 6 * * *',
+  $cron$
+  do $$
+  declare
+    s          record;
+    r          record;
+    v_sem      text;
+    v_sem_start date;
+    v_sem_end   date;
+    v_return_at date;
+  begin
+    if not public.is_school_day(current_date) then return; end if;
+
+    if extract(month from current_date) >= 9 then
+      v_sem       := '1';
+      v_sem_start := make_date(extract(year from current_date)::int, 9, 1);
+      v_sem_end   := make_date(extract(year from current_date)::int + 1, 1, 31);
+    else
+      v_sem       := '2';
+      v_sem_start := make_date(extract(year from current_date)::int, 2, 1);
+      v_sem_end   := make_date(extract(year from current_date)::int, 6, 30);
+    end if;
+
+    for s in
+      select id, coalesce(dropout_threshold_days, 16) as threshold
+      from public.schools
+    loop
+      for r in
+        select
+          dsa.student_id,
+          stu.full_name,
+          c.grade,
+          count(*) filter (where dsa.status = 'absent') as absent_days
+        from public.daily_student_attendance dsa
+        join public.students stu on stu.id = dsa.student_id
+        join public.classes  c   on c.id   = dsa.class_id
+        where dsa.school_id = s.id
+          and dsa.date between v_sem_start and current_date
+          and stu.is_active
+          and stu.dropout_flagged_at is null
+        group by dsa.student_id, stu.full_name, c.grade
+        having count(*) filter (where dsa.status = 'absent') >= s.threshold
+      loop
+        v_return_at := case when r.grade <= 9 then current_date + 15 else null end;
+
+        update public.students set
+          dropout_flagged_at = now(),
+          dropout_semester   = v_sem,
+          dropout_grade      = r.grade,
+          dropout_return_at  = v_return_at
+        where id = r.student_id and dropout_flagged_at is null;
+
+        perform public.notify_user(
+          u.id,
+          'dropout_warning',
+          'إنذار تسرب: ' || r.full_name,
+          'الطالب/ة غاب ' || r.absent_days || ' يوماً في الفصل ' || v_sem
+          || case when r.grade <= 9
+                  then ' — يحق له تقديم العودة بعد 15 يوماً'
+                  else ' — يُعدّ منفصلاً نهائياً (الصف ' || r.grade || ')'
+             end,
+          'students',
+          r.student_id
+        )
+        from public.users u
+        where u.school_id = s.id and u.role = 'school_admin';
+      end loop;
+    end loop;
+  end;
+  $$ language plpgsql;
+  $cron$
+);
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+--  SECTION 11 — ملخص تغطية الدرجات (Grades Coverage Summary)
+--
+--  RPC خفيفة للمديرية: كم صفاً، كم مادة، كم إدخال درجات لكل مدرسة.
+--  الحكم الفعلي (ناجح/راسب) يُحسب client-side لتجنّب تكرار منطق الشرائح.
+-- ════════════════════════════════════════════════════════════════════════════
+
+create or replace function public.get_directorate_grades_coverage()
+returns table (
+  school_id      uuid,
+  school_name    text,
+  classes_count  bigint,
+  subjects_count bigint,
+  entries_count  bigint
+)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_dir  uuid;
+  v_year text;
+begin
+  select u.directorate_id into v_dir
+  from public.users u where u.id = auth.uid() and u.role = 'directorate_user';
+  if v_dir is null then raise exception 'غير مصرّح'; end if;
+
+  v_year := case
+    when extract(month from current_date) >= 9
+    then extract(year from current_date)::text || '-'
+         || (extract(year from current_date)::int + 1)::text
+    else (extract(year from current_date)::int - 1)::text || '-'
+         || extract(year from current_date)::text
+  end;
+
+  return query
+  select
+    s.id,
+    s.name,
+    count(distinct sg.class_id)   as classes_count,
+    count(distinct sg.subject_id) as subjects_count,
+    count(*)                      as entries_count
+  from public.schools s
+  left join public.student_grades sg
+         on sg.school_id    = s.id
+        and sg.academic_year = v_year
+  where s.directorate_id = v_dir
+  group by s.id, s.name
+  order by s.name;
+end; $$;
+
+revoke all on function public.get_directorate_grades_coverage() from public, anon;
+grant execute on function public.get_directorate_grades_coverage() to authenticated;

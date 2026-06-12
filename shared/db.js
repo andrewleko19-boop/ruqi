@@ -2384,6 +2384,82 @@ async function getFullStaffRoster(schoolId) {
   return [...teachers, ...others];
 }
 
+// ─── Holiday calendar ────────────────────────────────────────────────────────
+
+async function getHolidays() {
+  const { data, error } = await db
+    .from('school_holidays').select('id, date, name, created_at').order('date');
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function createHoliday({ date, name }) {
+  const { data: { user } } = await db.auth.getUser();
+  const { data, error } = await db
+    .from('school_holidays')
+    .insert({ date, name, created_by: user?.id ?? null })
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+
+async function deleteHoliday(id) {
+  const { error } = await db.from('school_holidays').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ─── Dropout warning ─────────────────────────────────────────────────────────
+
+async function getDropoutRiskStudents(schoolId) {
+  const { data, error } = await db
+    .rpc('get_dropout_risk_students', { p_school_id: schoolId });
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function getDirectorateDropoutSummary() {
+  const { data, error } = await db.rpc('get_directorate_dropout_summary');
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function flagStudentDropout(studentId, grade) {
+  const month = new Date().getMonth() + 1;
+  const semester = month >= 9 ? '1' : '2';
+  const returnAt = grade <= 9
+    ? new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10)
+    : null;
+  const { error } = await db.from('students').update({
+    dropout_flagged_at: new Date().toISOString(),
+    dropout_semester:   semester,
+    dropout_grade:      grade,
+    dropout_return_at:  returnAt,
+  }).eq('id', studentId).is('dropout_flagged_at', null);
+  if (error) throw error;
+}
+
+async function getFlaggedDropoutStudents(schoolId) {
+  const month = new Date().getMonth() + 1;
+  const semester = month >= 9 ? '1' : '2';
+  const { data, error } = await db
+    .from('students')
+    .select('id, full_name, dropout_flagged_at, dropout_semester, dropout_grade, dropout_return_at, class_id, classes(name, grade)')
+    .eq('school_id', schoolId)
+    .not('dropout_flagged_at', 'is', null)
+    .eq('dropout_semester', semester)
+    .order('dropout_flagged_at', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+// ─── Directorate grades coverage ─────────────────────────────────────────────
+
+async function getDirectorateGradesCoverage() {
+  const { data, error } = await db.rpc('get_directorate_grades_coverage');
+  if (error) throw error;
+  return data ?? [];
+}
+
 // ─── Admin (ministry_user) ────────────────────────────────────────────────────
 
 async function getAdminDirectorates() {
@@ -2560,6 +2636,20 @@ window.NSAMS_DB = {
   markAllNotificationsRead,
   subscribeNotifications,
   registerPushSubscription,
+
+  // Holiday calendar
+  getHolidays,
+  createHoliday,
+  deleteHoliday,
+
+  // Dropout warning
+  getDropoutRiskStudents,
+  getDirectorateDropoutSummary,
+  flagStudentDropout,
+  getFlaggedDropoutStudents,
+
+  // Directorate grades coverage
+  getDirectorateGradesCoverage,
 
   // Admin (ministry_user) — system management
   getAdminDirectorates,

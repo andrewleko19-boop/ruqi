@@ -87,6 +87,7 @@
         <button class="tab-btn is-active" data-tab="schools">المدارس</button>
         <button class="tab-btn" data-tab="users">المستخدمون</button>
         <button class="tab-btn" data-tab="audit">سجل التدقيق</button>
+        <button class="tab-btn" data-tab="holidays">تقويم العطل</button>
       </div>
 
       <!-- ══════════════════════════════════════════════
@@ -207,6 +208,38 @@
           <div id="audit-load-more-wrap" class="hidden" style="padding:14px 20px;border-top:1px solid var(--border)">
             <button id="audit-load-more" class="btn btn-ghost btn-sm">تحميل المزيد</button>
           </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════
+           تبويب 4: تقويم العطل
+      ══════════════════════════════════════════════ -->
+      <div id="tab-holidays" class="tab-panel">
+        <div class="section-card">
+          <div class="section-header">
+            <h2>العطل الرسمية (<span id="holidays-count">—</span>)</h2>
+            <button id="add-holiday-btn" class="btn btn-primary btn-sm">
+              <svg width="14" height="14"><use href="#icon-plus"/></svg>
+              إضافة عطلة
+            </button>
+          </div>
+          <div id="holidays-loading" class="table-loading hidden">
+            <div class="spinner"></div><span>جارٍ التحميل…</span>
+          </div>
+          <div id="holidays-table-wrap" class="table-wrapper hidden">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>التاريخ</th>
+                  <th>الاسم</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="holidays-tbody"></tbody>
+            </table>
+          </div>
+          <div id="holidays-empty" class="table-empty hidden">لا توجد عطل مسجّلة.</div>
         </div>
       </div>
 
@@ -367,6 +400,55 @@
       <div class="modal-footer">
         <button class="btn btn-ghost" id="deactivate-modal-cancel">إلغاء</button>
         <button class="btn btn-danger" id="deactivate-modal-confirm">تعطيل</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       Modal: إضافة عطلة
+  ══════════════════════════════════════════════ -->
+  <div id="holiday-modal" class="modal-overlay hidden">
+    <div class="modal" style="max-width:400px">
+      <div class="modal-header">
+        <span class="modal-title">إضافة عطلة رسمية</span>
+        <button class="btn btn-icon btn-sm" id="holiday-modal-close">
+          <svg width="16" height="16"><use href="#icon-close"/></svg>
+        </button>
+      </div>
+      <div id="holiday-modal-error" class="error-msg hidden"></div>
+      <div class="form-group">
+        <label>التاريخ *</label>
+        <input type="date" id="hm-date" />
+      </div>
+      <div class="form-group">
+        <label>اسم العطلة *</label>
+        <input type="text" id="hm-name" placeholder="مثال: عيد الفطر" />
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="holiday-modal-cancel">إلغاء</button>
+        <button class="btn btn-primary" id="holiday-modal-save">حفظ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       Modal: تأكيد حذف عطلة
+  ══════════════════════════════════════════════ -->
+  <div id="delete-holiday-modal" class="modal-overlay hidden">
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header">
+        <span class="modal-title">حذف العطلة</span>
+        <button class="btn btn-icon btn-sm" id="del-holiday-close">
+          <svg width="16" height="16"><use href="#icon-close"/></svg>
+        </button>
+      </div>
+      <p style="color:var(--text-dim);font-size:13px;line-height:1.7">
+        سيتم حذف عطلة <strong id="del-holiday-name" style="color:#fff"></strong>.
+        هذا الإجراء قابل للتراجع بإعادة الإضافة.
+      </p>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="del-holiday-cancel">إلغاء</button>
+        <button class="btn btn-danger" id="del-holiday-confirm">حذف</button>
       </div>
     </div>
   </div>

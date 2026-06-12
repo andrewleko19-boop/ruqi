@@ -3137,7 +3137,95 @@ function liveDobError() {
 
 async function initStudentsTab() {
   _studentsLoaded = true;
-  await loadStuClasses();
+  await Promise.all([loadStuClasses(), loadDropoutWarning()]);
+}
+
+// ── Dropout warning ───────────────────────────────────────────────────────────
+async function loadDropoutWarning() {
+  if (!S.school?.id) return;
+  const DB            = window.NSAMS_DB;
+  const loadingEl     = el('dropout-loading');
+  const riskHdr       = el('dropout-risk-hdr');
+  const riskList      = el('dropout-risk-list');
+  const riskEmpty     = el('dropout-risk-empty');
+  const flaggedHdr    = el('dropout-flagged-hdr');
+  const flaggedList   = el('dropout-flagged-list');
+  const hintEl        = el('dropout-hint');
+  if (!loadingEl) return;
+
+  loadingEl.hidden = false;
+  if (riskHdr)    riskHdr.hidden    = true;
+  if (riskEmpty)  riskEmpty.hidden  = true;
+  if (flaggedHdr) flaggedHdr.hidden = true;
+
+  try {
+    const [atRisk, flagged] = await Promise.all([
+      DB.getDropoutRiskStudents(S.school.id),
+      DB.getFlaggedDropoutStudents(S.school.id),
+    ]);
+    loadingEl.hidden = true;
+
+    // ── طلاب في خطر ───────────────────────────────────
+    if (riskHdr) riskHdr.hidden = false;
+    if (atRisk.length === 0) {
+      if (riskEmpty) riskEmpty.hidden = false;
+    } else {
+      riskList.innerHTML = atRisk.map(r => {
+        const semLabel = r.semester === '1' ? 'الفصل الأول' : 'الفصل الثاني';
+        return `<li class="mng-item" style="align-items:flex-start;flex-direction:column;gap:4px">
+          <div style="display:flex;align-items:center;gap:8px;width:100%">
+            <span style="font-weight:600;flex:1">${escHtml(r.full_name)}</span>
+            <span style="background:#450a0a;color:#f87171;border:1px solid #dc2626;border-radius:20px;font-size:11px;font-weight:600;padding:2px 10px;white-space:nowrap">${r.absent_days} يوم غياب</span>
+            <button class="btn btn-danger btn-sm" data-flag-id="${r.student_id}" data-flag-grade="${r.grade}">
+              ترقين القيد
+            </button>
+          </div>
+          <small style="color:#94a3b8">الصف ${r.grade} — ${escHtml(r.class_name ?? '')} — ${semLabel} — الحد: ${r.threshold}</small>
+        </li>`;
+      }).join('');
+    }
+
+    // ── طلاب مرقَّن قيدهم ───────────────────────────────
+    if (flagged.length > 0) {
+      if (flaggedHdr) flaggedHdr.hidden = false;
+      flaggedList.innerHTML = flagged.map(r => {
+        const flagDate = new Date(r.dropout_flagged_at).toLocaleDateString('ar-SY', { dateStyle: 'medium' });
+        const returnInfo = r.dropout_return_at
+          ? `حق العودة من: ${new Date(r.dropout_return_at).toLocaleDateString('ar-SY', { dateStyle: 'medium' })}`
+          : 'انفصال نهائي';
+        return `<li class="mng-item" style="align-items:flex-start;flex-direction:column;gap:4px">
+          <span style="font-weight:600">${escHtml(r.full_name)}</span>
+          <small style="color:#94a3b8">الصف ${r.dropout_grade ?? '—'} — تاريخ الترقين: ${flagDate} — ${returnInfo}</small>
+        </li>`;
+      }).join('');
+    }
+
+    // Wire up flag buttons
+    riskList.querySelectorAll('[data-flag-id]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const sid   = btn.dataset.flagId;
+        const grade = parseInt(btn.dataset.flagGrade, 10);
+        if (!confirm('تأكيد ترقين قيد هذا الطالب؟')) return;
+        btn.disabled = true;
+        try {
+          await DB.flagStudentDropout(sid, grade);
+          toast('تم ترقين قيد الطالب', 'success');
+          await loadDropoutWarning();
+        } catch (e) {
+          toast('تعذّر ترقين القيد: ' + e.message, 'error');
+          btn.disabled = false;
+        }
+      });
+    });
+  } catch (err) {
+    loadingEl.hidden = true;
+    if (hintEl) hintEl.textContent = 'تعذّر تحميل بيانات التسرب — تأكد من تشغيل القسم 10 من database-setup.sql';
+    console.warn('[Dropout]', err);
+  }
+}
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 async function loadStuClasses() {
@@ -3204,6 +3292,7 @@ function renderStudents() {
 
 stuSearch.addEventListener('input', renderStudents);
 el('btn-refresh-students').addEventListener('click', () => { if (_stuClassId) loadStudents(); });
+el('btn-refresh-dropout')?.addEventListener('click', loadDropoutWarning);
 
 stuListEl.addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-act]');

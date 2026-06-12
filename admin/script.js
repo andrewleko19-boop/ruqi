@@ -87,12 +87,33 @@ const deactivateClose   = document.getElementById('deactivate-modal-close');
 const deactivateCancel  = document.getElementById('deactivate-modal-cancel');
 const deactivateConfirm = document.getElementById('deactivate-modal-confirm');
 
+// Holidays tab DOM refs
+const holidaysCount     = document.getElementById('holidays-count');
+const holidaysLoading   = document.getElementById('holidays-loading');
+const holidaysTableWrap = document.getElementById('holidays-table-wrap');
+const holidaysEmpty     = document.getElementById('holidays-empty');
+const holidaysTbody     = document.getElementById('holidays-tbody');
+const addHolidayBtn     = document.getElementById('add-holiday-btn');
+const holidayModal      = document.getElementById('holiday-modal');
+const holidayModalError = document.getElementById('holiday-modal-error');
+const holidayModalClose = document.getElementById('holiday-modal-close');
+const holidayModalCancel= document.getElementById('holiday-modal-cancel');
+const holidayModalSave  = document.getElementById('holiday-modal-save');
+const hmDate            = document.getElementById('hm-date');
+const hmName            = document.getElementById('hm-name');
+const delHolidayModal   = document.getElementById('delete-holiday-modal');
+const delHolidayName    = document.getElementById('del-holiday-name');
+const delHolidayClose   = document.getElementById('del-holiday-close');
+const delHolidayCancel  = document.getElementById('del-holiday-cancel');
+const delHolidayConfirm = document.getElementById('del-holiday-confirm');
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let allSchools     = [];   // { id, name, directorate_id, directorates:{name,governorate}, ... }
 let allUsers       = [];   // { id, full_name, role, school_id, directorate_id, schools, directorates }
 let allDirectorates= [];   // { id, name, governorate }
 let editingSchoolId= null; // null = create mode
 let pendingDeactivateId = null;
+let pendingDeleteHolidayId = null;
 let auditOffset    = 0;
 const AUDIT_LIMIT  = 100;
 
@@ -169,6 +190,7 @@ function showDashboard(email) {
     loadSchools();
     loadUsers();
     populateAuditSchoolFilter();
+    loadHolidays();
   });
 }
 
@@ -570,6 +592,113 @@ async function loadAudit(reset = true) {
 
 auditFilterBtn.addEventListener('click', () => loadAudit(true));
 auditLoadMoreBtn.addEventListener('click', () => loadAudit(false));
+
+// ── Holidays tab ──────────────────────────────────────────────────────────────
+let allHolidays = [];
+
+async function loadHolidays() {
+  show(holidaysLoading);
+  hide(holidaysTableWrap);
+  hide(holidaysEmpty);
+
+  try {
+    const { data, error } = await supabase
+      .from('school_holidays').select('id, date, name, created_at').order('date');
+    if (error) throw error;
+    allHolidays = data ?? [];
+  } catch (e) {
+    console.error('[admin] loadHolidays', e);
+    allHolidays = [];
+  }
+
+  hide(holidaysLoading);
+  holidaysCount.textContent = allHolidays.length;
+
+  if (allHolidays.length === 0) { show(holidaysEmpty); return; }
+
+  holidaysTbody.innerHTML = allHolidays.map((h, i) => {
+    const d = new Date(h.date + 'T00:00:00').toLocaleDateString('ar-SY', { dateStyle: 'long' });
+    return `
+    <tr>
+      <td class="muted">${i + 1}</td>
+      <td>${esc(d)}</td>
+      <td>${esc(h.name)}</td>
+      <td>
+        <button class="btn btn-danger btn-sm" data-del-holiday="${esc(h.id)}" data-del-name="${esc(h.name)}">
+          حذف
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+  show(holidaysTableWrap);
+
+  holidaysTbody.querySelectorAll('[data-del-holiday]').forEach(btn => {
+    btn.addEventListener('click', () => openDeleteHoliday(btn.dataset.delHoliday, btn.dataset.delName));
+  });
+}
+
+function openAddHoliday() {
+  hmDate.value = '';
+  hmName.value = '';
+  clearError(holidayModalError);
+  show(holidayModal);
+  hmDate.focus();
+}
+
+function closeHolidayModal() { hide(holidayModal); }
+holidayModalClose.addEventListener('click', closeHolidayModal);
+holidayModalCancel.addEventListener('click', closeHolidayModal);
+addHolidayBtn.addEventListener('click', openAddHoliday);
+
+holidayModalSave.addEventListener('click', async () => {
+  clearError(holidayModalError);
+  const date = hmDate.value;
+  const name = hmName.value.trim();
+  if (!date) { showError(holidayModalError, 'التاريخ مطلوب.'); return; }
+  if (!name) { showError(holidayModalError, 'اسم العطلة مطلوب.'); return; }
+
+  holidayModalSave.disabled = true;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase
+      .from('school_holidays')
+      .insert({ date, name, created_by: user?.id ?? null });
+    if (error) throw error;
+    closeHolidayModal();
+    await loadHolidays();
+  } catch (e) {
+    const dup = /duplicate|unique|already/i.test(e.message);
+    showError(holidayModalError, dup ? 'هذا التاريخ مسجّل مسبقاً.' : e.message);
+  } finally {
+    holidayModalSave.disabled = false;
+  }
+});
+
+function openDeleteHoliday(id, name) {
+  pendingDeleteHolidayId = id;
+  delHolidayName.textContent = name;
+  show(delHolidayModal);
+}
+
+function closeDeleteHolidayModal() { hide(delHolidayModal); pendingDeleteHolidayId = null; }
+delHolidayClose.addEventListener('click', closeDeleteHolidayModal);
+delHolidayCancel.addEventListener('click', closeDeleteHolidayModal);
+
+delHolidayConfirm.addEventListener('click', async () => {
+  if (!pendingDeleteHolidayId) return;
+  delHolidayConfirm.disabled = true;
+  try {
+    const { error } = await supabase
+      .from('school_holidays').delete().eq('id', pendingDeleteHolidayId);
+    if (error) throw error;
+    closeDeleteHolidayModal();
+    await loadHolidays();
+  } catch (e) {
+    console.error('[admin] deleteHoliday', e);
+  } finally {
+    delHolidayConfirm.disabled = false;
+  }
+});
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 checkSession();
