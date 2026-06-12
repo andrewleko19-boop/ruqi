@@ -1,5 +1,6 @@
 // directorate/script.js
 // ── DB من window.NSAMS_DB (يُحمَّل عبر shared/db.js قبل هذا الملف) ──────────
+import { CustomSelect } from '../shared/csel.js';
 const {
   login,
   logout,
@@ -630,6 +631,9 @@ function setupReportActionDelegation() {
 }
 
 function setupFilters() {
+  CustomSelect.enhance('filter-status');
+  CustomSelect.enhance('filter-type');
+  CustomSelect.enhance('filter-severity');
   document.getElementById('filter-status')?.addEventListener('change', renderReportsTable);
   document.getElementById('filter-type')?.addEventListener('change', renderReportsTable);
   document.getElementById('filter-severity')?.addEventListener('change', renderReportsTable);

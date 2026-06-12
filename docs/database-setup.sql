@@ -1032,6 +1032,25 @@ create trigger trg_notify_dir_new_request
 -- alter table public.schools alter column total_students  drop not null;
 -- update public.schools set total_teachers = null, total_students = null;
 
+-- ════════════════════════════════════════════════════════
+--  2.7  (تصلب اختياري) FK لربط audit_log بـ schools
+--  يُمكّن PostgREST من تضمين بيانات المدرسة مباشرةً.
+--  JavaScript يعمل بدونه (ربط يدوي)، لكن تشغيل هذا
+--  يُحسّن الأداء ويُطبّق تكامل البيانات.
+-- ════════════════════════════════════════════════════════
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'audit_log_school_id_fkey'
+  ) then
+    alter table public.audit_log
+      add constraint audit_log_school_id_fkey
+      foreign key (school_id) references public.schools(id) on delete set null;
+  end if;
+end$$;
+-- إذا استمر خطأ 400 بعد تشغيل هذا، نفّذ:
+-- notify pgrst, 'reload schema';
+
 
 -- ════════════════════════════════════════════════════════════════════════════
 --  SECTION 9 — تقويم العطل الرسمية (Holiday Calendar)

@@ -17,6 +17,7 @@ const PRECACHE = [
   './index.html',
   './manifest.json',
   './shared/db.js',
+  './shared/csel.js',
   './teacher/index.html',
   './teacher/script.js',
   './teacher/style.css',
