@@ -1945,3 +1945,450 @@ select cron.schedule(
   '0 6 1 * *',
   $$ select public.generate_monthly_reports(); $$
 );
+
+-- ════════════════════════════════════════════════════════════════════════════
+--  14. البيان الشهري الرسمي — سجل الكوادر والقوائم المرجعية
+--
+--  جداول جديدة:
+--    lookup_lists            — قوائم مرجعية مركزية (مدار من المشرف)
+--    staff_records           — سجل الكوادر البشرية (حساس - مدير المدرسة فقط)
+--    staff_leaves            — الإجازات الشهرية للكوادر
+--    monthly_statements      — البيانات الشهرية + سير الموافقة
+--    monthly_statement_changes — التعديلات الطارئة الشهرية
+--
+--  أعمدة جديدة على schools:
+--    statistical_number, cycle, rural_curriculum
+--
+--  Prerequisite: current_user_school_id(), current_user_directorate_id()
+--  يجب أن تكون معرَّفتين (§1 أنشأهما). القسم idempotent — آمن لإعادة التشغيل.
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- 14.1  أعمدة إضافية على schools لاستكمال بيانات البيان الشهري
+alter table public.schools
+  add column if not exists statistical_number text,         -- الرقم الإحصائي
+  add column if not exists cycle              text,         -- الحلقة: 1|2|3|1+2|2+3|1+2+3
+  add column if not exists rural_curriculum  boolean default false; -- منهاج ريفي
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- 14.2  القوائم المرجعية المركزية
+-- ────────────────────────────────────────────────────────────────────────────
+create table if not exists public.lookup_lists (
+  id             uuid        primary key default gen_random_uuid(),
+  directorate_id uuid        references public.directorates(id) on delete cascade,
+  list_type      text        not null
+                 check (list_type in (
+                   'admin_role','specialization','certificate','higher_degree',
+                   'leave_type','ministerial_doc','support_job','educational_zone'
+                 )),
+  value          text        not null,   -- النص العربي يُخزَّن كما هو (يُسهّل تصدير Excel)
+  sort_order     int         not null default 0,
+  active         boolean     not null default true,
+  created_at     timestamptz not null default now()
+);
+
+-- فهرس فريد: يسمح بنفس القيمة في مديريات مختلفة لكن لا تكرار داخل نفس المديرية/النظامي
+create unique index if not exists lookup_lists_uniq
+  on public.lookup_lists (
+    list_type,
+    value,
+    coalesce(directorate_id, '00000000-0000-0000-0000-000000000000'::uuid)
+  );
+
+alter table public.lookup_lists enable row level security;
+
+drop policy if exists lookup_authenticated_select  on public.lookup_lists;
+drop policy if exists lookup_ministry_write        on public.lookup_lists;
+
+create policy lookup_authenticated_select on public.lookup_lists
+  for select to authenticated
+  using (active = true);
+
+create policy lookup_ministry_write on public.lookup_lists
+  for all to authenticated
+  using      (exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'ministry_user'))
+  with check (exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'ministry_user'));
+
+grant select, insert, update, delete on public.lookup_lists to authenticated;
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- 14.3  Seed القوائم النظامية (مستخرجة من ورقة «قوائم» في ملف البيان الرسمي)
+--       directorate_id = null → قائمة نظامية مشتركة لكل المديريات
+-- ────────────────────────────────────────────────────────────────────────────
+insert into public.lookup_lists (list_type, value, sort_order) values
+  -- العمل المسند (الجهاز الإداري)
+  ('admin_role', 'مدير',                   1),
+  ('admin_role', 'معاون مدير',             2),
+  ('admin_role', 'تسيير أمور (إدارة)',     3),
+  ('admin_role', 'توجيه',                  4),
+  ('admin_role', 'أمانة سر',              5),
+  ('admin_role', 'معاون أمين سر',         6),
+  ('admin_role', 'أمانة مكتبة',           7),
+  ('admin_role', 'معاون أمين مكتبة',      8),
+  ('admin_role', 'أمين مخبر',             9),
+  ('admin_role', 'م. أمين مخبر',         10),
+  ('admin_role', 'أمين سر حاسوب',        11),
+  ('admin_role', 'م. أمين سر حاسوب',    12),
+  ('admin_role', 'مشرف جاهزية',          13),
+  ('admin_role', 'إشراف صحي',            14),
+  ('admin_role', 'إرشاد اجتماعي',        15),
+  ('admin_role', 'إرشاد نفسي',           16),
+  ('admin_role', 'أمين مشغل',            17),
+  ('admin_role', 'أنشطة لاصفية',         18),
+  ('admin_role', 'كاتب',                  19),
+  -- الاختصاص (جهاز إداري + تدريسي)
+  ('specialization', 'معلم صف',            1),
+  ('specialization', 'مكتبات',             2),
+  ('specialization', 'إرشاد نفسي',        3),
+  ('specialization', 'إرشاد اجتماعي',     4),
+  ('specialization', 'إدارة وتخطيط',      5),
+  ('specialization', 'مناهج',              6),
+  ('specialization', 'أهلية تعليم',       7),
+  ('specialization', 'ق.38',              8),
+  ('specialization', 'تعميق تأهيل',       9),
+  ('specialization', 'عربي',             10),
+  ('specialization', 'رياضيات',          11),
+  ('specialization', 'تجاري مصرفي',     12),
+  ('specialization', 'تجارة واقتصاد',   13),
+  ('specialization', 'فيزياء+كيمياء',   14),
+  ('specialization', 'تاريخ',            15),
+  ('specialization', 'جغرافية',          16),
+  ('specialization', 'علوم',             17),
+  ('specialization', 'معلوماتية',        18),
+  ('specialization', 'معهد موسيقا',      19),
+  ('specialization', 'رياضة',            20),
+  ('specialization', 'فنون',             21),
+  ('specialization', 'انكليزي',          22),
+  ('specialization', 'فرنسي',            23),
+  ('specialization', 'روسي',             24),
+  ('specialization', 'إسلامية',          25),
+  ('specialization', 'مسيحية',           26),
+  ('specialization', 'تربية',            27),
+  ('specialization', 'علوم سياسية',      28),
+  ('specialization', 'أعمال يدوية',      29),
+  ('specialization', 'اقتصاد منزلي',    30),
+  ('specialization', 'تربية عسكرية',    31),
+  ('specialization', 'تقنيات حاسوب',    32),
+  ('specialization', 'حقوق',             33),
+  ('specialization', 'فلسفة',            34),
+  ('specialization', 'مهندس',            35),
+  ('specialization', 'احتياط',           36),
+  ('specialization', 'كاتب',             37),
+  ('specialization', 'غير محدد',         38),
+  -- الشهادة
+  ('certificate', 'جامعة',       1),
+  ('certificate', 'معهد',        2),
+  ('certificate', 'ثانوية',      3),
+  ('certificate', 'أهلية تعليم', 4),
+  ('certificate', 'إعدادية',    5),
+  ('certificate', 'لا يوجد',    6),
+  ('certificate', 'أخرى',       7),
+  -- شهادات عليا
+  ('higher_degree', 'دبلوم',    1),
+  ('higher_degree', 'ماجستير',  2),
+  ('higher_degree', 'دكتوراه',  3),
+  -- نوع الإجازة
+  ('leave_type', 'صحية',  1),
+  ('leave_type', 'أمومة', 2),
+  ('leave_type', 'بلا أجر', 3),
+  ('leave_type', 'مأجورة', 4),
+  -- الموافقة الوزارية
+  ('ministerial_doc', 'محافظة', 1),
+  ('ministerial_doc', 'تربية',  2),
+  -- العمل المسند (مهني ومستخدم وحارس)
+  ('support_job', 'مستخدم', 1),
+  ('support_job', 'حارس',   2),
+  ('support_job', 'مهني',   3)
+  -- educational_zone: لا seed نظامي — يحررها المشرف لكل مديرية
+  -- (مثال اللاذقية: الحفة، القرداحة، جبلة، مدينة، منطقة)
+on conflict do nothing;
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- 14.4  سجل الكوادر البشرية
+-- ────────────────────────────────────────────────────────────────────────────
+create table if not exists public.staff_records (
+  id               uuid         primary key default gen_random_uuid(),
+  school_id        uuid         not null references public.schools(id) on delete cascade,
+  staff_type       text         not null
+                   check (staff_type in ('admin','teaching','professional','worker','guard')),
+  -- بيانات شخصية — حساسة (المدير فقط)
+  national_id      text,
+  full_name        text         not null,
+  mother_name      text,
+  birth_date       date,
+  -- مؤهلات
+  certificate      text,        -- من lookup_lists 'certificate'
+  higher_degree    text,        -- من lookup_lists 'higher_degree'
+  specialization   text,        -- من lookup_lists 'specialization'
+  subject_taught   text,        -- للتدريسيين: المادة المُدرَّسة
+  -- وظيفة
+  seniority_years  numeric(4,1) default 0,
+  job_title        text,        -- من lookup_lists 'admin_role' أو 'support_job'
+  start_date       date,
+  -- اتصال + سكن — حساسة
+  phone            text,
+  residential_zone text,        -- المنطقة السكنية (حرة)
+  educational_zone text,        -- من lookup_lists 'educational_zone' (تابعة للمديرية)
+  -- ملاك
+  roster_type      text         not null default 'inside'
+                   check (roster_type in ('inside','outside','contract')),
+  ministerial_doc  text,        -- من lookup_lists 'ministerial_doc'
+  notes            text,
+  active           boolean      not null default true,
+  created_at       timestamptz  not null default now(),
+  updated_at       timestamptz  not null default now()
+);
+
+create index if not exists staff_records_school_type
+  on public.staff_records (school_id, staff_type)
+  where active = true;
+
+alter table public.staff_records enable row level security;
+
+drop policy if exists staff_records_school_admin on public.staff_records;
+
+-- school_admin: كامل CRUD لسجلات مدرسته (البيانات حساسة — لا select للمديرية مباشرة)
+create policy staff_records_school_admin on public.staff_records
+  for all to authenticated
+  using (
+    school_id = current_user_school_id()
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'school_admin')
+  )
+  with check (
+    school_id = current_user_school_id()
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'school_admin')
+  );
+
+grant select, insert, update, delete on public.staff_records to authenticated;
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- 14.5  RPC: get_school_staff_for_directorate — قراءة منقّحة بدون الحقول الحساسة
+-- ────────────────────────────────────────────────────────────────────────────
+create or replace function public.get_school_staff_for_directorate(p_school_id uuid)
+returns table (
+  id               uuid,
+  staff_type       text,
+  full_name        text,
+  certificate      text,
+  higher_degree    text,
+  specialization   text,
+  subject_taught   text,
+  seniority_years  numeric,
+  job_title        text,
+  start_date       date,
+  educational_zone text,
+  roster_type      text,
+  ministerial_doc  text,
+  active           boolean
+)
+language plpgsql security definer
+set search_path = public
+as $$
+begin
+  -- تحقق: المستدعي directorate_user وصاحب المدرسة في مديريته
+  if not exists (
+    select 1 from public.users u
+    join public.schools s on s.id = p_school_id
+    where u.id = auth.uid()
+      and u.role = 'directorate_user'
+      and u.directorate_id = s.directorate_id
+  ) then
+    raise exception 'access denied';
+  end if;
+
+  return query
+    select
+      sr.id, sr.staff_type, sr.full_name, sr.certificate, sr.higher_degree,
+      sr.specialization, sr.subject_taught, sr.seniority_years, sr.job_title,
+      sr.start_date, sr.educational_zone, sr.roster_type, sr.ministerial_doc, sr.active
+    from public.staff_records sr
+    where sr.school_id = p_school_id and sr.active = true
+    order by sr.staff_type, sr.job_title, sr.full_name;
+end;
+$$;
+
+revoke all on function public.get_school_staff_for_directorate(uuid) from public, anon;
+grant execute on function public.get_school_staff_for_directorate(uuid) to authenticated;
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- 14.6  إجازات الكوادر الشهرية
+-- ────────────────────────────────────────────────────────────────────────────
+create table if not exists public.staff_leaves (
+  id          uuid        primary key default gen_random_uuid(),
+  staff_id    uuid        not null references public.staff_records(id) on delete cascade,
+  school_id   uuid        not null references public.schools(id) on delete cascade,
+  leave_type  text        not null,  -- من lookup_lists 'leave_type'
+  leave_days  int         not null check (leave_days > 0),
+  month       smallint    not null check (month between 1 and 12),
+  year        smallint    not null,
+  note        text,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists staff_leaves_school_period
+  on public.staff_leaves (school_id, year, month);
+
+alter table public.staff_leaves enable row level security;
+
+drop policy if exists staff_leaves_school_admin    on public.staff_leaves;
+drop policy if exists staff_leaves_directorate_sel on public.staff_leaves;
+
+create policy staff_leaves_school_admin on public.staff_leaves
+  for all to authenticated
+  using (
+    school_id = current_user_school_id()
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'school_admin')
+  )
+  with check (
+    school_id = current_user_school_id()
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'school_admin')
+  );
+
+-- المديرية: select فقط لمدارس مديريتها (أيام الإجازة غير حساسة — مطلوبة لمراجعة البيان)
+create policy staff_leaves_directorate_sel on public.staff_leaves
+  for select to authenticated
+  using (
+    exists (
+      select 1 from public.schools s
+      where s.id = staff_leaves.school_id
+        and s.directorate_id = current_user_directorate_id()
+    )
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'directorate_user')
+  );
+
+grant select, insert, update, delete on public.staff_leaves to authenticated;
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- 14.7  سجل البيانات الشهرية
+-- ────────────────────────────────────────────────────────────────────────────
+create table if not exists public.monthly_statements (
+  id             uuid        primary key default gen_random_uuid(),
+  school_id      uuid        not null references public.schools(id) on delete cascade,
+  month          smallint    not null check (month between 1 and 12),
+  year           smallint    not null,
+  status         text        not null default 'draft'
+                 check (status in ('draft','submitted','approved','rejected')),
+  snapshot_data  jsonb       not null default '{}',  -- لقطة البيان وقت الإرسال
+  notes          text,                               -- ملاحظة المديرية (رفض / موافقة)
+  submitted_at   timestamptz,
+  reviewed_by    uuid        references auth.users(id),
+  reviewed_at    timestamptz,
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
+);
+
+create unique index if not exists monthly_statements_school_period
+  on public.monthly_statements (school_id, year, month);
+
+alter table public.monthly_statements enable row level security;
+
+drop policy if exists stmt_school_insert     on public.monthly_statements;
+drop policy if exists stmt_school_select     on public.monthly_statements;
+drop policy if exists stmt_school_update     on public.monthly_statements;
+drop policy if exists stmt_dir_select        on public.monthly_statements;
+drop policy if exists stmt_dir_update        on public.monthly_statements;
+
+-- school_admin: إنشاء بيان
+create policy stmt_school_insert on public.monthly_statements
+  for insert to authenticated
+  with check (
+    school_id = current_user_school_id()
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'school_admin')
+  );
+
+-- school_admin: قراءة بيانات مدرسته
+create policy stmt_school_select on public.monthly_statements
+  for select to authenticated
+  using (
+    school_id = current_user_school_id()
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'school_admin')
+  );
+
+-- school_admin: تعديل المسودة والمرفوض فقط (لا يلمس المعتمد)
+create policy stmt_school_update on public.monthly_statements
+  for update to authenticated
+  using (
+    school_id = current_user_school_id()
+    and status in ('draft','rejected')
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'school_admin')
+  )
+  with check (
+    school_id = current_user_school_id()
+    and status in ('draft','submitted')  -- يحرر مسودة ويرسل، لا يعود للمرفوض مباشرةً
+  );
+
+-- directorate_user: قراءة بيانات مدارس مديريته
+create policy stmt_dir_select on public.monthly_statements
+  for select to authenticated
+  using (
+    exists (
+      select 1 from public.schools s
+      where s.id = monthly_statements.school_id
+        and s.directorate_id = current_user_directorate_id()
+    )
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'directorate_user')
+  );
+
+-- directorate_user: مراجعة البيانات المُرسَلة فقط (يوافق أو يرفض)
+create policy stmt_dir_update on public.monthly_statements
+  for update to authenticated
+  using (
+    exists (
+      select 1 from public.schools s
+      where s.id = monthly_statements.school_id
+        and s.directorate_id = current_user_directorate_id()
+    )
+    and status = 'submitted'
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'directorate_user')
+  )
+  with check (status in ('approved','rejected'));
+
+grant select, insert, update on public.monthly_statements to authenticated;
+-- لا delete: البيان الشهري سجل رسمي لا يُحذف
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- 14.8  التعديلات الطارئة الشهرية
+-- ────────────────────────────────────────────────────────────────────────────
+create table if not exists public.monthly_statement_changes (
+  id             uuid        primary key default gen_random_uuid(),
+  statement_id   uuid        not null references public.monthly_statements(id) on delete cascade,
+  school_id      uuid        not null references public.schools(id) on delete cascade,
+  change_type    text        not null
+                 check (change_type in ('added','removed','modified','leave','transfer')),
+  staff_id       uuid        references public.staff_records(id) on delete set null,
+  change_data    jsonb       not null default '{}',
+  reason         text,
+  effective_date date,
+  created_at     timestamptz not null default now()
+);
+
+create index if not exists stmt_changes_statement
+  on public.monthly_statement_changes (statement_id);
+
+alter table public.monthly_statement_changes enable row level security;
+
+drop policy if exists stmt_changes_school_admin on public.monthly_statement_changes;
+drop policy if exists stmt_changes_dir_sel      on public.monthly_statement_changes;
+
+create policy stmt_changes_school_admin on public.monthly_statement_changes
+  for all to authenticated
+  using (
+    school_id = current_user_school_id()
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'school_admin')
+  )
+  with check (
+    school_id = current_user_school_id()
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'school_admin')
+  );
+
+create policy stmt_changes_dir_sel on public.monthly_statement_changes
+  for select to authenticated
+  using (
+    exists (
+      select 1 from public.schools s
+      where s.id = monthly_statement_changes.school_id
+        and s.directorate_id = current_user_directorate_id()
+    )
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'directorate_user')
+  );
+
+grant select, insert, update, delete on public.monthly_statement_changes to authenticated;

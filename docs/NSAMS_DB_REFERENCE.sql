@@ -538,6 +538,43 @@ end$$;
 
 
 -- ════════════════════════════════════════════════════════════════════════════
+--  ٩ب. §14 — البيان الشهري الرسمي (جداول جديدة)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+--  أعمدة أُضيفت على schools:
+--    statistical_number text          الرقم الإحصائي للمدرسة
+--    cycle              text          الحلقة (1 | 2 | 3 | 1+2 | 2+3 | 1+2+3)
+--    rural_curriculum   boolean       منهاج ريفي (true/false)
+--
+--  lookup_lists  — القوائم المرجعية المركزية
+--    id, directorate_id (null=نظامي), list_type, value, sort_order, active
+--    list_type values: admin_role | specialization | certificate | higher_degree
+--                      leave_type | ministerial_doc | support_job | educational_zone
+--    RLS: select = كل authenticated؛ write = ministry_user فقط
+--
+--  staff_records  — سجل الكوادر البشرية (حساس)
+--    staff_type: admin | teaching | professional | worker | guard
+--    حقول حساسة: national_id, mother_name, birth_date, phone
+--    RLS: school_admin فقط (لا select مباشر للمديرية)
+--    للمديرية: استخدم get_school_staff_for_directorate(school_id) — يحذف الحقول الحساسة
+--
+--  staff_leaves  — إجازات الكوادر الشهرية
+--    (staff_id, school_id, leave_type, leave_days, month, year)
+--    RLS: school_admin كل عمليات؛ directorate_user select لمدارس مديريته
+--
+--  monthly_statements  — سجل البيانات الشهرية
+--    status: draft → submitted → approved | rejected
+--    snapshot_data: jsonb — لقطة البيان عند الإرسال (أرشفة)
+--    unique على (school_id, year, month)
+--    RLS: school_admin CRUD لمدرسته (draft/rejected فقط قابل للتعديل)؛
+--         directorate_user select + update (approved/rejected) لمدارس مديريته
+--    لا delete — سجل رسمي
+--
+--  monthly_statement_changes  — التعديلات الطارئة الشهرية
+--    (statement_id, change_type, staff_id, change_data, reason, effective_date)
+--    change_type: added | removed | modified | leave | transfer
+--
+-- ════════════════════════════════════════════════════════════════════════════
 --  ١٠. قوالب إدراج جاهزة (طلاب / موجهين)
 -- ════════════════════════════════════════════════════════════════════════════
 -- إدراج طالب:
