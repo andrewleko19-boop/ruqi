@@ -927,7 +927,7 @@ begin
         (v_payload->>'grade')::int,
         v_payload->>'section',
         coalesce(nullif(v_payload->>'academic_year',''),
-                 extract(year from now())::text),
+                 extract(year from now())::text || '-' || (extract(year from now())::int + 1)::text),
         coalesce(nullif(v_payload->>'name',''), '')
       )
       on conflict do nothing;
@@ -1606,3 +1606,342 @@ end; $$;
 
 revoke all on function public.get_directorate_grades_coverage() from public, anon;
 grant execute on function public.get_directorate_grades_coverage() to authenticated;
+
+-- ════════════════════════════════════════════════════════════════════════════
+--  SECTION 12 — الترفيع السنوي والأرشفة
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- 12.1  جدول نتائج نهاية العام (يُكتب client-side قبل استدعاء RPC الترفيع)
+create table if not exists public.student_year_results (
+  student_id    uuid not null references public.students(id) on delete cascade,
+  academic_year text not null,
+  result        text not null check (result in ('ناجح','راسب')),
+  final_percent numeric(5,2),
+  recorded_by   uuid references public.users(id),
+  recorded_at   timestamptz not null default now(),
+  primary key (student_id, academic_year)
+);
+alter table public.student_year_results enable row level security;
+
+drop policy if exists syr_read on public.student_year_results;
+create policy syr_read on public.student_year_results
+  for select to authenticated using (true);
+
+drop policy if exists syr_write on public.student_year_results;
+create policy syr_write on public.student_year_results
+  for all to authenticated
+  using (exists (
+    select 1 from public.students s
+    join public.classes c on c.id = s.class_id
+    join public.users u on u.school_id = c.school_id and u.id = auth.uid()
+    where s.id = student_year_results.student_id
+  ))
+  with check (exists (
+    select 1 from public.students s
+    join public.classes c on c.id = s.class_id
+    join public.users u on u.school_id = c.school_id and u.id = auth.uid()
+    where s.id = student_year_results.student_id
+  ));
+
+grant select, insert, update on public.student_year_results to authenticated;
+
+-- 12.2  RPC: upsert_year_results — كتابة جماعية للنتائج من المتصفح
+create or replace function public.upsert_year_results(
+  p_class_id uuid,
+  p_results  jsonb   -- [{student_id, academic_year, result, final_percent}]
+) returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_school_id uuid;
+begin
+  select c.school_id into v_school_id from public.classes c where c.id = p_class_id;
+  if not exists (
+    select 1 from public.users u
+    where u.id = auth.uid() and u.school_id = v_school_id and u.role = 'school_admin'
+  ) then raise exception 'غير مصرّح'; end if;
+
+  insert into public.student_year_results(student_id, academic_year, result, final_percent, recorded_by)
+  select
+    (r->>'student_id')::uuid,
+    r->>'academic_year',
+    r->>'result',
+    (r->>'final_percent')::numeric,
+    auth.uid()
+  from jsonb_array_elements(p_results) r
+  on conflict (student_id, academic_year) do update set
+    result        = excluded.result,
+    final_percent = excluded.final_percent,
+    recorded_by   = excluded.recorded_by,
+    recorded_at   = now();
+end; $$;
+
+revoke all on function public.upsert_year_results(uuid, jsonb) from public, anon;
+grant execute on function public.upsert_year_results(uuid, jsonb) to authenticated;
+
+-- 12.3  RPC: execute_annual_promotion — ترفيع/إعادة/تخريج لصف واحد
+create or replace function public.execute_annual_promotion(p_class_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_grade        int;
+  v_section      text;
+  v_school_id    uuid;
+  v_acad_year    text;
+  v_next_year    text;
+  v_promoted     int := 0;
+  v_repeated     int := 0;
+  v_graduated    int := 0;
+  v_skipped      int := 0;
+  r              record;
+  v_target_grade int;
+  v_target_cid   uuid;
+begin
+  select c.grade, c.section, c.school_id, c.academic_year
+  into v_grade, v_section, v_school_id, v_acad_year
+  from public.classes c where c.id = p_class_id;
+  if not found then raise exception 'الصف غير موجود'; end if;
+
+  if not exists (
+    select 1 from public.users u
+    where u.id = auth.uid() and u.school_id = v_school_id and u.role = 'school_admin'
+  ) then raise exception 'غير مصرّح'; end if;
+
+  v_next_year := (split_part(v_acad_year,'-',1)::int + 1)::text
+              || '-'
+              || (split_part(v_acad_year,'-',1)::int + 2)::text;
+
+  for r in
+    select s.id as student_id, s.full_name, yr.result
+    from public.students s
+    left join public.student_year_results yr
+           on yr.student_id = s.id and yr.academic_year = v_acad_year
+    where s.class_id = p_class_id and s.is_active = true
+  loop
+    if r.result is null then
+      v_skipped := v_skipped + 1;
+      continue;
+    end if;
+
+    -- الصف 12 + ناجح → تخريج
+    if v_grade = 12 and r.result = 'ناجح' then
+      update public.students set is_active = false where id = r.student_id;
+      insert into public.audit_log(actor_id, school_id, entity, action, changes)
+      values (auth.uid(), v_school_id, 'student', 'graduate',
+              jsonb_build_object('academic_year', v_acad_year, 'grade', v_grade, 'name', r.full_name));
+      v_graduated := v_graduated + 1;
+      continue;
+    end if;
+
+    v_target_grade := case when r.result = 'ناجح' then v_grade + 1 else v_grade end;
+
+    -- إيجاد أو إنشاء صف العام الجديد
+    select id into v_target_cid from public.classes
+    where school_id = v_school_id
+      and grade = v_target_grade
+      and section = v_section
+      and academic_year = v_next_year
+    limit 1;
+
+    if v_target_cid is null then
+      insert into public.classes(id, school_id, grade, section, academic_year, name)
+      values (gen_random_uuid(), v_school_id, v_target_grade, v_section, v_next_year,
+              'الصف ' || v_target_grade || ' / ' || v_section)
+      returning id into v_target_cid;
+    end if;
+
+    update public.students set class_id = v_target_cid where id = r.student_id;
+    insert into public.audit_log(actor_id, school_id, entity, action, changes)
+    values (auth.uid(), v_school_id, 'student', 'promote',
+            jsonb_build_object('from_class', p_class_id, 'to_class', v_target_cid,
+                               'result', r.result, 'academic_year', v_acad_year, 'name', r.full_name));
+
+    if r.result = 'ناجح' then v_promoted := v_promoted + 1;
+    else v_repeated := v_repeated + 1;
+    end if;
+  end loop;
+
+  return jsonb_build_object(
+    'promoted',  v_promoted,
+    'repeated',  v_repeated,
+    'graduated', v_graduated,
+    'skipped',   v_skipped
+  );
+end; $$;
+
+revoke all on function public.execute_annual_promotion(uuid) from public, anon;
+grant execute on function public.execute_annual_promotion(uuid) to authenticated;
+
+-- ════════════════════════════════════════════════════════════════════════════
+--  SECTION 13 — التقارير الشهرية
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- 13.1  جدول التقارير الدورية
+create table if not exists public.periodic_reports (
+  id          uuid primary key default gen_random_uuid(),
+  report_type text not null default 'monthly',
+  period      text not null,    -- 'YYYY-MM'
+  scope       text not null,    -- 'directorate' | 'national'
+  scope_id    uuid,             -- directorate_id (null للوطني)
+  data        jsonb not null default '{}',
+  created_at  timestamptz not null default now()
+);
+alter table public.periodic_reports enable row level security;
+
+drop policy if exists pr_select on public.periodic_reports;
+create policy pr_select on public.periodic_reports
+  for select to authenticated
+  using (
+    exists (
+      select 1 from public.users u where u.id = auth.uid() and (
+        u.role = 'ministry_user'
+        or (u.role = 'directorate_user'
+            and scope = 'directorate'
+            and u.directorate_id = periodic_reports.scope_id)
+      )
+    )
+  );
+
+grant select on public.periodic_reports to authenticated;
+grant insert, update on public.periodic_reports to service_role;
+
+-- 13.2  RPC: get_periodic_reports — قراءة التقارير المتاحة
+create or replace function public.get_periodic_reports(p_scope text default 'directorate')
+returns table (
+  id         uuid,
+  period     text,
+  scope      text,
+  scope_id   uuid,
+  data       jsonb,
+  created_at timestamptz
+)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_role text; v_dir uuid;
+begin
+  select u.role, u.directorate_id into v_role, v_dir
+  from public.users u where u.id = auth.uid();
+
+  if p_scope = 'national' then
+    if v_role <> 'ministry_user' then raise exception 'غير مصرّح'; end if;
+    return query
+    select pr.id, pr.period, pr.scope, pr.scope_id, pr.data, pr.created_at
+    from public.periodic_reports pr
+    where pr.scope = 'national'
+    order by pr.period desc;
+  else
+    if v_role not in ('directorate_user','ministry_user') then raise exception 'غير مصرّح'; end if;
+    return query
+    select pr.id, pr.period, pr.scope, pr.scope_id, pr.data, pr.created_at
+    from public.periodic_reports pr
+    where pr.scope = 'directorate'
+      and (v_role = 'ministry_user' or pr.scope_id = v_dir)
+    order by pr.period desc;
+  end if;
+end; $$;
+
+revoke all on function public.get_periodic_reports(text) from public, anon;
+grant execute on function public.get_periodic_reports(text) to authenticated;
+
+-- 13.3  دالة توليد التقارير الشهرية (تُستدعى من pg_cron)
+create or replace function public.generate_monthly_reports()
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_period      text;
+  v_month_start date;
+  v_month_end   date;
+  d             record;
+  v_dir_data    jsonb;
+  v_report_id   uuid;
+  v_nat_schools int := 0;
+  v_nat_present int := 0;
+  v_nat_absent  int := 0;
+  v_nat_dropout int := 0;
+  v_nat_reports int := 0;
+begin
+  v_period      := to_char(current_date - interval '1 month', 'YYYY-MM');
+  v_month_start := date_trunc('month', current_date - interval '1 month')::date;
+  v_month_end   := (date_trunc('month', current_date) - interval '1 day')::date;
+
+  for d in select id, name from public.directorates loop
+    select jsonb_build_object(
+      'directorate_id',    d.id,
+      'directorate_name',  d.name,
+      'period',            v_period,
+      'schools_count',     count(distinct s.id),
+      'present_count',     coalesce(sum(case when dsa.status in ('present','late','excused') then 1 else 0 end), 0),
+      'absent_count',      coalesce(sum(case when dsa.status = 'absent' then 1 else 0 end), 0),
+      'attendance_rate',   case when count(dsa.id) > 0
+                           then round(100.0 * sum(case when dsa.status in ('present','late','excused') then 1 else 0 end)
+                                      / nullif(count(dsa.id),0), 1)
+                           else 0 end,
+      'reporting_days',    count(distinct dsa.date),
+      'dropout_flagged',   (select count(distinct stu2.id) from public.students stu2
+                            join public.schools s2 on s2.id = stu2.school_id
+                            where s2.directorate_id = d.id and stu2.dropout_flagged_at is not null),
+      'emergency_reports', (select count(*) from public.emergency_reports er2
+                            join public.schools s2 on s2.id = er2.school_id
+                            where s2.directorate_id = d.id
+                              and er2.created_at::date between v_month_start and v_month_end)
+    )
+    into v_dir_data
+    from public.schools s
+    left join public.daily_student_attendance dsa
+           on dsa.school_id = s.id and dsa.date between v_month_start and v_month_end
+    where s.directorate_id = d.id;
+
+    -- حذف التقرير القديم إن وجد ثم إدراج الجديد
+    delete from public.periodic_reports where period = v_period and scope = 'directorate' and scope_id = d.id;
+    insert into public.periodic_reports(report_type, period, scope, scope_id, data)
+    values ('monthly', v_period, 'directorate', d.id, v_dir_data)
+    returning id into v_report_id;
+
+    -- إشعار مستخدمي المديرية
+    perform public.notify_user(
+      u.id, 'periodic_report_ready',
+      'التقرير الشهري — ' || v_period,
+      'تقرير شهر ' || v_period || ' جاهز للعرض والطباعة',
+      'periodic_report', v_report_id
+    )
+    from public.users u
+    where u.directorate_id = d.id and u.role = 'directorate_user';
+
+    v_nat_schools := v_nat_schools + coalesce((v_dir_data->>'schools_count')::int, 0);
+    v_nat_present := v_nat_present + coalesce((v_dir_data->>'present_count')::int, 0);
+    v_nat_absent  := v_nat_absent  + coalesce((v_dir_data->>'absent_count')::int,  0);
+    v_nat_dropout := v_nat_dropout + coalesce((v_dir_data->>'dropout_flagged')::int, 0);
+    v_nat_reports := v_nat_reports + coalesce((v_dir_data->>'emergency_reports')::int, 0);
+  end loop;
+
+  -- التقرير الوطني
+  delete from public.periodic_reports where period = v_period and scope = 'national' and scope_id is null;
+  insert into public.periodic_reports(report_type, period, scope, scope_id, data)
+  values ('monthly', v_period, 'national', null, jsonb_build_object(
+    'period',            v_period,
+    'schools_count',     v_nat_schools,
+    'present_count',     v_nat_present,
+    'absent_count',      v_nat_absent,
+    'attendance_rate',   case when (v_nat_present + v_nat_absent) > 0
+                         then round(100.0 * v_nat_present / (v_nat_present + v_nat_absent), 1)
+                         else 0 end,
+    'dropout_flagged',   v_nat_dropout,
+    'emergency_reports', v_nat_reports
+  ))
+  returning id into v_report_id;
+
+  -- إشعار مستخدمي الوزارة
+  perform public.notify_user(
+    u.id, 'periodic_report_ready',
+    'التقرير الشهري الوطني — ' || v_period,
+    'التقرير الشهري الوطني لشهر ' || v_period || ' جاهز',
+    'periodic_report', v_report_id
+  )
+  from public.users u where u.role = 'ministry_user';
+end; $$;
+
+revoke all on function public.generate_monthly_reports() from public, anon;
+grant execute on function public.generate_monthly_reports() to service_role;
+
+-- 13.4  pg_cron: أول كل شهر 09:00 سوريا (06:00 UTC)
+select cron.schedule(
+  'monthly-report-generator',
+  '0 6 1 * *',
+  $$ select public.generate_monthly_reports(); $$
+);

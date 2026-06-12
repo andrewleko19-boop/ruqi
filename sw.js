@@ -10,7 +10,7 @@
  * which avoids serving a half-updated mix of old HTML + new JS mid-session.
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'nsams-v45';
+const CACHE = 'nsams-v46';
 
 const PRECACHE = [
   './',
@@ -18,9 +18,19 @@ const PRECACHE = [
   './manifest.json',
   './shared/db.js',
   './shared/csel.js',
+  './school/index.html',
+  './school/script.js',
+  './school/style.css',
   './teacher/index.html',
   './teacher/script.js',
   './teacher/style.css',
+  './directorate/index.html',
+  './directorate/script.js',
+  './directorate/style.css',
+  './directorate/school.html',
+  './ministry/index.html',
+  './ministry/script.js',
+  './ministry/style.css',
   './admin/index.html',
   './admin/script.js',
   './admin/style.css',

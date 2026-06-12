@@ -324,7 +324,8 @@ async function loadAllData() {
     renderTable(rows);
     renderGovRankChart(rows);
     renderDrill();         // يعيد رسم مستوى التعمق الحالي ببيانات طازجة
-    loadNationalTrend();   // try/catch داخلي — فشل RPC لا يمسّ اللوحة
+    loadNationalTrend();          // try/catch داخلي — فشل RPC لا يمسّ اللوحة
+    loadNationalPeriodicReports(); // نفس النمط
     setLastUpdated();
 
   } catch (err) {
@@ -822,6 +823,91 @@ exportBtn.addEventListener('click', () => {
   a.click();
   URL.revokeObjectURL(url);
 });
+
+// ── التقارير الشهرية الوطنية ─────────────────────────────────────────────────
+async function loadNationalPeriodicReports() {
+  const loadingEl = document.getElementById('nat-periodic-loading');
+  const tableWrap = document.getElementById('nat-periodic-table-wrap');
+  const emptyEl   = document.getElementById('nat-periodic-empty');
+  const tbody     = document.getElementById('nat-periodic-tbody');
+  if (!tbody) return;
+
+  loadingEl?.classList.remove('hidden');
+  tableWrap?.setAttribute('hidden', '');
+  emptyEl?.classList.add('hidden');
+  tbody.innerHTML = '';
+
+  try {
+    const { data: reports, error } = await supabase.rpc('get_periodic_reports', { p_scope: 'national' });
+    loadingEl?.classList.add('hidden');
+    if (error) throw error;
+    if (!reports || !reports.length) { emptyEl?.classList.remove('hidden'); return; }
+
+    reports.forEach(r => {
+      const d = r.data || {};
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r.period}</td>
+        <td>${d.schools_count ?? '—'}</td>
+        <td>${d.attendance_rate != null ? d.attendance_rate + '٪' : '—'}</td>
+        <td>${d.dropout_flagged ?? '—'}</td>
+        <td>${d.emergency_reports ?? '—'}</td>
+        <td><button class="btn btn-icon" data-rid="${r.id}" title="طباعة">🖨</button></td>`;
+      tbody.appendChild(tr);
+    });
+    tableWrap?.removeAttribute('hidden');
+
+    tbody.querySelectorAll('[data-rid]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const rep = reports.find(x => x.id === btn.dataset.rid);
+        if (rep) printNationalReport(rep);
+      });
+    });
+  } catch (err) {
+    loadingEl?.classList.add('hidden');
+    if (emptyEl) { emptyEl.textContent = 'تعذّر تحميل التقارير الشهرية.'; emptyEl.classList.remove('hidden'); }
+  }
+}
+
+document.getElementById('reload-nat-periodic-btn')
+  ?.addEventListener('click', loadNationalPeriodicReports);
+
+function printNationalReport(rep) {
+  const d = rep.data || {};
+  const html = `<!DOCTYPE html><html lang="ar" dir="rtl">
+<head><meta charset="utf-8">
+<title>التقرير الشهري الوطني — ${rep.period}</title>
+<style>
+  body { font-family: Cairo, Arial, sans-serif; padding: 32px; color: #111; }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  .sub { color: #555; margin-bottom: 24px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #ccc; padding: 10px 14px; text-align: right; }
+  th { background: #f0f4f8; font-weight: 700; }
+  @media print { body { padding: 14mm; } }
+</style>
+</head>
+<body>
+<h1>التقرير الشهري الوطني</h1>
+<p class="sub">الفترة: ${rep.period} &nbsp;|&nbsp; تاريخ التوليد: ${new Date(rep.created_at).toLocaleDateString('ar-SY')}</p>
+<table>
+  <thead><tr><th>المؤشر</th><th>القيمة</th></tr></thead>
+  <tbody>
+    <tr><td>عدد المدارس</td><td>${d.schools_count ?? '—'}</td></tr>
+    <tr><td>نسبة الحضور الوطنية</td><td>${d.attendance_rate != null ? d.attendance_rate + '٪' : '—'}</td></tr>
+    <tr><td>عدد الحاضرين (الفترة)</td><td>${d.present_count ?? '—'}</td></tr>
+    <tr><td>عدد الغائبين (الفترة)</td><td>${d.absent_count ?? '—'}</td></tr>
+    <tr><td>حالات التسرب المُرقَّنة</td><td>${d.dropout_flagged ?? '—'}</td></tr>
+    <tr><td>البلاغات الطارئة</td><td>${d.emergency_reports ?? '—'}</td></tr>
+  </tbody>
+</table>
+</body></html>`;
+  const win = window.open('', '_blank');
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
+  win.onload = () => setTimeout(() => win.print(), 300);
+}
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 checkSession();

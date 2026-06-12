@@ -2460,6 +2460,30 @@ async function getDirectorateGradesCoverage() {
   return data ?? [];
 }
 
+// ─── Annual promotion ────────────────────────────────────────────────────────
+
+async function upsertYearResults(classId, results) {
+  const { error } = await db.rpc('upsert_year_results', {
+    p_class_id: classId,
+    p_results:  results,
+  });
+  if (error) throw error;
+}
+
+async function executeAnnualPromotion(classId) {
+  const { data, error } = await db.rpc('execute_annual_promotion', { p_class_id: classId });
+  if (error) throw error;
+  return data;
+}
+
+// ─── Periodic reports ─────────────────────────────────────────────────────────
+
+async function getPeriodicReports(scope = 'directorate') {
+  const { data, error } = await db.rpc('get_periodic_reports', { p_scope: scope });
+  if (error) throw error;
+  return data ?? [];
+}
+
 // ─── Admin (ministry_user) ────────────────────────────────────────────────────
 
 async function getAdminDirectorates() {
@@ -2663,6 +2687,13 @@ window.NSAMS_DB = {
 
   // Directorate grades coverage
   getDirectorateGradesCoverage,
+
+  // Annual promotion
+  upsertYearResults,
+  executeAnnualPromotion,
+
+  // Periodic reports
+  getPeriodicReports,
 
   // Admin (ministry_user) — system management
   getAdminDirectorates,

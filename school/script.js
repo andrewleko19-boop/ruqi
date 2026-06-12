@@ -2307,6 +2307,7 @@ const repListEl         = el('rep-list');
 const repEmpty          = el('rep-empty');
 const btnPrintAll       = el('btn-print-all');
 const btnRefreshReports = el('btn-refresh-reports');
+const btnPromoteClass   = el('btn-promote-class');
 const repMinAtt         = el('rep-minatt');
 const btnSaveMinAtt     = el('btn-save-minatt');
 const modalGrace        = el('modal-grace');
@@ -2370,20 +2371,65 @@ async function initReportsTab() {
 repClassSelect.addEventListener('change', () => {
   const id = repClassSelect.value;
   if (id) loadReports(id);
-  else { repListEl.innerHTML = ''; repEmpty.hidden = true; hide(btnPrintAll); }
+  else { repListEl.innerHTML = ''; repEmpty.hidden = true; hide(btnPrintAll); hide(btnPromoteClass); }
 });
 repTermSelect.addEventListener('change', () => { if (repClassSelect.value) loadReports(repClassSelect.value); });
 btnRefreshReports.addEventListener('click', () => { if (repClassSelect.value) loadReports(repClassSelect.value); });
+
+btnPromoteClass?.addEventListener('click', async () => {
+  const classId = repClassSelect.value;
+  if (!classId || !_repData) return;
+  const cards = _repData.students || [];
+  const incomplete = cards.filter(c => !c.complete);
+  if (incomplete.length > 0) {
+    toast(`${incomplete.length} طالب لم تكتمل نتائجه — يجب إدخال كل الدرجات أولاً`, 'error');
+    return;
+  }
+  if (!confirm(`تأكيد تنفيذ الترفيع السنوي لـ ${cards.length} طالب؟ هذا الإجراء لا يمكن التراجع عنه.`)) return;
+
+  btnPromoteClass.disabled = true;
+  btnPromoteClass.textContent = 'جارٍ الترفيع…';
+  try {
+    // 1. حفظ النتائج server-side
+    const yearResults = cards.map(c => ({
+      student_id:    c.student.id,
+      academic_year: _repData.academicYear,
+      result:        c.result,
+      final_percent: c.finalPercent ?? null,
+    }));
+    await NDB.upsertYearResults(classId, yearResults);
+    // 2. تنفيذ الترفيع
+    const summary = await NDB.executeAnnualPromotion(classId);
+    const s = summary || {};
+    toast(
+      `الترفيع اكتمل: ترقّى ${s.promoted ?? 0}، أعاد ${s.repeated ?? 0}، تخرّج ${s.graduated ?? 0}` +
+      (s.skipped ? `، تجاوزنا ${s.skipped} (نتائج ناقصة)` : ''),
+      'success',
+    );
+    // إعادة تحميل قائمة الصفوف بعد الترفيع (الصف الحالي قد يكون فارغاً الآن)
+    await initReportsTab();
+    repListEl.innerHTML = '';
+    repEmpty.hidden = false;
+    hide(btnPrintAll);
+    hide(btnPromoteClass);
+  } catch (err) {
+    console.error('[NSAMS] promote', err);
+    toast('تعذّر تنفيذ الترفيع: ' + (err.message || String(err)), 'error');
+  } finally {
+    btnPromoteClass.disabled = false;
+    btnPromoteClass.textContent = 'تنفيذ الترفيع السنوي للصف';
+  }
+});
 
 async function loadReports(classId) {
   show(repLoading);
   repListEl.innerHTML = '';
   repEmpty.hidden = true;
   hide(btnPrintAll);
+  hide(btnPromoteClass);
   try {
     _repData = await NDB.getClassReportCards(classId, undefined, currentTerm());
     hide(repLoading);
-    // Keep the editable field + cached school in sync with the authoritative value.
     if (_repData?.minAttendancePct != null && S.school) {
       S.school.minAttendancePct = _repData.minAttendancePct;
       syncMinAttField();
@@ -2392,6 +2438,10 @@ async function loadReports(classId) {
     if (cards.length === 0) { repEmpty.hidden = false; return; }
     cards.forEach((card, i) => repListEl.appendChild(buildReportRow(card, i + 1)));
     show(btnPrintAll);
+    // زر الترفيع يظهر فقط عند شهادة السنة وكل الطلاب مكتملون
+    if (currentTerm() === 'year' && cards.length > 0 && cards.every(c => c.complete)) {
+      show(btnPromoteClass);
+    }
   } catch (err) {
     console.error('[NSAMS] loadReports', err);
     hide(repLoading);

@@ -201,6 +201,37 @@
         <p id="trend-empty" class="table-empty hidden">شغّل القسم 7 من database-setup.sql لتفعيل مخطط الاتجاه.</p>
       </section>
 
+      <!-- التقارير الشهرية الوطنية -->
+      <section class="section-card" id="nat-periodic-panel">
+        <div class="section-header">
+          <h2 class="section-title">التقارير الشهرية الوطنية</h2>
+          <button id="reload-nat-periodic-btn" class="btn btn-icon" title="تحديث">
+            <svg class="icon icon-sm"><use href="#icon-refresh"/></svg>
+          </button>
+        </div>
+        <div id="nat-periodic-loading" class="table-loading hidden">
+          <div class="spinner"></div><span>جارٍ التحميل…</span>
+        </div>
+        <div class="table-wrapper" id="nat-periodic-table-wrap" hidden>
+          <table id="nat-periodic-table">
+            <thead>
+              <tr>
+                <th>الشهر</th>
+                <th>المدارس</th>
+                <th>نسبة الحضور</th>
+                <th>مرقَّنو القيد</th>
+                <th>البلاغات</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="nat-periodic-tbody"></tbody>
+          </table>
+        </div>
+        <p id="nat-periodic-empty" class="table-empty hidden">
+          لا توجد تقارير شهرية بعد — تُولَّد تلقائياً في أول كل شهر.
+        </p>
+      </section>
+
       <!-- التعمق: محافظة ← مديرية ← مدرسة -->
       <section class="section-card hidden" id="drill-card">
         <div class="section-header">

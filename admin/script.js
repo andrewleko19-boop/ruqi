@@ -3,6 +3,46 @@ import { CustomSelect } from '../shared/csel.js';
 
 const EDGE_BASE = supabaseUrl + '/functions/v1';
 
+// ── Audit log translation maps ────────────────────────────────────────────────
+const AUDIT_ACTION_LABELS = {
+  create: 'إضافة', update: 'تعديل', delete: 'حذف',
+  archive: 'أرشفة', transfer: 'نقل', promote: 'ترفيع',
+  graduate: 'تخريج', flag_dropout: 'ترقين قيد',
+};
+const AUDIT_ENTITY_LABELS = {
+  student: 'طالب', class: 'صف', school: 'مدرسة',
+  report: 'بلاغ', user: 'مستخدم', holiday: 'عطلة',
+};
+const AUDIT_FIELD_LABELS = {
+  full_name: 'الاسم الكامل', gender: 'الجنس', birth_date: 'تاريخ الميلاد',
+  class_id: 'الصف', is_active: 'الحالة', national_id: 'الرقم الوطني',
+  grade: 'المرحلة', section: 'الشعبة', academic_year: 'العام الدراسي',
+  result: 'النتيجة', name: 'الاسم',
+};
+const AUDIT_VALUE_LABELS = {
+  male: 'ذكر', female: 'أنثى', true: 'نعم', false: 'لا',
+  'ناجح': 'ناجح', 'راسب': 'راسب',
+};
+
+function buildAuditChangesText(changes) {
+  if (!changes || typeof changes !== 'object') return JSON.stringify(changes, null, 2);
+  const lines = [];
+  for (const [k, v] of Object.entries(changes)) {
+    const label = AUDIT_FIELD_LABELS[k] ?? k;
+    let val = v;
+    if (val !== null && val !== undefined) {
+      const strVal = String(val);
+      val = AUDIT_VALUE_LABELS[strVal] ?? strVal;
+      // format date strings YYYY-MM-DD
+      if (/^\d{4}-\d{2}-\d{2}$/.test(strVal)) {
+        val = new Date(strVal).toLocaleDateString('ar-SY');
+      }
+    }
+    lines.push(`${label}: ${val ?? '—'}`);
+  }
+  return lines.join('\n');
+}
+
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const loginScreen   = document.getElementById('login-screen');
 const dashboard     = document.getElementById('dashboard');
@@ -590,12 +630,12 @@ async function loadAudit(reset = true) {
       <td class="muted" style="white-space:nowrap">${esc(date)}</td>
       <td>${esc(schoolName)}</td>
       <td>${esc(actorName)}</td>
-      <td>${esc(r.entity ?? '—')}</td>
-      <td>${esc(r.action ?? '—')}</td>
+      <td>${esc(AUDIT_ENTITY_LABELS[r.entity] ?? r.entity ?? '—')}</td>
+      <td>${esc(AUDIT_ACTION_LABELS[r.action] ?? r.action ?? '—')}</td>
       <td>
         ${r.changes ? `
           <button class="changes-toggle" data-target="${changesId}">عرض</button>
-          <pre class="changes-json hidden" id="${changesId}">${esc(JSON.stringify(r.changes, null, 2))}</pre>
+          <pre class="changes-json hidden" id="${changesId}">${esc(buildAuditChangesText(r.changes))}</pre>
         ` : '—'}
       </td>`;
     auditTbody.appendChild(tr);

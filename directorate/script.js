@@ -82,6 +82,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
+window.addEventListener('online', () => loadAll().catch(() => {}));
+
 // ══════════════════════════════════════════════
 //  Login
 // ══════════════════════════════════════════════
@@ -731,10 +733,10 @@ function exportReportsCSV() {
   downloadCSV(`nsams_reports_${todayLocalISO()}.csv`, [headers, ...dataRows]);
 }
 
-function exportComplianceCSV() {
+async function exportComplianceCSV() {
   if (!complianceRows.length) { showToast('تصدير', 'بيانات الالتزام غير متوفرة.', 'info'); return; }
 
-  const workingDays = countWorkingDays(30) || 1;
+  const workingDays = (await countWorkingDays(30)) || 1;
   const headers     = ['المدرسة', 'أرسلت اليوم', 'أيام مُرسلة', 'أيام العمل (30ي)', 'نسبة الالتزام %'];
   const dataRows    = complianceRows.map(r => [
     r.name,
@@ -942,9 +944,99 @@ async function loadDropoutSummary() {
 }
 
 document.getElementById('reload-dropout-btn')?.addEventListener('click', loadDropoutSummary);
+document.getElementById('reload-periodic-btn')?.addEventListener('click', loadPeriodicReports);
 
 async function loadAll() {
-  await Promise.allSettled([loadStats(), loadMapAndCompliance(), loadReports(), loadTrend(), loadRequests(), loadDropoutSummary()]);
+  await Promise.allSettled([loadStats(), loadMapAndCompliance(), loadReports(), loadTrend(), loadRequests(), loadDropoutSummary(), loadPeriodicReports()]);
+}
+
+// ══════════════════════════════════════════════
+//  التقارير الشهرية
+// ══════════════════════════════════════════════
+async function loadPeriodicReports() {
+  const loadingEl = document.getElementById('periodic-loading');
+  const tableWrap = document.getElementById('periodic-table-wrap');
+  const emptyEl   = document.getElementById('periodic-empty');
+  const tbody     = document.getElementById('periodic-tbody');
+  if (!tbody) return;
+
+  loadingEl?.classList.remove('hidden');
+  tableWrap?.setAttribute('hidden', '');
+  emptyEl?.setAttribute('hidden', '');
+  tbody.innerHTML = '';
+
+  try {
+    const reports = await NSAMS_DB.getPeriodicReports('directorate');
+    loadingEl?.classList.add('hidden');
+    if (!reports.length) { emptyEl?.removeAttribute('hidden'); return; }
+
+    reports.forEach(r => {
+      const d = r.data || {};
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${esc(r.period)}</td>
+        <td>${d.schools_count ?? '—'}</td>
+        <td>${d.attendance_rate != null ? d.attendance_rate + '٪' : '—'}</td>
+        <td>${d.dropout_flagged ?? '—'}</td>
+        <td>${d.emergency_reports ?? '—'}</td>
+        <td><button class="btn btn-ghost btn-sm" data-rep-id="${r.id}" data-period="${esc(r.period)}">
+          طباعة
+        </button></td>`;
+      tbody.appendChild(tr);
+    });
+
+    tableWrap?.removeAttribute('hidden');
+
+    tbody.querySelectorAll('[data-rep-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const rep = reports.find(x => x.id === btn.dataset.repId);
+        if (rep) printMonthlyReport(rep);
+      });
+    });
+  } catch (err) {
+    loadingEl?.classList.add('hidden');
+    console.error('[NSAMS] loadPeriodicReports', err);
+    if (emptyEl) { emptyEl.textContent = 'تعذّر تحميل التقارير الشهرية.'; emptyEl.removeAttribute('hidden'); }
+  }
+}
+
+function printMonthlyReport(rep) {
+  const d = rep.data || {};
+  const dirName = d.directorate_name || '';
+  const html = `<!DOCTYPE html><html lang="ar" dir="rtl">
+<head><meta charset="utf-8">
+<title>التقرير الشهري — ${rep.period}</title>
+<style>
+  body { font-family: Cairo, Arial, sans-serif; padding: 32px; color: #111; }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  .sub { color: #555; margin-bottom: 24px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #ccc; padding: 10px 14px; text-align: right; }
+  th { background: #f0f4f8; font-weight: 700; }
+  @media print { body { padding: 14mm; } }
+</style>
+</head>
+<body>
+<h1>التقرير الشهري${dirName ? ' — ' + dirName : ''}</h1>
+<p class="sub">الفترة: ${rep.period} &nbsp;|&nbsp; تاريخ التوليد: ${new Date(rep.created_at).toLocaleDateString('ar-SY')}</p>
+<table>
+  <thead><tr><th>المؤشر</th><th>القيمة</th></tr></thead>
+  <tbody>
+    <tr><td>عدد المدارس</td><td>${d.schools_count ?? '—'}</td></tr>
+    <tr><td>نسبة الحضور</td><td>${d.attendance_rate != null ? d.attendance_rate + '٪' : '—'}</td></tr>
+    <tr><td>عدد الحاضرين (الفترة)</td><td>${d.present_count ?? '—'}</td></tr>
+    <tr><td>عدد الغائبين (الفترة)</td><td>${d.absent_count ?? '—'}</td></tr>
+    <tr><td>أيام التسجيل</td><td>${d.reporting_days ?? '—'}</td></tr>
+    <tr><td>حالات التسرب المُرقَّنة</td><td>${d.dropout_flagged ?? '—'}</td></tr>
+    <tr><td>البلاغات الطارئة</td><td>${d.emergency_reports ?? '—'}</td></tr>
+  </tbody>
+</table>
+</body></html>`;
+  const win = window.open('', '_blank');
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
+  win.onload = () => setTimeout(() => win.print(), 300);
 }
 
 // ══════════════════════════════════════════════

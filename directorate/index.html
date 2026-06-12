@@ -324,6 +324,41 @@
         </p>
       </section>
 
+      <!-- التقارير الشهرية -->
+      <section class="panel" id="periodic-reports-panel">
+        <div class="panel-header">
+          <h2>
+            <svg class="icon"><use href="#icon-eye"/></svg>
+            التقارير الشهرية
+          </h2>
+          <button id="reload-periodic-btn" class="btn btn-ghost btn-sm">
+            <svg class="icon icon-sm"><use href="#icon-refresh"/></svg>
+            تحديث
+          </button>
+        </div>
+        <div id="periodic-loading" class="table-loading hidden">
+          <div class="spinner"></div><span>جارٍ التحميل…</span>
+        </div>
+        <div class="table-wrapper" id="periodic-table-wrap" hidden>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>الشهر</th>
+                <th>المدارس</th>
+                <th>نسبة الحضور</th>
+                <th>مرقَّنو القيد</th>
+                <th>البلاغات</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="periodic-tbody"></tbody>
+          </table>
+        </div>
+        <p id="periodic-empty" class="empty-state" style="padding:14px 18px" hidden>
+          لا توجد تقارير شهرية بعد — تُولَّد تلقائياً في أول كل شهر.
+        </p>
+      </section>
+
       <!-- طلبات المدارس -->
       <section class="panel" id="requests-card">
         <div class="panel-header">
