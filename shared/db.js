@@ -2422,7 +2422,7 @@ async function getAdminUsers() {
 async function getAuditLogAll({ schoolId, from, to, offset = 0, limit = 100 } = {}) {
   let q = db
     .from('audit_log')
-    .select('id, school_id, actor_id, entity, action, changes, reason, created_at, schools(name)')
+    .select('id, school_id, actor_id, entity, action, changes, reason, created_at')
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
   if (schoolId) q = q.eq('school_id', schoolId);
@@ -2430,7 +2430,20 @@ async function getAuditLogAll({ schoolId, from, to, offset = 0, limit = 100 } = 
   if (to)       q = q.lte('created_at', to);
   const { data, error } = await q;
   if (error) throw error;
-  return data ?? [];
+  const rows = data ?? [];
+  // audit_log.school_id has no FK constraint → manual join for school names.
+  const ids = [...new Set(rows.map(r => r.school_id).filter(Boolean))];
+  if (ids.length > 0) {
+    const { data: schools, error: sErr } = await db
+      .from('schools').select('id, name').in('id', ids);
+    if (sErr) throw sErr;
+    const nameMap = {};
+    (schools ?? []).forEach(s => { nameMap[s.id] = s.name; });
+    rows.forEach(r => { r.schools = r.school_id ? { name: nameMap[r.school_id] ?? null } : null; });
+  } else {
+    rows.forEach(r => { r.schools = null; });
+  }
+  return rows;
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────

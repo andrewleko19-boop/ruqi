@@ -1,4 +1,5 @@
 import { supabase, supabaseUrl } from '../shared/db.js';
+import { CustomSelect } from '../shared/csel.js';
 
 const EDGE_BASE = supabaseUrl + '/functions/v1';
 
@@ -86,6 +87,18 @@ const deactivateError   = document.getElementById('deactivate-modal-error');
 const deactivateClose   = document.getElementById('deactivate-modal-close');
 const deactivateCancel  = document.getElementById('deactivate-modal-cancel');
 const deactivateConfirm = document.getElementById('deactivate-modal-confirm');
+
+// ── Custom selects ────────────────────────────────────────────────────────────
+CustomSelect.enhance('users-role-filter');
+CustomSelect.enhance('audit-school-filter');
+CustomSelect.enhance('sm-directorate');
+CustomSelect.enhance('sm-classification');
+CustomSelect.enhance('sm-education-type');
+CustomSelect.enhance('sm-shift');
+CustomSelect.enhance('sm-student-type');
+CustomSelect.enhance('um-role');
+CustomSelect.enhance('um-school');
+CustomSelect.enhance('um-directorate');
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let allSchools     = [];   // { id, name, directorate_id, directorates:{name,governorate}, ... }
@@ -206,6 +219,7 @@ async function loadDirectorates() {
       const o = new Option(`${d.name} — ${d.governorate}`, d.id);
       sel.add(o);
     });
+    CustomSelect.refresh(sel);
   });
 }
 
@@ -232,6 +246,7 @@ async function loadSchools() {
   // Populate school dropdown in user modal
   while (umSchool.options.length > 1) umSchool.remove(1);
   allSchools.forEach(s => umSchool.add(new Option(s.name, s.id)));
+  CustomSelect.refresh(umSchool);
 
   if (allSchools.length === 0) { show(schoolsEmpty); return; }
 
@@ -268,6 +283,7 @@ function openAddSchool() {
   smEducationType.value = '';
   smShift.value = '';
   smStudentType.value = '';
+  [smDirectorate, smClassification, smEducationType, smShift, smStudentType].forEach(s => CustomSelect.refresh(s));
   clearError(schoolModalError);
   show(schoolModal);
   smName.focus();
@@ -289,6 +305,7 @@ function openEditSchool(schoolId) {
   smTotalStudents.value   = s.total_students ?? '';
   smTotalTeachers.value   = s.total_teachers ?? '';
   smComplexName.value     = s.complex_name ?? '';
+  [smDirectorate, smClassification, smEducationType, smShift, smStudentType].forEach(s => CustomSelect.refresh(s));
   clearError(schoolModalError);
   show(schoolModal);
   smName.focus();
@@ -397,6 +414,7 @@ function openAddUser() {
   umFullname.value = '';
   umPassword.value = '';
   umRole.value = '';
+  CustomSelect.refresh(umRole);
   umSchoolGroup.style.display = 'none';
   umDirGroup.style.display = 'none';
   show(userModal);
@@ -477,6 +495,7 @@ deactivateConfirm.addEventListener('click', async () => {
 function populateAuditSchoolFilter() {
   while (auditSchoolFilter.options.length > 1) auditSchoolFilter.remove(1);
   allSchools.forEach(s => auditSchoolFilter.add(new Option(s.name, s.id)));
+  CustomSelect.refresh(auditSchoolFilter);
 }
 
 async function loadAudit(reset = true) {
@@ -495,7 +514,7 @@ async function loadAudit(reset = true) {
 
   let q = supabase
     .from('audit_log')
-    .select('id, school_id, actor_id, entity, action, changes, reason, created_at, schools(name)')
+    .select('id, school_id, actor_id, entity, action, changes, reason, created_at')
     .order('created_at', { ascending: false })
     .range(auditOffset, auditOffset + AUDIT_LIMIT - 1);
 
@@ -519,6 +538,17 @@ async function loadAudit(reset = true) {
     return;
   }
 
+  // Build school-name map: seed from already-loaded allSchools, then batch-fetch
+  // any IDs not yet known (audit viewed before schools tab, or new schools added).
+  const schoolMap = {};
+  allSchools.forEach(s => { schoolMap[s.id] = s.name; });
+  const missingSchoolIds = [...new Set(rows.map(r => r.school_id).filter(id => id && !schoolMap[id]))];
+  if (missingSchoolIds.length > 0) {
+    const { data: schoolRows } = await supabase
+      .from('schools').select('id, name').in('id', missingSchoolIds);
+    (schoolRows ?? []).forEach(s => { schoolMap[s.id] = s.name; });
+  }
+
   // Batch-fetch actor names (UUIDs from actor_id column → full_name in users)
   const actorIds = [...new Set(rows.map(r => r.actor_id).filter(Boolean))];
   const nameMap  = {};
@@ -530,7 +560,7 @@ async function loadAudit(reset = true) {
 
   rows.forEach(r => {
     const date = new Date(r.created_at).toLocaleString('ar-SY', { dateStyle: 'short', timeStyle: 'short' });
-    const schoolName = r.schools?.name ?? '—';
+    const schoolName = (r.school_id && schoolMap[r.school_id]) || '—';
     const actorName  = (r.actor_id && nameMap[r.actor_id]) ? nameMap[r.actor_id] : (r.actor_id ? r.actor_id.slice(0, 8) + '…' : '—');
     const changesId  = `ch-${r.id}`;
     const tr = document.createElement('tr');
