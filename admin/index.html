@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NSAMS – لوحة المشرف</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+    <symbol id="icon-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+      <polyline points="16 17 21 12 16 7"/>
+      <line x1="21" y1="12" x2="9" y2="12"/>
+    </symbol>
+    <symbol id="icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    </symbol>
+    <symbol id="icon-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+    </symbol>
+    <symbol id="icon-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="23 4 23 10 17 10"/>
+      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+    </symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+    </symbol>
+  </svg>
+
+  <link rel="icon" href="../icons/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../icons/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="../icons/favicon-16.png" />
+  <link rel="apple-touch-icon" href="../icons/apple-touch-icon-180.png" />
+  <link rel="manifest" href="../manifest.json" />
+  <meta name="theme-color" content="#0B2B5E" />
+</head>
+<body>
+
+  <!-- شاشة تسجيل الدخول -->
+  <div id="login-screen" class="login-screen">
+    <div class="login-card">
+      <div class="login-logo">
+        <img src="../icons/eagle-mark.png" alt="شعار NSAMS" width="48" height="48" style="object-fit:contain;display:block" />
+      </div>
+      <h1>NSAMS</h1>
+      <p class="login-subtitle">لوحة المشرف — إدارة النظام</p>
+      <div class="form-group">
+        <label for="email">البريد الإلكتروني</label>
+        <input type="email" id="email" placeholder="admin@edu.gov.sy" autocomplete="username" />
+      </div>
+      <div class="form-group">
+        <label for="password">كلمة المرور</label>
+        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
+      </div>
+      <div id="login-error" class="error-msg hidden"></div>
+      <button id="login-btn" class="btn btn-primary btn-full">تسجيل الدخول</button>
+    </div>
+  </div>
+
+  <!-- لوحة التحكم الرئيسية -->
+  <div id="dashboard" class="hidden">
+
+    <header class="topbar">
+      <div class="topbar-left">
+        <img src="../icons/eagle-mark.png" alt="شعار NSAMS" width="26" height="26" style="object-fit:contain;display:block" />
+        <div>
+          <span class="topbar-title">لوحة المشرف</span>
+          <span class="topbar-sub">إدارة المدارس والمستخدمين وسجل التدقيق</span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <span id="user-email" class="user-email"></span>
+        <button id="logout-btn" class="btn btn-icon" title="تسجيل الخروج">
+          <svg width="18" height="18"><use href="#icon-logout"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="main-content">
+
+      <!-- تبويبات -->
+      <div class="tab-bar">
+        <button class="tab-btn is-active" data-tab="schools">المدارس</button>
+        <button class="tab-btn" data-tab="users">المستخدمون</button>
+        <button class="tab-btn" data-tab="audit">سجل التدقيق</button>
+      </div>
+
+      <!-- ══════════════════════════════════════════════
+           تبويب 1: إدارة المدارس
+      ══════════════════════════════════════════════ -->
+      <div id="tab-schools" class="tab-panel is-active">
+        <div class="section-card">
+          <div class="section-header">
+            <h2>المدارس (<span id="schools-count">—</span>)</h2>
+            <button id="add-school-btn" class="btn btn-primary btn-sm">
+              <svg width="14" height="14"><use href="#icon-plus"/></svg>
+              إضافة مدرسة
+            </button>
+          </div>
+          <div id="schools-loading" class="table-loading">
+            <div class="spinner"></div><span>جارٍ تحميل المدارس…</span>
+          </div>
+          <div id="schools-table-wrap" class="table-wrapper hidden">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>اسم المدرسة</th>
+                  <th>المديرية</th>
+                  <th>المحافظة</th>
+                  <th>التصنيف</th>
+                  <th>الطلاب</th>
+                  <th>المعلمون</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="schools-tbody"></tbody>
+            </table>
+          </div>
+          <div id="schools-empty" class="table-empty hidden">لا توجد مدارس بعد.</div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════
+           تبويب 2: إدارة المستخدمين
+      ══════════════════════════════════════════════ -->
+      <div id="tab-users" class="tab-panel">
+        <div class="section-card">
+          <div class="section-header">
+            <h2>المستخدمون (<span id="users-count">—</span>)</h2>
+            <div class="section-header-actions">
+              <select id="users-role-filter">
+                <option value="">كل الأدوار</option>
+                <option value="school_admin">مدير مدرسة</option>
+                <option value="directorate_user">مشرف مديرية</option>
+                <option value="ministry_user">مستخدم وزارة</option>
+              </select>
+              <button id="add-user-btn" class="btn btn-primary btn-sm">
+                <svg width="14" height="14"><use href="#icon-plus"/></svg>
+                إنشاء مستخدم
+              </button>
+            </div>
+          </div>
+          <div id="users-loading" class="table-loading">
+            <div class="spinner"></div><span>جارٍ تحميل المستخدمين…</span>
+          </div>
+          <div id="users-table-wrap" class="table-wrapper hidden">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>الاسم</th>
+                  <th>الدور</th>
+                  <th>المدرسة / المديرية</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="users-tbody"></tbody>
+            </table>
+          </div>
+          <div id="users-empty" class="table-empty hidden">لا يوجد مستخدمون.</div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════
+           تبويب 3: سجل التدقيق
+      ══════════════════════════════════════════════ -->
+      <div id="tab-audit" class="tab-panel">
+        <div class="section-card">
+          <div class="section-header">
+            <h2>سجل التدقيق</h2>
+          </div>
+          <div class="filter-bar">
+            <select id="audit-school-filter">
+              <option value="">كل المدارس</option>
+            </select>
+            <input type="date" id="audit-from" title="من تاريخ" />
+            <input type="date" id="audit-to" title="إلى تاريخ" />
+            <button id="audit-filter-btn" class="btn btn-ghost btn-sm">
+              <svg width="14" height="14"><use href="#icon-refresh"/></svg>
+              تطبيق
+            </button>
+          </div>
+          <div id="audit-loading" class="table-loading hidden">
+            <div class="spinner"></div><span>جارٍ تحميل السجل…</span>
+          </div>
+          <div id="audit-table-wrap" class="table-wrapper hidden">
+            <table>
+              <thead>
+                <tr>
+                  <th>التاريخ</th>
+                  <th>المدرسة</th>
+                  <th>المنفّذ</th>
+                  <th>الجهة</th>
+                  <th>الإجراء</th>
+                  <th>التغييرات</th>
+                </tr>
+              </thead>
+              <tbody id="audit-tbody"></tbody>
+            </table>
+          </div>
+          <div id="audit-empty" class="table-empty">اختر فلتراً ثم اضغط «تطبيق» لعرض السجل.</div>
+          <div id="audit-load-more-wrap" class="hidden" style="padding:14px 20px;border-top:1px solid var(--border)">
+            <button id="audit-load-more" class="btn btn-ghost btn-sm">تحميل المزيد</button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       Modal: إضافة / تعديل مدرسة
+  ══════════════════════════════════════════════ -->
+  <div id="school-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="school-modal-title">إضافة مدرسة</span>
+        <button class="btn btn-icon btn-sm" id="school-modal-close">
+          <svg width="16" height="16"><use href="#icon-close"/></svg>
+        </button>
+      </div>
+      <div id="school-modal-error" class="error-msg hidden"></div>
+      <div class="form-group">
+        <label>اسم المدرسة *</label>
+        <input type="text" id="sm-name" placeholder="مدرسة …" />
+      </div>
+      <div class="form-group">
+        <label>المديرية *</label>
+        <select id="sm-directorate"><option value="">— اختر —</option></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>خط العرض (lat)</label>
+          <input type="number" id="sm-lat" step="any" placeholder="33.5" />
+        </div>
+        <div class="form-group">
+          <label>خط الطول (lng)</label>
+          <input type="number" id="sm-lng" step="any" placeholder="36.3" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>التصنيف</label>
+          <select id="sm-classification">
+            <option value="">—</option>
+            <option>أ</option><option>ب</option><option>ج</option><option>د</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>نوع التعليم</label>
+          <select id="sm-education-type">
+            <option value="">—</option>
+            <option value="عام">عام</option>
+            <option value="مهني">مهني</option>
+            <option value="ديني">ديني</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>نوع الدوام</label>
+          <select id="sm-shift">
+            <option value="">—</option>
+            <option value="صباحي">صباحي</option>
+            <option value="مسائي">مسائي</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>نوع الطلاب</label>
+          <select id="sm-student-type">
+            <option value="">—</option>
+            <option value="مختلط">مختلط</option>
+            <option value="بنين">بنين</option>
+            <option value="بنات">بنات</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>عدد الطلاب</label>
+          <input type="number" id="sm-total-students" min="0" placeholder="0" />
+        </div>
+        <div class="form-group">
+          <label>عدد المعلمين</label>
+          <input type="number" id="sm-total-teachers" min="0" placeholder="0" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>اسم المجمع المدرسي</label>
+        <input type="text" id="sm-complex-name" placeholder="اختياري" />
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="school-modal-cancel">إلغاء</button>
+        <button class="btn btn-primary" id="school-modal-save">حفظ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       Modal: إنشاء مستخدم
+  ══════════════════════════════════════════════ -->
+  <div id="user-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">إنشاء مستخدم جديد</span>
+        <button class="btn btn-icon btn-sm" id="user-modal-close">
+          <svg width="16" height="16"><use href="#icon-close"/></svg>
+        </button>
+      </div>
+      <div id="user-modal-error" class="error-msg hidden"></div>
+      <div class="form-group">
+        <label>البريد الإلكتروني *</label>
+        <input type="email" id="um-email" placeholder="user@example.com" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label>الاسم الكامل *</label>
+        <input type="text" id="um-fullname" placeholder="أحمد محمد" />
+      </div>
+      <div class="form-group">
+        <label>كلمة المرور *</label>
+        <input type="password" id="um-password" placeholder="٨ أحرف على الأقل" autocomplete="new-password" />
+      </div>
+      <div class="form-group">
+        <label>الدور *</label>
+        <select id="um-role">
+          <option value="">— اختر —</option>
+          <option value="school_admin">مدير مدرسة</option>
+          <option value="directorate_user">مشرف مديرية</option>
+        </select>
+      </div>
+      <div class="form-group" id="um-school-group" style="display:none">
+        <label>المدرسة *</label>
+        <select id="um-school"><option value="">— اختر —</option></select>
+      </div>
+      <div class="form-group" id="um-directorate-group" style="display:none">
+        <label>المديرية *</label>
+        <select id="um-directorate"><option value="">— اختر —</option></select>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="user-modal-cancel">إلغاء</button>
+        <button class="btn btn-primary" id="user-modal-save">إنشاء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       Modal: تأكيد تعطيل مستخدم
+  ══════════════════════════════════════════════ -->
+  <div id="deactivate-modal" class="modal-overlay hidden">
+    <div class="modal" style="max-width:400px">
+      <div class="modal-header">
+        <span class="modal-title">تعطيل المستخدم</span>
+        <button class="btn btn-icon btn-sm" id="deactivate-modal-close">
+          <svg width="16" height="16"><use href="#icon-close"/></svg>
+        </button>
+      </div>
+      <p style="color:var(--text-dim);font-size:13px;line-height:1.7">
+        سيُحظر حساب <strong id="deactivate-name" style="color:#fff"></strong> ولن يتمكن من تسجيل الدخول.
+        هذا الإجراء قابل للتراجع من Supabase Dashboard.
+      </p>
+      <div id="deactivate-modal-error" class="error-msg hidden"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="deactivate-modal-cancel">إلغاء</button>
+        <button class="btn btn-danger" id="deactivate-modal-confirm">تعطيل</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>

@@ -4,7 +4,7 @@ const SUPABASE_URL      = "https://xocrzpjfvizgnsybegwr.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_HCVzNgEJmov38FWXRO1uFw_DG1d87Y4";
 
 const LAYER = location.pathname.split('/').filter(Boolean).find(
-  s => ['school', 'teacher', 'directorate', 'ministry'].includes(s)
+  s => ['school', 'teacher', 'directorate', 'ministry', 'admin'].includes(s)
 ) || 'root';
 
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -16,6 +16,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 export { db as supabase };
+export { SUPABASE_URL as supabaseUrl };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Queue helpers (offline support)
@@ -2383,6 +2384,55 @@ async function getFullStaffRoster(schoolId) {
   return [...teachers, ...others];
 }
 
+// ─── Admin (ministry_user) ────────────────────────────────────────────────────
+
+async function getAdminDirectorates() {
+  const { data, error } = await db
+    .from('directorates').select('id, name, governorate').order('name');
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function getAdminSchools() {
+  const { data, error } = await db
+    .from('schools')
+    .select('id, name, directorate_id, directorates(name, governorate), classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name')
+    .order('name');
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function createAdminSchool(data) {
+  const { data: row, error } = await db.from('schools').insert(data).select().single();
+  if (error) throw error;
+  return row;
+}
+
+async function getAdminUsers() {
+  const { data, error } = await db
+    .from('users')
+    .select('id, full_name, role, school_id, directorate_id, schools(name), directorates(name)')
+    .in('role', ['school_admin', 'directorate_user', 'ministry_user'])
+    .order('role')
+    .order('full_name');
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function getAuditLogAll({ schoolId, from, to, offset = 0, limit = 100 } = {}) {
+  let q = db
+    .from('audit_log')
+    .select('id, school_id, actor_id, entity, action, changes, reason, created_at, schools(name)')
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (schoolId) q = q.eq('school_id', schoolId);
+  if (from)     q = q.gte('created_at', from);
+  if (to)       q = q.lte('created_at', to);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data ?? [];
+}
+
 // ─── Export ───────────────────────────────────────────────────────────────────
 window.NSAMS_DB = {
   // Auth
@@ -2510,4 +2560,11 @@ window.NSAMS_DB = {
   markAllNotificationsRead,
   subscribeNotifications,
   registerPushSubscription,
+
+  // Admin (ministry_user) — system management
+  getAdminDirectorates,
+  getAdminSchools,
+  createAdminSchool,
+  getAdminUsers,
+  getAuditLogAll,
 };

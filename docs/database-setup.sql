@@ -184,6 +184,52 @@ create policy schools_admin_update on public.schools
   using      (id = current_user_school_id())
   with check (id = current_user_school_id());
 
+-- 2.5  audit_log SELECT for ministry_user — lets the admin portal read the full
+--      cross-school audit log. The existing audit_log_select policy is school-scoped
+--      (school_admin only); this separate policy broadens read access for ministry.
+drop policy if exists audit_log_ministry_select on public.audit_log;
+create policy audit_log_ministry_select on public.audit_log
+  for select to authenticated
+  using (
+    exists (select 1 from public.users u
+            where u.id = auth.uid()
+            and u.role = 'ministry_user')
+  );
+
+-- 2.6  schools INSERT/SELECT for ministry_user — the admin portal creates new
+--      schools and reads all schools regardless of directorate.
+drop policy if exists schools_ministry_select on public.schools;
+create policy schools_ministry_select on public.schools
+  for select to authenticated
+  using (
+    exists (select 1 from public.users u
+            where u.id = auth.uid()
+            and u.role = 'ministry_user')
+  );
+
+drop policy if exists schools_ministry_insert on public.schools;
+create policy schools_ministry_insert on public.schools
+  for insert to authenticated
+  with check (
+    exists (select 1 from public.users u
+            where u.id = auth.uid()
+            and u.role = 'ministry_user')
+  );
+
+drop policy if exists schools_ministry_update on public.schools;
+create policy schools_ministry_update on public.schools
+  for update to authenticated
+  using (
+    exists (select 1 from public.users u
+            where u.id = auth.uid()
+            and u.role = 'ministry_user')
+  )
+  with check (
+    exists (select 1 from public.users u
+            where u.id = auth.uid()
+            and u.role = 'ministry_user')
+  );
+
 
 -- ════════════════════════════════════════════════════════════════════════════
 --  SECTION 3 — Teacher account credentials (principal-provisioned logins)

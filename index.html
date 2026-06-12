@@ -154,6 +154,7 @@
     .card:nth-child(2) { animation-delay: 0.42s; }
     .card:nth-child(3) { animation-delay: 0.54s; }
     .card:nth-child(4) { animation-delay: 0.66s; }
+    .card:nth-child(5) { animation-delay: 0.78s; }
 
     /* Top accent bar */
     .card::before {
@@ -279,6 +280,7 @@
     .badge-directorate { background: rgba(240, 180, 41, 0.1);  color: #f0c84a; border: 1px solid rgba(240, 180, 41, 0.2); }
     .badge-ministry    { background: rgba(72, 199, 142, 0.1);  color: #5dd4a3; border: 1px solid rgba(72, 199, 142, 0.2); }
     .badge-teacher     { background: rgba(167, 139, 250, 0.12); color: #b9a4fb; border: 1px solid rgba(167, 139, 250, 0.22); }
+    .badge-admin       { background: rgba(239, 68, 68, 0.10);  color: #f87171; border: 1px solid rgba(239, 68, 68, 0.22); }
 
     .badge-dot {
       width: 6px; height: 6px;
@@ -453,6 +455,29 @@
         <div class="card-title">لوحة الوزارة</div>
         <div class="card-desc">
           رؤية شاملة على المستوى الوطني: مؤشرات الأداء، المديريات، والإحصاءات التعليمية الكلية.
+        </div>
+      </div>
+      <span class="card-cta">
+        دخول إلى اللوحة
+        <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </span>
+    </a>
+
+    <!-- Admin -->
+    <a href="./admin/" class="card">
+      <div class="badge badge-admin">
+        <span class="badge-dot"></span>
+        مشرف النظام
+      </div>
+      <div class="card-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <div class="card-body">
+        <div class="card-title">لوحة المشرف</div>
+        <div class="card-desc">
+          إدارة المدارس والمستخدمين والاطلاع على سجل التدقيق الكامل لجميع المدارس.
         </div>
       </div>
       <span class="card-cta">
