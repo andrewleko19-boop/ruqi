@@ -2701,4 +2701,95 @@ window.NSAMS_DB = {
   createAdminSchool,
   getAdminUsers,
   getAuditLogAll,
+
+  // البيان الشهري — القوائم المرجعية وسجل الكوادر
+  getLookupList,
+  getStaffRecords,
+  createStaffRecord,
+  updateStaffRecord,
+  softDeleteStaffRecord,
+  getStaffLeaves,
+  upsertStaffLeave,
+  deleteStaffLeave,
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §14 — البيان الشهري: القوائم المرجعية وسجل الكوادر
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function getLookupList(listType, directorateId = null) {
+  let q = db.from('lookup_lists')
+    .select('value, sort_order')
+    .eq('list_type', listType)
+    .eq('active', true)
+    .order('sort_order')
+    .order('value');
+  q = directorateId
+    ? q.or(`directorate_id.is.null,directorate_id.eq.${directorateId}`)
+    : q.is('directorate_id', null);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data || []).map(r => r.value);
+}
+
+async function getStaffRecords(schoolId) {
+  const { data, error } = await db.from('staff_records')
+    .select('*')
+    .eq('school_id', schoolId)
+    .eq('active', true)
+    .order('staff_type')
+    .order('full_name');
+  if (error) throw error;
+  return data || [];
+}
+
+async function createStaffRecord(payload) {
+  const { data, error } = await db.from('staff_records')
+    .insert({ ...payload, updated_at: new Date().toISOString() })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function updateStaffRecord(id, payload) {
+  const { data, error } = await db.from('staff_records')
+    .update({ ...payload, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function softDeleteStaffRecord(id) {
+  const { error } = await db.from('staff_records')
+    .update({ active: false, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+async function getStaffLeaves(schoolId, month, year) {
+  const { data, error } = await db.from('staff_leaves')
+    .select('*')
+    .eq('school_id', schoolId)
+    .eq('month', month)
+    .eq('year', year)
+    .order('created_at');
+  if (error) throw error;
+  return data || [];
+}
+
+async function upsertStaffLeave(payload) {
+  const { data, error } = await db.from('staff_leaves')
+    .upsert(payload, { onConflict: 'staff_id,leave_type,month,year' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function deleteStaffLeave(id) {
+  const { error } = await db.from('staff_leaves').delete().eq('id', id);
+  if (error) throw error;
+}

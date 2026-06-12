@@ -799,6 +799,8 @@ async function initApp() {
   _mngSubjectsInit = false;
   _reportsLoaded   = false;
   _staffLoaded     = false;
+  _registryLoaded  = false;
+  _lookupCache     = {};
 
   // Kick off sync of any offline-queued records
   await doSync();
@@ -1299,6 +1301,8 @@ const viewStudents    = el('view-students');
 const viewStaff       = el('view-staff');
 const viewSubjects    = el('view-subjects');
 const viewReports     = el('view-reports');
+const tabRegistry     = el('tab-registry');
+const viewRegistry    = el('view-registry');
 const fabReport       = el('btn-open-report');
 
 const mngClassSelect    = el('mng-class-select');
@@ -1331,6 +1335,7 @@ const TABS = {
   staff:      { tab: tabStaff,      view: viewStaff },
   subjects:   { tab: tabSubjects,   view: viewSubjects },
   reports:    { tab: tabReports,    view: viewReports },
+  registry:   { tab: tabRegistry,   view: viewRegistry },
 };
 
 function switchTab(tab) {
@@ -1353,8 +1358,9 @@ function switchTab(tab) {
   if (tab === 'manage'   && !_mngSubjectsInit) initManageSubjects();
   if (tab === 'students' && !_studentsLoaded) initStudentsTab();
   if (tab === 'staff'    && !_staffLoaded)   initStaffTab();
-  if (tab === 'subjects' && !_subjectsLoaded) initSubjectsTab();
-  if (tab === 'reports'  && !_reportsLoaded)  initReportsTab();
+  if (tab === 'subjects'  && !_subjectsLoaded)  initSubjectsTab();
+  if (tab === 'reports'   && !_reportsLoaded)   initReportsTab();
+  if (tab === 'registry'  && !_registryLoaded)  initRegistryTab();
 }
 
 tabAttendance.addEventListener('click', () => switchTab('attendance'));
@@ -1363,6 +1369,7 @@ tabStudents.addEventListener('click',   () => switchTab('students'));
 tabStaff.addEventListener('click',      () => switchTab('staff'));
 tabSubjects.addEventListener('click',   () => switchTab('subjects'));
 tabReports.addEventListener('click',    () => switchTab('reports'));
+tabRegistry?.addEventListener('click',  () => switchTab('registry'));
 
 // «المزيد» sections menu (bottom sheet)
 const btnMore   = el('btn-more');
@@ -3976,6 +3983,433 @@ CustomSelect.enhance('req-stu-gender');
 CustomSelect.enhance('req-cor-class');
 CustomSelect.enhance('req-cor-student');
 CustomSelect.enhance('req-cor-field');
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Tab: Registry — سجل الكوادر البشرية
+// ════════════════════════════════════════════════════════════════════════════
+let _registryLoaded = false;
+let _regSegment     = 'admin';   // 'admin' | 'teaching' | 'support'
+let _regAllRecords  = [];
+let _regEditId      = null;
+let _leavesStaff    = null;
+let _delStaffId     = null;
+let _lookupCache    = {};
+
+const regList         = el('reg-list');
+const regLoading      = el('reg-loading');
+const regError        = el('reg-error');
+const regEmpty        = el('reg-empty');
+const btnRefreshReg   = el('btn-refresh-registry');
+const btnAddStaffRec  = el('btn-add-staff-rec');
+const modalStaffRec   = el('modal-staff-rec');
+const btnCloseStaffRec= el('btn-close-staff-rec');
+const staffRecTitle   = el('staff-rec-title');
+const srFullName      = el('sr-full-name');
+const srJobTitle      = el('sr-job-title');
+const srSpec          = el('sr-specialization');
+const srSubjectWrap   = el('sr-subject-wrap');
+const srSubject       = el('sr-subject');
+const srRosterType    = el('sr-roster-type');
+const srCertificate   = el('sr-certificate');
+const srHigherDegree  = el('sr-higher-degree');
+const srSeniority     = el('sr-seniority');
+const srStartDate     = el('sr-start-date');
+const srNationalId    = el('sr-national-id');
+const srMotherName    = el('sr-mother-name');
+const srDobDay        = el('sr-dob-day');
+const srDobMonth      = el('sr-dob-month');
+const srDobYear       = el('sr-dob-year');
+const srPhone         = el('sr-phone');
+const srResZone       = el('sr-res-zone');
+const srEduZone       = el('sr-edu-zone');
+const srMinDoc        = el('sr-min-doc');
+const srNotes         = el('sr-notes');
+const srError         = el('sr-error');
+const srSaveSpinner   = el('sr-save-spinner');
+const btnSaveStaffRec = el('btn-save-staff-rec');
+const modalLeaves     = el('modal-staff-leaves');
+const btnCloseLeaves  = el('btn-close-staff-leaves');
+const leavesStaffName = el('leaves-staff-name');
+const leavesMonthSel  = el('leaves-month-sel');
+const leavesYearIn    = el('leaves-year-in');
+const leavesList      = el('leaves-list');
+const leaveTypeSel    = el('leave-type-sel');
+const leaveDaysIn     = el('leave-days-in');
+const btnSaveLeave    = el('btn-save-leave');
+const leavesError     = el('leaves-error');
+const modalDelStaff   = el('modal-del-staff-rec');
+const btnCloseDelStaff= el('btn-close-del-staff');
+const delStaffName    = el('del-staff-name');
+const delStaffError   = el('del-staff-error');
+const btnConfirmDel   = el('btn-confirm-del-staff');
+
+async function getLookup(type) {
+  if (_lookupCache[type]) return _lookupCache[type];
+  const vals = await NDB.getLookupList(type, S.user?.directorateId ?? null);
+  _lookupCache[type] = vals;
+  return vals;
+}
+
+function fillSel(sel, values, blank = '— اختر —') {
+  sel.innerHTML = `<option value="">${blank}</option>`;
+  for (const v of values) {
+    const o = document.createElement('option');
+    o.value = o.textContent = v;
+    sel.appendChild(o);
+  }
+  CustomSelect.refresh(sel);
+}
+
+async function initRegistryTab() {
+  _registryLoaded = true;
+  await loadRegistryRecords();
+}
+
+async function loadRegistryRecords() {
+  if (!S.school?.id) return;
+  show(regLoading); hide(regError);
+  try {
+    _regAllRecords = await NDB.getStaffRecords(S.school.id);
+    renderRegistryList();
+  } catch (err) {
+    console.error('[NSAMS] loadRegistryRecords', err);
+    show(regError);
+  } finally {
+    hide(regLoading);
+  }
+}
+
+function renderRegistryList() {
+  const filtered = _regAllRecords.filter(r => {
+    if (_regSegment === 'admin')    return r.staff_type === 'admin';
+    if (_regSegment === 'teaching') return r.staff_type === 'teaching';
+    return ['professional','worker','guard'].includes(r.staff_type);
+  });
+  if (!filtered.length) {
+    show(regEmpty);
+    if (regList) regList.innerHTML = '';
+    return;
+  }
+  hide(regEmpty);
+  if (regList) regList.innerHTML = filtered.map(r => {
+    const meta = [r.job_title, r.specialization].filter(Boolean).join(' · ');
+    return `<li class="reg-row" data-id="${r.id}">
+      <div class="reg-row-main">
+        <div class="reg-name">${escapeHtml(r.full_name)}</div>
+        ${meta ? `<div class="reg-meta">${escapeHtml(meta)}</div>` : ''}
+      </div>
+      <div class="reg-row-acts">
+        <button class="icon-btn" data-act="leaves" aria-label="إجازات" title="إجازات">
+          <svg class="icon icon-sm"><use href="#ic-list"/></svg>
+        </button>
+        <button class="icon-btn" data-act="edit" aria-label="تعديل" title="تعديل">
+          <svg class="icon icon-sm"><use href="#ic-edit"/></svg>
+        </button>
+        <button class="icon-btn" data-act="del" aria-label="حذف" title="حذف">
+          <svg class="icon icon-sm"><use href="#ic-trash"/></svg>
+        </button>
+      </div>
+    </li>`;
+  }).join('');
+}
+
+// Segment switching
+document.querySelectorAll('.reg-seg-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    _regSegment = btn.dataset.seg;
+    document.querySelectorAll('.reg-seg-btn').forEach(b =>
+      b.classList.toggle('is-active', b === btn));
+    renderRegistryList();
+  });
+});
+
+// Row action delegation
+regList?.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  const li  = btn.closest('.reg-row');
+  const rec = _regAllRecords.find(r => r.id === li?.dataset.id);
+  if (!rec) return;
+  const act = btn.dataset.act;
+  if      (act === 'edit')   openStaffRecModal(rec);
+  else if (act === 'leaves') openLeavesModal(rec);
+  else if (act === 'del')    openDelStaffModal(rec);
+});
+
+btnAddStaffRec?.addEventListener('click', () => openStaffRecModal(null));
+btnRefreshReg?.addEventListener('click',  loadRegistryRecords);
+
+// ── Staff Record Modal ────────────────────────────────────────────────────────
+async function openStaffRecModal(rec) {
+  _regEditId = rec?.id ?? null;
+  if (staffRecTitle) staffRecTitle.textContent = rec ? 'تعديل بيانات كادر' : 'إضافة كادر جديد';
+
+  const jobTitles = _regSegment === 'admin'
+    ? await getLookup('admin_role')
+    : _regSegment === 'teaching'
+      ? ['معلم', 'مدرس', 'مدرس مساعد']
+      : await getLookup('support_job');
+
+  const [specs, certs, higher, minDocs, eduZones] = await Promise.all([
+    getLookup('specialization'), getLookup('certificate'),
+    getLookup('higher_degree'),  getLookup('ministerial_doc'),
+    getLookup('educational_zone'),
+  ]);
+
+  fillSel(srJobTitle, jobTitles);
+  fillSel(srSpec, specs);
+  fillSel(srCertificate, certs);
+  fillSel(srHigherDegree, higher, '— لا يوجد —');
+  fillSel(srMinDoc, minDocs, '— لا يوجد —');
+  fillSel(srEduZone, eduZones, '— لا يوجد —');
+
+  // Subject field visible for teaching only
+  if (srSubjectWrap) srSubjectWrap.hidden = _regSegment !== 'teaching';
+
+  const textInputs = [srFullName, srNationalId, srMotherName, srDobDay, srDobMonth,
+                      srDobYear, srSubject, srPhone, srResZone, srNotes];
+  const numInputs  = [srSeniority];
+
+  if (rec) {
+    srFullName.value    = rec.full_name     || '';
+    srNationalId.value  = rec.national_id   || '';
+    srMotherName.value  = rec.mother_name   || '';
+    srPhone.value       = rec.phone         || '';
+    srResZone.value     = rec.residential_zone || '';
+    srNotes.value       = rec.notes         || '';
+    srSubject.value     = rec.subject_taught || '';
+    srSeniority.value   = rec.seniority_years ?? '';
+    srStartDate.value   = rec.start_date    || '';
+    if (rec.birth_date) {
+      const [y, m, d]  = rec.birth_date.split('-');
+      srDobYear.value  = y; srDobMonth.value = m; srDobDay.value = d;
+    } else {
+      srDobYear.value  = srDobMonth.value = srDobDay.value = '';
+    }
+    srJobTitle.value    = rec.job_title     || '';
+    srSpec.value        = rec.specialization || '';
+    srCertificate.value = rec.certificate   || '';
+    srHigherDegree.value= rec.higher_degree || '';
+    srEduZone.value     = rec.educational_zone || '';
+    srRosterType.value  = rec.roster_type   || 'inside';
+    srMinDoc.value      = rec.ministerial_doc || '';
+    [srJobTitle, srSpec, srCertificate, srHigherDegree, srEduZone, srRosterType, srMinDoc]
+      .forEach(s => CustomSelect.refresh(s));
+  } else {
+    textInputs.forEach(i => { if (i) i.value = ''; });
+    numInputs.forEach(i => { if (i) i.value = ''; });
+    if (srStartDate) srStartDate.value = '';
+    srRosterType.value = 'inside';
+    [srJobTitle, srSpec, srCertificate, srHigherDegree, srEduZone, srRosterType, srMinDoc]
+      .forEach(s => { if (s) { s.value = ''; CustomSelect.refresh(s); } });
+  }
+
+  hide(srError);
+  show(modalStaffRec);
+  document.body.style.overflow = 'hidden';
+}
+
+function closeStaffRecModal() {
+  hide(modalStaffRec);
+  document.body.style.overflow = '';
+  _regEditId = null;
+}
+btnCloseStaffRec?.addEventListener('click', closeStaffRecModal);
+modalStaffRec?.addEventListener('click', e => { if (e.target === modalStaffRec) closeStaffRecModal(); });
+
+btnSaveStaffRec?.addEventListener('click', async () => {
+  const fullName = srFullName?.value.trim();
+  if (!fullName) { if (srError) { srError.textContent = 'الاسم الثلاثي مطلوب'; show(srError); } return; }
+  if (!navigator.onLine) { if (srError) { srError.textContent = 'الحفظ يحتاج اتصالاً بالإنترنت'; show(srError); } return; }
+
+  let birth_date = null;
+  if (srDobYear?.value && srDobMonth?.value && srDobDay?.value) {
+    const y = String(srDobYear.value).padStart(4, '0');
+    const m = String(srDobMonth.value).padStart(2, '0');
+    const d = String(srDobDay.value).padStart(2, '0');
+    birth_date = `${y}-${m}-${d}`;
+  }
+
+  const jt = srJobTitle?.value || null;
+  let staff_type = _regSegment === 'admin' ? 'admin'
+    : _regSegment === 'teaching' ? 'teaching'
+    : jt === 'مستخدم' ? 'worker' : jt === 'حارس' ? 'guard' : 'professional';
+
+  const payload = {
+    school_id:        S.school.id,
+    staff_type,
+    full_name:        fullName,
+    national_id:      srNationalId?.value.trim() || null,
+    mother_name:      srMotherName?.value.trim() || null,
+    birth_date,
+    job_title:        jt,
+    specialization:   srSpec?.value || null,
+    subject_taught:   _regSegment === 'teaching' ? (srSubject?.value.trim() || null) : null,
+    certificate:      srCertificate?.value || null,
+    higher_degree:    srHigherDegree?.value || null,
+    seniority_years:  srSeniority?.value ? parseFloat(srSeniority.value) : null,
+    start_date:       srStartDate?.value || null,
+    phone:            srPhone?.value.trim() || null,
+    residential_zone: srResZone?.value.trim() || null,
+    educational_zone: srEduZone?.value || null,
+    roster_type:      srRosterType?.value || 'inside',
+    ministerial_doc:  srMinDoc?.value || null,
+    notes:            srNotes?.value.trim() || null,
+  };
+
+  if (btnSaveStaffRec) btnSaveStaffRec.disabled = true;
+  if (srSaveSpinner) srSaveSpinner.hidden = false;
+  hide(srError);
+  try {
+    if (_regEditId) {
+      await NDB.updateStaffRecord(_regEditId, payload);
+      toast('تم تحديث البيانات', 'success');
+    } else {
+      await NDB.createStaffRecord(payload);
+      toast('تمت الإضافة إلى السجل', 'success');
+    }
+    closeStaffRecModal();
+    await loadRegistryRecords();
+  } catch (err) {
+    console.error('[NSAMS] saveStaffRecord', err);
+    if (srError) { srError.textContent = 'تعذّر الحفظ. تحقق من البيانات وحاول مجدداً.'; show(srError); }
+  } finally {
+    if (btnSaveStaffRec) btnSaveStaffRec.disabled = false;
+    if (srSaveSpinner) srSaveSpinner.hidden = true;
+  }
+});
+
+// ── Leaves Modal ──────────────────────────────────────────────────────────────
+async function openLeavesModal(rec) {
+  _leavesStaff = rec;
+  if (leavesStaffName) leavesStaffName.textContent = rec.full_name;
+  const now = new Date();
+  if (leavesMonthSel) leavesMonthSel.value = String(now.getMonth() + 1);
+  if (leavesYearIn)   leavesYearIn.value   = String(now.getFullYear());
+  const types = await getLookup('leave_type');
+  fillSel(leaveTypeSel, types, '— نوع الإجازة —');
+  if (leaveDaysIn) leaveDaysIn.value = '';
+  await loadLeavesForStaff();
+  hide(leavesError);
+  show(modalLeaves);
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLeavesModal() {
+  hide(modalLeaves);
+  document.body.style.overflow = '';
+  _leavesStaff = null;
+}
+btnCloseLeaves?.addEventListener('click', closeLeavesModal);
+modalLeaves?.addEventListener('click', e => { if (e.target === modalLeaves) closeLeavesModal(); });
+
+async function loadLeavesForStaff() {
+  if (!_leavesStaff || !S.school?.id) return;
+  const month = parseInt(leavesMonthSel?.value || 1);
+  const year  = parseInt(leavesYearIn?.value   || new Date().getFullYear());
+  try {
+    const all = await NDB.getStaffLeaves(S.school.id, month, year);
+    const my  = all.filter(l => l.staff_id === _leavesStaff.id);
+    if (leavesList) leavesList.innerHTML = my.length
+      ? my.map(l => `<li class="leave-row" data-id="${l.id}">
+          <span class="leave-type">${escapeHtml(l.leave_type)}</span>
+          <span class="leave-days">${l.leave_days} يوم</span>
+          <button class="icon-btn" data-act="del-leave" aria-label="حذف الإجازة">
+            <svg class="icon icon-sm"><use href="#ic-trash"/></svg>
+          </button>
+        </li>`).join('')
+      : '<li style="padding:8px 0;color:#94A3B8;font-size:.85rem">لا توجد إجازات لهذا الشهر</li>';
+  } catch (err) {
+    console.error('[NSAMS] loadLeavesForStaff', err);
+  }
+}
+
+leavesMonthSel?.addEventListener('change', loadLeavesForStaff);
+leavesYearIn?.addEventListener('change',   loadLeavesForStaff);
+
+btnSaveLeave?.addEventListener('click', async () => {
+  const type = leaveTypeSel?.value;
+  const days = parseInt(leaveDaysIn?.value || '0');
+  hide(leavesError);
+  if (!type) { if (leavesError) { leavesError.textContent = 'اختر نوع الإجازة'; show(leavesError); } return; }
+  if (!days || days < 1) { if (leavesError) { leavesError.textContent = 'أدخل عدد أيام صحيح (1 على الأقل)'; show(leavesError); } return; }
+  try {
+    await NDB.upsertStaffLeave({
+      staff_id:   _leavesStaff.id,
+      school_id:  S.school.id,
+      leave_type: type,
+      leave_days: days,
+      month:      parseInt(leavesMonthSel.value),
+      year:       parseInt(leavesYearIn.value),
+    });
+    if (leaveTypeSel) { leaveTypeSel.value = ''; CustomSelect.refresh(leaveTypeSel); }
+    if (leaveDaysIn)    leaveDaysIn.value  = '';
+    await loadLeavesForStaff();
+    toast('تم تسجيل الإجازة', 'success');
+  } catch (err) {
+    console.error('[NSAMS] saveLeave', err);
+    if (leavesError) { leavesError.textContent = 'تعذّر الحفظ'; show(leavesError); }
+  }
+});
+
+leavesList?.addEventListener('click', async e => {
+  const btn = e.target.closest('[data-act="del-leave"]');
+  if (!btn) return;
+  const id = btn.closest('.leave-row')?.dataset.id;
+  if (!id) return;
+  try {
+    await NDB.deleteStaffLeave(id);
+    await loadLeavesForStaff();
+  } catch (err) {
+    toast('تعذّر حذف الإجازة', 'error');
+  }
+});
+
+// ── Delete Confirm Modal ──────────────────────────────────────────────────────
+function openDelStaffModal(rec) {
+  _delStaffId = rec.id;
+  if (delStaffName) delStaffName.textContent = rec.full_name;
+  hide(delStaffError);
+  show(modalDelStaff);
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDelStaffModal() {
+  hide(modalDelStaff);
+  document.body.style.overflow = '';
+  _delStaffId = null;
+}
+btnCloseDelStaff?.addEventListener('click', closeDelStaffModal);
+modalDelStaff?.addEventListener('click', e => { if (e.target === modalDelStaff) closeDelStaffModal(); });
+
+btnConfirmDel?.addEventListener('click', async () => {
+  if (!_delStaffId) return;
+  if (btnConfirmDel) btnConfirmDel.disabled = true;
+  const spinner = el('del-staff-spinner');
+  if (spinner) spinner.hidden = false;
+  try {
+    await NDB.softDeleteStaffRecord(_delStaffId);
+    toast('تم حذف الكادر من السجل', 'success');
+    closeDelStaffModal();
+    await loadRegistryRecords();
+  } catch (err) {
+    console.error('[NSAMS] delStaffRecord', err);
+    if (delStaffError) { delStaffError.textContent = 'تعذّر الحذف'; show(delStaffError); }
+  } finally {
+    if (btnConfirmDel) btnConfirmDel.disabled = false;
+    if (spinner) spinner.hidden = true;
+  }
+});
+
+// Registry tab selects (populated dynamically — enhance once, refresh on populate)
+CustomSelect.enhance('sr-job-title');
+CustomSelect.enhance('sr-specialization');
+CustomSelect.enhance('sr-roster-type');
+CustomSelect.enhance('sr-certificate');
+CustomSelect.enhance('sr-higher-degree');
+CustomSelect.enhance('sr-edu-zone');
+CustomSelect.enhance('sr-min-doc');
+CustomSelect.enhance('leave-type-sel');
 
 // ── Start the app (after all declarations are initialized) ──
 bootstrap();

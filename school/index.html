@@ -317,6 +317,11 @@
       <svg class="icon"><use href="#ic-award"/></svg>
       الشهادات
     </button>
+    <button class="tab-btn" id="tab-registry" role="tab"
+            aria-selected="false" data-tab="registry">
+      <svg class="icon"><use href="#ic-receipt"/></svg>
+      الكوادر
+    </button>
   </nav>
 
   <main class="page" id="view-attendance" role="tabpanel" aria-labelledby="tab-attendance">
@@ -1496,6 +1501,246 @@
       </div>
     </section>
   </main><!-- /page (reports) -->
+
+  <!-- ═══ Staff Registry ═══════════════════════════════════════════════════ -->
+  <main class="page" id="view-registry" role="tabpanel" aria-labelledby="tab-registry" hidden>
+
+    <section class="card">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-receipt"/></svg>
+        <span>سجل الكوادر البشرية</span>
+        <button class="hdr-btn" id="btn-refresh-registry" aria-label="تحديث"
+                style="margin-inline-start:auto">
+          <svg class="icon icon-sm" id="registry-refresh-icon"><use href="#ic-refresh"/></svg>
+        </button>
+      </div>
+      <div class="card-body">
+
+        <div class="reg-seg-bar" role="group" aria-label="نوع الجهاز">
+          <button class="reg-seg-btn is-active" data-seg="admin">الجهاز الإداري</button>
+          <button class="reg-seg-btn" data-seg="teaching">الجهاز التدريسي</button>
+          <button class="reg-seg-btn" data-seg="support">مهنيون وعمال وحراس</button>
+        </div>
+
+        <div id="reg-loading" class="loading-row" hidden>
+          <span class="spinner"></span>
+        </div>
+        <div id="reg-error" class="msg msg-error" hidden>تعذّر تحميل السجل. تحقق من الاتصال وحاول مجدداً.</div>
+        <ul id="reg-list" class="reg-list"></ul>
+        <p id="reg-empty" class="empty-hint" hidden>لا توجد كوادر مسجّلة في هذا القسم — استخدم زر «إضافة كادر» أدناه.</p>
+
+        <button type="button" class="btn btn-primary btn-sm" id="btn-add-staff-rec"
+                style="margin-top:10px">
+          <svg class="icon icon-sm"><use href="#ic-plus"/></svg>
+          إضافة كادر
+        </button>
+      </div>
+    </section>
+
+    <!-- ── Modal: نموذج الكادر (إضافة / تعديل) ──────────────────────────────── -->
+    <div id="modal-staff-rec" class="overlay" hidden aria-modal="true" role="dialog"
+         aria-label="بيانات الكادر">
+      <div class="sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-hdr">
+          <div class="sheet-title">
+            <svg class="icon"><use href="#ic-receipt"/></svg>
+            <span id="staff-rec-title">إضافة كادر جديد</span>
+          </div>
+          <button class="icon-btn" id="btn-close-staff-rec" aria-label="إغلاق">
+            <svg class="icon"><use href="#ic-x"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body">
+
+          <p class="form-section-label">البيانات الوظيفية</p>
+          <div class="field-group">
+            <label for="sr-full-name">الاسم الثلاثي <span class="req">*</span></label>
+            <input id="sr-full-name" class="field-input" type="text" maxlength="120" />
+          </div>
+          <div class="field-group">
+            <label for="sr-job-title">العمل المسند</label>
+            <select id="sr-job-title" class="field-input">
+              <option value="">— اختر —</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="sr-specialization">الاختصاص</label>
+            <select id="sr-specialization" class="field-input">
+              <option value="">— اختر —</option>
+            </select>
+          </div>
+          <div id="sr-subject-wrap" class="field-group" hidden>
+            <label for="sr-subject">المادة التي يدرسها</label>
+            <input id="sr-subject" class="field-input" type="text" maxlength="80" />
+          </div>
+          <div class="field-group">
+            <label for="sr-roster-type">الملاك</label>
+            <select id="sr-roster-type" class="field-input">
+              <option value="inside">داخل الملاك</option>
+              <option value="outside">خارج الملاك</option>
+              <option value="contract">عقود</option>
+            </select>
+          </div>
+
+          <p class="form-section-label">المؤهلات</p>
+          <div class="field-group">
+            <label for="sr-certificate">الشهادة</label>
+            <select id="sr-certificate" class="field-input">
+              <option value="">— اختر —</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="sr-higher-degree">شهادة عليا <span class="optional">(اختياري)</span></label>
+            <select id="sr-higher-degree" class="field-input">
+              <option value="">— لا يوجد —</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="sr-seniority">القدم الوظيفي (سنوات)</label>
+            <input id="sr-seniority" class="field-input" type="number" min="0" max="50" step="0.5" />
+          </div>
+          <div class="field-group">
+            <label for="sr-start-date">تاريخ المباشرة</label>
+            <input id="sr-start-date" class="field-input" type="date" />
+          </div>
+
+          <p class="form-section-label">البيانات الشخصية</p>
+          <div class="field-group">
+            <label for="sr-national-id">الرقم الوطني</label>
+            <input id="sr-national-id" class="field-input" type="text" maxlength="20"
+                   inputmode="numeric" />
+          </div>
+          <div class="field-group">
+            <label for="sr-mother-name">اسم الأم</label>
+            <input id="sr-mother-name" class="field-input" type="text" maxlength="80" />
+          </div>
+          <div class="field-group">
+            <label>تاريخ الولادة</label>
+            <div class="dob-row">
+              <input id="sr-dob-day"   class="field-input dob-in" type="text" inputmode="numeric"
+                     maxlength="2" placeholder="يوم" aria-label="اليوم" />
+              <input id="sr-dob-month" class="field-input dob-in" type="text" inputmode="numeric"
+                     maxlength="2" placeholder="شهر" aria-label="الشهر" />
+              <input id="sr-dob-year"  class="field-input dob-in dob-year" type="text"
+                     inputmode="numeric" maxlength="4" placeholder="سنة" aria-label="السنة" />
+            </div>
+          </div>
+          <div class="field-group">
+            <label for="sr-phone">الهاتف</label>
+            <input id="sr-phone" class="field-input" type="tel" maxlength="20" />
+          </div>
+
+          <p class="form-section-label">السكن والتوزيع</p>
+          <div class="field-group">
+            <label for="sr-res-zone">المنطقة السكنية</label>
+            <input id="sr-res-zone" class="field-input" type="text" maxlength="80" />
+          </div>
+          <div class="field-group">
+            <label for="sr-edu-zone">المنطقة التعليمية</label>
+            <select id="sr-edu-zone" class="field-input">
+              <option value="">— لا يوجد —</option>
+            </select>
+          </div>
+
+          <p class="form-section-label">الوثائق</p>
+          <div class="field-group">
+            <label for="sr-min-doc">نوع الوثيقة / الموافقة الوزارية</label>
+            <select id="sr-min-doc" class="field-input">
+              <option value="">— لا يوجد —</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="sr-notes">ملاحظات <span class="optional">(اختياري)</span></label>
+            <textarea id="sr-notes" class="field-input" rows="2" maxlength="500"></textarea>
+          </div>
+
+          <div id="sr-error" class="msg msg-error" hidden></div>
+          <button type="button" class="btn btn-primary btn-full" id="btn-save-staff-rec">
+            حفظ البيانات
+            <span class="spinner" id="sr-save-spinner" hidden></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Modal: إجازات الكادر ────────────────────────────────────────────── -->
+    <div id="modal-staff-leaves" class="overlay" hidden aria-modal="true" role="dialog"
+         aria-label="إجازات الكادر">
+      <div class="sheet sheet-sm">
+        <div class="sheet-handle"></div>
+        <div class="sheet-hdr">
+          <div class="sheet-title">
+            <svg class="icon"><use href="#ic-list"/></svg>
+            <span>إجازات: <strong id="leaves-staff-name">—</strong></span>
+          </div>
+          <button class="icon-btn" id="btn-close-staff-leaves" aria-label="إغلاق">
+            <svg class="icon"><use href="#ic-x"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body">
+          <div class="leaves-period-row">
+            <select id="leaves-month-sel" class="field-input" aria-label="الشهر">
+              <option value="1">كانون الثاني</option>
+              <option value="2">شباط</option>
+              <option value="3">آذار</option>
+              <option value="4">نيسان</option>
+              <option value="5">أيار</option>
+              <option value="6">حزيران</option>
+              <option value="7">تموز</option>
+              <option value="8">آب</option>
+              <option value="9">أيلول</option>
+              <option value="10">تشرين الأول</option>
+              <option value="11">تشرين الثاني</option>
+              <option value="12">كانون الأول</option>
+            </select>
+            <input id="leaves-year-in" class="field-input" type="number" min="2020" max="2099"
+                   style="width:80px" aria-label="السنة" />
+          </div>
+          <ul id="leaves-list" class="leaves-list"></ul>
+          <div class="add-row" style="margin-top:10px;flex-wrap:wrap;gap:6px">
+            <select id="leave-type-sel" class="field-input" style="flex:1;min-width:120px">
+              <option value="">— نوع الإجازة —</option>
+            </select>
+            <input id="leave-days-in" class="field-input" type="number" min="1" max="31"
+                   placeholder="أيام" style="width:70px" />
+            <button type="button" class="btn btn-primary btn-sm" id="btn-save-leave">إضافة</button>
+          </div>
+          <div id="leaves-error" class="msg msg-error" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Modal: تأكيد حذف الكادر ───────────────────────────────────────── -->
+    <div id="modal-del-staff-rec" class="overlay" hidden aria-modal="true" role="dialog"
+         aria-label="حذف كادر من السجل">
+      <div class="sheet sheet-sm">
+        <div class="sheet-handle"></div>
+        <div class="sheet-hdr sheet-hdr-danger">
+          <div class="sheet-title">
+            <svg class="icon"><use href="#ic-trash"/></svg>
+            <span>حذف من السجل الرسمي</span>
+          </div>
+          <button class="icon-btn" id="btn-close-del-staff" aria-label="إغلاق">
+            <svg class="icon"><use href="#ic-x"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body">
+          <p style="font-size:.9rem;color:var(--clr-text-2,#475569);line-height:1.6">
+            سيُزال <strong id="del-staff-name">—</strong> من سجل الكوادر.
+            تبقى إجازاته المسجّلة محفوظة في الأرشيف.
+          </p>
+          <div id="del-staff-error" class="msg msg-error" hidden></div>
+          <button type="button" class="btn btn-danger btn-full" id="btn-confirm-del-staff">
+            <svg class="icon icon-sm"><use href="#ic-trash"/></svg>
+            <span>حذف من السجل</span>
+            <span class="spinner" id="del-staff-spinner" hidden></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main><!-- /page (registry) -->
 
   <!-- FAB: Emergency Report -->
   <button class="fab" id="btn-open-report" aria-label="فتح نموذج البلاغ الطارئ">

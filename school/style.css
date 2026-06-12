@@ -1300,3 +1300,39 @@ select.csel-native {
 .req-date   { font-size: .75rem; color: var(--clr-text-3); }
 .req-reason { font-size: .78rem; color: #b91c1c; margin-top: 4px; }
 .req-fields { margin-top: 8px; }
+
+/* ── Registry tab (سجل الكوادر) ─────────────────────────────────── */
+.reg-seg-bar { display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
+.reg-seg-btn {
+  flex:1; padding:6px 8px; font-size:.8rem; font-weight:600;
+  border:1px solid var(--clr-border-lt,#E2E8F0); border-radius:var(--r-md,10px);
+  background:transparent; color:var(--clr-text-3,#94A3B8); cursor:pointer;
+  transition:background .15s, color .15s, border-color .15s; white-space:nowrap;
+}
+.reg-seg-btn.is-active {
+  background:var(--clr-primary-dim,rgba(11,43,94,.1));
+  color:var(--clr-primary,#0B2B5E); border-color:var(--clr-primary,#0B2B5E);
+}
+.reg-list { list-style:none; padding:0; margin:0; }
+.reg-row {
+  display:flex; align-items:center; gap:10px; padding:11px 4px;
+  border-bottom:1px solid var(--clr-border-lt,#E2E8F0);
+}
+.reg-row:last-child { border-bottom:none; }
+.reg-row-main { flex:1; min-width:0; }
+.reg-name { font-weight:600; font-size:.88rem; color:#0F172A; overflow-wrap:anywhere; }
+.reg-meta { font-size:.75rem; color:#64748B; margin-top:2px; }
+.reg-row-acts { display:flex; gap:4px; flex-shrink:0; }
+.form-section-label {
+  font-size:.72rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+  color:var(--clr-text-3,#94A3B8); margin:16px 0 6px;
+}
+.leaves-period-row { display:flex; gap:8px; margin-bottom:10px; }
+.leaves-list { list-style:none; padding:0; margin:0 0 4px; }
+.leave-row {
+  display:flex; align-items:center; gap:8px; padding:8px 4px;
+  border-bottom:1px solid var(--clr-border-lt,#E2E8F0); font-size:.85rem;
+}
+.leave-row:last-child { border-bottom:none; }
+.leave-type { flex:1; color:var(--clr-text-1,#0F172A); }
+.leave-days { font-weight:600; color:var(--clr-primary,#0B2B5E); white-space:nowrap; }
