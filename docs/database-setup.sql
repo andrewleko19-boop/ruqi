@@ -1342,11 +1342,13 @@ alter table public.students
   add column if not exists dropout_return_at   date;
 
 -- 10.3  دالة get_dropout_risk_students — طلاب بلغوا حد الغياب ولم يُرقَّن قيدهم
+-- أُصلح نوع grade — classes.grade نصي في الإنتاج (CREATE OR REPLACE لا يقبل تغيير نوع الإرجاع)
+drop function if exists public.get_dropout_risk_students(uuid);
 create or replace function public.get_dropout_risk_students(p_school_id uuid)
 returns table (
   student_id   uuid,
   full_name    text,
-  grade        int,
+  grade        text,
   class_id     uuid,
   class_name   text,
   absent_days  bigint,
@@ -1396,7 +1398,7 @@ begin
   select
     dsa.student_id,
     stu.full_name,
-    c.grade,
+    c.grade::text,
     c.id   as class_id,
     c.name as class_name,
     count(*) filter (where dsa.status = 'absent')::bigint as absent_days,

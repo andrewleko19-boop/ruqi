@@ -2711,6 +2711,7 @@ window.NSAMS_DB = {
   getStaffLeaves,
   upsertStaffLeave,
   deleteStaffLeave,
+  getSchoolStudentStats,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2792,4 +2793,26 @@ async function upsertStaffLeave(payload) {
 async function deleteStaffLeave(id) {
   const { error } = await db.from('staff_leaves').delete().eq('id', id);
   if (error) throw error;
+}
+
+// إحصائية طلاب المدرسة للبيان: يعيد { 'grade': {sections, male, female} }
+async function getSchoolStudentStats(schoolId) {
+  const [clsRes, stuRes] = await Promise.all([
+    db.from('classes').select('id, grade, section').eq('school_id', schoolId),
+    db.from('students').select('class_id, gender').eq('school_id', schoolId).eq('is_active', true),
+  ]);
+  if (clsRes.error) throw clsRes.error;
+  if (stuRes.error) throw stuRes.error;
+  const byClass = {};
+  for (const c of clsRes.data || []) byClass[c.id] = { grade: String(c.grade ?? ''), male: 0, female: 0 };
+  for (const s of stuRes.data || []) {
+    const e = byClass[s.class_id]; if (!e) continue;
+    if (s.gender === 'female') e.female++; else e.male++;
+  }
+  const grades = {};
+  for (const e of Object.values(byClass)) {
+    const g = grades[e.grade] ??= { sections: 0, male: 0, female: 0 };
+    g.sections++; g.male += e.male; g.female += e.female;
+  }
+  return grades;
 }

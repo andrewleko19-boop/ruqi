@@ -1336,3 +1336,48 @@ select.csel-native {
 .leave-row:last-child { border-bottom:none; }
 .leave-type { flex:1; color:var(--clr-text-1,#0F172A); }
 .leave-days { font-weight:600; color:var(--clr-primary,#0B2B5E); white-space:nowrap; }
+
+/* ── Statement tab (البيان الشهري) ──────────────────────────────── */
+.stmt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px 14px;
+}
+.stmt-header-grid {
+  display: flex; flex-wrap: wrap; gap: 8px 16px;
+  padding: 8px 0; border-bottom: 1px solid var(--clr-border-lt, #E2E8F0);
+}
+.stmt-table {
+  border-collapse: collapse;
+  font-size: .82rem;
+  min-width: 340px;
+}
+.stmt-table th, .stmt-table td {
+  border: 1px solid var(--clr-border, #CBD5E1);
+  padding: 4px 7px;
+  text-align: center;
+  white-space: nowrap;
+}
+.stmt-table thead th {
+  background: var(--clr-primary-dim, rgba(26,39,68,.08));
+  font-weight: 700;
+  font-size: .78rem;
+}
+.stmt-table .stmt-num { min-width: 36px; }
+.stmt-table td[contenteditable="true"] {
+  background: #f8faff;
+  outline: none;
+  cursor: text;
+}
+.stmt-table td[contenteditable="true"]:focus {
+  background: #eff6ff;
+  box-shadow: 0 0 0 2px rgba(59,130,246,.3);
+}
+.stmt-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--clr-border-lt, #E2E8F0);
+}

@@ -191,6 +191,13 @@
     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
     <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
   </symbol>
+  <symbol id="ic-file-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="16" y1="13" x2="8" y2="13"/>
+    <line x1="16" y1="17" x2="8" y2="17"/>
+    <polyline points="10 9 9 9 8 9"/>
+  </symbol>
 </svg>
 
 <!-- ═══ Login Screen ══════════════════════════════════════════════════════════ -->
@@ -321,6 +328,11 @@
             aria-selected="false" data-tab="registry">
       <svg class="icon"><use href="#ic-receipt"/></svg>
       الكوادر
+    </button>
+    <button class="tab-btn" id="tab-statement" role="tab"
+            aria-selected="false" data-tab="statement">
+      <svg class="icon"><use href="#ic-file-text"/></svg>
+      البيان
     </button>
   </nav>
 
@@ -1741,6 +1753,249 @@
     </div>
 
   </main><!-- /page (registry) -->
+
+  <!-- ══════════════════════════════════════════════════════════════════════════
+       PAGE 8 — البيان الشهري
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <main class="page" id="view-statement" role="tabpanel" aria-labelledby="tab-statement" hidden>
+
+    <!-- Generator card -->
+    <section class="card" id="stmt-gen-card">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-file-text"/></svg>
+        <h2 class="card-title">توليد البيان الشهري</h2>
+      </div>
+      <div class="card-body">
+        <div class="stmt-grid">
+          <div class="field-wrap">
+            <label class="field-label" for="stmt-month-sel">الشهر</label>
+            <select id="stmt-month-sel" class="field-in">
+              <option value="1">1 / يناير / كانون الثاني</option>
+              <option value="2">2 / فبراير / شباط</option>
+              <option value="3">3 / مارس / آذار</option>
+              <option value="4">4 / أبريل / نيسان</option>
+              <option value="5">5 / مايو / أيار</option>
+              <option value="6">6 / يونيو / حزيران</option>
+              <option value="7">7 / يوليو / تموز</option>
+              <option value="8">8 / أغسطس / آب</option>
+              <option value="9">9 / سبتمبر / أيلول</option>
+              <option value="10">10 / أكتوبر / تشرين الأول</option>
+              <option value="11">11 / نوفمبر / تشرين الثاني</option>
+              <option value="12">12 / ديسمبر / كانون الأول</option>
+            </select>
+          </div>
+          <div class="field-wrap">
+            <label class="field-label" for="stmt-year-in">السنة</label>
+            <input id="stmt-year-in" type="number" class="field-in" min="2020" max="2099" style="width:110px">
+          </div>
+        </div>
+
+        <details id="stmt-meta-details" style="margin-top:12px">
+          <summary style="cursor:pointer;font-weight:600;font-size:.9rem;padding:6px 0">
+            بيانات الترويسة والبناء
+          </summary>
+          <div class="stmt-grid" style="margin-top:10px">
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-edu-zone">المنطقة التعليمية</label>
+              <select id="stmt-edu-zone" class="field-in"><option value="">— اختر —</option></select>
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-village">القرية</label>
+              <input id="stmt-village" type="text" class="field-in">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-address">العنوان</label>
+              <input id="stmt-address" type="text" class="field-in">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-phone">الهاتف</label>
+              <input id="stmt-phone" type="text" class="field-in">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-shared-with">مشترك مع</label>
+              <input id="stmt-shared-with" type="text" class="field-in">
+            </div>
+          </div>
+          <p class="form-section-label" style="margin-top:12px">البناء المدرسي</p>
+          <div class="stmt-grid">
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-b-floors">عدد الطوابق</label>
+              <input id="stmt-b-floors" type="number" class="field-in" min="0" style="width:80px">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-b-ownership">البناء حكومي/مستأجر</label>
+              <select id="stmt-b-ownership" class="field-in">
+                <option value="">—</option>
+                <option value="حكومي">حكومي</option>
+                <option value="مستأجر">مستأجر</option>
+              </select>
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-b-class-rooms">غرف صفية</label>
+              <input id="stmt-b-class-rooms" type="number" class="field-in" min="0" style="width:80px">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-b-admin-rooms">غرف إدارية</label>
+              <input id="stmt-b-admin-rooms" type="number" class="field-in" min="0" style="width:80px">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-b-unused">غير مستخدمة</label>
+              <input id="stmt-b-unused" type="number" class="field-in" min="0" style="width:80px">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-b-basement">قبو</label>
+              <input id="stmt-b-basement" type="number" class="field-in" min="0" style="width:80px">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-b-lab">مخبر</label>
+              <input id="stmt-b-lab" type="number" class="field-in" min="0" style="width:80px">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-b-computer">حاسوب</label>
+              <input id="stmt-b-computer" type="number" class="field-in" min="0" style="width:80px">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-b-library">مكتبة</label>
+              <input id="stmt-b-library" type="number" class="field-in" min="0" style="width:80px">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-b-secretary">أمانة سر</label>
+              <input id="stmt-b-secretary" type="number" class="field-in" min="0" style="width:80px">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-b-gym">قاعة رياضة</label>
+              <input id="stmt-b-gym" type="number" class="field-in" min="0" style="width:80px">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-b-storage">مستودع</label>
+              <input id="stmt-b-storage" type="number" class="field-in" min="0" style="width:80px">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-b-guidance">ارشاد</label>
+              <input id="stmt-b-guidance" type="number" class="field-in" min="0" style="width:80px">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-b-health">منهج صحي</label>
+              <input id="stmt-b-health" type="number" class="field-in" min="0" style="width:80px">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-b-workshop">مشغل يدوي</label>
+              <input id="stmt-b-workshop" type="number" class="field-in" min="0" style="width:80px">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-b-theater">مسرح</label>
+              <input id="stmt-b-theater" type="number" class="field-in" min="0" style="width:80px">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-b-yard">ساحة</label>
+              <input id="stmt-b-yard" type="number" class="field-in" min="0" style="width:80px">
+            </div>
+            <div class="field-wrap">
+              <label class="field-label" for="stmt-b-other">قاعات أخرى</label>
+              <input id="stmt-b-other" type="number" class="field-in" min="0" style="width:80px">
+            </div>
+          </div>
+        </details>
+
+        <div id="stmt-gen-error" class="msg msg-error" hidden></div>
+        <button type="button" class="btn btn-primary" id="btn-gen-statement" style="margin-top:14px">
+          <svg class="icon icon-sm"><use href="#ic-file-text"/></svg>
+          <span id="btn-gen-label">توليد المعاينة</span>
+          <span class="spinner" id="stmt-gen-spinner" hidden></span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Preview card (hidden until generated) -->
+    <section class="card" id="stmt-preview-card" hidden>
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-list"/></svg>
+        <h2 class="card-title">معاينة البيان</h2>
+        <small id="stmt-preview-title" style="color:var(--clr-text-2,#475569);margin-right:auto"></small>
+      </div>
+      <div class="card-body" style="overflow-x:auto">
+
+        <!-- School header info (read-only summary) -->
+        <div id="stmt-header-summary" class="stmt-header-grid" style="margin-bottom:12px;font-size:.85rem;color:#334155"></div>
+
+        <!-- Student count table -->
+        <p class="form-section-label">أعداد الطلاب</p>
+        <table class="stmt-table" id="stmt-students-table" dir="rtl">
+          <thead>
+            <tr>
+              <th rowspan="2">الصف</th>
+              <th rowspan="2">عدد الشعب</th>
+              <th colspan="2">انكليزي</th>
+              <th colspan="2">فرنسي</th>
+              <th colspan="2">روسي</th>
+            </tr>
+            <tr>
+              <th>ذكور</th><th>إناث</th>
+              <th>ذكور</th><th>إناث</th>
+              <th>ذكور</th><th>إناث</th>
+            </tr>
+          </thead>
+          <tbody id="stmt-students-body">
+            <!-- rows injected by JS, data-grade-key for mapping -->
+            <tr data-grade-key="استعدوا"><td>استعدوا</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="1"><td>الأول</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="2"><td>الثاني</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="3"><td>الثالث</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="4"><td>الرابع</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="5"><td>الخامس</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="6"><td>السادس</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="7"><td>السابع</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="8"><td>الثامن</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="9"><td>التاسع</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="م1"><td>المستوى الأول</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="م2"><td>المستوى الثاني</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="م3"><td>المستوى الثالث</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="م4"><td>المستوى الرابع</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="ث1أ"><td>الأول الثانوي (أدبي)</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="ث1ع"><td>الأول الثانوي (علمي)</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="ث2أ"><td>الثاني الثانوي (أدبي)</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="ث2ع"><td>الثاني الثانوي (علمي)</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="ث3أ"><td>الثالث الثانوي (أدبي)</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr data-grade-key="ث3ع"><td>الثالث الثانوي (علمي)</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
+            <tr id="stmt-unclassified-row" hidden><td style="color:#dc2626">غير مصنف</td><td class="stmt-num" id="stmt-unclassified-sections">0</td><td class="stmt-num" id="stmt-unclassified-male">0</td><td class="stmt-num" id="stmt-unclassified-female">0</td><td colspan="4" style="font-size:.78rem;color:#dc2626">⚠ يرجى توزيع هؤلاء يدوياً على الصفوف</td></tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td><strong>المجموع</strong></td>
+              <td class="stmt-num" id="stmt-total-sections">0</td>
+              <td class="stmt-num" id="stmt-total-male">0</td>
+              <td class="stmt-num" id="stmt-total-female">0</td>
+              <td colspan="4"></td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <!-- Admin staff summary -->
+        <p class="form-section-label" style="margin-top:16px">الجهاز الإداري</p>
+        <table class="stmt-table" id="stmt-admin-table" dir="rtl" style="max-width:480px">
+          <thead><tr><th>المنصب</th><th>العدد</th></tr></thead>
+          <tbody id="stmt-admin-body"></tbody>
+        </table>
+
+        <!-- Staff type totals -->
+        <div id="stmt-staff-totals" style="margin-top:10px;font-size:.87rem;color:#334155"></div>
+
+        <div id="stmt-preview-error" class="msg msg-error" hidden></div>
+        <div class="stmt-actions">
+          <button type="button" class="btn btn-secondary" id="btn-print-statement">
+            <svg class="icon icon-sm"><use href="#ic-printer"/></svg>
+            طباعة PDF
+          </button>
+          <button type="button" class="btn btn-primary" id="btn-export-excel">
+            <svg class="icon icon-sm"><use href="#ic-list"/></svg>
+            <span id="btn-export-label">تصدير Excel</span>
+            <span class="spinner" id="stmt-export-spinner" hidden></span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </main><!-- /page (statement) -->
 
   <!-- FAB: Emergency Report -->
   <button class="fab" id="btn-open-report" aria-label="فتح نموذج البلاغ الطارئ">

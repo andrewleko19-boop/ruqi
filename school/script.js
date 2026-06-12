@@ -79,14 +79,17 @@ function normaliseSchool(row) {
     minAttendancePct: row.min_attendance_pct ?? 75,
     // Raw passthroughs needed by staff/identity settings (kept on S.school so
     // they survive caching). Safe when the columns are missing (⇒ undefined).
-    work_start_time: row.work_start_time ?? null,
-    complex_name:    row.complex_name    ?? null,
-    classification:  row.classification  ?? null,
-    education_type:  row.education_type  ?? null,
-    shift:           row.shift           ?? null,
-    student_type:    row.student_type    ?? null,
-    lat:             row.lat ?? null,
-    lng:             row.lng ?? null,
+    work_start_time:    row.work_start_time    ?? null,
+    complex_name:       row.complex_name       ?? null,
+    classification:     row.classification     ?? null,
+    education_type:     row.education_type     ?? null,
+    shift:              row.shift              ?? null,
+    student_type:       row.student_type       ?? null,
+    statistical_number: row.statistical_number ?? null,
+    cycle:              row.cycle              ?? null,
+    rural_curriculum:   row.rural_curriculum   ?? false,
+    lat:                row.lat ?? null,
+    lng:                row.lng ?? null,
   };
 }
 
@@ -800,6 +803,7 @@ async function initApp() {
   _reportsLoaded   = false;
   _staffLoaded     = false;
   _registryLoaded  = false;
+  _statementLoaded = false;
   _lookupCache     = {};
 
   // Kick off sync of any offline-queued records
@@ -1303,6 +1307,8 @@ const viewSubjects    = el('view-subjects');
 const viewReports     = el('view-reports');
 const tabRegistry     = el('tab-registry');
 const viewRegistry    = el('view-registry');
+const tabStatement    = el('tab-statement');
+const viewStatement   = el('view-statement');
 const fabReport       = el('btn-open-report');
 
 const mngClassSelect    = el('mng-class-select');
@@ -1336,6 +1342,7 @@ const TABS = {
   subjects:   { tab: tabSubjects,   view: viewSubjects },
   reports:    { tab: tabReports,    view: viewReports },
   registry:   { tab: tabRegistry,   view: viewRegistry },
+  statement:  { tab: tabStatement,  view: viewStatement },
 };
 
 function switchTab(tab) {
@@ -1361,6 +1368,7 @@ function switchTab(tab) {
   if (tab === 'subjects'  && !_subjectsLoaded)  initSubjectsTab();
   if (tab === 'reports'   && !_reportsLoaded)   initReportsTab();
   if (tab === 'registry'  && !_registryLoaded)  initRegistryTab();
+  if (tab === 'statement' && !_statementLoaded) initStatementTab();
 }
 
 tabAttendance.addEventListener('click', () => switchTab('attendance'));
@@ -1370,6 +1378,7 @@ tabStaff.addEventListener('click',      () => switchTab('staff'));
 tabSubjects.addEventListener('click',   () => switchTab('subjects'));
 tabReports.addEventListener('click',    () => switchTab('reports'));
 tabRegistry?.addEventListener('click',  () => switchTab('registry'));
+tabStatement?.addEventListener('click', () => switchTab('statement'));
 
 // «المزيد» sections menu (bottom sheet)
 const btnMore   = el('btn-more');
@@ -3260,8 +3269,9 @@ async function loadDropoutWarning() {
     // Wire up flag buttons
     riskList.querySelectorAll('[data-flag-id]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const sid   = btn.dataset.flagId;
-        const grade = parseInt(btn.dataset.flagGrade, 10);
+        const sid        = btn.dataset.flagId;
+        const gradeRaw   = parseInt(btn.dataset.flagGrade, 10);
+        const grade      = Number.isFinite(gradeRaw) ? gradeRaw : null;
         if (!confirm('تأكيد ترقين قيد هذا الطالب؟')) return;
         btn.disabled = true;
         try {
@@ -3276,7 +3286,7 @@ async function loadDropoutWarning() {
     });
   } catch (err) {
     loadingEl.hidden = true;
-    if (hintEl) hintEl.textContent = 'تعذّر تحميل بيانات التسرب — تأكد من تشغيل القسم 10 من database-setup.sql';
+    if (hintEl) hintEl.textContent = 'تعذّر تحميل بيانات التسرب' + (err?.message ? ' — ' + err.message : '');
     console.warn('[Dropout]', err);
   }
 }
@@ -4410,6 +4420,675 @@ CustomSelect.enhance('sr-higher-degree');
 CustomSelect.enhance('sr-edu-zone');
 CustomSelect.enhance('sr-min-doc');
 CustomSelect.enhance('leave-type-sel');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// § البيان الشهري — statement tab
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _statementLoaded = false;
+
+// Arabic number words for 0-99 (used in column P of البيان template)
+const _arNumWords = [
+  'صفر','واحد','اثنان','ثلاثة','أربعة','خمسة','ستة','سبعة','ثمانية','تسعة','عشرة',
+  'أحد عشر','اثنا عشر','ثلاثة عشر','أربعة عشر','خمسة عشر','ستة عشر','سبعة عشر',
+  'ثمانية عشر','تسعة عشر','عشرون','واحد وعشرون','اثنان وعشرون','ثلاثة وعشرون',
+  'أربعة وعشرون','خمسة وعشرون','ستة وعشرون','سبعة وعشرون','ثمانية وعشرون',
+  'تسعة وعشرون','ثلاثون','واحد وثلاثون','اثنان وثلاثون','ثلاثة وثلاثون',
+  'أربعة وثلاثون','خمسة وثلاثون','ستة وثلاثون','سبعة وثلاثون','ثمانية وثلاثون',
+  'تسعة وثلاثون','أربعون','واحد وأربعون','اثنان وأربعون','ثلاثة وأربعون',
+  'أربعة وأربعون','خمسة وأربعون','ستة وأربعون','سبعة وأربعون','ثمانية وأربعون',
+  'تسعة وأربعون','خمسون','واحد وخمسون','اثنان وخمسون','ثلاثة وخمسون',
+  'أربعة وخمسون','خمسة وخمسون','ستة وخمسون','سبعة وخمسون','ثمانية وخمسون',
+  'تسعة وخمسون','ستون','واحد وستون','اثنان وستون','ثلاثة وستون','أربعة وستون',
+  'خمسة وستون','ستة وستون','سبعة وستون','ثمانية وستون','تسعة وستون','سبعون',
+  'واحد وسبعون','اثنان وسبعون','ثلاثة وسبعون','أربعة وسبعون','خمسة وسبعون',
+  'ستة وسبعون','سبعة وسبعون','ثمانية وسبعون','تسعة وسبعون','ثمانون',
+  'واحد وثمانون','اثنان وثمانون','ثلاثة وثمانون','أربعة وثمانون','خمسة وثمانون',
+  'ستة وثمانون','سبعة وثمانون','ثمانية وثمانون','تسعة وثمانون','تسعون',
+  'واحد وتسعون','اثنان وتسعون','ثلاثة وتسعون','أربعة وتسعون','خمسة وتسعون',
+  'ستة وتسعون','سبعة وتسعون','ثمانية وتسعون','تسعة وتسعون',
+];
+function arNumWord(n) {
+  const i = Math.round(n);
+  if (i >= 0 && i < _arNumWords.length) return _arNumWords[i];
+  return String(i);
+}
+
+// Month labels matching template format
+const MONTH_LABELS = [
+  '', '1 / يناير / كانون الثاني', '2 / فبراير / شباط', '3 / مارس / آذار',
+  '4 / أبريل / نيسان', '5 / مايو / أيار', '6 / يونيو / حزيران',
+  '7 / يوليو / تموز', '8 / أغسطس / آب', '9 / سبتمبر / أيلول',
+  '10 / أكتوبر / تشرين الأول', '11 / نوفمبر / تشرين الثاني', '12 / ديسمبر / كانون الأول',
+];
+
+// Admin role order matching template rows M20..M37
+const ADMIN_ROLE_ORDER = [
+  'مدير','معاون مدير','توجيه','أمانة سر','معاون أمين سر',
+  'أمانة مكتبة','معاون أمين مكتبة','امين مخبر','مساعد امين مخبر',
+  'امين سر حاسوب','م.امين سر حاسوب','ارشاد اجتماعي','ارشاد نفسي',
+  'أمين مشغل','انشطة لاصفية','كاتب','مشرف جاهزية','مجموع الإداريين',
+];
+
+// Grade key → DB grade value(s) mapping
+const GRADE_KEY_MAP = {
+  'استعدوا': ['استعدوا','0'],
+  '1':['1'],'2':['2'],'3':['3'],'4':['4'],'5':['5'],
+  '6':['6'],'7':['7'],'8':['8'],'9':['9'],
+  'م1':['المستوى 1','المستوى الأول','10'],
+  'م2':['المستوى 2','المستوى الثاني','11'],
+  'م3':['المستوى 3','المستوى الثالث','12'],
+  'م4':['المستوى 4','المستوى الرابع','13'],
+  'ث1أ':['الأول الثانوي أدبي','الأول الثانوي(أدبي)','10ث'],
+  'ث1ع':['الأول الثانوي علمي','الأول الثانوي(علمي)','10ثع'],
+  'ث2أ':['الثاني الثانوي أدبي','الثاني الثانوي(أدبي)','11ث'],
+  'ث2ع':['الثاني الثانوي علمي','الثاني الثانوي(علمي)','11ثع'],
+  'ث3أ':['الثالث الثانوي أدبي','الثالث الثانوي(أدبي)','12ث'],
+  'ث3ع':['الثالث الثانوي علمي','الثالث الثانوي(علمي)','12ثع'],
+};
+
+// Flatten to a reverse map: dbGrade → gradeKey
+const DB_GRADE_TO_KEY = {};
+for (const [key, vals] of Object.entries(GRADE_KEY_MAP)) {
+  for (const v of vals) DB_GRADE_TO_KEY[String(v)] = key;
+}
+
+function _stmtMetaKey() { return `nsams_stmt_meta_${S.school?.id || 'x'}`; }
+
+function _stmtSaveMeta() {
+  const meta = {
+    eduZone:   el('stmt-edu-zone')?.value || '',
+    village:   el('stmt-village')?.value || '',
+    address:   el('stmt-address')?.value || '',
+    phone:     el('stmt-phone')?.value || '',
+    sharedWith:el('stmt-shared-with')?.value || '',
+    bFloors:   el('stmt-b-floors')?.value || '',
+    bOwnership:el('stmt-b-ownership')?.value || '',
+    bClassRooms:el('stmt-b-class-rooms')?.value || '',
+    bAdminRooms:el('stmt-b-admin-rooms')?.value || '',
+    bUnused:   el('stmt-b-unused')?.value || '',
+    bBasement: el('stmt-b-basement')?.value || '',
+    bLab:      el('stmt-b-lab')?.value || '',
+    bComputer: el('stmt-b-computer')?.value || '',
+    bLibrary:  el('stmt-b-library')?.value || '',
+    bSecretary:el('stmt-b-secretary')?.value || '',
+    bGym:      el('stmt-b-gym')?.value || '',
+    bStorage:  el('stmt-b-storage')?.value || '',
+    bGuidance: el('stmt-b-guidance')?.value || '',
+    bHealth:   el('stmt-b-health')?.value || '',
+    bWorkshop: el('stmt-b-workshop')?.value || '',
+    bTheater:  el('stmt-b-theater')?.value || '',
+    bYard:     el('stmt-b-yard')?.value || '',
+    bOther:    el('stmt-b-other')?.value || '',
+  };
+  localStorage.setItem(_stmtMetaKey(), JSON.stringify(meta));
+  return meta;
+}
+
+function _stmtLoadMeta() {
+  try {
+    const raw = localStorage.getItem(_stmtMetaKey());
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function _stmtRestoreMeta(meta) {
+  const set = (id, val) => { const e = el(id); if (e && val !== undefined) e.value = val; };
+  set('stmt-edu-zone',     meta.eduZone);
+  set('stmt-village',      meta.village);
+  set('stmt-address',      meta.address);
+  set('stmt-phone',        meta.phone);
+  set('stmt-shared-with',  meta.sharedWith);
+  set('stmt-b-floors',     meta.bFloors);
+  set('stmt-b-ownership',  meta.bOwnership);
+  set('stmt-b-class-rooms',meta.bClassRooms);
+  set('stmt-b-admin-rooms',meta.bAdminRooms);
+  set('stmt-b-unused',     meta.bUnused);
+  set('stmt-b-basement',   meta.bBasement);
+  set('stmt-b-lab',        meta.bLab);
+  set('stmt-b-computer',   meta.bComputer);
+  set('stmt-b-library',    meta.bLibrary);
+  set('stmt-b-secretary',  meta.bSecretary);
+  set('stmt-b-gym',        meta.bGym);
+  set('stmt-b-storage',    meta.bStorage);
+  set('stmt-b-guidance',   meta.bGuidance);
+  set('stmt-b-health',     meta.bHealth);
+  set('stmt-b-workshop',   meta.bWorkshop);
+  set('stmt-b-theater',    meta.bTheater);
+  set('stmt-b-yard',       meta.bYard);
+  set('stmt-b-other',      meta.bOther);
+  if (meta.eduZone) CustomSelect.refresh(el('stmt-edu-zone'));
+  if (meta.bOwnership) CustomSelect.refresh(el('stmt-b-ownership'));
+}
+
+async function initStatementTab() {
+  _statementLoaded = true;
+  // Set default year to current
+  const yearIn = el('stmt-year-in');
+  if (yearIn && !yearIn.value) yearIn.value = new Date().getFullYear();
+  // Restore saved meta
+  _stmtRestoreMeta(_stmtLoadMeta());
+  // Populate educational zone lookup
+  const zoneEl = el('stmt-edu-zone');
+  if (zoneEl) {
+    try {
+      const zones = await getLookup('educational_zone');
+      const cur = zoneEl.value;
+      zoneEl.innerHTML = '<option value="">— اختر —</option>' +
+        zones.map(z => `<option value="${escapeHtml(z)}"${z===cur?' selected':''}>${escapeHtml(z)}</option>`).join('');
+      CustomSelect.refresh(zoneEl);
+    } catch { /* non-fatal */ }
+  }
+  el('btn-gen-statement')?.addEventListener('click', generateStatementPreview);
+  el('btn-print-statement')?.addEventListener('click', printStatement);
+  el('btn-export-excel')?.addEventListener('click', exportStatementExcel);
+}
+
+async function buildStatementData() {
+  const month  = parseInt(el('stmt-month-sel')?.value || '1', 10);
+  const year   = parseInt(el('stmt-year-in')?.value || new Date().getFullYear(), 10);
+  const meta   = _stmtSaveMeta();
+  const school = S.school;
+
+  const [stuStats, staffRecs, staffLeaves] = await Promise.all([
+    NDB.getSchoolStudentStats(school.id),
+    NDB.getStaffRecords(school.id),
+    NDB.getStaffLeaves(school.id, month, year),
+  ]);
+
+  // Build admin role counts
+  const adminByRole = {};
+  for (const r of (staffRecs || [])) {
+    if (r.staff_type !== 'admin') continue;
+    const role = r.job_title || 'غير محدد';
+    adminByRole[role] = (adminByRole[role] || 0) + 1;
+  }
+
+  // Staff type counts
+  const staffCounts = { admin: 0, teaching: 0, professional: 0, worker: 0, guard: 0 };
+  for (const r of (staffRecs || [])) {
+    if (r.staff_type === 'admin') staffCounts.admin++;
+    else if (r.staff_type === 'teaching') staffCounts.teaching++;
+    else if (r.staff_type === 'support') {
+      const jt = r.job_title || '';
+      if (jt === 'مستخدم') staffCounts.worker++;
+      else if (jt === 'حارس') staffCounts.guard++;
+      else staffCounts.professional++;
+    }
+  }
+
+  // Teaching counts by specialization category
+  const teachBySpec = {};
+  for (const r of (staffRecs || [])) {
+    if (r.staff_type !== 'teaching') continue;
+    const sp = r.specialization || 'غير محدد';
+    teachBySpec[sp] = (teachBySpec[sp] || 0) + 1;
+  }
+
+  // Leaves: merge by staff_id
+  const leavesMap = {};
+  for (const lv of (staffLeaves || [])) {
+    if (!leavesMap[lv.staff_id]) leavesMap[lv.staff_id] = [];
+    leavesMap[lv.staff_id].push(`${lv.leave_type} ${lv.days}`);
+  }
+  // Enrich with staff name
+  const staffById = {};
+  for (const r of (staffRecs || [])) staffById[r.id] = r;
+  const leaveLines = Object.entries(leavesMap).map(([sid, parts]) => {
+    const name = staffById[sid]?.full_name || '—';
+    return `${name}: ${parts.join(' + ')}`;
+  });
+
+  return { month, year, meta, school, stuStats, staffRecs,
+           adminByRole, staffCounts, teachBySpec, leaveLines };
+}
+
+async function generateStatementPreview() {
+  const genBtn  = el('btn-gen-statement');
+  const spinner = el('stmt-gen-spinner');
+  const errEl   = el('stmt-gen-error');
+  if (genBtn) genBtn.disabled = true;
+  if (spinner) spinner.hidden = false;
+  hide(errEl);
+
+  try {
+    const d = await buildStatementData();
+
+    // Header summary
+    const headerEl = el('stmt-header-summary');
+    if (headerEl) {
+      headerEl.innerHTML = `
+        <span><strong>المدرسة:</strong> ${escapeHtml(d.school.name || '—')}</span>
+        <span><strong>الشهر:</strong> ${escapeHtml(MONTH_LABELS[d.month] || d.month)}</span>
+        <span><strong>العام:</strong> ${d.year}</span>
+        <span><strong>الحلقة:</strong> ${escapeHtml(d.school.cycle || d.meta.eduZone || '—')}</span>
+        ${d.school.statistical_number ? `<span><strong>الرقم الإحصائي:</strong> ${escapeHtml(d.school.statistical_number)}</span>` : ''}
+      `;
+    }
+
+    // Student table
+    const allKeys = Object.keys(GRADE_KEY_MAP);
+    const claimed = new Set();
+    for (const key of allKeys) {
+      const row = el('stmt-students-body')?.querySelector(`[data-grade-key="${key}"]`);
+      if (!row) continue;
+      const cells = row.querySelectorAll('.stmt-num');
+      let sections = 0, male = 0, female = 0;
+      for (const dbGrade of GRADE_KEY_MAP[key]) {
+        const s = d.stuStats[dbGrade];
+        if (s) { sections += s.sections; male += s.male; female += s.female; claimed.add(dbGrade); }
+      }
+      if (cells[0]) cells[0].textContent = sections;
+      if (cells[1]) cells[1].textContent = male;
+      if (cells[2]) cells[2].textContent = female;
+      // cols 3-6 (French/Russian) left for manual edit, zero them only on first generate
+      if (cells[3] && cells[3].textContent === '0') cells[3].textContent = '0';
+    }
+
+    // Unclassified grades
+    let uncSec = 0, uncM = 0, uncF = 0;
+    for (const [grade, s] of Object.entries(d.stuStats)) {
+      if (!claimed.has(grade)) { uncSec += s.sections; uncM += s.male; uncF += s.female; }
+    }
+    const uncRow = el('stmt-unclassified-row');
+    if (uncRow) {
+      uncRow.hidden = (uncSec === 0);
+      const secEl = el('stmt-unclassified-sections');
+      const mEl   = el('stmt-unclassified-male');
+      const fEl   = el('stmt-unclassified-female');
+      if (secEl) secEl.textContent = uncSec;
+      if (mEl)   mEl.textContent   = uncM;
+      if (fEl)   fEl.textContent   = uncF;
+    }
+
+    // Update totals
+    _updateStudentTotals();
+
+    // Admin staff table
+    const adminBody = el('stmt-admin-body');
+    if (adminBody) {
+      adminBody.innerHTML = ADMIN_ROLE_ORDER.map(role => {
+        const cnt = role === 'مجموع الإداريين'
+          ? d.staffCounts.admin
+          : (d.adminByRole[role] || 0);
+        return `<tr><td>${escapeHtml(role)}</td><td class="stmt-num">${cnt}</td></tr>`;
+      }).join('');
+    }
+
+    // Staff totals
+    const totalsEl = el('stmt-staff-totals');
+    if (totalsEl) {
+      const total = d.staffCounts.admin + d.staffCounts.teaching +
+                    d.staffCounts.professional + d.staffCounts.worker + d.staffCounts.guard;
+      totalsEl.innerHTML = `
+        <strong>إجمالي العاملين: ${total}</strong> &nbsp;|&nbsp;
+        إداري: ${d.staffCounts.admin} &nbsp;|&nbsp;
+        تدريسي: ${d.staffCounts.teaching} &nbsp;|&nbsp;
+        مهني: ${d.staffCounts.professional} &nbsp;|&nbsp;
+        مستخدم: ${d.staffCounts.worker} &nbsp;|&nbsp;
+        حارس: ${d.staffCounts.guard}
+        ${d.leaveLines.length ? '<br><small style="color:#475569">إجازات الشهر: ' + d.leaveLines.map(l => escapeHtml(l)).join(' — ') + '</small>' : ''}
+      `;
+    }
+
+    // Show preview
+    const previewCard = el('stmt-preview-card');
+    if (previewCard) previewCard.hidden = false;
+    const titleEl = el('stmt-preview-title');
+    if (titleEl) titleEl.textContent = `${MONTH_LABELS[d.month]} / ${d.year}`;
+
+    previewCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    console.error('[Statement] generate', err);
+    if (errEl) { errEl.textContent = 'تعذّر توليد البيان — ' + (err?.message || err); show(errEl); }
+  } finally {
+    if (genBtn) genBtn.disabled = false;
+    if (spinner) spinner.hidden = true;
+  }
+}
+
+function _updateStudentTotals() {
+  const tbody = el('stmt-students-body');
+  if (!tbody) return;
+  let totSec = 0, totM = 0, totF = 0;
+  for (const row of tbody.querySelectorAll('tr[data-grade-key]:not([hidden])')) {
+    const cells = row.querySelectorAll('.stmt-num');
+    totSec += parseInt(cells[0]?.textContent || '0', 10) || 0;
+    totM   += parseInt(cells[1]?.textContent || '0', 10) || 0;
+    totF   += parseInt(cells[2]?.textContent || '0', 10) || 0;
+  }
+  const st = el('stmt-total-sections'); if (st) st.textContent = totSec;
+  const tm = el('stmt-total-male');     if (tm) tm.textContent = totM;
+  const tf = el('stmt-total-female');   if (tf) tf.textContent = totF;
+}
+
+// ── ExcelJS lazy loader ───────────────────────────────────────────────────────
+let _excelJsPromise = null;
+function loadExcelJS() {
+  if (window.ExcelJS) return Promise.resolve();
+  return _excelJsPromise ??= new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    s.onload = res;
+    s.onerror = () => rej(new Error('تعذّر تحميل مكتبة Excel'));
+    document.head.appendChild(s);
+  });
+}
+
+function _setCell(ws, addr, val) {
+  try {
+    const cell = ws.getCell(addr);
+    if (cell.formula) return; // never overwrite formulas
+    cell.value = (val === null || val === undefined || val === '') ? null : val;
+  } catch { /* merged/invalid cell */ }
+}
+
+async function exportStatementExcel() {
+  const btn     = el('btn-export-excel');
+  const label   = el('btn-export-label');
+  const spinner = el('stmt-export-spinner');
+  const errEl   = el('stmt-preview-error');
+  if (btn) btn.disabled = true;
+  if (label) label.textContent = 'جارٍ التصدير...';
+  if (spinner) spinner.hidden = false;
+  hide(errEl);
+
+  try {
+    await loadExcelJS();
+    const d = await buildStatementData();
+
+    const resp = await fetch('../shared/statement_template.xlsx');
+    if (!resp.ok) throw new Error(`تعذّر تحميل القالب (${resp.status})`);
+    const buffer = await resp.arrayBuffer();
+
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+
+    const wsBayan = wb.getWorksheet('البيان');
+    if (!wsBayan) throw new Error('ورقة البيان غير موجودة في القالب');
+
+    // ── الترويسة ──────────────────────────────────────────────────────────────
+    _setCell(wsBayan, 'E3', MONTH_LABELS[d.month] || String(d.month));
+    _setCell(wsBayan, 'K3', d.year);
+    _setCell(wsBayan, 'C7', d.meta.eduZone);
+    _setCell(wsBayan, 'E7', d.meta.village);
+    _setCell(wsBayan, 'G7', d.meta.address);
+    _setCell(wsBayan, 'J7', d.school.cycle || '');
+    _setCell(wsBayan, 'K7', d.school.name || '');
+    _setCell(wsBayan, 'O7', d.meta.phone);
+    _setCell(wsBayan, 'R7', d.school.statistical_number || '');
+    _setCell(wsBayan, 'T7', d.school.rural_curriculum ? 'نعم' : 'لا');
+    _setCell(wsBayan, 'Y7', d.school.shift === 'full' ? 'كامل' : d.school.shift === 'half' ? 'نصفي' : (d.school.shift || ''));
+    _setCell(wsBayan, 'W8', d.meta.sharedWith);
+
+    // ── البناء ───────────────────────────────────────────────────────────────
+    const bCols = ['C','E','H','K','M','O','P','Q','R','S','T','U','V','W','X','Y','Z','AA'];
+    const bVals = [
+      d.meta.bFloors, d.meta.bOwnership, d.meta.bClassRooms, d.meta.bAdminRooms,
+      d.meta.bUnused, d.meta.bBasement, d.meta.bLab, d.meta.bComputer,
+      d.meta.bLibrary, d.meta.bSecretary, d.meta.bGym, d.meta.bStorage,
+      d.meta.bGuidance, d.meta.bHealth, d.meta.bWorkshop, d.meta.bTheater,
+      d.meta.bYard, d.meta.bOther,
+    ];
+    bCols.forEach((col, i) => {
+      const v = bVals[i];
+      _setCell(wsBayan, `${col}11`, v === '' ? null : (isNaN(Number(v)) ? v : Number(v)));
+    });
+
+    // ── أعداد الطلاب (تُقرأ من المعاينة المحررة) ────────────────────────────
+    const gradeKeys = Object.keys(GRADE_KEY_MAP);
+    // Template row offsets: استعدوا=22, 1..9=23..31, م1..م4=32..35, ث1أ..ث3ع=36..41
+    const keyToTemplateRow = {};
+    gradeKeys.forEach((key, idx) => { keyToTemplateRow[key] = 22 + idx; });
+
+    const stuBody = el('stmt-students-body');
+    if (stuBody) {
+      for (const row of stuBody.querySelectorAll('tr[data-grade-key]')) {
+        const key = row.dataset.gradeKey;
+        const tRow = keyToTemplateRow[key];
+        if (!tRow) continue;
+        const cells = row.querySelectorAll('.stmt-num');
+        const sec = parseInt(cells[0]?.textContent || '0', 10) || 0;
+        const enM = parseInt(cells[1]?.textContent || '0', 10) || 0;
+        const enF = parseInt(cells[2]?.textContent || '0', 10) || 0;
+        const frM = parseInt(cells[3]?.textContent || '0', 10) || 0;
+        const frF = parseInt(cells[4]?.textContent || '0', 10) || 0;
+        const ruM = parseInt(cells[5]?.textContent || '0', 10) || 0;
+        const ruF = parseInt(cells[6]?.textContent || '0', 10) || 0;
+        _setCell(wsBayan, `D${tRow}`, sec);
+        _setCell(wsBayan, `E${tRow}`, enM);
+        _setCell(wsBayan, `F${tRow}`, enF);
+        _setCell(wsBayan, `G${tRow}`, frM);
+        _setCell(wsBayan, `H${tRow}`, frF);
+        _setCell(wsBayan, `I${tRow}`, ruM);
+        _setCell(wsBayan, `J${tRow}`, ruF);
+      }
+    }
+
+    // ── الجهاز الإداري — أعداد حسب الوظيفة ───────────────────────────────────
+    const roleRows = ADMIN_ROLE_ORDER.slice(0, -1); // exclude مجموع الإداريين row
+    roleRows.forEach((role, idx) => {
+      const tRow = 20 + idx;
+      const cnt = role === 'مجموع الإداريين' ? d.staffCounts.admin : (d.adminByRole[role] || 0);
+      _setCell(wsBayan, `O${tRow}`, cnt);
+      _setCell(wsBayan, `P${tRow}`, arNumWord(cnt));
+    });
+    // مجموع الإداريين (row 38)
+    _setCell(wsBayan, `O38`, d.staffCounts.admin);
+    _setCell(wsBayan, `P38`, arNumWord(d.staffCounts.admin));
+
+    // ── ملخص المهنيين / مستخدمين / حراس ─────────────────────────────────────
+    _setCell(wsBayan, 'AA19', d.staffCounts.professional);
+    _setCell(wsBayan, 'AA20', d.staffCounts.worker);
+    _setCell(wsBayan, 'AA21', d.staffCounts.guard);
+    const grandTotal = d.staffCounts.admin + d.staffCounts.teaching +
+                       d.staffCounts.professional + d.staffCounts.worker + d.staffCounts.guard;
+    _setCell(wsBayan, 'AA23', grandTotal);
+
+    // ── أوراق الكوادر — الجهاز الإداري ───────────────────────────────────────
+    const wsAdmin = wb.getWorksheet('الجهاز الإداري');
+    if (wsAdmin) {
+      const adminRecs = (d.staffRecs || []).filter(r => r.staff_type === 'admin');
+      adminRecs.forEach((r, i) => {
+        const row = 4 + i;
+        _setCell(wsAdmin, `B${row}`, r.national_id || '');
+        _setCell(wsAdmin, `C${row}`, r.full_name || '');
+        _setCell(wsAdmin, `D${row}`, r.mother_name || '');
+        if (r.birth_date) {
+          const bd = new Date(r.birth_date);
+          _setCell(wsAdmin, `E${row}`, bd.getDate());
+          _setCell(wsAdmin, `F${row}`, bd.getMonth() + 1);
+          _setCell(wsAdmin, `G${row}`, bd.getFullYear());
+        }
+        _setCell(wsAdmin, `H${row}`, r.certificate || '');
+        _setCell(wsAdmin, `I${row}`, r.specialization || '');
+        _setCell(wsAdmin, `J${row}`, r.seniority_year || '');
+        _setCell(wsAdmin, `K${row}`, r.job_title || '');
+        _setCell(wsAdmin, `L${row}`, r.higher_degree || '');
+        if (r.start_date) {
+          const sd = new Date(r.start_date);
+          _setCell(wsAdmin, `M${row}`, sd.getDate());
+          _setCell(wsAdmin, `N${row}`, sd.getMonth() + 1);
+          _setCell(wsAdmin, `O${row}`, sd.getFullYear());
+        }
+        _setCell(wsAdmin, `P${row}`, r.phone || '');
+        _setCell(wsAdmin, `R${row}`, r.residential_zone || '');
+        // إجازات
+        const lvParts = (d.leaveLines.find(l => l.startsWith(r.full_name + ':')) || '').split(':')[1] || '';
+        _setCell(wsAdmin, `S${row}`, lvParts.trim());
+        _setCell(wsAdmin, `T${row}`, r.ministerial_doc || '');
+        _setCell(wsAdmin, `U${row}`, r.notes || '');
+      });
+    }
+
+    // ── أوراق الكوادر — الجهاز التدريسي ──────────────────────────────────────
+    const wsTeach = wb.getWorksheet('الجهاز التدريسي');
+    if (wsTeach) {
+      const teachRecs = (d.staffRecs || []).filter(r => r.staff_type === 'teaching');
+      teachRecs.forEach((r, i) => {
+        const row = 4 + i;
+        _setCell(wsTeach, `B${row}`, r.national_id || '');
+        _setCell(wsTeach, `C${row}`, r.full_name || '');
+        _setCell(wsTeach, `D${row}`, r.mother_name || '');
+        if (r.birth_date) {
+          const bd = new Date(r.birth_date);
+          _setCell(wsTeach, `E${row}`, bd.getDate());
+          _setCell(wsTeach, `F${row}`, bd.getMonth() + 1);
+          _setCell(wsTeach, `G${row}`, bd.getFullYear());
+        }
+        _setCell(wsTeach, `H${row}`, r.certificate || '');
+        _setCell(wsTeach, `I${row}`, r.specialization || '');
+        _setCell(wsTeach, `J${row}`, r.seniority_year || '');
+        _setCell(wsTeach, `K${row}`, r.subject_taught || '');
+        if (r.start_date) {
+          const sd = new Date(r.start_date);
+          _setCell(wsTeach, `Q${row}`, sd.getDate());
+          _setCell(wsTeach, `R${row}`, sd.getMonth() + 1);
+          _setCell(wsTeach, `S${row}`, sd.getFullYear());
+        }
+        _setCell(wsTeach, `T${row}`, r.phone || '');
+        _setCell(wsTeach, `V${row}`, r.residential_zone || '');
+        const lvParts = (d.leaveLines.find(l => l.startsWith(r.full_name + ':')) || '').split(':')[1] || '';
+        _setCell(wsTeach, `W${row}`, lvParts.trim());
+        _setCell(wsTeach, `X${row}`, r.ministerial_doc || '');
+        _setCell(wsTeach, `Y${row}`, r.notes || '');
+      });
+    }
+
+    // ── أوراق الكوادر — مهنيون ومستخدمون وحراس ───────────────────────────────
+    const wsSupport = wb.getWorksheet('مهنيين ومستخدمين وحراس');
+    if (wsSupport) {
+      const suppRecs = (d.staffRecs || []).filter(r => r.staff_type === 'support');
+      suppRecs.forEach((r, i) => {
+        const row = 4 + i;
+        _setCell(wsSupport, `B${row}`, r.national_id || '');
+        _setCell(wsSupport, `C${row}`, r.full_name || '');
+        _setCell(wsSupport, `D${row}`, r.mother_name || '');
+        if (r.birth_date) {
+          const bd = new Date(r.birth_date);
+          _setCell(wsSupport, `E${row}`, bd.getDate());
+          _setCell(wsSupport, `F${row}`, bd.getMonth() + 1);
+          _setCell(wsSupport, `G${row}`, bd.getFullYear());
+        }
+        _setCell(wsSupport, `H${row}`, r.certificate || '');
+        _setCell(wsSupport, `I${row}`, r.seniority_year || '');
+        _setCell(wsSupport, `J${row}`, r.job_title || '');
+        if (r.start_date) {
+          const sd = new Date(r.start_date);
+          _setCell(wsSupport, `K${row}`, sd.getDate());
+          _setCell(wsSupport, `L${row}`, sd.getMonth() + 1);
+          _setCell(wsSupport, `M${row}`, sd.getFullYear());
+        }
+        _setCell(wsSupport, `N${row}`, r.phone || '');
+        _setCell(wsSupport, `P${row}`, r.residential_zone || '');
+        const lvParts = (d.leaveLines.find(l => l.startsWith(r.full_name + ':')) || '').split(':')[1] || '';
+        _setCell(wsSupport, `Q${row}`, lvParts.trim());
+        _setCell(wsSupport, `R${row}`, r.ministerial_doc || '');
+        _setCell(wsSupport, `S${row}`, r.notes || '');
+      });
+    }
+
+    // ── تنزيل الملف ──────────────────────────────────────────────────────────
+    const outBuf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([outBuf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const safeName = (d.school.name || 'المدرسة').replace(/[/\\?%*:|"<>]/g, '-');
+    a.href = url;
+    a.download = `بيان_${safeName}_${MONTH_LABELS[d.month]}_${d.year}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error('[Statement] exportExcel', err);
+    if (errEl) { errEl.textContent = 'تعذّر تصدير Excel — ' + (err?.message || err); show(errEl); }
+  } finally {
+    if (btn) btn.disabled = false;
+    if (label) label.textContent = 'تصدير Excel';
+    if (spinner) spinner.hidden = true;
+  }
+}
+
+function printStatement() {
+  const d_school = S.school;
+  const month  = parseInt(el('stmt-month-sel')?.value || '1', 10);
+  const year   = parseInt(el('stmt-year-in')?.value || new Date().getFullYear(), 10);
+
+  // Collect current preview data
+  const stuRows = [];
+  el('stmt-students-body')?.querySelectorAll('tr[data-grade-key]:not([hidden])').forEach(row => {
+    const label = row.querySelector('td:first-child')?.textContent || '';
+    const cells = row.querySelectorAll('.stmt-num');
+    const vals  = [...cells].map(c => c.textContent || '0');
+    stuRows.push({ label, vals });
+  });
+
+  const adminRows = [];
+  el('stmt-admin-body')?.querySelectorAll('tr').forEach(row => {
+    const tds = row.querySelectorAll('td');
+    adminRows.push({ role: tds[0]?.textContent || '', cnt: tds[1]?.textContent || '0' });
+  });
+
+  const totals = el('stmt-staff-totals')?.textContent || '';
+
+  const win = window.open('', '_blank', 'width=1000,height=700');
+  if (!win) { toast('يرجى السماح بالنوافذ المنبثقة', 'error'); return; }
+
+  const stuTableHtml = `
+    <table>
+      <thead>
+        <tr>
+          <th rowspan="2">الصف</th><th rowspan="2">عدد الشعب</th>
+          <th colspan="2">انكليزي</th><th colspan="2">فرنسي</th><th colspan="2">روسي</th>
+        </tr>
+        <tr><th>ذكور</th><th>إناث</th><th>ذكور</th><th>إناث</th><th>ذكور</th><th>إناث</th></tr>
+      </thead>
+      <tbody>
+        ${stuRows.map(r => `<tr><td>${r.label}</td>${r.vals.map(v=>`<td>${v}</td>`).join('')}</tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+
+  const adminHtml = `
+    <table>
+      <thead><tr><th>المنصب</th><th>العدد</th></tr></thead>
+      <tbody>${adminRows.map(r=>`<tr><td>${r.role}</td><td>${r.cnt}</td></tr>`).join('')}</tbody>
+    </table>
+  `;
+
+  win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>البيان الشهري — ${escapeHtml(d_school?.name || '')} — ${MONTH_LABELS[month]} ${year}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
+  @page { size:A4 landscape; margin:10mm; }
+  body { font-family:'Cairo',sans-serif; font-size:9pt; direction:rtl; }
+  h1 { font-size:12pt; margin:0 0 4px; }
+  h2 { font-size:10pt; margin:8px 0 4px; }
+  table { border-collapse:collapse; width:100%; margin-bottom:8px; }
+  th, td { border:1px solid #555; padding:3px 5px; text-align:center; }
+  th { background:#e2e8f0; font-weight:700; }
+  .page-break { page-break-after: always; }
+  .header-meta { font-size:8pt; color:#333; margin-bottom:6px; }
+</style>
+</head>
+<body>
+<h1>البيان الشهري — ${escapeHtml(d_school?.name || '')} — ${MONTH_LABELS[month]} ${year}</h1>
+<div class="header-meta">
+  الحلقة: ${escapeHtml(d_school?.cycle||'—')} | الرقم الإحصائي: ${escapeHtml(d_school?.statistical_number||'—')} | نوع الدوام: ${escapeHtml(d_school?.shift||'—')}
+</div>
+<h2>أعداد الطلاب</h2>
+${stuTableHtml}
+<h2>الجهاز الإداري</h2>
+${adminHtml}
+<p style="font-size:8pt">${escapeHtml(totals)}</p>
+</body></html>`);
+  win.document.close();
+  setTimeout(() => { win.focus(); win.print(); }, 600);
+}
+
+CustomSelect.enhance('stmt-edu-zone');
+CustomSelect.enhance('stmt-b-ownership');
 
 // ── Start the app (after all declarations are initialized) ──
 bootstrap();
