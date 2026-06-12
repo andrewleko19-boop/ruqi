@@ -940,7 +940,7 @@
           <div class="field-group" id="mng-subj-field">
             <label>المواد التي يُدرّسها</label>
             <div id="mng-subj-pick" class="subj-pick"></div>
-            <p id="mng-subj-empty" class="mng-hint" hidden>لا توجد مواد معرّفة لهذا الصف — أضِفها من «المواد».</p>
+            <p id="mng-subj-empty" class="mng-hint" hidden>لا توجد مواد معرّفة لهذا الصف — أضِفها من بطاقة «مواد الصفوف» أدناه.</p>
           </div>
           <div id="mng-error" class="msg msg-error" hidden></div>
           <button type="button" class="btn btn-primary btn-full" id="btn-assign-teacher">
@@ -949,6 +949,36 @@
             <span class="spinner" id="assign-spinner" hidden></span>
           </button>
         </div>
+      </div>
+    </section>
+
+    <!-- Subjects management (مواد الصفوف) -->
+    <section class="card">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-book"/></svg>
+        <span>مواد الصفوف</span>
+        <button class="hdr-btn" id="btn-refresh-subjects" aria-label="تحديث" style="margin-inline-start:auto">
+          <svg class="icon icon-sm" id="subjects-refresh-icon"><use href="#ic-refresh"/></svg>
+        </button>
+      </div>
+      <div class="card-body">
+        <p class="mng-hint">اختر صفاً لإدارة مواده ومكوّنات علامة كل مادة. مادة اللغة العربية تُقسَّم إلى مادتين، ونسبة النجاح فيها 50٪.</p>
+
+        <div class="field-group">
+          <label for="subj-grade-select">الصف</label>
+          <select id="subj-grade-select" class="field-input"></select>
+        </div>
+
+        <div id="subj-loading" hidden style="padding:8px 0">
+          <div class="dskel"></div><div class="dskel" style="width:60%"></div>
+        </div>
+        <ul id="subj-list" class="mng-list" role="list"></ul>
+        <p id="subj-empty" class="mng-empty" hidden>لا توجد مواد لهذا الصف بعد.</p>
+
+        <button type="button" class="btn btn-primary btn-full" id="btn-add-subject" style="margin-top:14px">
+          <svg class="icon icon-sm"><use href="#ic-plus"/></svg>
+          إضافة مادة
+        </button>
       </div>
     </section>
 

@@ -794,10 +794,11 @@ async function initApp() {
 
   // Default to the attendance tab on each app entry; other tabs load lazily.
   switchTab('attendance');
-  _manageLoaded   = false;
-  _subjectsLoaded = false;
-  _reportsLoaded  = false;
-  _staffLoaded    = false;
+  _manageLoaded    = false;
+  _subjectsLoaded  = false;
+  _mngSubjectsInit = false;
+  _reportsLoaded   = false;
+  _staffLoaded     = false;
 
   // Kick off sync of any offline-queued records
   await doSync();
@@ -1349,6 +1350,7 @@ function switchTab(tab) {
   closeMoreMenu();
 
   if (tab === 'manage'   && !_manageLoaded)  loadManageClasses();
+  if (tab === 'manage'   && !_mngSubjectsInit) initManageSubjects();
   if (tab === 'students' && !_studentsLoaded) initStudentsTab();
   if (tab === 'staff'    && !_staffLoaded)   initStaffTab();
   if (tab === 'subjects' && !_subjectsLoaded) initSubjectsTab();
@@ -1681,6 +1683,254 @@ btnRefreshManage.addEventListener('click', async () => {
     mngAssignedWrap.hidden = false;
     await Promise.all([loadAssignedTeachers(classId), loadAssignableTeachers(classId)]);
   }
+  if (_mngSubjectsInit) loadSubjects();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Subjects management (مواد الصفوف) — card inside the manage (الصفوف) tab
+// ═══════════════════════════════════════════════════════════════════════════
+const subjGradeSelect    = el('subj-grade-select');
+const subjLoading        = el('subj-loading');
+const subjListEl         = el('subj-list');
+const subjEmpty          = el('subj-empty');
+const btnAddSubject      = el('btn-add-subject');
+const btnRefreshSubjects = el('btn-refresh-subjects');
+// editor modal
+const modalSubject   = el('modal-subject');
+const btnCloseSubject= el('btn-close-subject');
+const subjModalTitle = el('subj-modal-title');
+const subjNameIn     = el('subj-name');
+const subjMaxIn      = el('subj-max');
+const subjPassIn     = el('subj-pass');
+const subjArabicIn   = el('subj-arabic');
+const subjMathIn     = el('subj-math');
+const subjCompList   = el('subj-comp-list');
+const btnAddComp     = el('btn-add-comp');
+const subjCompSum    = el('subj-comp-sum');
+const subjError      = el('subj-error');
+const btnSaveSubject = el('btn-save-subject');
+const subjSaveLabel  = el('subj-save-label');
+const subjSpinner    = el('subj-spinner');
+
+let _mngSubjectsInit  = false;
+let _subjGrade        = 1;
+let _editingSubjectId = null;
+
+// Map a Supabase error to a clear Arabic message. 42501 / "permission denied
+// for table" means the grades tables haven't been granted to the app role yet.
+function gradesErr(err, fallback) {
+  if (err?.code === '42501' || /permission denied/i.test(err?.message || '')) {
+    return 'لا تملك صلاحية الوصول إلى بيانات الدرجات على قاعدة البيانات (راجع إعداد الصلاحيات).';
+  }
+  return fallback;
+}
+
+function initManageSubjects() {
+  if (!S.school?.id) return;
+  subjGradeSelect.innerHTML = '';
+  for (let g = 1; g <= 12; g++) {
+    const opt = document.createElement('option');
+    opt.value = String(g);
+    opt.textContent = gradeNameLabel(g);
+    subjGradeSelect.appendChild(opt);
+  }
+  subjGradeSelect.value = String(_subjGrade);
+  CustomSelect.refresh(subjGradeSelect);
+  _mngSubjectsInit = true;
+  loadSubjects();
+}
+
+async function loadSubjects() {
+  if (!S.school?.id) return;
+  _subjGrade = Number(subjGradeSelect.value) || 1;
+  show(subjLoading);
+  subjListEl.innerHTML = '';
+  subjEmpty.hidden = true;
+  try {
+    const subjects = await NDB.getSchoolSubjects(S.school.id, _subjGrade);
+    hide(subjLoading);
+    if (!subjects.length) { subjEmpty.hidden = false; return; }
+    for (const sub of subjects) subjListEl.appendChild(buildSubjectRow(sub));
+  } catch (err) {
+    console.error('[NSAMS] loadSubjects', err);
+    hide(subjLoading);
+    toast(gradesErr(err, 'تعذّر تحميل المواد'), 'error');
+  }
+}
+
+// Keep the teacher-assignment subjects picker (mng-subj-pick) in sync after a
+// subject is created/edited/deleted for the currently selected class's grade.
+function refreshAssignSubjectsPicker() {
+  if (mngClassSelect.value) loadSubjectsPicker(selectedClassGrade());
+}
+
+function buildSubjectRow(sub) {
+  const li = document.createElement('li');
+  li.className = 'subj-row';
+  const tag = (sub.is_core_arabic ? '<span class="subj-tag">عربي</span>' : '')
+            + (sub.is_core_math ? '<span class="subj-tag">رياضيات</span>' : '');
+  li.innerHTML = `
+    <div class="subj-info">
+      <div class="subj-name">${escapeHtml(sub.name)}${tag}</div>
+      <div class="subj-meta">العظمى ${escapeHtml(String(sub.max_total))} · النجاح ${escapeHtml(String(sub.pass_mark))}٪</div>
+    </div>
+    <div class="subj-actions">
+      <button class="icon-btn-sm" data-act="edit" aria-label="تعديل">
+        <svg class="icon icon-sm"><use href="#ic-edit"/></svg>
+      </button>
+      <button class="icon-btn-sm danger" data-act="del" aria-label="حذف">
+        <svg class="icon icon-sm"><use href="#ic-trash"/></svg>
+      </button>
+    </div>
+  `;
+  li.querySelector('[data-act="edit"]').addEventListener('click', () => openSubjectModal(sub));
+  li.querySelector('[data-act="del"]').addEventListener('click', () => deleteSubjectRow(sub));
+  return li;
+}
+
+async function deleteSubjectRow(sub) {
+  if (!confirm(`حذف المادة «${sub.name}»؟ ستُحذف درجاتها أيضاً.`)) return;
+  try {
+    await NDB.deleteSubject(sub.id);
+    toast('تم حذف المادة', 'success');
+    loadSubjects();
+    refreshAssignSubjectsPicker();
+  } catch (err) {
+    console.error('[NSAMS] deleteSubject', err);
+    toast('تعذّر حذف المادة', 'error');
+  }
+}
+
+subjGradeSelect.addEventListener('change', loadSubjects);
+btnRefreshSubjects.addEventListener('click', loadSubjects);
+btnAddSubject.addEventListener('click', () => openSubjectModal(null));
+
+// ── Subject editor modal ──
+function addCompRow(name = '', max = '') {
+  const li = document.createElement('li');
+  li.className = 'comp-row';
+  li.innerHTML = `
+    <input class="field-input comp-name" type="text" placeholder="اسم المكوّن (مذاكرة…)" maxlength="40" />
+    <input class="field-input comp-max"  type="number" min="0" step="1" placeholder="العظمى" />
+    <button type="button" class="icon-btn-sm danger" aria-label="حذف المكوّن">
+      <svg class="icon icon-sm"><use href="#ic-x"/></svg>
+    </button>
+  `;
+  li.querySelector('.comp-name').value = name;
+  li.querySelector('.comp-max').value  = max;
+  li.querySelector('.comp-max').addEventListener('input', updateCompSum);
+  li.querySelector('button').addEventListener('click', () => { li.remove(); updateCompSum(); });
+  subjCompList.appendChild(li);
+}
+
+function updateCompSum() {
+  let sum = 0;
+  subjCompList.querySelectorAll('.comp-max').forEach(i => { sum += Number(i.value) || 0; });
+  const max = Number(subjMaxIn.value) || 0;
+  subjCompSum.textContent = `مجموع المكوّنات: ${sum} / ${max}`;
+  subjCompSum.classList.toggle('ok',  sum === max && max > 0);
+  subjCompSum.classList.toggle('bad', sum !== max);
+}
+
+async function openSubjectModal(sub) {
+  _editingSubjectId = sub?.id ?? null;
+  subjModalTitle.textContent = sub ? 'تعديل مادة' : 'مادة جديدة';
+  subjError.hidden = true;
+  subjNameIn.value   = sub?.name ?? '';
+  subjMaxIn.value    = sub?.max_total ?? 100;
+  subjPassIn.value   = sub?.pass_mark ?? 40;
+  subjArabicIn.checked = !!sub?.is_core_arabic;
+  subjMathIn.checked   = !!sub?.is_core_math;
+  subjCompList.innerHTML = '';
+
+  show(modalSubject);
+  document.body.style.overflow = 'hidden';
+
+  if (sub) {
+    try {
+      const comps = await NDB.getSubjectComponents(sub.id);
+      if (comps.length) comps.forEach(c => addCompRow(c.name, c.max_mark));
+      else addCompRow();
+    } catch {
+      addCompRow();
+    }
+  } else {
+    // sensible starter components (the user can adjust per stage)
+    addCompRow('مذاكرة', '');
+    addCompRow('شفهي / وظائف', '');
+    addCompRow('امتحان فصلي', '');
+  }
+  updateCompSum();
+}
+
+function closeSubjectModal() {
+  hide(modalSubject);
+  document.body.style.overflow = '';
+}
+
+btnCloseSubject.addEventListener('click', closeSubjectModal);
+modalSubject.addEventListener('click', (e) => { if (e.target === modalSubject) closeSubjectModal(); });
+btnAddComp.addEventListener('click', () => { addCompRow(); updateCompSum(); });
+subjMaxIn.addEventListener('input', updateCompSum);
+subjArabicIn.addEventListener('change', () => {
+  // Convenience: Arabic parts pass at 50% by default.
+  if (subjArabicIn.checked && (Number(subjPassIn.value) || 0) < 50) subjPassIn.value = 50;
+});
+
+btnSaveSubject.addEventListener('click', async () => {
+  const name = subjNameIn.value.trim();
+  const maxTotal = Number(subjMaxIn.value) || 0;
+  const passMark = Number(subjPassIn.value);
+  subjError.hidden = true;
+
+  if (!name)        { subjError.textContent = 'يرجى إدخال اسم المادة'; show(subjError); return; }
+  if (maxTotal <= 0){ subjError.textContent = 'العلامة العظمى غير صحيحة'; show(subjError); return; }
+  if (!(passMark >= 0 && passMark <= 100)) { subjError.textContent = 'نسبة النجاح يجب أن تكون بين 0 و 100'; show(subjError); return; }
+
+  const comps = [];
+  subjCompList.querySelectorAll('.comp-row').forEach(row => {
+    const n = row.querySelector('.comp-name').value.trim();
+    const m = Number(row.querySelector('.comp-max').value) || 0;
+    if (n) comps.push({ name: n, maxMark: m });
+  });
+  if (comps.length === 0) { subjError.textContent = 'أضف مكوّناً واحداً على الأقل'; show(subjError); return; }
+  const compSum = comps.reduce((a, c) => a + c.maxMark, 0);
+  if (compSum !== maxTotal) {
+    subjError.textContent = `مجموع المكوّنات (${compSum}) يجب أن يساوي العلامة العظمى (${maxTotal})`;
+    show(subjError); return;
+  }
+
+  btnSaveSubject.disabled = true;
+  subjSaveLabel.hidden = true;
+  subjSpinner.hidden = false;
+  try {
+    let subjectId = _editingSubjectId;
+    if (subjectId) {
+      await NDB.updateSubject(subjectId, {
+        name, maxTotal, passMark,
+        isCoreArabic: subjArabicIn.checked, isCoreMath: subjMathIn.checked,
+      });
+    } else {
+      subjectId = await NDB.createSubject({
+        schoolId: S.school.id, grade: _subjGrade,
+        name, maxTotal, passMark,
+        isCoreArabic: subjArabicIn.checked, isCoreMath: subjMathIn.checked,
+      });
+    }
+    await NDB.setSubjectComponents(subjectId, comps);
+    closeSubjectModal();
+    toast('تم حفظ المادة', 'success');
+    loadSubjects();
+    refreshAssignSubjectsPicker();
+  } catch (err) {
+    console.error('[NSAMS] saveSubject', err);
+    subjError.textContent = err?.message ?? 'تعذّر حفظ المادة';
+    show(subjError);
+  } finally {
+    btnSaveSubject.disabled = false;
+    subjSaveLabel.hidden = false;
+    subjSpinner.hidden = true;
+  }
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1886,6 +2136,7 @@ async function initSubjectsTab() {
       opt.textContent = gradeNameLabel(g);
       sel.appendChild(opt);
     }
+    CustomSelect.refresh(sel);
   });
   // populate class dropdowns for add_student and correct_student
   try {
@@ -1899,6 +2150,7 @@ async function initSubjectsTab() {
         opt.textContent = c.name || gradeNameLabel(c.grade) + (c.section ? ` / شعبة ${c.section}` : '');
         sel.appendChild(opt);
       });
+      CustomSelect.refresh(sel);
     });
   } catch (e) {
     console.warn('[Requests] could not load classes', e);
@@ -1911,6 +2163,7 @@ el('req-cor-class')?.addEventListener('change', async function () {
   const stuSel = el('req-cor-student');
   stuSel.innerHTML = '<option value="">— اختر الطالب —</option>';
   stuSel.disabled = true;
+  CustomSelect.refresh(stuSel);
   if (!this.value) return;
   try {
     const students = await NDB.getClassStudents(this.value);
@@ -1921,6 +2174,7 @@ el('req-cor-class')?.addEventListener('change', async function () {
       stuSel.appendChild(opt);
     });
     stuSel.disabled = false;
+    CustomSelect.refresh(stuSel);
   } catch (e) { console.warn('[Requests] load students', e); }
 });
 
@@ -1991,6 +2245,7 @@ async function submitRequest() {
     show(msgEl);
     // reset form
     el('req-type-select').value = '';
+    CustomSelect.refresh(el('req-type-select'));
     ['req-fields-add-class','req-fields-add-student','req-fields-correct-stu']
       .forEach(id => { const e = el(id); if (e) e.hidden = true; });
     loadRequests();
@@ -3575,6 +3830,13 @@ CustomSelect.enhance('r-type');
 CustomSelect.enhance('subj-grade-select');
 CustomSelect.enhance('rep-class-select');
 CustomSelect.enhance('rep-term-select');
+CustomSelect.enhance('req-type-select');
+CustomSelect.enhance('req-class-grade');
+CustomSelect.enhance('req-stu-class');
+CustomSelect.enhance('req-stu-gender');
+CustomSelect.enhance('req-cor-class');
+CustomSelect.enhance('req-cor-student');
+CustomSelect.enhance('req-cor-field');
 
 // ── Start the app (after all declarations are initialized) ──
 bootstrap();
