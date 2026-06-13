@@ -28,6 +28,10 @@ jobs:
           # Authenticated requests raise GitHub's API limit 60/hr -> 5000/hr,
           # so resolving the latest CLI release no longer rate-limits.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Deploy admin-create-user
+        run: supabase functions deploy admin-create-user --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       - name: Deploy admin-create-staff
         run: supabase functions deploy admin-create-staff --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt
         env:
