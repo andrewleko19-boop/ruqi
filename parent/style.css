@@ -177,6 +177,13 @@ input, textarea, select { font-family: inherit; }
   border-top-color: transparent; border-radius: 50%;
   animation: spin .7s linear infinite; display: inline-block;
 }
+/* Inside a .btn the spinner is taken out of flex-flow so it stays centred
+   regardless of the (hidden) label's width. */
+.btn .spinner {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+}
 .spinner-lg { width: 36px; height: 36px; border-width: 3px; color: var(--clr-primary); }
 @keyframes spin { to { transform: rotate(360deg); } }
 

@@ -2533,6 +2533,9 @@ drop policy if exists parent_otps_no_access on public.parent_otps;
 create policy parent_otps_no_access on public.parent_otps
   for all to authenticated using (false);
 
+-- service_role bypasses RLS but still needs object-level GRANT
+grant select, insert, update on public.parent_otps to service_role;
+
 -- P.3 — ربط المستخدم (parent) بطلابه المرتبطين
 create table if not exists public.parent_links (
   id          uuid primary key default gen_random_uuid(),
@@ -2547,6 +2550,8 @@ drop policy if exists parent_read_own_links on public.parent_links;
 create policy parent_read_own_links on public.parent_links
   for select to authenticated
   using (user_id = auth.uid());
+
+grant select, insert, update, delete on public.parent_links to service_role;
 
 -- P.4 — عذر الغياب المُقدَّم من ولي الأمر
 create table if not exists public.absence_excuses (
@@ -2637,6 +2642,8 @@ create policy parent_read_own_excuses on public.absence_excuses
       where pl.user_id = auth.uid() and pl.student_id = absence_excuses.student_id
     )
   );
+
+grant select, insert, update on public.absence_excuses to service_role;
 
 -- مدير المدرسة يرى الأعذار الواردة لمدرسته
 drop policy if exists school_admin_read_excuses on public.absence_excuses;

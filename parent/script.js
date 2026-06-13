@@ -166,7 +166,7 @@ function toast(msg, type = 'info', duration = 3000) {
 
 function setBusy(spinEl, labelEl, busy) {
   spinEl.hidden = !busy;
-  if (labelEl) labelEl.style.opacity = busy ? '0' : '1';
+  if (labelEl) labelEl.style.visibility = busy ? 'hidden' : '';
 }
 
 function formatDate(iso) {
