@@ -2628,7 +2628,7 @@ async function parentLogout() {
 async function parentGetMyStudents() {
   const { data, error } = await db
     .from('parent_links')
-    .select('student:student_id(id, full_name, gender, class_id, school_id, school:school_id(id, name, contact_phone, work_start_time), class:class_id(id, name, grade, section))')
+    .select('student:student_id(id, full_name, gender, class_id, school_id, school:school_id(id, name), class:class_id(id, name, grade, section))')
     .order('linked_at');
   if (error) throw error;
   return (data ?? []).map(r => r.student).filter(Boolean);
