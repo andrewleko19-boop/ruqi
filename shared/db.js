@@ -53,12 +53,15 @@ function generateReceiptNumber() {
 function isOnline() { return navigator.onLine; }
 
 // ── Report photo storage ──────────────────────────────────────────────────────
-// Emergency-report photos arrive from the UI as data: URIs. Storing a multi-MB
-// base64 string inside a table row is wasteful, so we upload to Supabase Storage
-// and keep only the public URL. SAFE FALLBACK: if the bucket is missing or the
-// upload fails, we KEEP the original data URI rather than dropping the photo —
-// no regression versus the old behaviour, and no silent data loss.
+// The bucket 'report-photos' is PRIVATE. uploadDataUri() uploads the file and
+// returns the storage PATH (e.g. "reports/1234_abc.jpg"), not a public URL.
+// Call resolveReportPhotos() before displaying — it converts paths to 1-hour
+// signed URLs. Data URIs (legacy inline photos) and legacy https:// URLs pass
+// through unchanged so old records continue to work.
 const REPORT_BUCKET = 'report-photos';
+// Signed URL TTL in seconds (1 hour — long enough for a session, short enough
+// to limit exposure if a link leaks).
+const SIGNED_URL_TTL = 3600;
 
 async function uploadDataUri(dataUri) {
   const m = /^data:([^;]+);base64,(.*)$/s.exec(dataUri);
@@ -77,11 +80,11 @@ async function uploadDataUri(dataUri) {
     .upload(path, bytes, { contentType: mime, upsert: false });
   if (error) throw error;
 
-  const { data } = db.storage.from(REPORT_BUCKET).getPublicUrl(path);
-  return data.publicUrl;
+  // Return the storage path — caller must use resolveReportPhotos() to display.
+  return path;
 }
 
-// Replace any inline data-URI photos with uploaded Storage URLs.
+// Replace any inline data-URI photos with storage paths.
 // Keeps the data URI on failure so the photo is never lost.
 async function materialisePhotos(mediaUrls) {
   if (!Array.isArray(mediaUrls) || mediaUrls.length === 0) return mediaUrls ?? [];
@@ -92,6 +95,27 @@ async function materialisePhotos(mediaUrls) {
       catch (e) { console.warn('[NSAMS] photo upload failed — keeping inline data URI', e); out.push(u); }
     } else {
       out.push(u);
+    }
+  }
+  return out;
+}
+
+// Convert an array of storage paths / legacy public URLs / data URIs into
+// displayable URLs. Storage paths get a short-lived signed URL; the other two
+// types are returned as-is (backwards-compatible with old inline records).
+async function resolveReportPhotos(mediaUrls) {
+  if (!Array.isArray(mediaUrls) || !mediaUrls.length) return [];
+  const out = [];
+  for (const u of mediaUrls) {
+    if (!u) continue;
+    if (u.startsWith('data:') || u.startsWith('http')) {
+      out.push(u); // data URI or legacy public URL — use directly
+    } else {
+      const { data, error } = await db.storage
+        .from(REPORT_BUCKET)
+        .createSignedUrl(u, SIGNED_URL_TTL);
+      if (error) { console.warn('[NSAMS] signed URL failed for', u, error); }
+      else out.push(data.signedUrl);
     }
   }
   return out;
@@ -2864,6 +2888,9 @@ window.NSAMS_DB = {
   submitMonthlyStatement,
   getDirectorateStatements,
   reviewMonthlyStatement,
+
+  // Report photo resolution (signed URLs for private bucket)
+  resolveReportPhotos,
 
   // Parent Portal (بوابة ولي الأمر)
   parentRequestOtp,

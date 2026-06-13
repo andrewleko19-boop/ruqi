@@ -395,27 +395,41 @@ alter table public.teacher_daily_attendance enable row level security;
 
 -- ════════════════════════════════════════════════════════════════════════════
 --  ٦. STORAGE (تخزين صور البلاغات)
+--
+--  الـ bucket خاص (public = false). db.js يرفع الصور ويخزّن المسار فقط (لا
+--  public URL). عند العرض تستدعي الواجهة resolveReportPhotos() التي تولّد
+--  signed URL (TTL ساعة) لكل مسار. data URIs القديمة تمرّ كما هي.
 -- ════════════════════════════════════════════════════════════════════════════
--- bucket عام 'report-photos'. db.js يرفع صور data URI إليه ويخزّن الرابط فقط؛
--- وإن فشل الرفع يحتفظ بالـ data URI (fallback آمن، بلا فقدان صورة).
 
+-- P.1: تأكد من أن الـ bucket خاص (إذا سبق إنشاؤه كـ public، عدِّله من Dashboard)
 insert into storage.buckets (id, name, public)
-values ('report-photos', 'report-photos', true)
-on conflict (id) do nothing;
+values ('report-photos', 'report-photos', false)
+on conflict (id) do update set public = false;
 
+-- إزالة السياسة العامة القديمة
 drop policy if exists "report photos public read" on storage.objects;
-create policy "report photos public read"
-  on storage.objects for select to public
-  using (bucket_id = 'report-photos');
 
+-- قراءة مقيَّدة: مدير المدرسة + مديرية + وزارة فقط
+drop policy if exists "report photos staff read" on storage.objects;
+create policy "report photos staff read"
+  on storage.objects for select to authenticated
+  using (
+    bucket_id = 'report-photos'
+    and public.current_user_role() in (
+      'school_admin'::public.user_role,
+      'directorate_user'::public.user_role,
+      'ministry_user'::public.user_role
+    )
+  );
+
+-- رفع: مدير المدرسة فقط (بقي كما هو)
 drop policy if exists "report photos admin upload" on storage.objects;
 create policy "report photos admin upload"
   on storage.objects for insert to authenticated
-  with check (bucket_id = 'report-photos' and public.auth_role() = 'school_admin');
--- ملاحظة اتساق: سياسة Storage هذه تستخدم auth_role() (نصّي) لأن المقارنة هنا
--- بقيمة 'school_admin' التي تتطابق نصّياً مع الـ enum (آمنة). لو رغبت بتوحيد كامل
--- استبدلها بـ current_user_role() = 'school_admin'::user_role. غير عاجل
--- (school_admin يطابق صح)، لكن أي تغيير لاسم الدور في الـ enum يتطلب تحديثها.
+  with check (
+    bucket_id = 'report-photos'
+    and public.current_user_role() = 'school_admin'::public.user_role
+  );
 
 
 -- ════════════════════════════════════════════════════════════════════════════
