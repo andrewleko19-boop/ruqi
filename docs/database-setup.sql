@@ -237,6 +237,43 @@ create policy schools_ministry_update on public.schools
   );
 
 
+-- 2.7  إنشاء مستخدم الوزارة (ministry_user) — دليل تشغيل
+--
+--  لوحة الوزارة (ministry/) تسمح فقط لمستخدم دوره 'ministry_user'. إنشاء هذا
+--  الحساب خطوتان: حساب في auth.users (المصادقة)، ثم صف مطابق في public.users
+--  (الدور) مربوط بنفس الـ UID.
+--
+--  ⚠️  تحذير من نطاق .test: Supabase يرفض عناوين البريد ذات النطاقات المحجوزة
+--      مثل ‎@example.test أو ‎@nsams.test ("Email address is invalid")، فيفشل
+--      إرسال بريد الاسترجاع ولا يمكن إعادة تعيين كلمة المرور عبر البريد. استخدم
+--      دائماً نطاقاً صالحاً (مثل ‎@nsams.app) لحسابات الوزارة/المديرية.
+--
+--  الخطوة 1 — إنشاء حساب المصادقة:
+--      Dashboard → Authentication → Users → Add user
+--      أدخل بريداً بنطاق صالح وكلمة مرور، وفعّل "Auto Confirm User".
+--      انسخ الـ UID الناتج.
+--
+--  الخطوة 2 — أنشئ صف الدور (استبدل UID والاسم):
+--      insert into public.users (id, full_name, role)
+--      values ('<UID-من-الخطوة-1>', 'وزارة التربية', 'ministry_user')
+--      on conflict (id) do update set role = excluded.role;
+--
+--  إعادة تعيين كلمة المرور دون بريد (يتجاوز رفض النطاق) — إن لزم:
+--      update auth.users
+--      set encrypted_password = crypt('<كلمة-مرور-جديدة>', gen_salt('bf')),
+--          email_confirmed_at = coalesce(email_confirmed_at, now())
+--      where email = '<البريد>';
+--      -- إن ظهر "function crypt does not exist" استخدم extensions.crypt / extensions.gen_salt
+--
+--  إصلاح حساب أُنشئ بنطاق .test (تغيير البريد + كلمة المرور دفعة واحدة):
+--      update auth.users
+--      set email = '<بريد-بنطاق-صالح>',
+--          encrypted_password = crypt('<كلمة-مرور-جديدة>', gen_salt('bf')),
+--          email_confirmed_at = coalesce(email_confirmed_at, now())
+--      where email = '<البريد-القديم-بنطاق-.test>';
+--      -- آمن: الربط مع public.users عبر الـ UID لا البريد، فالدور لا يتأثر.
+
+
 -- ════════════════════════════════════════════════════════════════════════════
 --  SECTION 3 — Teacher account credentials (principal-provisioned logins)
 --
