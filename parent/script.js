@@ -202,18 +202,23 @@ function startCountdown(seconds = 600) {
 }
 
 // ── Login Flow ────────────────────────────────────────────────────────────
+let _phoneSubmitting = false;
 formPhone.addEventListener('submit', async e => {
   e.preventDefault();
+  if (_phoneSubmitting) return;
   phoneErr.hidden = true;
   const phone = inpPhone.value.trim();
   if (!phone) { phoneErr.textContent = 'يرجى إدخال رقم الهاتف'; phoneErr.hidden = false; return; }
-
+  _phoneSubmitting = true;
   setBusy(spinPhone, btnSendOtp.querySelector('.btn-label'), true);
   btnSendOtp.disabled = true;
   try {
     await parentRequestOtp(phone);
     S.phone = phone;
     otpPhoneDisplay.textContent = phone;
+    // Reset button BEFORE transitioning so it's clean if user returns
+    setBusy(spinPhone, btnSendOtp.querySelector('.btn-label'), false);
+    btnSendOtp.disabled = false;
     showScreen('otp');
     otpCells[0].focus();
     startCountdown(600);
@@ -221,6 +226,7 @@ formPhone.addEventListener('submit', async e => {
     phoneErr.textContent = err.message;
     phoneErr.hidden = false;
   } finally {
+    _phoneSubmitting = false;
     setBusy(spinPhone, btnSendOtp.querySelector('.btn-label'), false);
     btnSendOtp.disabled = false;
   }
@@ -272,16 +278,22 @@ otpCells.forEach((cell, i) => {
 
 function getOtpCode() { return otpCells.map(c => c.value).join(''); }
 
+let _otpSubmitting = false;
 formOtp.addEventListener('submit', async e => {
   e.preventDefault();
+  if (_otpSubmitting) return;
   const code = getOtpCode();
   if (code.length < 6) { otpErr.textContent = 'أدخل الرمز المكوَّن من 6 أرقام'; otpErr.hidden = false; return; }
   otpErr.hidden = true;
+  _otpSubmitting = true;
   setBusy(spinOtp, btnVerify.querySelector('.btn-label'), true);
   btnVerify.disabled = true;
   try {
     await parentVerifyOtp(S.phone, code);
     clearInterval(_countdownTimer);
+    // Reset button BEFORE switching screens — keeps it clean if session expires
+    setBusy(spinOtp, btnVerify.querySelector('.btn-label'), false);
+    btnVerify.disabled = false;
     showScreen('app');
     await loadApp();
   } catch (err) {
@@ -290,6 +302,7 @@ formOtp.addEventListener('submit', async e => {
     otpCells.forEach(c => c.value = '');
     otpCells[0].focus();
   } finally {
+    _otpSubmitting = false;
     setBusy(spinOtp, btnVerify.querySelector('.btn-label'), false);
     btnVerify.disabled = false;
   }
@@ -307,7 +320,6 @@ async function loadApp() {
     const students = await parentGetMyStudents();
     S.students = students;
     if (!students.length) {
-      mainLoading.hidden = true;
       noStudents.hidden = false;
       return;
     }
@@ -318,8 +330,9 @@ async function loadApp() {
     bottomNav.hidden = false;
     await loadActiveStudentData();
   } catch (err) {
-    mainLoading.hidden = true;
     toast('تعذَّر تحميل البيانات: ' + err.message, 'error');
+  } finally {
+    mainLoading.hidden = true;
   }
 }
 
@@ -360,10 +373,10 @@ async function loadActiveStudentData() {
       loadSchoolInfo(),
     ]);
     showView(S.activeView);
-    mainLoading.hidden = true;
   } catch (err) {
-    mainLoading.hidden = true;
     toast('تعذَّر تحميل البيانات', 'error');
+  } finally {
+    mainLoading.hidden = true;
   }
 }
 
