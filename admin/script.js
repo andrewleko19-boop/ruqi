@@ -279,7 +279,7 @@ async function loadDirectorates() {
   [smDirectorate, umDir, lkDirFilter].forEach(sel => {
     while (sel.options.length > 1) sel.remove(1);
     allDirectorates.forEach(d => {
-      const o = new Option(`${d.name} — ${d.governorate}`, d.id);
+      const o = new Option(`${d.name}`, d.id);
       sel.add(o);
     });
     CustomSelect.refresh(sel);
@@ -494,6 +494,9 @@ umRole.addEventListener('change', () => {
   umDirGroup.style.display     = umRole.value === 'directorate_user'  ? '' : 'none';
 });
 
+[umEmail, umPassword, umFullname].forEach(el =>
+  el.addEventListener('input', () => clearError(userModalError)));
+
 userModalSave.addEventListener('click', async () => {
   clearError(userModalError);
   const email    = umEmail.value.trim().toLowerCase();
@@ -503,10 +506,12 @@ userModalSave.addEventListener('click', async () => {
   const schoolId = umSchool.value;
   const dirId    = umDir.value;
 
-  if (!email || !email.includes('@')) { showError(userModalError, 'البريد غير صالح.'); return; }
-  if (!fullName)                       { showError(userModalError, 'الاسم الكامل مطلوب.'); return; }
-  if (password.length < 8)            { showError(userModalError, 'كلمة المرور ٨ أحرف على الأقل.'); return; }
-  if (!role)                           { showError(userModalError, 'اختر الدور.'); return; }
+  if (!email)               { showError(userModalError, 'أدخل البريد الإلكتروني.'); return; }
+  if (!email.includes('@')) { showError(userModalError, 'البريد الإلكتروني غير صالح.'); return; }
+  if (!password)            { showError(userModalError, 'أدخل كلمة المرور.'); return; }
+  if (password.length < 8)  { showError(userModalError, 'كلمة المرور ٨ أحرف على الأقل.'); return; }
+  if (!fullName)            { showError(userModalError, 'أدخل الاسم الكامل.'); return; }
+  if (!role)                { showError(userModalError, 'اختر الدور.'); return; }
   if (role === 'school_admin' && !schoolId)      { showError(userModalError, 'اختر المدرسة.'); return; }
   if (role === 'directorate_user' && !dirId)     { showError(userModalError, 'اختر المديرية.'); return; }
 
@@ -624,13 +629,17 @@ async function loadAudit(reset = true) {
   rows.forEach(r => {
     const date = new Date(r.created_at).toLocaleString('ar-SY', { dateStyle: 'short', timeStyle: 'short' });
     const schoolName = (r.school_id && schoolMap[r.school_id]) || '—';
-    const actorName  = (r.actor_id && nameMap[r.actor_id]) ? nameMap[r.actor_id] : (r.actor_id ? r.actor_id.slice(0, 8) + '…' : '—');
+    const actorCell = (r.actor_id && nameMap[r.actor_id])
+      ? esc(nameMap[r.actor_id])
+      : (r.actor_id
+          ? `<button type="button" class="actor-id" data-full="${esc(r.actor_id)}" title="انقر لعرض المعرّف كاملاً">${esc(r.actor_id.slice(0, 8))}…</button>`
+          : '—');
     const changesId  = `ch-${r.id}`;
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="muted" style="white-space:nowrap">${esc(date)}</td>
       <td>${esc(schoolName)}</td>
-      <td>${esc(actorName)}</td>
+      <td>${actorCell}</td>
       <td>${esc(AUDIT_ENTITY_LABELS[r.entity] ?? r.entity ?? '—')}</td>
       <td>${esc(AUDIT_ACTION_LABELS[r.action] ?? r.action ?? '—')}</td>
       <td>
@@ -650,6 +659,17 @@ async function loadAudit(reset = true) {
       if (!pre) return;
       pre.classList.toggle('hidden');
       btn.textContent = pre.classList.contains('hidden') ? 'عرض' : 'إخفاء';
+    });
+  });
+
+  auditTbody.querySelectorAll('.actor-id').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const full = btn.dataset.full;
+      if (btn.textContent.includes('…')) {
+        btn.textContent = full;
+      } else {
+        btn.textContent = full.slice(0, 8) + '…';
+      }
     });
   });
 
@@ -909,7 +929,7 @@ function openAddLookup() {
   lkDirRow.style.display = per ? '' : 'none';
   if (per) {
     const d = allDirectorates.find(x => x.id === lkDirFilter.value);
-    lkDirLabel.value = d ? `${d.name} — ${d.governorate}` : '';
+    lkDirLabel.value = d ? `${d.name}` : '';
   }
   lkValue.value = '';
   lkSort.value  = allLookups.length ? (Math.max(...allLookups.map(r => r.sort_order || 0)) + 1) : 0;
@@ -929,7 +949,7 @@ function openEditLookup(id) {
   lkDirRow.style.display = per ? '' : 'none';
   if (per) {
     const d = allDirectorates.find(x => x.id === r.directorate_id);
-    lkDirLabel.value = d ? `${d.name} — ${d.governorate}` : '';
+    lkDirLabel.value = d ? `${d.name}` : '';
   }
   lkValue.value = r.value ?? '';
   lkSort.value  = r.sort_order ?? 0;

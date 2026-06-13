@@ -180,8 +180,8 @@
             <select id="audit-school-filter">
               <option value="">كل المدارس</option>
             </select>
-            <input type="date" id="audit-from" title="من تاريخ" />
-            <input type="date" id="audit-to" title="إلى تاريخ" />
+            <label class="filter-field">من تاريخ<input type="date" id="audit-from" /></label>
+            <label class="filter-field">إلى تاريخ<input type="date" id="audit-to" /></label>
             <button id="audit-filter-btn" class="btn btn-ghost btn-sm">
               <svg width="14" height="14"><use href="#icon-refresh"/></svg>
               تطبيق
@@ -392,12 +392,12 @@
         <input type="email" id="um-email" placeholder="user@example.com" autocomplete="off" />
       </div>
       <div class="form-group">
-        <label>الاسم الكامل *</label>
-        <input type="text" id="um-fullname" placeholder="أحمد محمد" />
-      </div>
-      <div class="form-group">
         <label>كلمة المرور *</label>
         <input type="password" id="um-password" placeholder="٨ أحرف على الأقل" autocomplete="new-password" />
+      </div>
+      <div class="form-group">
+        <label>الاسم الكامل *</label>
+        <input type="text" id="um-fullname" />
       </div>
       <div class="form-group">
         <label>الدور *</label>

@@ -110,9 +110,12 @@ export const CustomSelect = (() => {
       this.trigger.setAttribute('aria-expanded', 'true');
       this.root.classList.add('is-open');
       document.addEventListener('click', this.onDocClick);
-      // Scroll the selected option into view.
+      // Scroll selected option into view, then scroll the menu itself into view
+      // so it's visible when opened near the bottom of a scrollable modal.
       const sel = this.menu.querySelector('.is-selected');
       if (sel) sel.scrollIntoView({ block: 'nearest' });
+      requestAnimationFrame(() =>
+        this.menu.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
     }
 
     close() {
