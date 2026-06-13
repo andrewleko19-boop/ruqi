@@ -2502,13 +2502,17 @@ create trigger trg_notify_dir_statement_submitted
 -- ════════════════════════════════════════════════════════════════════════════
 --  SECTION P — Parent Portal (بوابة ولي الأمر)
 --
---  Deploy the Edge Function `supabase/functions/parent-auth` BEFORE applying
---  this section. The function uses SUPABASE_SERVICE_ROLE_KEY (auto-injected).
---  Also create a Storage bucket `excuse-photos` (public=false) in the dashboard.
+--  ⚠️  خطوتان منفصلتان في SQL Editor (PostgreSQL لا يسمح باستخدام قيمة enum
+--  جديدة في نفس transaction التي أُضيفت فيها):
+--
+--  الخطوة 1: شغِّل سطر P.1 وحده → Run → انتظر "Success"
+--  الخطوة 2: شغِّل بقية القسم (P.2 فصاعداً) دفعةً واحدة
 -- ════════════════════════════════════════════════════════════════════════════
 
--- P.1 — تمديد enum الأدوار بدور ولي الأمر
+-- P.1 — تمديد enum الأدوار (RUN THIS ALONE FIRST, THEN RUN THE REST SEPARATELY)
 alter type public.user_role add value if not exists 'parent';
+
+-- ─── من هنا تبدأ الخطوة 2 (بعد نجاح P.1 أعلاه) ───────────────────────────
 
 -- P.2 — رموز التحقق OTP (تُخزَّن مُجزَّأة، تُدار حصراً من Edge Function)
 create table if not exists public.parent_otps (
