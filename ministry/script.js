@@ -240,19 +240,27 @@ async function loadAllData() {
 
     const allSchoolIds = (schools || []).map(s => s.id);
 
-    const { data: attendance, error: attErr } = await supabase
-      .from('daily_student_attendance')
-      .select('school_id, status')
-      .eq('date', today())
-      .in('school_id', allSchoolIds.length > 0 ? allSchoolIds : ['__none__']);
-    if (attErr) throw attErr;
+    // No schools yet → skip attendance queries (an empty .in() placeholder
+    // would send a non-uuid value and 400). Empty arrays flow through fine.
+    let attendance = [];
+    let staffAgg   = [];
+    if (allSchoolIds.length > 0) {
+      const { data: att, error: attErr } = await supabase
+        .from('daily_student_attendance')
+        .select('school_id, status')
+        .eq('date', today())
+        .in('school_id', allSchoolIds);
+      if (attErr) throw attErr;
+      attendance = att || [];
 
-    const { data: staffAgg, error: staffErr } = await supabase
-      .from('daily_attendance')
-      .select('admins_present, workers_present')
-      .eq('date', today())
-      .in('school_id', allSchoolIds.length > 0 ? allSchoolIds : ['__none__']);
-    if (staffErr) throw staffErr;
+      const { data: staff, error: staffErr } = await supabase
+        .from('daily_attendance')
+        .select('admins_present, workers_present')
+        .eq('date', today())
+        .in('school_id', allSchoolIds);
+      if (staffErr) throw staffErr;
+      staffAgg = staff || [];
+    }
 
     let adminsPresent = 0, workersPresent = 0;
     for (const r of staffAgg || []) {

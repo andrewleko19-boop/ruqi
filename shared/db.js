@@ -461,12 +461,12 @@ async function getTodaySummary(directorateId) {
     db.from("daily_student_attendance")
       .select("school_id, status")
       .eq("date", today)
-      .in("school_id", schoolIds.length ? schoolIds : ["__none__"]),
+      .in("school_id", schoolIds.length ? schoolIds : ["00000000-0000-0000-0000-000000000000"]),
     // دوام الموظفين (معلمون/إداريون/عمال) — من المجمّع daily_attendance
     db.from("daily_attendance")
       .select("school_id, teachers_present, admins_present, workers_present")
       .eq("date", today)
-      .in("school_id", schoolIds.length ? schoolIds : ["__none__"]),
+      .in("school_id", schoolIds.length ? schoolIds : ["00000000-0000-0000-0000-000000000000"]),
     // البلاغات المعلّقة (دون تغيير)
     db.from("emergency_reports")
       .select("id, type, status, created_at, school:schools!inner(name, directorate_id)")
@@ -518,11 +518,11 @@ async function getSchoolsAttendanceStatus(directorateId, date) {
     db.from("daily_student_attendance")
       .select("school_id, status")
       .eq("date", isoDate)
-      .in("school_id", ids.length ? ids : ["__none__"]),
+      .in("school_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]),
     db.from("emergency_reports")
       .select("school_id")
       .in("status", ["open", "acknowledged"])
-      .in("school_id", ids.length ? ids : ["__none__"]),
+      .in("school_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]),
   ]);
   if (attendanceRes.error) throw attendanceRes.error;
   if (reportsRes.error)    throw reportsRes.error;
@@ -636,7 +636,7 @@ async function getMinistryAttendanceSummary(date) {
     .from("daily_attendance")
     .select("school_id, students_present, teachers_present, admins_present, workers_present")
     .eq("date", isoDate)
-    .in("school_id", allSchoolIds.length > 0 ? allSchoolIds : ["__none__"]);
+    .in("school_id", allSchoolIds.length > 0 ? allSchoolIds : ["00000000-0000-0000-0000-000000000000"]);
   if (attErr) throw attErr;
 
   const schoolToDir  = {};

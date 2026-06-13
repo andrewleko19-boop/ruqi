@@ -131,6 +131,8 @@ body {
   border-radius: 8px;
 }
 .btn-icon:hover { color: var(--text); background: var(--border); }
+/* Guard: keep icon-button SVGs constrained even if width/height attrs are missing */
+.btn-icon svg { width: 18px; height: 18px; }
 
 /* ── Topbar ───────────────────────────────────── */
 .topbar {
