@@ -155,6 +155,7 @@
     .card:nth-child(3) { animation-delay: 0.54s; }
     .card:nth-child(4) { animation-delay: 0.66s; }
     .card:nth-child(5) { animation-delay: 0.78s; }
+    .card:nth-child(6) { animation-delay: 0.9s; }
 
     /* Top accent bar */
     .card::before {
@@ -281,6 +282,7 @@
     .badge-ministry    { background: rgba(72, 199, 142, 0.1);  color: #5dd4a3; border: 1px solid rgba(72, 199, 142, 0.2); }
     .badge-teacher     { background: rgba(167, 139, 250, 0.12); color: #b9a4fb; border: 1px solid rgba(167, 139, 250, 0.22); }
     .badge-admin       { background: rgba(239, 68, 68, 0.10);  color: #f87171; border: 1px solid rgba(239, 68, 68, 0.22); }
+    .badge-parent      { background: rgba(244, 114, 182, 0.10); color: #f9a8d4; border: 1px solid rgba(244, 114, 182, 0.22); }
 
     .badge-dot {
       width: 6px; height: 6px;
@@ -362,6 +364,32 @@
 
   <!-- ── Cards ── -->
   <div class="cards">
+
+    <!-- Parent -->
+    <a href="./parent/" class="card">
+      <div class="badge badge-parent">
+        <span class="badge-dot"></span>
+        ولي الأمر
+      </div>
+      <div class="card-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+      </div>
+      <div class="card-body">
+        <div class="card-title">بوابة ولي الأمر</div>
+        <div class="card-desc">
+          متابعة غيابات الأبناء ودرجاتهم، تقديم أعذار الغياب، والاطلاع على تقويم العطل الرسمية.
+        </div>
+      </div>
+      <span class="card-cta">
+        دخول إلى البوابة
+        <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </span>
+    </a>
 
     <!-- Teacher -->
     <a href="./teacher/" class="card">
