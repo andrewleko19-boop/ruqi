@@ -198,6 +198,12 @@ create policy audit_log_ministry_select on public.audit_log
 
 -- 2.6  schools INSERT/SELECT for ministry_user — the admin portal creates new
 --      schools and reads all schools regardless of directorate.
+--
+--      Table-level GRANT first: RLS policies are only evaluated AFTER Postgres
+--      passes the table privilege check. Without this GRANT every write fails
+--      with "permission denied for table schools" no matter what policies exist.
+grant select, insert, update on public.schools to authenticated;
+
 drop policy if exists schools_ministry_select on public.schools;
 create policy schools_ministry_select on public.schools
   for select to authenticated
