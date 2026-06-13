@@ -15,6 +15,8 @@ const {
   getDirectorateTrend,
   getDirectorateRequests,
   reviewSchoolRequest,
+  getDirectorateStatements,
+  reviewMonthlyStatement,
   localDateISO,
 } = window.NSAMS_DB;
 
@@ -947,7 +949,7 @@ document.getElementById('reload-dropout-btn')?.addEventListener('click', loadDro
 document.getElementById('reload-periodic-btn')?.addEventListener('click', loadPeriodicReports);
 
 async function loadAll() {
-  await Promise.allSettled([loadStats(), loadMapAndCompliance(), loadReports(), loadTrend(), loadRequests(), loadDropoutSummary(), loadPeriodicReports()]);
+  await Promise.allSettled([loadStats(), loadMapAndCompliance(), loadReports(), loadTrend(), loadRequests(), loadStatements(), loadDropoutSummary(), loadPeriodicReports()]);
 }
 
 // ══════════════════════════════════════════════
@@ -1236,6 +1238,7 @@ function initNotificationsDir(userId) {
       new Notification(notif.title, { body: notif.body ?? '', dir: 'rtl', lang: 'ar' });
     }
     if (notif.type === 'report_new') loadReports().catch(() => {});
+    if (notif.type === 'statement_submitted') loadStatements().catch(() => {});
   });
 
   Notification.requestPermission().then((perm) => {
@@ -1395,4 +1398,172 @@ document.getElementById('dir-review-modal')?.addEventListener('click', (e) => {
 function closeReviewModal() {
   _reviewingReqId = null;
   document.getElementById('dir-review-modal')?.classList.add('hidden');
+}
+
+// ══════════════════════════════════════════════
+//  البيانات الشهرية (مراجعة البيان الشهري)
+// ══════════════════════════════════════════════
+
+const MONTH_AR = ['', 'كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران',
+  'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
+
+let _reviewingStmtId = null;
+
+async function loadStatements() {
+  if (!currentUser?.directorateId) return;
+  const listEl  = document.getElementById('dir-stmt-list');
+  const loadEl  = document.getElementById('dir-stmt-loading');
+  const wrapEl  = document.getElementById('dir-stmt-table-wrap');
+  const emptyEl = document.getElementById('dir-stmt-empty');
+  const countEl = document.getElementById('dir-stmt-count');
+  if (!listEl) return;
+
+  if (loadEl) loadEl.hidden = false;
+  if (wrapEl) wrapEl.hidden = true;
+  listEl.innerHTML = '';
+  if (emptyEl) emptyEl.hidden = true;
+
+  try {
+    const stmts = await getDirectorateStatements();
+    if (loadEl) loadEl.hidden = true;
+    // المُرسَل أولاً، ثم الأحدث إرسالاً
+    stmts.sort((a, b) => {
+      if (a.status === 'submitted' && b.status !== 'submitted') return -1;
+      if (b.status === 'submitted' && a.status !== 'submitted') return 1;
+      return new Date(b.submitted_at || 0) - new Date(a.submitted_at || 0);
+    });
+    const pending = stmts.filter(s => s.status === 'submitted').length;
+    if (countEl) {
+      countEl.textContent = pending ? `${pending} بانتظار المراجعة` : '';
+      countEl.hidden = !pending;
+    }
+    if (!stmts.length) { if (emptyEl) emptyEl.hidden = false; return; }
+    stmts.forEach(s => listEl.appendChild(buildStmtRow(s)));
+    if (wrapEl) wrapEl.hidden = false;
+  } catch (err) {
+    console.error('[DirStatements] load', err);
+    if (loadEl) loadEl.hidden = true;
+  }
+}
+
+function buildStmtRow(s) {
+  const tr = document.createElement('tr');
+  const schoolName = s.school?.name ?? '—';
+  const period = `${MONTH_AR[s.month] ?? s.month} ${s.year}`;
+  const statusHtml = s.status === 'submitted'
+    ? `<span class="dir-req-badge dir-req-badge--pending">بانتظار المراجعة</span>`
+    : s.status === 'approved'
+      ? `<span class="dir-req-badge dir-req-badge--approved">معتمد ✓</span>`
+      : s.status === 'rejected'
+        ? `<span class="dir-req-badge dir-req-badge--rejected">مرفوض ✗</span>`
+        : `<span class="dir-req-badge">مسودة</span>`;
+
+  const actionHtml = s.status === 'submitted'
+    ? `<button class="btn btn-sm btn-primary dir-stmt-review-btn" data-id="${esc(s.id)}"
+         data-school="${esc(schoolName)}" data-period="${esc(period)}"
+         data-snap='${esc(JSON.stringify(s.snapshot_data || {}))}'>مراجعة</button>`
+    : `<span class="dir-req-reason">${s.notes ? esc(s.notes) : '—'}</span>`;
+
+  tr.innerHTML = `
+    <td>${esc(schoolName)}</td>
+    <td>${esc(period)}</td>
+    <td>${statusHtml}</td>
+    <td>${actionHtml}</td>
+  `;
+  return tr;
+}
+
+// فتح مودال مراجعة البيان
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.dir-stmt-review-btn');
+  if (!btn) return;
+  _reviewingStmtId = btn.dataset.id;
+  const school = btn.dataset.school;
+  const period = btn.dataset.period;
+  let snap = {};
+  try { snap = JSON.parse(btn.dataset.snap || '{}'); } catch { /* tolerate */ }
+
+  document.getElementById('dir-stmt-title').textContent = `مراجعة بيان: ${school} — ${period}`;
+  document.getElementById('dir-stmt-body').innerHTML = buildStmtSummary(snap);
+  document.getElementById('dir-stmt-notes').value = '';
+  document.getElementById('dir-stmt-msg').hidden = true;
+  document.getElementById('dir-stmt-modal').classList.remove('hidden');
+});
+
+function buildStmtSummary(snap) {
+  const rows = [];
+  const students = Array.isArray(snap.students) ? snap.students : [];
+  let totSec = 0, totM = 0, totF = 0;
+  for (const s of students) {
+    totSec += (+s.sections || 0);
+    totM   += (+s.enM || 0) + (+s.frM || 0) + (+s.ruM || 0);
+    totF   += (+s.enF || 0) + (+s.frF || 0) + (+s.ruF || 0);
+  }
+  rows.push(['عدد الشعب', totSec]);
+  rows.push(['إجمالي الذكور', totM]);
+  rows.push(['إجمالي الإناث', totF]);
+  rows.push(['إجمالي الطلاب', totM + totF]);
+
+  const sc = snap.staffCounts || {};
+  const totalStaff = (sc.admin || 0) + (sc.teaching || 0) + (sc.professional || 0) + (sc.worker || 0) + (sc.guard || 0);
+  rows.push(['إجمالي العاملين', totalStaff]);
+  rows.push(['إداري / تدريسي', `${sc.admin || 0} / ${sc.teaching || 0}`]);
+  rows.push(['مهني / مستخدم / حارس', `${sc.professional || 0} / ${sc.worker || 0} / ${sc.guard || 0}`]);
+
+  let html = rows.map(([k, v]) =>
+    `<div class="dir-req-detail"><span>${esc(k)}</span><strong>${esc(String(v ?? '—'))}</strong></div>`
+  ).join('');
+
+  const leaves = Array.isArray(snap.leaveLines) ? snap.leaveLines : [];
+  if (leaves.length) {
+    html += `<div class="dir-req-detail" style="flex-direction:column;align-items:flex-start;gap:4px">
+      <span>إجازات الشهر</span>
+      <small style="color:var(--text-secondary)">${leaves.map(l => esc(l)).join(' — ')}</small>
+    </div>`;
+  }
+  return html;
+}
+
+// موافقة / رفض البيان
+document.getElementById('dir-stmt-approve')?.addEventListener('click', () => doStmtReview('approved'));
+document.getElementById('dir-stmt-reject')?.addEventListener('click',  () => doStmtReview('rejected'));
+
+async function doStmtReview(decision) {
+  if (!_reviewingStmtId) return;
+  const notes      = document.getElementById('dir-stmt-notes')?.value.trim() || null;
+  const msgEl      = document.getElementById('dir-stmt-msg');
+  const approveBtn = document.getElementById('dir-stmt-approve');
+  const rejectBtn  = document.getElementById('dir-stmt-reject');
+  if (approveBtn) approveBtn.disabled = true;
+  if (rejectBtn)  rejectBtn.disabled  = true;
+  if (msgEl) msgEl.hidden = true;
+  try {
+    await reviewMonthlyStatement(_reviewingStmtId, decision, notes);
+    closeStmtModal();
+    showToast(
+      decision === 'approved' ? 'تم اعتماد البيان ✓' : 'تم رفض البيان',
+      '', decision === 'approved' ? 'success' : 'info'
+    );
+    loadStatements();
+  } catch (err) {
+    console.error('[DirStatements] review', err);
+    if (msgEl) {
+      msgEl.className = 'msg msg-error';
+      msgEl.textContent = err?.message ?? 'تعذّرت المراجعة';
+      msgEl.hidden = false;
+    }
+  } finally {
+    if (approveBtn) approveBtn.disabled = false;
+    if (rejectBtn)  rejectBtn.disabled  = false;
+  }
+}
+
+document.getElementById('dir-stmt-cancel')?.addEventListener('click', closeStmtModal);
+document.getElementById('dir-stmt-modal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'dir-stmt-modal') closeStmtModal();
+});
+
+function closeStmtModal() {
+  _reviewingStmtId = null;
+  document.getElementById('dir-stmt-modal')?.classList.add('hidden');
 }

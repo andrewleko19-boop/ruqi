@@ -2712,6 +2712,10 @@ window.NSAMS_DB = {
   upsertStaffLeave,
   deleteStaffLeave,
   getSchoolStudentStats,
+  getMonthlyStatement,
+  submitMonthlyStatement,
+  getDirectorateStatements,
+  reviewMonthlyStatement,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2815,4 +2819,52 @@ async function getSchoolStudentStats(schoolId) {
     g.sections++; g.male += e.male; g.female += e.female;
   }
   return grades;
+}
+
+// ── سير موافقة البيان الشهري (مدرسة → مديرية) ────────────────────────────────
+
+// البيان الحالي لفترة معيّنة (للمدرسة لمعرفة الحالة)
+async function getMonthlyStatement(schoolId, month, year) {
+  const { data, error } = await db.from('monthly_statements')
+    .select('id, status, notes, submitted_at, reviewed_at')
+    .eq('school_id', schoolId).eq('month', month).eq('year', year)
+    .maybeSingle();
+  if (error) throw error;
+  return data;          // null إن لم يوجد
+}
+
+// إرسال/إعادة إرسال البيان (select-then-insert/update لاحترام RLS)
+async function submitMonthlyStatement(schoolId, month, year, snapshot) {
+  const existing = await getMonthlyStatement(schoolId, month, year);
+  if (existing && existing.status === 'approved')
+    throw new Error('البيان معتمد بالفعل ولا يمكن تعديله');
+  if (existing && existing.status === 'submitted')
+    throw new Error('البيان مُرسَل بالفعل وبانتظار المراجعة');
+  const row = { school_id: schoolId, month, year, status: 'submitted',
+                snapshot_data: snapshot, submitted_at: new Date().toISOString(),
+                updated_at: new Date().toISOString() };
+  if (existing) {       // draft|rejected → submitted (RLS يسمح)
+    const { error } = await db.from('monthly_statements')
+      .update(row).eq('id', existing.id);
+    if (error) throw error;
+  } else {              // insert جديد
+    const { error } = await db.from('monthly_statements').insert(row);
+    if (error) throw error;
+  }
+}
+
+// المديرية: كل بيانات مدارسها (RLS يُرشِّح تلقائياً) + اسم المدرسة
+async function getDirectorateStatements() {
+  const { data, error } = await db.from('monthly_statements')
+    .select('id, school_id, month, year, status, notes, submitted_at, reviewed_at, snapshot_data, school:schools(name)')
+    .order('submitted_at', { ascending: false }).limit(300);
+  if (error) throw error;
+  return data ?? [];    // الترتيب «المُرسَل أولاً» يتم في الواجهة
+}
+
+async function reviewMonthlyStatement(statementId, decision, notes = null) {
+  const { error } = await db.rpc('review_monthly_statement', {
+    p_statement_id: statementId, p_decision: decision, p_notes: notes || null });
+  if (error) throw error;
+  return true;
 }

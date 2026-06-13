@@ -4582,6 +4582,89 @@ async function initStatementTab() {
   el('btn-gen-statement')?.addEventListener('click', generateStatementPreview);
   el('btn-print-statement')?.addEventListener('click', printStatement);
   el('btn-export-excel')?.addEventListener('click', exportStatementExcel);
+  el('btn-submit-statement')?.addEventListener('click', submitStatement);
+}
+
+// Render submission status banner + toggle submit button enabled/disabled
+function _renderStatementStatus(st) {
+  const banner = el('stmt-status-banner');
+  const btn    = el('btn-submit-statement');
+  const status = st?.status || 'none';
+  const map = {
+    none:      { cls: 'stmt-status--draft',     txt: 'لم يُرسَل بعد — يمكنك الإرسال للمديرية.' },
+    draft:     { cls: 'stmt-status--draft',     txt: 'مسودة محفوظة — لم تُرسَل بعد.' },
+    submitted: { cls: 'stmt-status--submitted', txt: 'مُرسَل للمديرية — بانتظار المراجعة.' },
+    approved:  { cls: 'stmt-status--approved',  txt: 'معتمد من المديرية ✓' },
+    rejected:  { cls: 'stmt-status--rejected',  txt: 'رُفض من المديرية' + (st?.notes ? ' — ' + st.notes : '') },
+  };
+  const m = map[status] || map.none;
+  if (banner) {
+    banner.className = 'stmt-status-banner ' + m.cls;
+    banner.textContent = m.txt;
+    banner.hidden = false;
+  }
+  if (btn) {
+    const locked = (status === 'submitted' || status === 'approved');
+    btn.disabled = locked;
+    const lbl = el('btn-submit-label');
+    if (lbl) lbl.textContent = status === 'rejected' ? 'إعادة الإرسال للمديرية' : 'إرسال للمديرية';
+  }
+}
+
+// Collect a JSONB snapshot from the current (possibly hand-edited) preview
+function _collectStatementSnapshot(d) {
+  const students = [];
+  const stuBody = el('stmt-students-body');
+  if (stuBody) {
+    for (const row of stuBody.querySelectorAll('tr[data-grade-key]')) {
+      const cells = row.querySelectorAll('.stmt-num');
+      const n = i => parseInt(cells[i]?.textContent || '0', 10) || 0;
+      students.push({
+        key: row.dataset.gradeKey,
+        sections: n(0), enM: n(1), enF: n(2),
+        frM: n(3), frF: n(4), ruM: n(5), ruF: n(6),
+      });
+    }
+  }
+  return {
+    month: d.month, year: d.year,
+    schoolName: d.school.name || '',
+    statisticalNumber: d.school.statistical_number || '',
+    cycle: d.school.cycle || '',
+    students,
+    adminByRole: d.adminByRole,
+    staffCounts: d.staffCounts,
+    leaveLines: d.leaveLines,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+async function submitStatement() {
+  const btn     = el('btn-submit-statement');
+  const label   = el('btn-submit-label');
+  const spinner = el('stmt-submit-spinner');
+  const errEl   = el('stmt-preview-error');
+  if (!confirm('إرسال البيان للمديرية؟ لن يمكن تعديله حتى تُراجعه المديرية.')) return;
+  if (btn) btn.disabled = true;
+  if (label) label.textContent = 'جارٍ الإرسال...';
+  if (spinner) spinner.hidden = false;
+  hide(errEl);
+  try {
+    const d = await buildStatementData();
+    const snapshot = _collectStatementSnapshot(d);
+    await NDB.submitMonthlyStatement(d.school.id, d.month, d.year, snapshot);
+    toast('أُرسل البيان للمديرية ✓', 'success');
+    const st = await NDB.getMonthlyStatement(d.school.id, d.month, d.year);
+    if (spinner) spinner.hidden = true;
+    if (label) label.textContent = 'إرسال للمديرية';
+    _renderStatementStatus(st);   // locks the button (status now 'submitted')
+  } catch (err) {
+    console.error('[Statement] submit', err);
+    if (errEl) { errEl.textContent = 'تعذّر إرسال البيان — ' + (err?.message || err); show(errEl); }
+    if (spinner) spinner.hidden = true;
+    if (label) label.textContent = 'إرسال للمديرية';
+    if (btn) btn.disabled = false;  // failed → allow retry
+  }
 }
 
 async function buildStatementData() {
@@ -4736,6 +4819,15 @@ async function generateStatementPreview() {
     if (previewCard) previewCard.hidden = false;
     const titleEl = el('stmt-preview-title');
     if (titleEl) titleEl.textContent = `${MONTH_LABELS[d.month]} / ${d.year}`;
+
+    // Reflect existing submission status (if any) on the banner + submit button
+    try {
+      const st = await NDB.getMonthlyStatement(d.school.id, d.month, d.year);
+      _renderStatementStatus(st);
+    } catch (e) {
+      console.warn('[Statement] status fetch', e);
+      _renderStatementStatus(null);
+    }
 
     previewCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err) {

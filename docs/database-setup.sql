@@ -2394,3 +2394,106 @@ create policy stmt_changes_dir_sel on public.monthly_statement_changes
   );
 
 grant select, insert, update, delete on public.monthly_statement_changes to authenticated;
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- 14.9  سير موافقة البيان الشهري (مدرسة → مديرية)
+--   يحاكي review_school_request + _notify_dir_new_request (القسم 6).
+-- ────────────────────────────────────────────────────────────────────────────
+
+-- 14.9.1  RPC مراجعة البيان — المديرية توافق/ترفض بياناً مُرسَلاً وتُشعر المدرسة
+create or replace function public.review_monthly_statement(
+  p_statement_id uuid,
+  p_decision     text,
+  p_notes        text default null
+) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  v_dir         uuid;
+  v_stmt        public.monthly_statements;
+  v_school_name text;
+begin
+  -- تحقق من الدور
+  select u.directorate_id into v_dir
+  from public.users u
+  where u.id = auth.uid() and u.role = 'directorate_user';
+  if v_dir is null then
+    raise exception 'غير مصرّح: هذه الدالة لمستخدمي المديرية فقط';
+  end if;
+
+  if p_decision not in ('approved','rejected') then
+    raise exception 'قيمة القرار غير صالحة';
+  end if;
+
+  -- جلب البيان وتحقق من الملكية والحالة
+  select s.* into v_stmt
+  from public.monthly_statements s
+  join public.schools sc on sc.id = s.school_id
+  where s.id = p_statement_id
+    and sc.directorate_id = v_dir
+    and s.status = 'submitted';
+  if not found then
+    raise exception 'البيان غير موجود أو خارج نطاق صلاحيتك أو ليس مُرسَلاً';
+  end if;
+
+  -- تحديث الحالة
+  update public.monthly_statements set
+    status      = p_decision,
+    notes       = p_notes,
+    reviewed_by = auth.uid(),
+    reviewed_at = now(),
+    updated_at  = now()
+  where id = p_statement_id;
+
+  select name into v_school_name from public.schools where id = v_stmt.school_id;
+
+  -- إشعار جميع مدراء المدرسة بالنتيجة
+  perform public.notify_user(
+    u.id,
+    case p_decision when 'approved' then 'statement_approved' else 'statement_rejected' end,
+    case p_decision when 'approved' then 'اعتُمد البيان الشهري ✓' else 'رُفض البيان الشهري' end,
+    coalesce(p_notes,
+      case p_decision
+        when 'approved' then 'تمت الموافقة على البيان.'
+        else                 'رُفض البيان من قبل المديرية.'
+      end),
+    'monthly_statements',
+    p_statement_id
+  )
+  from public.users u
+  where u.school_id = v_stmt.school_id and u.role = 'school_admin';
+end; $$;
+
+revoke all on function public.review_monthly_statement(uuid, text, text) from public, anon;
+grant execute on function public.review_monthly_statement(uuid, text, text) to authenticated;
+
+-- 14.9.2  Trigger إشعار المديرية عند إرسال بيان جديد (draft/none → submitted)
+create or replace function public._notify_dir_statement_submitted()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_dir         uuid;
+  v_school_name text;
+begin
+  -- يُطلق فقط عند الانتقال إلى حالة submitted (لا عند approved/rejected/draft)
+  if NEW.status <> 'submitted' then return NEW; end if;
+  if TG_OP = 'UPDATE' and OLD.status = 'submitted' then return NEW; end if;  -- تجنّب التكرار
+
+  select directorate_id, name into v_dir, v_school_name
+  from public.schools where id = NEW.school_id;
+
+  perform public.notify_user(
+    u.id,
+    'statement_submitted',
+    'بيان شهري جديد للمراجعة',
+    coalesce(v_school_name, 'مدرسة') || ' — ' || NEW.month || '/' || NEW.year,
+    'monthly_statements',
+    NEW.id
+  )
+  from public.users u
+  where u.directorate_id = v_dir and u.role = 'directorate_user';
+  return NEW;
+end; $$;
+
+drop trigger if exists trg_notify_dir_statement_submitted on public.monthly_statements;
+create trigger trg_notify_dir_statement_submitted
+  after insert or update on public.monthly_statements
+  for each row execute function public._notify_dir_statement_submitted();

@@ -1381,3 +1381,26 @@ select.csel-native {
   padding-top: 12px;
   border-top: 1px solid var(--clr-border-lt, #E2E8F0);
 }
+.stmt-status-banner {
+  margin-bottom: 12px;
+  padding: 9px 13px;
+  border-radius: var(--r-md, 10px);
+  font-size: .85rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.stmt-status--draft {
+  background: #f1f5f9; color: #475569; border-color: #e2e8f0;
+}
+.stmt-status--submitted {
+  background: var(--clr-warning-bg, #FEF3C7); color: #92400e;
+  border-color: var(--clr-warning-brd, #FCD34D);
+}
+.stmt-status--approved {
+  background: var(--clr-success-bg, #dcfce7); color: #166534;
+  border-color: var(--clr-success-brd, #86efac);
+}
+.stmt-status--rejected {
+  background: var(--clr-danger-bg, #FEE2E2); color: #991b1b;
+  border-color: var(--clr-danger-brd, #FCA5A5);
+}

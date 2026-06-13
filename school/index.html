@@ -1918,6 +1918,9 @@
         <!-- School header info (read-only summary) -->
         <div id="stmt-header-summary" class="stmt-header-grid" style="margin-bottom:12px;font-size:.85rem;color:#334155"></div>
 
+        <!-- Submission status banner -->
+        <div id="stmt-status-banner" class="stmt-status-banner" hidden></div>
+
         <!-- Student count table -->
         <p class="form-section-label">أعداد الطلاب</p>
         <table class="stmt-table" id="stmt-students-table" dir="rtl">
@@ -1986,10 +1989,15 @@
             <svg class="icon icon-sm"><use href="#ic-printer"/></svg>
             طباعة PDF
           </button>
-          <button type="button" class="btn btn-primary" id="btn-export-excel">
+          <button type="button" class="btn btn-secondary" id="btn-export-excel">
             <svg class="icon icon-sm"><use href="#ic-list"/></svg>
             <span id="btn-export-label">تصدير Excel</span>
             <span class="spinner" id="stmt-export-spinner" hidden></span>
+          </button>
+          <button type="button" class="btn btn-primary" id="btn-submit-statement">
+            <svg class="icon icon-sm"><use href="#ic-send"/></svg>
+            <span id="btn-submit-label">إرسال للمديرية</span>
+            <span class="spinner" id="stmt-submit-spinner" hidden></span>
           </button>
         </div>
       </div>

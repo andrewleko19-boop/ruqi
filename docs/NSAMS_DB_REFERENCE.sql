@@ -574,6 +574,14 @@ end$$;
 --    (statement_id, change_type, staff_id, change_data, reason, effective_date)
 --    change_type: added | removed | modified | leave | transfer
 --
+--  سير موافقة البيان (§14.9):
+--    review_monthly_statement(p_statement_id, p_decision, p_notes)  — RPC security definer
+--      المديرية توافق/ترفض بياناً status='submitted' → approved|rejected
+--      تُحدّث reviewed_by/reviewed_at/notes وتُشعر مدراء المدرسة (notify_user)
+--    trg_notify_dir_statement_submitted  — after insert/update على monthly_statements
+--      عند الانتقال إلى submitted تُشعر directorate_user في مديرية المدرسة
+--      (أنواع الإشعار: statement_submitted / statement_approved / statement_rejected)
+--
 -- ════════════════════════════════════════════════════════════════════════════
 --  ١٠. قوالب إدراج جاهزة (طلاب / موجهين)
 -- ════════════════════════════════════════════════════════════════════════════
