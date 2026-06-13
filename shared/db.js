@@ -4,7 +4,7 @@ const SUPABASE_URL      = "https://xocrzpjfvizgnsybegwr.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_HCVzNgEJmov38FWXRO1uFw_DG1d87Y4";
 
 const LAYER = location.pathname.split('/').filter(Boolean).find(
-  s => ['school', 'teacher', 'directorate', 'ministry', 'admin'].includes(s)
+  s => ['school', 'teacher', 'directorate', 'ministry', 'admin', 'parent'].includes(s)
 ) || 'root';
 
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -2547,6 +2547,154 @@ async function getAuditLogAll({ schoolId, from, to, offset = 0, limit = 100 } = 
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────
+// ── بوابة ولي الأمر — Parent Portal ──────────────────────────────────────────
+// OTP مخصَّص (قابل للاستبدال بأي خلفية عبر Edge Function parent-auth)
+// الجلسة: email مُركَّب {phone}@parent.nsams.local مع Supabase Auth
+// الربط: parent_links (user_id ↔ student_id) يُنشأ تلقائياً في Edge Function
+
+const PARENT_AUTH_URL = `${SUPABASE_URL}/functions/v1/parent-auth`;
+const EXCUSE_BUCKET = 'excuse-photos';
+
+function _normalizePhone(raw) {
+  let p = String(raw ?? '').replace(/[\s\-\(\)]/g, '');
+  if (!p) return '';
+  if (p.startsWith('00963')) p = '+963' + p.slice(5);
+  else if (p.startsWith('0963')) p = '+963' + p.slice(4);
+  else if (p.startsWith('963')) p = '+' + p;
+  else if (p.startsWith('09')) p = '+963' + p.slice(1);
+  else if (p.startsWith('+9639')) { /* already normalized */ }
+  return p;
+}
+
+async function parentRequestOtp(phone) {
+  const normalized = _normalizePhone(phone);
+  if (!normalized) throw new Error('رقم الهاتف غير صالح');
+  const res = await fetch(PARENT_AUTH_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json',
+               apikey: SUPABASE_ANON_KEY, },
+    body: JSON.stringify({ action: 'request_otp', phone: normalized }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error ?? 'تعذَّر إرسال رمز التحقق');
+  return true;
+}
+
+async function parentVerifyOtp(phone, code) {
+  const normalized = _normalizePhone(phone);
+  const res = await fetch(PARENT_AUTH_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json',
+               apikey: SUPABASE_ANON_KEY, },
+    body: JSON.stringify({ action: 'verify_otp', phone: normalized, code: String(code).trim() }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error ?? 'رمز التحقق غير صحيح');
+  const { access_token, refresh_token } = body;
+  if (!access_token) throw new Error('استجابة غير متوقعة من الخادم');
+  const { error } = await db.auth.setSession({ access_token, refresh_token });
+  if (error) throw error;
+  return true;
+}
+
+async function parentLogout() {
+  await db.auth.signOut();
+}
+
+async function parentGetMyStudents() {
+  const { data, error } = await db
+    .from('parent_links')
+    .select('student:students(id, full_name, gender, class_id, school_id, school:schools(id, name, contact_phone, work_start_time), class:classes(id, name, grade, section))')
+    .order('linked_at');
+  if (error) throw error;
+  return (data ?? []).map(r => r.student).filter(Boolean);
+}
+
+async function parentGetStudentAttendance(studentId, year, month) {
+  // year: رقم 4 أرقام، month: 1-12
+  const from = `${year}-${String(month).padStart(2,'0')}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const to = `${year}-${String(month).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+  const { data, error } = await db
+    .from('daily_student_attendance')
+    .select('date, status, reason')
+    .eq('student_id', studentId)
+    .gte('date', from)
+    .lte('date', to)
+    .order('date');
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function parentGetStudentGrades(studentId, academicYear) {
+  const { data, error } = await db
+    .from('student_grades')
+    .select('subject_id, component_id, semester, mark, subject:subjects(name, max_mark, display_order), component:grade_components(name, max_mark, display_order)')
+    .eq('student_id', studentId)
+    .eq('academic_year', academicYear)
+    .order('semester');
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function parentGetHolidays(year) {
+  const from = `${year}-01-01`;
+  const to   = `${year}-12-31`;
+  const { data, error } = await db
+    .from('school_holidays')
+    .select('date, name')
+    .gte('date', from)
+    .lte('date', to)
+    .order('date');
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function parentGetAbsenceExcuses(studentId) {
+  const { data, error } = await db
+    .from('absence_excuses')
+    .select('id, date, reason, photo_url, status, created_at')
+    .eq('student_id', studentId)
+    .order('date', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function parentSubmitAbsenceExcuse(studentId, schoolId, date, reason, photoUrl) {
+  const payload = {
+    student_id: studentId,
+    school_id:  schoolId,
+    date,
+    reason,
+    photo_url:  photoUrl || null,
+  };
+  const { error } = await db.from('absence_excuses').insert(payload);
+  if (error) {
+    if (/unique|duplicate/i.test(error.message))
+      throw new Error('تم تقديم عذر لهذا اليوم مسبقاً');
+    throw error;
+  }
+  return true;
+}
+
+async function parentUploadExcusePhoto(dataUri) {
+  const m = /^data:([^;]+);base64,(.*)$/s.exec(dataUri);
+  if (!m) return dataUri;
+  const mime = m[1];
+  const b64  = m[2];
+  const ext  = (mime.split('/')[1] || 'jpg').replace(/[^a-z0-9]/gi, '') || 'jpg';
+  const binary = atob(b64);
+  const bytes  = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const path = `excuses/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await db.storage
+    .from(EXCUSE_BUCKET)
+    .upload(path, bytes, { contentType: mime, upsert: false });
+  if (error) throw error;
+  const { data } = db.storage.from(EXCUSE_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
+}
+
 window.NSAMS_DB = {
   // Auth
   login,
@@ -2716,6 +2864,18 @@ window.NSAMS_DB = {
   submitMonthlyStatement,
   getDirectorateStatements,
   reviewMonthlyStatement,
+
+  // Parent Portal (بوابة ولي الأمر)
+  parentRequestOtp,
+  parentVerifyOtp,
+  parentLogout,
+  parentGetMyStudents,
+  parentGetStudentAttendance,
+  parentGetStudentGrades,
+  parentGetHolidays,
+  parentGetAbsenceExcuses,
+  parentSubmitAbsenceExcuse,
+  parentUploadExcusePhoto,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
