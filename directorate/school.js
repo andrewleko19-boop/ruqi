@@ -7,6 +7,7 @@ const {
   getSchoolTrend,
   getDirectorateCompliance,
   getReportsForDirectorate,
+  resolveReportPhotos,
   localDateISO,
 } = window.NSAMS_DB;
 
@@ -400,7 +401,9 @@ function setupReportPhotoDelegation() {
     if (!btn) return;
     const report = schoolReports.find(r => r.id === btn.dataset.id);
     const urls = Array.isArray(report?.media_urls) ? report.media_urls.filter(Boolean) : [];
-    if (urls.length > 0) openLightbox(urls, 0);
+    if (urls.length > 0) {
+      resolveReportPhotos(urls).then(resolved => { if (resolved.length) openLightbox(resolved, 0); });
+    }
   });
 }
 

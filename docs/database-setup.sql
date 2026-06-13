@@ -2497,3 +2497,152 @@ drop trigger if exists trg_notify_dir_statement_submitted on public.monthly_stat
 create trigger trg_notify_dir_statement_submitted
   after insert or update on public.monthly_statements
   for each row execute function public._notify_dir_statement_submitted();
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+--  SECTION P — Parent Portal (بوابة ولي الأمر)
+--
+--  ⚠️  خطوتان منفصلتان في SQL Editor (PostgreSQL لا يسمح باستخدام قيمة enum
+--  جديدة في نفس transaction التي أُضيفت فيها):
+--
+--  الخطوة 1: شغِّل سطر P.1 وحده → Run → انتظر "Success"
+--  الخطوة 2: شغِّل بقية القسم (P.2 فصاعداً) دفعةً واحدة
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- P.1 — تمديد enum الأدوار (RUN THIS ALONE FIRST, THEN RUN THE REST SEPARATELY)
+alter type public.user_role add value if not exists 'parent';
+
+-- ─── من هنا تبدأ الخطوة 2 (بعد نجاح P.1 أعلاه) ───────────────────────────
+
+-- P.2 — رموز التحقق OTP (تُخزَّن مُجزَّأة، تُدار حصراً من Edge Function)
+create table if not exists public.parent_otps (
+  id          uuid primary key default gen_random_uuid(),
+  phone       text not null,
+  code_hash   text not null,
+  expires_at  timestamptz not null,
+  used_at     timestamptz,
+  attempts    smallint not null default 0,
+  created_at  timestamptz default now()
+);
+alter table public.parent_otps enable row level security;
+create index if not exists parent_otps_phone_idx on public.parent_otps(phone, expires_at);
+
+-- لا سياسات مباشرة من المتصفح — Edge Function تكتب بـ service_role فقط
+-- المتصفح لا يملك أي صلاحية على هذا الجدول
+drop policy if exists parent_otps_no_access on public.parent_otps;
+create policy parent_otps_no_access on public.parent_otps
+  for all to authenticated using (false);
+
+-- P.3 — ربط المستخدم (parent) بطلابه المرتبطين
+create table if not exists public.parent_links (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  student_id  uuid not null references public.students(id) on delete cascade,
+  linked_at   timestamptz default now(),
+  unique(user_id, student_id)
+);
+alter table public.parent_links enable row level security;
+
+drop policy if exists parent_read_own_links on public.parent_links;
+create policy parent_read_own_links on public.parent_links
+  for select to authenticated
+  using (user_id = auth.uid());
+
+-- P.4 — عذر الغياب المُقدَّم من ولي الأمر
+create table if not exists public.absence_excuses (
+  id              uuid primary key default gen_random_uuid(),
+  student_id      uuid not null references public.students(id),
+  school_id       uuid not null references public.schools(id),
+  date            date not null,
+  reason          text not null,
+  photo_url       text,
+  status          text not null default 'pending'
+                  check (status in ('pending','accepted','rejected')),
+  submitted_by    uuid references auth.users(id),
+  reviewed_by     uuid references public.users(id),
+  review_note     text,
+  created_at      timestamptz default now(),
+  updated_at      timestamptz default now(),
+  unique(student_id, date)
+);
+alter table public.absence_excuses enable row level security;
+create index if not exists absence_excuses_school_date_idx
+  on public.absence_excuses(school_id, date desc);
+
+-- P.5 — دالة مساعدة
+create or replace function public.current_user_is_parent()
+returns boolean language sql security definer stable as $$
+  select current_user_role() = 'parent'
+$$;
+
+-- P.6 — سياسات RLS لقراءة بيانات الطالب من ولي الأمر
+
+-- الطلاب: ولي الأمر يرى أبناءه المرتبطين فقط
+drop policy if exists parent_read_linked_students on public.students;
+create policy parent_read_linked_students on public.students
+  for select to authenticated
+  using (
+    current_user_is_parent() and exists (
+      select 1 from public.parent_links pl
+      where pl.user_id = auth.uid() and pl.student_id = students.id
+    )
+  );
+
+-- الغيابات اليومية: ولي الأمر يرى غيابات أبنائه فقط
+drop policy if exists parent_read_linked_attendance on public.daily_student_attendance;
+create policy parent_read_linked_attendance on public.daily_student_attendance
+  for select to authenticated
+  using (
+    current_user_is_parent() and exists (
+      select 1 from public.parent_links pl
+      where pl.user_id = auth.uid() and pl.student_id = daily_student_attendance.student_id
+    )
+  );
+
+-- الدرجات: ولي الأمر يرى درجات أبنائه فقط
+drop policy if exists parent_read_linked_grades on public.student_grades;
+create policy parent_read_linked_grades on public.student_grades
+  for select to authenticated
+  using (
+    current_user_is_parent() and exists (
+      select 1 from public.parent_links pl
+      where pl.user_id = auth.uid() and pl.student_id = student_grades.student_id
+    )
+  );
+
+-- العطل الرسمية: أي مستخدم أصيل يستطيع القراءة (يشمل ولي الأمر)
+drop policy if exists authenticated_read_holidays on public.school_holidays;
+create policy authenticated_read_holidays on public.school_holidays
+  for select to authenticated using (true);
+
+-- P.7 — سياسات عذر الغياب
+
+-- ولي الأمر يُدرج/يقرأ أعذار أبنائه المرتبطين فقط
+drop policy if exists parent_insert_excuse on public.absence_excuses;
+create policy parent_insert_excuse on public.absence_excuses
+  for insert to authenticated
+  with check (
+    current_user_is_parent() and exists (
+      select 1 from public.parent_links pl
+      where pl.user_id = auth.uid() and pl.student_id = absence_excuses.student_id
+    )
+  );
+
+drop policy if exists parent_read_own_excuses on public.absence_excuses;
+create policy parent_read_own_excuses on public.absence_excuses
+  for select to authenticated
+  using (
+    current_user_is_parent() and exists (
+      select 1 from public.parent_links pl
+      where pl.user_id = auth.uid() and pl.student_id = absence_excuses.student_id
+    )
+  );
+
+-- مدير المدرسة يرى الأعذار الواردة لمدرسته
+drop policy if exists school_admin_read_excuses on public.absence_excuses;
+create policy school_admin_read_excuses on public.absence_excuses
+  for select to authenticated
+  using (
+    current_user_role() = 'school_admin'
+    and school_id = current_user_school_id()
+  );

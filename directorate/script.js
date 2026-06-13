@@ -17,6 +17,7 @@ const {
   reviewSchoolRequest,
   getDirectorateStatements,
   reviewMonthlyStatement,
+  resolveReportPhotos,
   localDateISO,
 } = window.NSAMS_DB;
 
@@ -625,7 +626,9 @@ function setupReportActionDelegation() {
     const { action, id } = btn.dataset;
     if (action === 'photos') {
       const r = allReports.find(x => x.id === id);
-      if (r?.media_urls?.length) openLightbox(r.media_urls, 0);
+      if (r?.media_urls?.length) {
+        resolveReportPhotos(r.media_urls).then(urls => { if (urls.length) openLightbox(urls, 0); });
+      }
       return;
     }
     handleStatusUpdate(id, action);
