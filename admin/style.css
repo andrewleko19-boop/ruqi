@@ -328,6 +328,18 @@ td.muted { color: var(--text-muted); font-size: 12px; }
 .role-directorate     { background: rgba(240,180,41,.10); color: #f0c84a; border: 1px solid rgba(240,180,41,.22); }
 .role-ministry        { background: rgba(72,199,142,.10); color: #5dd4a3; border: 1px solid rgba(72,199,142,.22); }
 
+.badge-inactive {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: rgba(248,113,113,.10);
+  color: #f87171;
+  border: 1px solid rgba(248,113,113,.25);
+}
+
 /* ── Status badge ─────────────────────────────── */
 .badge {
   display: inline-block;

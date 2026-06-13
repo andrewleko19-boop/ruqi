@@ -427,7 +427,7 @@ async function loadUsers() {
 
   const { data, error } = await supabase
     .from('users')
-    .select('id, full_name, role, school_id, directorate_id, schools(name), directorates(name)')
+    .select('id, full_name, role, is_active, school_id, directorate_id, schools(name), directorates(name)')
     .in('role', ['school_admin', 'directorate_user', 'ministry_user'])
     .order('role')
     .order('full_name');
@@ -454,10 +454,11 @@ function renderUsers() {
       <td>${esc(u.full_name ?? '—')}</td>
       <td><span class="role-badge ${roleBadgeClass(u.role)}">${roleName(u.role)}</span></td>
       <td>${esc(org)}</td>
-      <td>${u.role !== 'ministry_user' ? `
-        <button class="btn btn-danger btn-sm" data-deactivate="${esc(u.id)}" data-name="${esc(u.full_name)}">
-          تعطيل
-        </button>` : ''}
+      <td>${u.role !== 'ministry_user' ? (
+        u.is_active === false
+          ? `<span class="badge-inactive">مُعطَّل</span>`
+          : `<button class="btn btn-danger btn-sm" data-deactivate="${esc(u.id)}" data-name="${esc(u.full_name)}">تعطيل</button>`
+      ) : ''}
       </td>
     </tr>`;
   }).join('');

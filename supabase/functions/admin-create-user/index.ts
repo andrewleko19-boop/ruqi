@@ -142,6 +142,7 @@ Deno.serve(async (req) => {
         return json({ error: "لا يمكن تعطيل مستخدم وزارة من هنا" }, 403);
       const { error } = await admin.auth.admin.updateUserById(userId, { ban_duration: "876000h" });
       if (error) return json({ error: error.message }, 400);
+      await admin.from("users").update({ is_active: false }).eq("id", userId);
       return json({ ok: true });
     }
 

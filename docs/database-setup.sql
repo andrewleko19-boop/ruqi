@@ -273,6 +273,14 @@ create policy schools_ministry_update on public.schools
 --      where email = '<البريد-القديم-بنطاق-.test>';
 --      -- آمن: الربط مع public.users عبر الـ UID لا البريد، فالدور لا يتأثر.
 
+-- 2.8  is_active على public.users — لعرض حالة التعطيل في لوحة المشرف
+--
+--  حظر المستخدم يتم عبر auth.admin.updateUserById (ban_duration)، لكن لوحة المشرف
+--  تقرأ من public.users فقط ولا ترى حالة الحظر. العمود is_active يُزامَن مع الحظر
+--  في Edge Function (admin-create-user / action=deactivate) ليظهر شارة «مُعطَّل»
+--  في الجدول بدلاً من زر «تعطيل».
+alter table public.users add column if not exists is_active boolean not null default true;
+
 
 -- ════════════════════════════════════════════════════════════════════════════
 --  SECTION 3 — Teacher account credentials (principal-provisioned logins)
