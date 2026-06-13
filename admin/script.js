@@ -244,6 +244,7 @@ function showDashboard(email) {
     loadUsers();
     populateAuditSchoolFilter();
     loadHolidays();
+    loadLookups();
   });
 }
 
@@ -275,7 +276,7 @@ async function loadDirectorates() {
   allDirectorates = data ?? [];
 
   // Populate dropdowns
-  [smDirectorate, umDir].forEach(sel => {
+  [smDirectorate, umDir, lkDirFilter].forEach(sel => {
     while (sel.options.length > 1) sel.remove(1);
     allDirectorates.forEach(d => {
       const o = new Option(`${d.name} — ${d.governorate}`, d.id);
@@ -767,6 +768,246 @@ delHolidayConfirm.addEventListener('click', async () => {
     console.error('[admin] deleteHoliday', e);
   } finally {
     delHolidayConfirm.disabled = false;
+  }
+});
+
+// ══════════════════════════════════════════════
+//  القوائم المرجعية (lookup_lists)
+// ══════════════════════════════════════════════
+
+const LIST_TYPE_LABELS = {
+  admin_role:       'الأعمال الإدارية',
+  specialization:   'الاختصاصات',
+  certificate:      'الشهادات',
+  higher_degree:    'الشهادات العليا',
+  leave_type:       'أنواع الإجازات',
+  ministerial_doc:  'الوثائق / الموافقات',
+  support_job:      'الأعمال المساندة',
+  educational_zone: 'المناطق التعليمية (لكل مديرية)',
+};
+
+// Lookups DOM refs
+const lkTypeFilter    = document.getElementById('lk-type-filter');
+const lkDirWrap       = document.getElementById('lk-dir-wrap');
+const lkDirFilter     = document.getElementById('lk-dir-filter');
+const addLookupBtn    = document.getElementById('add-lookup-btn');
+const lookupsCount    = document.getElementById('lookups-count');
+const lookupsLoading  = document.getElementById('lookups-loading');
+const lookupsTableWrap= document.getElementById('lookups-table-wrap');
+const lookupsEmpty    = document.getElementById('lookups-empty');
+const lookupsHint     = document.getElementById('lookups-hint');
+const lookupsTbody    = document.getElementById('lookups-tbody');
+const lookupModal     = document.getElementById('lookup-modal');
+const lookupModalTitle= document.getElementById('lookup-modal-title');
+const lookupModalError= document.getElementById('lookup-modal-error');
+const lookupModalClose= document.getElementById('lookup-modal-close');
+const lookupModalCancel=document.getElementById('lookup-modal-cancel');
+const lookupModalSave = document.getElementById('lookup-modal-save');
+const lkTypeLabel     = document.getElementById('lk-type-label');
+const lkDirRow        = document.getElementById('lk-dir-row');
+const lkDirLabel      = document.getElementById('lk-dir-label');
+const lkValue         = document.getElementById('lk-value');
+const lkSort          = document.getElementById('lk-sort');
+const lkActive        = document.getElementById('lk-active');
+const delLookupModal  = document.getElementById('delete-lookup-modal');
+const delLookupName   = document.getElementById('del-lookup-name');
+const delLookupError  = document.getElementById('del-lookup-error');
+const delLookupClose  = document.getElementById('del-lookup-close');
+const delLookupCancel = document.getElementById('del-lookup-cancel');
+const delLookupConfirm= document.getElementById('del-lookup-confirm');
+
+let allLookups = [];
+let editingLookupId = null;
+let pendingDeleteLookupId = null;
+
+// Build the list_type filter options, then enhance all three selects.
+lkTypeFilter.innerHTML = Object.entries(LIST_TYPE_LABELS)
+  .map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('');
+CustomSelect.enhance('lk-type-filter');
+CustomSelect.enhance('lk-dir-filter');
+CustomSelect.enhance('lk-active');
+
+function lkIsPerDirectorate() { return lkTypeFilter.value === 'educational_zone'; }
+
+function syncLookupDir() {
+  lkDirWrap.style.display = lkIsPerDirectorate() ? 'inline-block' : 'none';
+}
+
+async function loadLookups() {
+  syncLookupDir();
+  const listType = lkTypeFilter.value;
+  const per      = listType === 'educational_zone';
+  const dirId    = lkDirFilter.value;
+
+  hide(lookupsTableWrap);
+  hide(lookupsEmpty);
+  hide(lookupsHint);
+
+  // educational_zone needs a directorate selected first
+  if (per && !dirId) {
+    if (addLookupBtn) addLookupBtn.disabled = true;
+    lookupsCount.textContent = '—';
+    show(lookupsHint);
+    return;
+  }
+  if (addLookupBtn) addLookupBtn.disabled = false;
+
+  show(lookupsLoading);
+  try {
+    let q = supabase.from('lookup_lists')
+      .select('id, list_type, value, sort_order, active, directorate_id')
+      .eq('list_type', listType)
+      .order('sort_order').order('value');
+    q = per ? q.eq('directorate_id', dirId) : q.is('directorate_id', null);
+    const { data, error } = await q;
+    if (error) throw error;
+    allLookups = data ?? [];
+  } catch (e) {
+    console.error('[admin] loadLookups', e);
+    allLookups = [];
+  }
+  hide(lookupsLoading);
+  lookupsCount.textContent = allLookups.length;
+
+  if (!allLookups.length) { show(lookupsEmpty); return; }
+
+  lookupsTbody.innerHTML = allLookups.map((r, i) => `
+    <tr>
+      <td class="muted">${i + 1}</td>
+      <td>${esc(r.value)}</td>
+      <td class="muted">${r.sort_order ?? 0}</td>
+      <td>${r.active
+            ? 'نشط'
+            : '<span style="color:var(--text-dim)">معطّل</span>'}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" data-edit-lookup="${esc(r.id)}">
+          <svg width="13" height="13"><use href="#icon-edit"/></svg>
+          تعديل
+        </button>
+        <button class="btn btn-danger btn-sm" data-del-lookup="${esc(r.id)}" data-del-name="${esc(r.value)}">
+          حذف
+        </button>
+      </td>
+    </tr>`).join('');
+  show(lookupsTableWrap);
+
+  lookupsTbody.querySelectorAll('[data-edit-lookup]').forEach(btn => {
+    btn.addEventListener('click', () => openEditLookup(btn.dataset.editLookup));
+  });
+  lookupsTbody.querySelectorAll('[data-del-lookup]').forEach(btn => {
+    btn.addEventListener('click', () => openDeleteLookup(btn.dataset.delLookup, btn.dataset.delName));
+  });
+}
+
+function openAddLookup() {
+  const listType = lkTypeFilter.value;
+  const per = listType === 'educational_zone';
+  if (per && !lkDirFilter.value) return;   // guard (button is disabled in this state)
+  editingLookupId = null;
+  lookupModalTitle.textContent = 'إضافة عنصر';
+  lkTypeLabel.value = LIST_TYPE_LABELS[listType] ?? listType;
+  lkDirRow.style.display = per ? '' : 'none';
+  if (per) {
+    const d = allDirectorates.find(x => x.id === lkDirFilter.value);
+    lkDirLabel.value = d ? `${d.name} — ${d.governorate}` : '';
+  }
+  lkValue.value = '';
+  lkSort.value  = allLookups.length ? (Math.max(...allLookups.map(r => r.sort_order || 0)) + 1) : 0;
+  lkActive.value = 'true'; CustomSelect.refresh(lkActive);
+  clearError(lookupModalError);
+  show(lookupModal);
+  lkValue.focus();
+}
+
+function openEditLookup(id) {
+  const r = allLookups.find(x => x.id === id);
+  if (!r) return;
+  editingLookupId = id;
+  lookupModalTitle.textContent = 'تعديل عنصر';
+  lkTypeLabel.value = LIST_TYPE_LABELS[r.list_type] ?? r.list_type;
+  const per = r.list_type === 'educational_zone';
+  lkDirRow.style.display = per ? '' : 'none';
+  if (per) {
+    const d = allDirectorates.find(x => x.id === r.directorate_id);
+    lkDirLabel.value = d ? `${d.name} — ${d.governorate}` : '';
+  }
+  lkValue.value = r.value ?? '';
+  lkSort.value  = r.sort_order ?? 0;
+  lkActive.value = r.active ? 'true' : 'false'; CustomSelect.refresh(lkActive);
+  clearError(lookupModalError);
+  show(lookupModal);
+  lkValue.focus();
+}
+
+function closeLookupModal() { hide(lookupModal); }
+
+lookupModalClose.addEventListener('click', closeLookupModal);
+lookupModalCancel.addEventListener('click', closeLookupModal);
+addLookupBtn.addEventListener('click', openAddLookup);
+lkTypeFilter.addEventListener('change', loadLookups);
+lkDirFilter.addEventListener('change', loadLookups);
+
+lookupModalSave.addEventListener('click', async () => {
+  clearError(lookupModalError);
+  const value = lkValue.value.trim();
+  if (!value) { showError(lookupModalError, 'القيمة مطلوبة.'); return; }
+
+  const editing = editingLookupId ? allLookups.find(r => r.id === editingLookupId) : null;
+  const listType = editing ? editing.list_type : lkTypeFilter.value;
+  const per = listType === 'educational_zone';
+  const dirId = per ? (editing ? editing.directorate_id : lkDirFilter.value) : null;
+  if (per && !dirId) { showError(lookupModalError, 'يجب اختيار مديرية.'); return; }
+
+  const row = {
+    list_type:      listType,
+    value,
+    sort_order:     lkSort.value !== '' ? (parseInt(lkSort.value, 10) || 0) : 0,
+    active:         lkActive.value === 'true',
+    directorate_id: dirId,
+  };
+
+  lookupModalSave.disabled = true;
+  try {
+    let err;
+    if (editingLookupId) {
+      ({ error: err } = await supabase.from('lookup_lists').update(row).eq('id', editingLookupId));
+    } else {
+      ({ error: err } = await supabase.from('lookup_lists').insert(row));
+    }
+    if (err) throw err;
+    closeLookupModal();
+    await loadLookups();
+  } catch (e) {
+    const dup = /duplicate|unique|already/i.test(e.message);
+    showError(lookupModalError, dup ? 'هذه القيمة موجودة مسبقاً في هذه القائمة.' : e.message);
+  } finally {
+    lookupModalSave.disabled = false;
+  }
+});
+
+function openDeleteLookup(id, name) {
+  pendingDeleteLookupId = id;
+  delLookupName.textContent = name;
+  clearError(delLookupError);
+  show(delLookupModal);
+}
+
+function closeDeleteLookupModal() { hide(delLookupModal); pendingDeleteLookupId = null; }
+delLookupClose.addEventListener('click', closeDeleteLookupModal);
+delLookupCancel.addEventListener('click', closeDeleteLookupModal);
+
+delLookupConfirm.addEventListener('click', async () => {
+  if (!pendingDeleteLookupId) return;
+  delLookupConfirm.disabled = true;
+  try {
+    const { error } = await supabase.from('lookup_lists').delete().eq('id', pendingDeleteLookupId);
+    if (error) throw error;
+    closeDeleteLookupModal();
+    await loadLookups();
+  } catch (e) {
+    showError(delLookupError, e.message);
+  } finally {
+    delLookupConfirm.disabled = false;
   }
 });
 

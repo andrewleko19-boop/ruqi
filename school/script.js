@@ -5179,6 +5179,7 @@ ${adminHtml}
   setTimeout(() => { win.focus(); win.print(); }, 600);
 }
 
+CustomSelect.enhance('stmt-month-sel');
 CustomSelect.enhance('stmt-edu-zone');
 CustomSelect.enhance('stmt-b-ownership');
 
