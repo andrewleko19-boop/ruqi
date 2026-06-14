@@ -340,6 +340,28 @@ td.muted { color: var(--text-muted); font-size: 12px; }
   border: 1px solid rgba(248,113,113,.25);
 }
 
+/* ── Credentials modal fields ─────────────────── */
+.cred-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+.cred-field label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.cred-field span {
+  font-size: 0.9rem;
+  font-family: monospace;
+  color: var(--text-primary);
+  background: var(--bg);
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  word-break: break-all;
+}
+
 /* ── Status badge ─────────────────────────────── */
 .badge {
   display: inline-block;

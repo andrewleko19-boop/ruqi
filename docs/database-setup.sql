@@ -282,6 +282,76 @@ create policy schools_ministry_update on public.schools
 alter table public.users add column if not exists is_active boolean not null default true;
 
 
+-- 2.9  admin_credentials — حفظ بيانات دخول مدراء المدارس والمديريات
+--
+--  تُكتب الصفوف عبر Edge Function (service role) عند إنشاء حساب school_admin
+--  أو directorate_user. ministry_user يرى الكل؛ directorate_user يرى فقط
+--  مدراء مدارس مديريته.
+create table if not exists public.admin_credentials (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references public.users(id) on delete cascade,
+  email      text not null,
+  password   text not null,
+  created_by uuid references public.users(id),
+  created_at timestamptz not null default now()
+);
+alter table public.admin_credentials enable row level security;
+
+grant select on public.admin_credentials to authenticated;
+grant insert, delete on public.admin_credentials to service_role;
+
+drop policy if exists admin_cred_ministry_select on public.admin_credentials;
+create policy admin_cred_ministry_select on public.admin_credentials
+  for select to authenticated
+  using (
+    exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'ministry_user')
+  );
+
+drop policy if exists admin_cred_directorate_select on public.admin_credentials;
+create policy admin_cred_directorate_select on public.admin_credentials
+  for select to authenticated
+  using (
+    exists (
+      select 1
+      from   public.users     target
+      join   public.schools   s  on s.id = target.school_id
+      join   public.users     me on me.id = auth.uid()
+      where  target.id              = public.admin_credentials.user_id
+        and  me.role                = 'directorate_user'
+        and  s.directorate_id       = me.directorate_id
+    )
+  );
+
+-- 2.10  سياسات schools للمديرية (SELECT / INSERT / UPDATE مقيَّد بمديريتها)
+drop policy if exists schools_directorate_select on public.schools;
+create policy schools_directorate_select on public.schools
+  for select to authenticated
+  using (
+    directorate_id = (select directorate_id from public.users where id = auth.uid())
+    and exists (select 1 from public.users where id = auth.uid() and role = 'directorate_user')
+  );
+
+drop policy if exists schools_directorate_insert on public.schools;
+create policy schools_directorate_insert on public.schools
+  for insert to authenticated
+  with check (
+    directorate_id = (select directorate_id from public.users where id = auth.uid())
+    and exists (select 1 from public.users where id = auth.uid() and role = 'directorate_user')
+  );
+
+drop policy if exists schools_directorate_update on public.schools;
+create policy schools_directorate_update on public.schools
+  for update to authenticated
+  using (
+    directorate_id = (select directorate_id from public.users where id = auth.uid())
+    and exists (select 1 from public.users where id = auth.uid() and role = 'directorate_user')
+  )
+  with check (
+    directorate_id = (select directorate_id from public.users where id = auth.uid())
+    and exists (select 1 from public.users where id = auth.uid() and role = 'directorate_user')
+  );
+
+
 -- ════════════════════════════════════════════════════════════════════════════
 --  SECTION 3 — Teacher account credentials (principal-provisioned logins)
 --

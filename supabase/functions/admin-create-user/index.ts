@@ -51,10 +51,14 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: profile, error: profErr } = await userClient
-      .from("users").select("role").eq("id", user.id).maybeSingle();
+      .from("users").select("role, directorate_id").eq("id", user.id).maybeSingle();
     if (profErr) return json({ error: `تعذّر التحقّق من الصلاحية: ${profErr.message}` }, 500);
-    if (!profile || profile.role !== "ministry_user")
-      return json({ error: "هذا الإجراء مخصّص لمشرف الوزارة فقط" }, 403);
+    const callerRole = profile?.role ?? "";
+    const isMinistry    = callerRole === "ministry_user";
+    const isDirectorate = callerRole === "directorate_user";
+    if (!isMinistry && !isDirectorate)
+      return json({ error: "هذا الإجراء مخصّص لمشرف الوزارة أو المديرية فقط" }, 403);
+    const callerDirectorateId = profile?.directorate_id ?? null;
 
     // 3) Admin client (service-role) — only used for auth.admin.* and trusted DB writes.
     const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
@@ -87,6 +91,13 @@ Deno.serve(async (req) => {
       }
       const newId = created.user.id;
 
+      // تحقق أن المدرسة تتبع مديرية المستدعي (عند استدعاء مستخدم مديرية)
+      if (isDirectorate) {
+        const { data: school } = await admin.from("schools").select("directorate_id").eq("id", schoolId).maybeSingle();
+        if (!school || school.directorate_id !== callerDirectorateId)
+          return json({ error: "المدرسة لا تتبع مديريتك" }, 403);
+      }
+
       const { error: uErr } = await admin.from("users").upsert({
         id: newId, role: "school_admin", school_id: schoolId, full_name: fullName,
       }, { onConflict: "id" });
@@ -94,6 +105,7 @@ Deno.serve(async (req) => {
         await admin.auth.admin.deleteUser(newId);
         return json({ error: `تعذّر إنشاء الملف الشخصي: ${uErr.message}` }, 500);
       }
+      await admin.from("admin_credentials").insert({ user_id: newId, email, password, created_by: user.id });
       return json({ ok: true, id: newId });
     }
 
@@ -120,6 +132,9 @@ Deno.serve(async (req) => {
       }
       const newId = created.user.id;
 
+      if (!isMinistry)
+        return json({ error: "إنشاء مشرف مديرية مخصّص لمشرف الوزارة فقط" }, 403);
+
       const { error: uErr } = await admin.from("users").upsert({
         id: newId, role: "directorate_user", directorate_id: directorateId, full_name: fullName,
       }, { onConflict: "id" });
@@ -127,6 +142,7 @@ Deno.serve(async (req) => {
         await admin.auth.admin.deleteUser(newId);
         return json({ error: `تعذّر إنشاء الملف الشخصي: ${uErr.message}` }, 500);
       }
+      await admin.from("admin_credentials").insert({ user_id: newId, email, password, created_by: user.id });
       return json({ ok: true, id: newId });
     }
 

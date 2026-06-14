@@ -875,7 +875,8 @@ tr.row-flash {
   gap: 0.35rem;
   padding: 0.2rem 0.65rem;
   border-radius: 9999px;
-  background: var(--surface-2, #f1f5f9);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   font-size: 0.78rem;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
@@ -886,6 +887,105 @@ tr.row-flash {
   min-width: 2ch;
   display: inline-block;
   text-align: center;
+}
+
+/* ── شريط تبويبات المديرية ──────────────────── */
+.dir-tab-bar {
+  display: flex;
+  gap: 4px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
+  position: sticky;
+  top: var(--topnav-h);
+  z-index: 90;
+}
+.dir-tab-btn {
+  padding: 12px 18px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition);
+  white-space: nowrap;
+}
+.dir-tab-btn:hover { color: var(--text-primary); }
+.dir-tab-btn.is-active {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+}
+.dir-tab-panel { display: none; }
+.dir-tab-panel.is-active { display: block; }
+
+/* ── جدول بيانات لتبويبات المدارس/المدراء ── */
+.dir-section-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin: 16px 20px;
+}
+.dir-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.dir-section-header h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.dir-table-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 20px;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+.dir-table-empty {
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+/* مودال بيانات الحساب */
+.cred-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+.cred-field label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.cred-field span {
+  font-size: 0.95rem;
+  font-family: monospace;
+  color: var(--text-primary);
+  background: var(--bg-base);
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  word-break: break-all;
+}
+/* شارة معطّل لتبويب المدراء */
+.badge-inactive {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: rgba(239,68,68,.10);
+  color: #f87171;
+  border: 1px solid rgba(239,68,68,.25);
 }
 
 /* ══════════════════════════════════════════════
