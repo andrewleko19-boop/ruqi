@@ -2632,7 +2632,18 @@ async function parentGetMyStudents() {
   // Self-healing link: rebuild parent_links from the caller's phone every load,
   // so students added (or fixed) after the OTP-verify step still appear. Errors
   // are non-fatal — fall through to whatever links already exist.
-  try { await db.rpc('parent_sync_links'); } catch (e) { console.warn('[parent] sync_links', e); }
+  try {
+    const { data, error } = await db.rpc('parent_sync_links');
+    if (error) {
+      // Most likely the function/migration hasn't been applied yet — make it loud
+      // so setup gaps are diagnosable instead of silently showing "no students".
+      console.error('[parent] parent_sync_links RPC failed — run tools/backfill-parent-phone.sql in Supabase:', error.message || error);
+    } else {
+      console.info('[parent] parent_sync_links linked', data, 'new student(s)');
+    }
+  } catch (e) {
+    console.error('[parent] parent_sync_links threw:', e);
+  }
 
   const { data, error } = await db
     .from('parent_links')

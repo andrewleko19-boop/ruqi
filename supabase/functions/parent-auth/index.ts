@@ -41,6 +41,16 @@ function normalizePhone(raw: string): string {
   return p;
 }
 
+// Reduce any phone format to its national core (e.g. 9XXXXXXXX) so matching
+// is format-agnostic — mirrors public._nsams_phone_core() in the database.
+function phoneCore(raw: string): string {
+  const d = (raw ?? "").replace(/[^0-9]/g, "");
+  if (d.startsWith("00963")) return d.slice(5);
+  if (d.startsWith("963"))   return d.slice(3);
+  if (d.startsWith("0"))     return d.slice(1);
+  return d;
+}
+
 async function sha256(text: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
@@ -161,18 +171,24 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Build / refresh parent_links by matching phone to students.parent_phone
-      // Normalize comparison: match both +9639x and 09x variants
-      const phoneVariants = [phone];
-      if (phone.startsWith("+9639")) phoneVariants.push("0" + phone.slice(4));
+      // Build / refresh parent_links by matching the phone against BOTH
+      // students.contact_phone (always filled by the school) and parent_phone,
+      // across the common stored formats. The DB self-healing RPC
+      // (parent_sync_links) is the authoritative, format-proof path on every
+      // app load — this is just an immediate best-effort link at sign-in time.
+      const core = phoneCore(phone);
+      const variants = [`+963${core}`, `0${core}`, core, `00963${core}`, `963${core}`];
 
-      const { data: linkedStudents } = await admin
-        .from("students")
-        .select("id")
-        .in("parent_phone", phoneVariants)
-        .eq("is_active", true);
+      const [byContact, byParent] = await Promise.all([
+        admin.from("students").select("id").eq("is_active", true).in("contact_phone", variants),
+        admin.from("students").select("id").eq("is_active", true).in("parent_phone",  variants),
+      ]);
+      const idSet = new Set<string>();
+      (byContact.data ?? []).forEach((s: { id: string }) => idSet.add(s.id));
+      (byParent.data  ?? []).forEach((s: { id: string }) => idSet.add(s.id));
+      const linkedStudents = [...idSet].map(id => ({ id }));
 
-      if (linkedStudents && linkedStudents.length > 0) {
+      if (linkedStudents.length > 0) {
         const links = linkedStudents.map(s => ({ user_id: userId, student_id: s.id }));
         await admin.from("parent_links").upsert(links, { onConflict: "user_id,student_id", ignoreDuplicates: true });
       }

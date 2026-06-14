@@ -2734,10 +2734,34 @@ returns boolean language sql security definer stable as $$
   select current_user_role() = 'parent'
 $$;
 
--- P.5b — ربط ولي الأمر بطلابه عند القراءة (self-healing)
--- يستخرج الهاتف من بريد المصادقة {phone}@parent.nsams.local ويطابقه على
--- students.parent_phone (صيغتا +9639… و 09…) ثم يبني parent_links الناقصة.
--- يُستدعى من الواجهة عند كل فتح للتطبيق فلا يعتمد الربط على لحظة التحقق فقط.
+-- P.5a — تطبيع الهاتف: يختزل أي صيغة إلى جوهرها الوطني (مثال: 9XXXXXXXX)
+-- ‎+963961234567 / 0961234567 / 00963961234567 / 963961234567 / 961234567
+-- تعطي جميعها النتيجة نفسها — فيتطابق الربط مهما اختلفت صيغة الإدخال.
+create or replace function public._nsams_phone_core(raw text)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when raw is null then null
+    else (
+      select case
+        when d like '00963%' then substr(d, 6)
+        when d like '963%'   then substr(d, 4)
+        when d like '0%'     then substr(d, 2)
+        else d
+      end
+      from (select regexp_replace(raw, '[^0-9]', '', 'g') as d) t
+    )
+  end
+$$;
+grant execute on function public._nsams_phone_core(text) to authenticated;
+
+-- P.5b — ربط ولي الأمر بطلابه عند القراءة (self-healing, محصّن)
+-- يستخرج الهاتف من بريد المصادقة {phone}@parent.nsams.local، يختزله إلى جوهره،
+-- ثم يطابقه على جوهر contact_phone أو parent_phone لكل طالب نشط ويبني
+-- parent_links الناقصة. يُستدعى من الواجهة عند كل فتح فلا يعتمد الربط على لحظة
+-- التحقق فقط — ويعمل مع البيانات الموجودة في contact_phone ومع أي صيغة هاتف.
 create or replace function public.parent_sync_links()
 returns integer
 language plpgsql
@@ -2747,7 +2771,7 @@ as $$
 declare
   myemail text;
   myphone text;
-  mylocal text;
+  mycore  text;
   n integer;
 begin
   select email into myemail from auth.users where id = auth.uid();
@@ -2755,17 +2779,20 @@ begin
     return 0;
   end if;
 
-  myphone := split_part(myemail, '@', 1);
-  mylocal := case when myphone ~ '^\+9639'
-                  then '0' || substr(myphone, 5)
-                  else myphone end;
+  myphone := split_part(myemail, '@', 1);          -- ‎+9639XXXXXXXX
+  mycore  := public._nsams_phone_core(myphone);    -- 9XXXXXXXX
+  if mycore is null or length(mycore) < 6 then
+    return 0;
+  end if;
 
   insert into public.parent_links (user_id, student_id)
   select auth.uid(), s.id
     from public.students s
    where s.is_active = true
-     and s.parent_phone is not null
-     and (s.parent_phone = myphone or s.parent_phone = mylocal)
+     and (
+       public._nsams_phone_core(s.parent_phone)  = mycore
+       or public._nsams_phone_core(s.contact_phone) = mycore
+     )
   on conflict (user_id, student_id) do nothing;
 
   get diagnostics n = row_count;
