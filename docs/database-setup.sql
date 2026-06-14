@@ -355,20 +355,32 @@ create policy schools_directorate_update on public.schools
 --
 --  مدير المدرسة (school_admin) ينتمي لمديرية عبر مدرسته (schools.directorate_id).
 --  بلا هذه السياسة، لا يرى مستخدم المديرية إلا صفّه فقط في public.users فيظهر
---  تبويب «المدراء» فارغاً. تستخدم current_user_directorate_id() (SECURITY DEFINER)
---  لتفادي العَوْد اللانهائي في RLS على نفس الجدول.
+--  تبويب «المدراء» فارغاً.
+--
+--  ⚠️  تحذير العَوْد اللانهائي: لا تستعلم عن public.schools داخل هذه السياسة
+--      مباشرةً. قراءة schools تُفعّل سياسة schools_directorate_select التي
+--      تستعلم بدورها عن public.users فتُفعّل هذه السياسة من جديد → عَوْد لا نهائي
+--      (خطأ 500 على كل استعلام users، بما فيه تسجيل الدخول). الحل: دالة واحدة
+--      SECURITY DEFINER تُجري الفحص كاملاً وتتجاوز RLS داخلياً، فلا تعود الحلقة
+--      تدخل users/schools إطلاقاً.
+create or replace function public.is_principal_in_my_directorate(p_school_id uuid)
+returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1
+    from   public.schools s
+    where  s.id            = p_school_id
+      and  s.directorate_id = (select directorate_id from public.users where id = auth.uid())
+      and  s.directorate_id is not null
+  );
+$$;
+
 drop policy if exists users_directorate_select_principals on public.users;
 create policy users_directorate_select_principals on public.users
   for select to authenticated
   using (
     role = 'school_admin'
-    and current_user_directorate_id() is not null
-    and exists (
-      select 1
-      from   public.schools s
-      where  s.id            = public.users.school_id
-        and  s.directorate_id = current_user_directorate_id()
-    )
+    and public.is_principal_in_my_directorate(public.users.school_id)
   );
 
 

@@ -1,50 +1,57 @@
 -- ════════════════════════════════════════════════════════════════════════════
 --  fix-directorate-principals-rls.sql
 --
---  يجعل مدراء المدارس (school_admin) يظهرون في تبويب «المدراء» بلوحة المديرية.
+--  يجعل مدراء المدارس (school_admin) يظهرون في تبويب «المدراء» بلوحة المديرية،
+--  بلا التسبّب في عَوْد لا نهائي يكسر تسجيل الدخول (خطأ 500).
 --  شغّله في: Supabase Dashboard → SQL Editor
 --
+--  ⚠️  إن كنت شغّلت نسخة سابقة من هذا الملف فكُسر تسجيل الدخول (خطأ 500 على
+--      users)، فهذا الملف يُصلح ذلك: يحذف السياسة المعطوبة ويستبدلها بنسخة
+--      آمنة من العَوْد. شغّله كاملاً.
+--
 --  المشكلة:
---    مدير المدرسة ينتمي لمديرية عبر مدرسته (schools.directorate_id). لكن لم تكن
---    هناك سياسة RLS تسمح لمستخدم المديرية بقراءة صفوف school_admin، فكان لا يرى
---    سوى صفّه فيظهر التبويب فارغاً — بما في ذلك المدراء المُضافون من لوحة المشرف.
+--    مدير المدرسة ينتمي لمديرية عبر مدرسته (schools.directorate_id). كانت تنقص
+--    سياسة RLS تتيح لمستخدم المديرية قراءة صفوف school_admin، فيظهر التبويب
+--    فارغاً.
 --
---  الحل:
---    سياسة SELECT على public.users تتيح لمستخدم المديرية قراءة كل school_admin
---    تتبع مدرسته نفس المديرية. لا حاجة لأي ترحيل بيانات — الرابط موجود مسبقاً
---    عبر schools.directorate_id الذي يُحدَّد عند إنشاء المدرسة.
+--  فخّ العَوْد اللانهائي (السبب في خطأ 500):
+--    لو فحصت السياسةُ الجدولَ public.schools مباشرةً، فإن قراءة schools تُفعّل
+--    سياسة schools_directorate_select التي تستعلم عن public.users، فتُفعّل هذه
+--    السياسة من جديد → حلقة لا نهائية تكسر كل استعلام users (ومنه الدخول).
 --
---  آمن للتشغيل أكثر من مرة (idempotent).
+--  الحل الجذري:
+--    دالة واحدة SECURITY DEFINER تُجري الفحص كاملاً وتتجاوز RLS داخلياً، فلا
+--    تدخل الحلقة جدولَي users/schools إطلاقاً.
 --
---  ملاحظة: تعتمد السياسة على الدالة current_user_directorate_id() وهي
---  SECURITY DEFINER (تتجاوز RLS) لتفادي العَوْد اللانهائي. إن ظهر خطأ
---  «infinite recursion detected in policy for relation users» فهذا يعني أن
---  الدالة ليست SECURITY DEFINER؛ أعد تعريفها بالكتلة المعلّقة في الأسفل.
+--  آمن للتشغيل أكثر من مرة (idempotent). لا حاجة لأي ترحيل بيانات.
 -- ════════════════════════════════════════════════════════════════════════════
 
--- (اختياري) ضمان أن الدالة المساعدة SECURITY DEFINER لتفادي العَوْد —
--- أزل التعليق فقط إن ظهر خطأ infinite recursion:
--- create or replace function public.current_user_directorate_id()
--- returns uuid language sql stable security definer set search_path = public as $$
---   select directorate_id from public.users where id = auth.uid()
--- $$;
-
+-- الخطوة 0: احذف أي نسخة معطوبة سابقة من السياسة (مصدر خطأ 500)
 drop policy if exists users_directorate_select_principals on public.users;
+
+-- الخطوة 1: دالة الفحص — SECURITY DEFINER تتجاوز RLS فتمنع العَوْد
+create or replace function public.is_principal_in_my_directorate(p_school_id uuid)
+returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1
+    from   public.schools s
+    where  s.id             = p_school_id
+      and  s.directorate_id  = (select directorate_id from public.users where id = auth.uid())
+      and  s.directorate_id is not null
+  );
+$$;
+
+-- الخطوة 2: السياسة — تستدعي الدالة فقط، بلا أي استعلام مباشر على users/schools
 create policy users_directorate_select_principals on public.users
   for select to authenticated
   using (
     role = 'school_admin'
-    and current_user_directorate_id() is not null
-    and exists (
-      select 1
-      from   public.schools s
-      where  s.id             = public.users.school_id
-        and  s.directorate_id  = current_user_directorate_id()
-    )
+    and public.is_principal_in_my_directorate(public.users.school_id)
   );
 
--- ── التحقق: استبدل <directorate_id> بمعرّف مديريتك لرؤية مدرائها ──────────────
---  (أو شغّله كمستخدم المديرية من اللوحة وافتح تبويب «المدراء»)
+-- ── التحقق: شغّل اللوحة كمستخدم المديرية وافتح تبويب «المدراء» ────────────────
+--  أو اعرض كل المدراء وحالة ربط مدارسهم بمديرية:
 -- select u.id, u.full_name, u.role, s.name as school, s.directorate_id
 -- from   public.users u
 -- left   join public.schools s on s.id = u.school_id
