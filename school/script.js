@@ -1309,6 +1309,8 @@ const tabRegistry     = el('tab-registry');
 const viewRegistry    = el('view-registry');
 const tabStatement    = el('tab-statement');
 const viewStatement   = el('view-statement');
+const tabPersonnel    = el('tab-personnel');
+const viewPersonnel   = el('view-personnel');
 const fabReport       = el('btn-open-report');
 
 const mngClassSelect    = el('mng-class-select');
@@ -1343,6 +1345,7 @@ const TABS = {
   reports:    { tab: tabReports,    view: viewReports },
   registry:   { tab: tabRegistry,   view: viewRegistry },
   statement:  { tab: tabStatement,  view: viewStatement },
+  personnel:  { tab: tabPersonnel,  view: viewPersonnel },
 };
 
 function switchTab(tab) {
@@ -1364,7 +1367,7 @@ function switchTab(tab) {
   if (tab === 'manage'   && !_manageLoaded)  loadManageClasses();
   if (tab === 'manage'   && !_mngSubjectsInit) initManageSubjects();
   if (tab === 'students' && !_studentsLoaded) initStudentsTab();
-  if (tab === 'staff'    && !_staffLoaded)   initStaffTab();
+  if ((tab === 'staff' || tab === 'personnel') && !_staffLoaded) initStaffTab();
   if (tab === 'subjects'  && !_subjectsLoaded)  initSubjectsTab();
   if (tab === 'reports'   && !_reportsLoaded)   initReportsTab();
   if (tab === 'registry'  && !_registryLoaded)  initRegistryTab();
@@ -1377,8 +1380,9 @@ tabStudents.addEventListener('click',   () => switchTab('students'));
 tabStaff.addEventListener('click',      () => switchTab('staff'));
 tabSubjects.addEventListener('click',   () => switchTab('subjects'));
 tabReports.addEventListener('click',    () => switchTab('reports'));
-tabRegistry?.addEventListener('click',  () => switchTab('registry'));
-tabStatement?.addEventListener('click', () => switchTab('statement'));
+tabRegistry?.addEventListener('click',   () => switchTab('registry'));
+tabStatement?.addEventListener('click',  () => switchTab('statement'));
+tabPersonnel?.addEventListener('click',  () => switchTab('personnel'));
 
 // «المزيد» sections menu (bottom sheet)
 const btnMore   = el('btn-more');
@@ -3315,6 +3319,8 @@ let _stuClasses = [];
 
 stuClassSelect.addEventListener('change', async () => {
   _stuClassId = stuClassSelect.value;
+  const btnAddStu = el('btn-add-student');
+  if (btnAddStu) btnAddStu.disabled = !_stuClassId;
   if (!_stuClassId) { stuTools.hidden = true; stuListEl.innerHTML = ''; hide(stuEmpty); hide(stuNoResults); return; }
   stuTools.hidden = false;
   await loadStudents();
