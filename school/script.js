@@ -4074,7 +4074,12 @@ const btnConfirmDel   = el('btn-confirm-del-staff');
 
 async function getLookup(type) {
   if (_lookupCache[type]) return _lookupCache[type];
-  const vals = await NDB.getLookupList(type, S.user?.directorateId ?? null);
+  // School admins carry no directorate_id on their user row — the directorate
+  // link lives on the school. Fall back to it so per-directorate lookups
+  // (e.g. educational_zone) resolve. Global lookups (directorate_id IS NULL)
+  // are always returned regardless, so other types are unaffected.
+  const dirId = S.user?.directorateId ?? S.school?.directorate_id ?? null;
+  const vals = await NDB.getLookupList(type, dirId);
   _lookupCache[type] = vals;
   return vals;
 }
