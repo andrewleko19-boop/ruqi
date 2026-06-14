@@ -120,6 +120,15 @@ const umSchool          = document.getElementById('um-school');
 const umDirGroup        = document.getElementById('um-directorate-group');
 const umDir             = document.getElementById('um-directorate');
 
+// Credentials modal
+const credModal     = document.getElementById('cred-modal');
+const credName      = document.getElementById('cred-name');
+const credEmail     = document.getElementById('cred-email');
+const credPassword  = document.getElementById('cred-password');
+const credNotFound  = document.getElementById('cred-not-found');
+const credModalClose= document.getElementById('cred-modal-close');
+const credModalOk   = document.getElementById('cred-modal-ok');
+
 // Deactivate modal
 const deactivateModal   = document.getElementById('deactivate-modal');
 const deactivateName    = document.getElementById('deactivate-name');
@@ -449,7 +458,7 @@ function renderUsers() {
   usersTbody.innerHTML = filtered.map((u, i) => {
     const org = u.schools?.name ?? u.directorates?.name ?? '—';
     return `
-    <tr>
+    <tr style="cursor:pointer" data-view-cred="${esc(u.id)}" data-cred-name="${esc(u.full_name ?? '')}">
       <td class="muted">${i + 1}</td>
       <td>${esc(u.full_name ?? '—')}</td>
       <td><span class="role-badge ${roleBadgeClass(u.role)}">${roleName(u.role)}</span></td>
@@ -466,7 +475,13 @@ function renderUsers() {
   hide(usersEmpty);
 
   usersTbody.querySelectorAll('[data-deactivate]').forEach(btn => {
-    btn.addEventListener('click', () => openDeactivate(btn.dataset.deactivate, btn.dataset.name));
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      openDeactivate(btn.dataset.deactivate, btn.dataset.name);
+    });
+  });
+  usersTbody.querySelectorAll('[data-view-cred]').forEach(row => {
+    row.addEventListener('click', () => openCredModal(row.dataset.viewCred, row.dataset.credName));
   });
 }
 
@@ -1031,6 +1046,35 @@ delLookupConfirm.addEventListener('click', async () => {
     delLookupConfirm.disabled = false;
   }
 });
+
+// ── Credentials modal ─────────────────────────────────────────────────────────
+async function openCredModal(userId, name) {
+  credName.textContent     = name || '—';
+  credEmail.textContent    = '…';
+  credPassword.textContent = '…';
+  credNotFound.classList.add('hidden');
+  show(credModal);
+
+  const { data, error } = await supabase
+    .from('admin_credentials')
+    .select('email, password')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error || !data) {
+    credEmail.textContent    = '—';
+    credPassword.textContent = '—';
+    credNotFound.classList.remove('hidden');
+  } else {
+    credEmail.textContent    = data.email;
+    credPassword.textContent = data.password;
+  }
+}
+
+function closeCredModal() { hide(credModal); }
+credModalClose.addEventListener('click', closeCredModal);
+credModalOk.addEventListener('click',    closeCredModal);
+credModal.addEventListener('click', e => { if (e.target === credModal) closeCredModal(); });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 checkSession();

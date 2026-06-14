@@ -1,6 +1,7 @@
 // directorate/script.js
 // ── DB من window.NSAMS_DB (يُحمَّل عبر shared/db.js قبل هذا الملف) ──────────
-import { CustomSelect } from '../shared/csel.js';
+import { CustomSelect }                      from '../shared/csel.js';
+import { supabase as _sb, supabaseUrl as _sbUrl } from '../shared/db.js';
 const {
   login,
   logout,
@@ -156,6 +157,9 @@ function showApp(session) {
   setupCSVExports();
   setupLightbox();
   setupTrendPeriod();
+  setupDirTabs();
+  setupDirSchools();
+  setupDirPrincipals();
 }
 
 // ══════════════════════════════════════════════
@@ -267,7 +271,7 @@ async function loadStats() {
     animateStatEl('stat-schools-val',  summary.reportingSchoolsCount ?? 0);
     animateStatEl('stat-reports-val',  summary.topPendingReports?.length ?? 0);
     const subEl = document.getElementById('stat-reports-sub');
-    if (subEl) subEl.textContent = 'التقارير النشطة';
+    if (subEl) subEl.textContent = '';
   } catch (err) {
     console.error('[Stats] Failed:', err);
     showToast('خطأ في الإحصائيات', 'تعذّر تحميل الملخص.', 'error');
@@ -1569,4 +1573,363 @@ document.getElementById('dir-stmt-modal')?.addEventListener('click', (e) => {
 function closeStmtModal() {
   _reviewingStmtId = null;
   document.getElementById('dir-stmt-modal')?.classList.add('hidden');
+}
+
+// ══════════════════════════════════════════════
+//  Helpers للتبويبات الجديدة
+// ══════════════════════════════════════════════
+function dirEsc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function dirEdgeFetch(path, body) {
+  const { data: { session } } = await _sb.auth.getSession();
+  const res = await fetch(`${_sbUrl}/functions/v1/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+  return data;
+}
+
+// ══════════════════════════════════════════════
+//  Tab switching
+// ══════════════════════════════════════════════
+function setupDirTabs() {
+  document.querySelectorAll('.dir-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.dir-tab-btn').forEach(b => b.classList.remove('is-active'));
+      document.querySelectorAll('.dir-tab-panel').forEach(p => p.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      document.getElementById(`dir-tab-${btn.dataset.tab}`)?.classList.add('is-active');
+      if (btn.dataset.tab === 'schools')    loadDirSchools();
+      if (btn.dataset.tab === 'principals') loadDirPrincipals();
+    });
+  });
+}
+
+// ══════════════════════════════════════════════
+//  تبويب المدارس
+// ══════════════════════════════════════════════
+let _dirAllSchools     = [];
+let _dirEditingSchoolId = null;
+
+async function loadDirSchools() {
+  if (!currentUser?.directorateId) return;
+  const countEl   = document.getElementById('dir-schools-count');
+  const loadingEl = document.getElementById('dir-schools-loading');
+  const tableEl   = document.getElementById('dir-schools-table-wrap');
+  const emptyEl   = document.getElementById('dir-schools-empty');
+  loadingEl?.classList.remove('hidden');
+  tableEl?.classList.add('hidden');
+  emptyEl?.classList.add('hidden');
+
+  const { data, error } = await _sb.from('schools')
+    .select('id, name, classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name, directorate_id')
+    .eq('directorate_id', currentUser.directorateId)
+    .order('name');
+
+  loadingEl?.classList.add('hidden');
+  if (error) { if (countEl) countEl.textContent = '!'; console.error(error); return; }
+  _dirAllSchools = data ?? [];
+  if (countEl) countEl.textContent = _dirAllSchools.length;
+
+  // أعِد ملء قائمة المدارس في مودال المدير
+  const pmSchoolEl = document.getElementById('dir-pm-school');
+  if (pmSchoolEl) {
+    while (pmSchoolEl.options.length > 1) pmSchoolEl.remove(1);
+    _dirAllSchools.forEach(s => pmSchoolEl.add(new Option(s.name, s.id)));
+  }
+
+  if (_dirAllSchools.length === 0) { emptyEl?.classList.remove('hidden'); return; }
+
+  const tbody = document.getElementById('dir-schools-tbody');
+  if (tbody) {
+    tbody.innerHTML = _dirAllSchools.map((s, i) => `
+      <tr>
+        <td class="muted">${i + 1}</td>
+        <td>${dirEsc(s.name)}</td>
+        <td>${dirEsc(s.classification ?? '—')}</td>
+        <td>${s.total_students ?? '—'}</td>
+        <td>${s.total_teachers ?? '—'}</td>
+        <td>
+          <button class="btn btn-ghost btn-sm" data-dir-edit-school="${dirEsc(s.id)}">
+            <svg width="13" height="13"><use href="#icon-edit"/></svg>
+            تعديل
+          </button>
+        </td>
+      </tr>`).join('');
+
+    tbody.querySelectorAll('[data-dir-edit-school]').forEach(btn => {
+      btn.addEventListener('click', () => openEditDirSchool(btn.dataset.dirEditSchool));
+    });
+  }
+  tableEl?.classList.remove('hidden');
+}
+
+function openAddDirSchool() {
+  _dirEditingSchoolId = null;
+  const title = document.getElementById('dir-school-modal-title');
+  if (title) title.textContent = 'إضافة مدرسة';
+  ['dir-sm-name','dir-sm-lat','dir-sm-lng','dir-sm-total-students','dir-sm-total-teachers','dir-sm-complex-name'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  ['dir-sm-classification','dir-sm-education-type','dir-sm-shift','dir-sm-student-type'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const errEl = document.getElementById('dir-school-modal-error');
+  if (errEl) { errEl.textContent = ''; errEl.hidden = true; }
+  document.getElementById('dir-school-modal')?.classList.remove('hidden');
+  document.getElementById('dir-sm-name')?.focus();
+}
+
+function openEditDirSchool(schoolId) {
+  const s = _dirAllSchools.find(x => x.id === schoolId);
+  if (!s) return;
+  _dirEditingSchoolId = schoolId;
+  const title = document.getElementById('dir-school-modal-title');
+  if (title) title.textContent = 'تعديل مدرسة';
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
+  set('dir-sm-name', s.name);
+  set('dir-sm-lat', s.lat);
+  set('dir-sm-lng', s.lng);
+  set('dir-sm-classification', s.classification);
+  set('dir-sm-education-type', s.education_type);
+  set('dir-sm-shift', s.shift);
+  set('dir-sm-student-type', s.student_type);
+  set('dir-sm-total-students', s.total_students);
+  set('dir-sm-total-teachers', s.total_teachers);
+  set('dir-sm-complex-name', s.complex_name);
+  const errEl = document.getElementById('dir-school-modal-error');
+  if (errEl) { errEl.textContent = ''; errEl.hidden = true; }
+  document.getElementById('dir-school-modal')?.classList.remove('hidden');
+  document.getElementById('dir-sm-name')?.focus();
+}
+
+function setupDirSchools() {
+  document.getElementById('dir-add-school-btn')?.addEventListener('click', openAddDirSchool);
+  document.getElementById('dir-school-modal-close')?.addEventListener('click', () => {
+    document.getElementById('dir-school-modal')?.classList.add('hidden');
+  });
+  document.getElementById('dir-school-modal-cancel')?.addEventListener('click', () => {
+    document.getElementById('dir-school-modal')?.classList.add('hidden');
+  });
+
+  document.getElementById('dir-school-modal-save')?.addEventListener('click', async () => {
+    const name = document.getElementById('dir-sm-name')?.value.trim() ?? '';
+    const errEl = document.getElementById('dir-school-modal-error');
+    const saveBtn = document.getElementById('dir-school-modal-save');
+    if (!name) {
+      if (errEl) { errEl.textContent = 'اسم المدرسة مطلوب.'; errEl.hidden = false; }
+      return;
+    }
+    if (errEl) { errEl.textContent = ''; errEl.hidden = true; }
+    if (saveBtn) saveBtn.disabled = true;
+
+    const getVal = id => document.getElementById(id)?.value ?? '';
+    const getNum = id => { const v = getVal(id); return v !== '' ? parseFloat(v) : null; };
+    const getInt = id => { const v = getVal(id); return v !== '' ? parseInt(v, 10) : null; };
+
+    const row = {
+      name,
+      directorate_id:  currentUser.directorateId,
+      lat:             getNum('dir-sm-lat'),
+      lng:             getNum('dir-sm-lng'),
+      classification:  getVal('dir-sm-classification')   || null,
+      education_type:  getVal('dir-sm-education-type')   || null,
+      shift:           getVal('dir-sm-shift')            || null,
+      student_type:    getVal('dir-sm-student-type')     || null,
+      total_students:  getInt('dir-sm-total-students'),
+      total_teachers:  getInt('dir-sm-total-teachers'),
+      complex_name:    getVal('dir-sm-complex-name').trim() || null,
+    };
+
+    try {
+      let err;
+      if (_dirEditingSchoolId) {
+        ({ error: err } = await _sb.from('schools').update(row).eq('id', _dirEditingSchoolId));
+      } else {
+        ({ error: err } = await _sb.from('schools').insert(row));
+      }
+      if (err) throw err;
+      document.getElementById('dir-school-modal')?.classList.add('hidden');
+      await loadDirSchools();
+    } catch (e) {
+      if (errEl) { errEl.textContent = e.message; errEl.hidden = false; }
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  });
+}
+
+// ══════════════════════════════════════════════
+//  تبويب المدراء
+// ══════════════════════════════════════════════
+let _dirAllPrincipals    = [];
+let _dirPendingDeactivate = null;
+
+async function loadDirPrincipals() {
+  if (!currentUser?.directorateId) return;
+  const countEl   = document.getElementById('dir-principals-count');
+  const loadingEl = document.getElementById('dir-principals-loading');
+  const tableEl   = document.getElementById('dir-principals-table-wrap');
+  const emptyEl   = document.getElementById('dir-principals-empty');
+  loadingEl?.classList.remove('hidden');
+  tableEl?.classList.add('hidden');
+  emptyEl?.classList.add('hidden');
+
+  const { data, error } = await _sb.from('users')
+    .select('id, full_name, is_active, school_id, schools(name, directorate_id)')
+    .eq('role', 'school_admin')
+    .order('full_name');
+
+  loadingEl?.classList.add('hidden');
+  if (error) { if (countEl) countEl.textContent = '!'; console.error(error); return; }
+
+  // فلترة من جانب العميل على مديريتهم
+  _dirAllPrincipals = (data ?? []).filter(u => u.schools?.directorate_id === currentUser.directorateId);
+  if (countEl) countEl.textContent = _dirAllPrincipals.length;
+
+  if (_dirAllPrincipals.length === 0) { emptyEl?.classList.remove('hidden'); return; }
+
+  const tbody = document.getElementById('dir-principals-tbody');
+  if (tbody) {
+    tbody.innerHTML = _dirAllPrincipals.map((u, i) => {
+      const action = u.is_active === false
+        ? `<span class="badge-inactive">مُعطَّل</span>`
+        : `<button class="btn btn-danger btn-sm" data-dir-deactivate="${dirEsc(u.id)}" data-dir-deact-name="${dirEsc(u.full_name ?? '')}">تعطيل</button>`;
+      return `
+      <tr style="cursor:pointer" data-dir-view-cred="${dirEsc(u.id)}" data-dir-cred-name="${dirEsc(u.full_name ?? '')}">
+        <td class="muted">${i + 1}</td>
+        <td>${dirEsc(u.full_name ?? '—')}</td>
+        <td>${dirEsc(u.schools?.name ?? '—')}</td>
+        <td>${action}</td>
+      </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('[data-dir-deactivate]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        openDirDeactivate(btn.dataset.dirDeactivate, btn.dataset.dirDeactName);
+      });
+    });
+    tbody.querySelectorAll('[data-dir-view-cred]').forEach(row => {
+      row.addEventListener('click', () => openDirCredModal(row.dataset.dirViewCred, row.dataset.dirCredName));
+    });
+  }
+  tableEl?.classList.remove('hidden');
+}
+
+function openDirDeactivate(userId, name) {
+  _dirPendingDeactivate = userId;
+  const nameEl = document.getElementById('dir-deactivate-name');
+  if (nameEl) nameEl.textContent = name;
+  const errEl = document.getElementById('dir-deactivate-error');
+  if (errEl) { errEl.textContent = ''; errEl.hidden = true; }
+  document.getElementById('dir-deactivate-modal')?.classList.remove('hidden');
+}
+
+async function openDirCredModal(userId, name) {
+  const modal    = document.getElementById('dir-cred-modal');
+  const nameEl   = document.getElementById('dir-cred-name');
+  const emailEl  = document.getElementById('dir-cred-email');
+  const passEl   = document.getElementById('dir-cred-password');
+  const nfEl     = document.getElementById('dir-cred-not-found');
+  if (!modal) return;
+  if (nameEl)  nameEl.textContent  = name || '—';
+  if (emailEl) emailEl.textContent = '…';
+  if (passEl)  passEl.textContent  = '…';
+  if (nfEl)    nfEl.hidden = true;
+  modal.classList.remove('hidden');
+
+  const { data, error } = await _sb.from('admin_credentials')
+    .select('email, password').eq('user_id', userId).maybeSingle();
+
+  if (error || !data) {
+    if (emailEl) emailEl.textContent = '—';
+    if (passEl)  passEl.textContent  = '—';
+    if (nfEl)    nfEl.hidden = false;
+  } else {
+    if (emailEl) emailEl.textContent = data.email;
+    if (passEl)  passEl.textContent  = data.password;
+  }
+}
+
+function setupDirPrincipals() {
+  document.getElementById('dir-add-principal-btn')?.addEventListener('click', () => {
+    const errEl = document.getElementById('dir-principal-modal-error');
+    if (errEl) { errEl.textContent = ''; errEl.hidden = true; }
+    ['dir-pm-email','dir-pm-password','dir-pm-fullname'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    const pmSchoolEl = document.getElementById('dir-pm-school');
+    if (pmSchoolEl) pmSchoolEl.value = '';
+    document.getElementById('dir-principal-modal')?.classList.remove('hidden');
+    document.getElementById('dir-pm-email')?.focus();
+  });
+
+  const closePrincipalModal = () => document.getElementById('dir-principal-modal')?.classList.add('hidden');
+  document.getElementById('dir-principal-modal-close')?.addEventListener('click',  closePrincipalModal);
+  document.getElementById('dir-principal-modal-cancel')?.addEventListener('click', closePrincipalModal);
+
+  document.getElementById('dir-principal-modal-save')?.addEventListener('click', async () => {
+    const errEl   = document.getElementById('dir-principal-modal-error');
+    const saveBtn = document.getElementById('dir-principal-modal-save');
+    const email    = document.getElementById('dir-pm-email')?.value.trim().toLowerCase() ?? '';
+    const password = document.getElementById('dir-pm-password')?.value ?? '';
+    const fullName = document.getElementById('dir-pm-fullname')?.value.trim() ?? '';
+    const schoolId = document.getElementById('dir-pm-school')?.value ?? '';
+
+    const showErr = msg => { if (errEl) { errEl.textContent = msg; errEl.hidden = false; } };
+    if (!email || !email.includes('@'))  return showErr('أدخل بريداً إلكترونياً صالحاً.');
+    if (password.length < 8)            return showErr('كلمة المرور ٨ أحرف على الأقل.');
+    if (!fullName)                       return showErr('أدخل الاسم الكامل.');
+    if (!schoolId)                       return showErr('اختر المدرسة.');
+    if (errEl) { errEl.textContent = ''; errEl.hidden = true; }
+    if (saveBtn) saveBtn.disabled = true;
+
+    try {
+      await dirEdgeFetch('admin-create-user', { action: 'create_school_admin', email, fullName, password, schoolId });
+      closePrincipalModal();
+      await loadDirPrincipals();
+    } catch (e) {
+      showErr(e.message);
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  });
+
+  // تعطيل
+  document.getElementById('dir-deactivate-cancel')?.addEventListener('click', () => {
+    _dirPendingDeactivate = null;
+    document.getElementById('dir-deactivate-modal')?.classList.add('hidden');
+  });
+
+  document.getElementById('dir-deactivate-confirm')?.addEventListener('click', async () => {
+    if (!_dirPendingDeactivate) return;
+    const confirmBtn = document.getElementById('dir-deactivate-confirm');
+    const errEl      = document.getElementById('dir-deactivate-error');
+    if (confirmBtn) confirmBtn.disabled = true;
+    if (errEl)      { errEl.textContent = ''; errEl.hidden = true; }
+    try {
+      await dirEdgeFetch('admin-create-user', { action: 'deactivate', userId: _dirPendingDeactivate });
+      _dirPendingDeactivate = null;
+      document.getElementById('dir-deactivate-modal')?.classList.add('hidden');
+      await loadDirPrincipals();
+    } catch (e) {
+      if (errEl) { errEl.textContent = e.message; errEl.hidden = false; }
+    } finally {
+      if (confirmBtn) confirmBtn.disabled = false;
+    }
+  });
+
+  // مودال بيانات الحساب
+  const closeCredModal = () => document.getElementById('dir-cred-modal')?.classList.add('hidden');
+  document.getElementById('dir-cred-modal-close')?.addEventListener('click', closeCredModal);
+  document.getElementById('dir-cred-modal-ok')?.addEventListener('click',    closeCredModal);
+  document.getElementById('dir-cred-modal')?.addEventListener('click', e => {
+    if (e.target.id === 'dir-cred-modal') closeCredModal();
+  });
 }

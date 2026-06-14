@@ -50,6 +50,19 @@
       <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
       <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
     </symbol>
+    <symbol id="icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    </symbol>
+    <symbol id="icon-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+    </symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+    </symbol>
+    <symbol id="icon-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+    </symbol>
   </svg>
   <link rel="icon" href="../icons/favicon.ico" sizes="any" />
   <link rel="icon" type="image/png" sizes="32x32" href="../icons/favicon-32.png" />
@@ -128,6 +141,15 @@
       </div>
     </header>
 
+    <!-- شريط التبويبات -->
+    <nav class="dir-tab-bar" role="tablist">
+      <button class="dir-tab-btn is-active" data-tab="overview" role="tab">النظرة العامة</button>
+      <button class="dir-tab-btn" data-tab="schools" role="tab">المدارس</button>
+      <button class="dir-tab-btn" data-tab="principals" role="tab">المدراء</button>
+    </nav>
+
+    <!-- تبويب النظرة العامة -->
+    <div id="dir-tab-overview" class="dir-tab-panel is-active">
     <main class="main-content">
 
       <!-- صف الإحصائيات -->
@@ -513,25 +535,249 @@
       </section>
 
     </main>
+    </div><!-- /dir-tab-overview -->
+
+    <!-- ══════════════════════════════════════════
+         تبويب المدارس
+    ══════════════════════════════════════════ -->
+    <div id="dir-tab-schools" class="dir-tab-panel">
+      <div class="dir-section-card">
+        <div class="dir-section-header">
+          <h2>المدارس (<span id="dir-schools-count">—</span>)</h2>
+          <button id="dir-add-school-btn" class="btn btn-primary btn-sm">
+            <svg width="14" height="14"><use href="#icon-plus"/></svg>
+            إضافة مدرسة
+          </button>
+        </div>
+        <div id="dir-schools-loading" class="dir-table-loading hidden">
+          <div class="spinner"></div><span>جارٍ التحميل…</span>
+        </div>
+        <div id="dir-schools-table-wrap" class="table-wrapper hidden">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>اسم المدرسة</th>
+                <th>التصنيف</th>
+                <th>الطلاب</th>
+                <th>المعلمون</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="dir-schools-tbody"></tbody>
+          </table>
+        </div>
+        <div id="dir-schools-empty" class="dir-table-empty hidden">لا توجد مدارس بعد.</div>
+      </div>
+    </div><!-- /dir-tab-schools -->
+
+    <!-- ══════════════════════════════════════════
+         تبويب المدراء
+    ══════════════════════════════════════════ -->
+    <div id="dir-tab-principals" class="dir-tab-panel">
+      <div class="dir-section-card">
+        <div class="dir-section-header">
+          <h2>المدراء (<span id="dir-principals-count">—</span>)</h2>
+          <button id="dir-add-principal-btn" class="btn btn-primary btn-sm">
+            <svg width="14" height="14"><use href="#icon-plus"/></svg>
+            إنشاء حساب مدير
+          </button>
+        </div>
+        <div id="dir-principals-loading" class="dir-table-loading hidden">
+          <div class="spinner"></div><span>جارٍ التحميل…</span>
+        </div>
+        <div id="dir-principals-table-wrap" class="table-wrapper hidden">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>الاسم</th>
+                <th>المدرسة</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="dir-principals-tbody"></tbody>
+          </table>
+        </div>
+        <div id="dir-principals-empty" class="dir-table-empty hidden">لا يوجد مدراء بعد.</div>
+      </div>
+    </div><!-- /dir-tab-principals -->
+
+  </div><!-- /#app -->
+
+  <!-- ══ مودال إضافة/تعديل مدرسة ══ -->
+  <div id="dir-school-modal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:540px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <span class="modal-title" id="dir-school-modal-title" style="font-size:1rem;font-weight:700;color:var(--text-primary)">إضافة مدرسة</span>
+        <button class="btn btn-ghost btn-sm" id="dir-school-modal-close">
+          <svg width="16" height="16"><use href="#icon-close"/></svg>
+        </button>
+      </div>
+      <div id="dir-school-modal-error" class="dir-review-msg" hidden style="color:var(--red);margin-bottom:10px;font-size:.88rem"></div>
+
+      <div class="form-group">
+        <label>اسم المدرسة *</label>
+        <input type="text" id="dir-sm-name" class="field-input" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px" />
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>خط العرض (lat)</label>
+          <input type="number" id="dir-sm-lat" class="field-input" step="any" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px" />
+        </div>
+        <div class="form-group">
+          <label>خط الطول (lng)</label>
+          <input type="number" id="dir-sm-lng" class="field-input" step="any" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px" />
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>التصنيف</label>
+          <select id="dir-sm-classification" class="field-input" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px">
+            <option value="">—</option><option>أ</option><option>ب</option><option>ج</option><option>د</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>نوع التعليم</label>
+          <select id="dir-sm-education-type" class="field-input" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px">
+            <option value="">—</option><option>عام</option><option>مهني</option><option>ديني</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>نوع الدوام</label>
+          <select id="dir-sm-shift" class="field-input" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px">
+            <option value="">—</option><option>صباحي</option><option>مسائي</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>نوع الطلاب</label>
+          <select id="dir-sm-student-type" class="field-input" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px">
+            <option value="">—</option><option>مختلط</option><option>بنين</option><option>بنات</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>عدد الطلاب</label>
+          <input type="number" id="dir-sm-total-students" class="field-input" min="0" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px" />
+        </div>
+        <div class="form-group">
+          <label>عدد المعلمين</label>
+          <input type="number" id="dir-sm-total-teachers" class="field-input" min="0" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>اسم المجمع المدرسي</label>
+        <input type="text" id="dir-sm-complex-name" class="field-input" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px" />
+      </div>
+
+      <div class="modal-actions" style="margin-top:16px">
+        <button class="btn btn-ghost btn-sm" id="dir-school-modal-cancel">إلغاء</button>
+        <button class="btn btn-primary btn-sm" id="dir-school-modal-save">حفظ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ مودال إنشاء حساب مدير ══ -->
+  <div id="dir-principal-modal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:480px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <span style="font-size:1rem;font-weight:700;color:var(--text-primary)">إنشاء حساب مدير</span>
+        <button class="btn btn-ghost btn-sm" id="dir-principal-modal-close">
+          <svg width="16" height="16"><use href="#icon-close"/></svg>
+        </button>
+      </div>
+      <div id="dir-principal-modal-error" class="dir-review-msg" hidden style="color:var(--red);margin-bottom:10px;font-size:.88rem"></div>
+      <div class="form-group">
+        <label>البريد الإلكتروني *</label>
+        <input type="email" id="dir-pm-email" class="field-input" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px" />
+      </div>
+      <div class="form-group">
+        <label>كلمة المرور *</label>
+        <input type="password" id="dir-pm-password" class="field-input" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px" />
+      </div>
+      <div class="form-group">
+        <label>الاسم الكامل *</label>
+        <input type="text" id="dir-pm-fullname" class="field-input" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px" />
+      </div>
+      <div class="form-group">
+        <label>المدرسة *</label>
+        <select id="dir-pm-school" class="field-input" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px">
+          <option value="">— اختر المدرسة —</option>
+        </select>
+      </div>
+      <div class="modal-actions" style="margin-top:16px">
+        <button class="btn btn-ghost btn-sm" id="dir-principal-modal-cancel">إلغاء</button>
+        <button class="btn btn-primary btn-sm" id="dir-principal-modal-save">إنشاء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ مودال تعطيل المدير ══ -->
+  <div id="dir-deactivate-modal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:400px">
+      <p style="color:var(--text-secondary);font-size:.9rem;line-height:1.7;margin-bottom:12px">
+        سيُحظر حساب <strong id="dir-deactivate-name" style="color:var(--text-primary)"></strong> ولن يتمكن من تسجيل الدخول.
+        يمكن إعادة تفعيله لاحقاً من قِبل مسؤول النظام.
+      </p>
+      <div id="dir-deactivate-error" class="dir-review-msg" hidden style="color:var(--red);margin-bottom:10px;font-size:.88rem"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost btn-sm" id="dir-deactivate-cancel">إلغاء</button>
+        <button class="btn btn-sm" id="dir-deactivate-confirm" style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)">تعطيل</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ مودال بيانات الحساب ══ -->
+  <div id="dir-cred-modal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:400px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <span style="font-size:1rem;font-weight:700;color:var(--text-primary)">بيانات الحساب</span>
+        <button class="btn btn-ghost btn-sm" id="dir-cred-modal-close">
+          <svg width="16" height="16"><use href="#icon-close"/></svg>
+        </button>
+      </div>
+      <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:14px">اطّلع على بيانات دخول المدير وشاركها معه بشكل آمن.</p>
+      <div class="cred-field">
+        <label>الاسم</label>
+        <span id="dir-cred-name">—</span>
+      </div>
+      <div class="cred-field">
+        <label>البريد الإلكتروني</label>
+        <span id="dir-cred-email">—</span>
+      </div>
+      <div class="cred-field">
+        <label>كلمة المرور</label>
+        <span id="dir-cred-password">—</span>
+      </div>
+      <div id="dir-cred-not-found" class="dir-review-msg" hidden style="color:var(--text-muted);font-size:.88rem">
+        لا تتوفر بيانات حساب لهذا المستخدم.
+      </div>
+      <div class="modal-actions" style="margin-top:8px">
+        <button class="btn btn-ghost btn-sm" id="dir-cred-modal-ok">إغلاق</button>
+      </div>
+    </div>
   </div>
 
   <!-- Toast Container -->
   <div id="toast-container" class="toast-container"></div>
 
   <!-- Notifications Modal -->
-  <div id="modal-notif" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center" aria-modal="true" role="dialog">
-    <div style="background:#fff;border-radius:12px;width:min(420px,94vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 16px 8px;border-bottom:1px solid #E2E8F0">
-        <span style="font-weight:700;font-size:1rem;direction:rtl">الإشعارات</span>
+  <div id="modal-notif" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:center;justify-content:center" aria-modal="true" role="dialog">
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);width:min(420px,94vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 16px 10px;border-bottom:1px solid var(--border)">
+        <span style="font-weight:700;font-size:1rem;color:var(--text-primary);direction:rtl">الإشعارات</span>
         <div style="display:flex;gap:8px;align-items:center">
-          <button id="btn-notif-read-all" style="font-size:.8rem;padding:4px 10px;border:1px solid #CBD5E1;border-radius:6px;cursor:pointer;background:#fff">تحديد الكل كمقروء</button>
-          <button id="btn-notif-close" style="background:none;border:none;cursor:pointer;font-size:1.3rem;line-height:1" aria-label="إغلاق">
+          <button id="btn-notif-read-all" style="font-size:.8rem;padding:4px 10px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--bg-hover);color:var(--text-secondary)">تحديد الكل كمقروء</button>
+          <button id="btn-notif-close" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);line-height:1" aria-label="إغلاق">
             <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="16" y1="4" x2="4" y2="16"/><line x1="4" y1="4" x2="16" y2="16"/></svg>
           </button>
         </div>
       </div>
       <ul id="notif-list" style="list-style:none;margin:0;padding:0;overflow-y:auto;flex:1;direction:rtl" role="list">
-        <li style="padding:32px 16px;text-align:center;color:#94A3B8;font-size:.9rem">لا توجد إشعارات</li>
+        <li style="padding:32px 16px;text-align:center;color:var(--text-muted);font-size:.9rem">لا توجد إشعارات</li>
       </ul>
     </div>
   </div>

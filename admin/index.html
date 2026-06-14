@@ -426,6 +426,39 @@
   <!-- ══════════════════════════════════════════════
        Modal: تأكيد تعطيل مستخدم
   ══════════════════════════════════════════════ -->
+  <!-- ══════════════════════════════════════════════
+       Modal: بيانات حساب المستخدم
+  ══════════════════════════════════════════════ -->
+  <div id="cred-modal" class="modal-overlay hidden">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header">
+        <span class="modal-title">بيانات الحساب</span>
+        <button class="btn btn-icon btn-sm" id="cred-modal-close">
+          <svg width="16" height="16"><use href="#icon-close"/></svg>
+        </button>
+      </div>
+      <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:14px">اطّلع على بيانات دخول المستخدم وشاركها معه بشكل آمن.</p>
+      <div class="cred-field">
+        <label>الاسم</label>
+        <span id="cred-name">—</span>
+      </div>
+      <div class="cred-field">
+        <label>البريد الإلكتروني</label>
+        <span id="cred-email">—</span>
+      </div>
+      <div class="cred-field">
+        <label>كلمة المرور</label>
+        <span id="cred-password">—</span>
+      </div>
+      <div id="cred-not-found" class="error-msg hidden" style="background:none;border:none;color:var(--text-muted)">
+        لا تتوفر بيانات حساب لهذا المستخدم.
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="cred-modal-ok">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
   <div id="deactivate-modal" class="modal-overlay hidden">
     <div class="modal" style="max-width:400px">
       <div class="modal-header">
