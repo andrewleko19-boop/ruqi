@@ -842,6 +842,9 @@ function studentRowFromInput(p) {
     card_number:      (p.cardNumber     ?? '').trim() || null,
     birth_place:      (p.birthPlace     ?? '').trim() || null,
     contact_phone:    (p.contactPhone   ?? '').trim() || null,
+    // Mirror the contact phone into parent_phone (normalised to +9639…) so the
+    // parent portal can link the student — parent-auth matches on parent_phone.
+    parent_phone:     _normalizePhone(p.contactPhone) || null,
     res_governorate:  (p.resGovernorate ?? '').trim() || null,
     res_region:       (p.resRegion      ?? '').trim() || null,
     res_subdistrict:  (p.resSubdistrict ?? '').trim() || null,
