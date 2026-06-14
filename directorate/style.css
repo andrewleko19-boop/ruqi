@@ -380,6 +380,60 @@ input::placeholder { color: var(--text-muted); }
   background: var(--bg-base);
 }
 
+/* ── Technical observatory (3D globe) ─────────────────────────────────────── */
+#globe-viz {
+  height: var(--map-h);
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 120% 90% at 50% 38%, #0e1730 0%, #070b16 55%, #04060d 100%);
+}
+#globe-viz[hidden] { display: none; }
+#globe-viz canvas { display: block; cursor: grab; }
+#globe-viz canvas:active { cursor: grabbing; }
+
+.map-head-right {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+.view-toggle {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 5px 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition), border-color var(--transition), box-shadow var(--transition);
+}
+.view-toggle:hover {
+  background: var(--blue-dim);
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(79,140,255,0.12);
+}
+
+/* globe.gl HTML tooltip — match the dark popup theme */
+.scene-tooltip { pointer-events: none; }
+.globe-tip {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  padding: 0.55rem 0.7rem;
+  font-size: 0.82rem;
+  min-width: 150px;
+  text-align: right;
+  direction: rtl;
+}
+.globe-tip-name { font-weight: 700; color: var(--blue); margin-bottom: 0.3rem; }
+.globe-tip-row  { display: flex; justify-content: space-between; gap: 1rem; color: var(--text-secondary); }
+.globe-tip-row b { color: var(--text-primary); font-weight: 600; }
+
 /* Override Leaflet popup for dark theme */
 .leaflet-popup-content-wrapper {
   background: var(--bg-card);

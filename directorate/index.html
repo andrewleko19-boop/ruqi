@@ -226,14 +226,19 @@
               <svg class="icon"><use href="#icon-map"/></svg>
               خريطة المدارس
             </h2>
-          <div class="map-legend">
-            <span class="legend-dot legend-dot--green"></span>طبيعي
-            <span class="legend-dot legend-dot--amber"></span>تغطية ناقصة
-            <span class="legend-dot legend-dot--red"></span>حضور منخفض / طارئ
-            <span class="legend-dot legend-dot--no-data"></span>لم تُسجّل
-           </div>
+          <div class="map-head-right">
+            <button id="view-toggle" class="view-toggle" type="button"
+                    aria-label="تبديل العرض">🌐 المرصد</button>
+            <div class="map-legend">
+              <span class="legend-dot legend-dot--green"></span>طبيعي
+              <span class="legend-dot legend-dot--amber"></span>تغطية ناقصة
+              <span class="legend-dot legend-dot--red"></span>حضور منخفض / طارئ
+              <span class="legend-dot legend-dot--no-data"></span>لم تُسجّل
+            </div>
+          </div>
           </div>
           <div id="map"></div>
+          <div id="globe-viz" hidden></div>
         </section>
 
         <!-- لوحة التقارير المعلقة -->
@@ -796,6 +801,7 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/globe.gl@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="../shared/db.js"></script>  <script type="module" src="script.js"></script>
