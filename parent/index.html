@@ -208,7 +208,17 @@
         </div>
       </div>
       <div class="excuses-section">
-        <h2 class="section-title">الأعذار المُقدَّمة</h2>
+        <div class="excuses-section-header">
+          <h2 class="section-title">الأعذار المُقدَّمة</h2>
+          <button type="button" class="btn btn-primary btn-submit-excuse" id="btn-new-excuse-more">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            تقديم عذر
+          </button>
+        </div>
+        <div id="excuse-date-picker-wrap" class="excuse-date-picker-wrap" hidden>
+          <label for="inp-excuse-date" class="field-label">اختر يوم الغياب</label>
+          <input type="date" id="inp-excuse-date" class="field-input" dir="ltr">
+        </div>
         <div id="excuses-empty" class="empty-msg" hidden>لم تُقدِّم أي أعذار بعد</div>
         <ul id="excuses-list" class="excuses-list" hidden></ul>
       </div>
@@ -285,6 +295,18 @@
         </button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ مودال تأكيد الخروج ════════════════════════════ -->
+<div id="modal-confirm-logout" class="modal-overlay modal-overlay--sm" hidden role="dialog" aria-modal="true" aria-labelledby="confirm-logout-title">
+  <div class="modal-sheet modal-sheet--sm">
+    <h2 id="confirm-logout-title" class="modal-title">تسجيل الخروج</h2>
+    <p class="modal-subtitle">هل تريد تسجيل الخروج من بوابة ولي الأمر؟</p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-outline" id="btn-confirm-logout-cancel">إلغاء</button>
+      <button type="button" class="btn btn-danger" id="btn-confirm-logout-ok">خروج</button>
+    </div>
   </div>
 </div>
 

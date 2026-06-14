@@ -2672,12 +2672,17 @@ async function parentGetStudentAttendance(studentId, year, month) {
 async function parentGetStudentGrades(studentId, academicYear) {
   const { data, error } = await db
     .from('student_grades')
-    .select('subject_id, component_id, semester, mark, subject:subjects(name, max_mark, display_order), component:grade_components(name, max_mark, display_order)')
+    .select('subject_id, component_id, semester, mark, subject:subjects(name, max_total, sort_order), component:subject_components(name, max_mark, sort_order)')
     .eq('student_id', studentId)
     .eq('academic_year', academicYear)
     .order('semester');
   if (error) throw error;
   return data ?? [];
+}
+
+async function parentRestoreSession() {
+  const { data: { session } } = await db.auth.getSession();
+  return session ?? null;
 }
 
 async function parentGetHolidays(year) {
@@ -2915,6 +2920,7 @@ window.NSAMS_DB = {
   parentRequestOtp,
   parentVerifyOtp,
   parentLogout,
+  parentRestoreSession,
   parentGetMyStudents,
   parentGetStudentAttendance,
   parentGetStudentGrades,

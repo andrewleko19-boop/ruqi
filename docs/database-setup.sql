@@ -2728,10 +2728,15 @@ alter table public.absence_excuses enable row level security;
 create index if not exists absence_excuses_school_date_idx
   on public.absence_excuses(school_id, date desc);
 
--- P.5 — دالة مساعدة
+-- P.5 — دالة مساعدة (تعرّف ولي الأمر من بريده في auth.users — لا تحتاج public.users)
 create or replace function public.current_user_is_parent()
-returns boolean language sql security definer stable as $$
-  select current_user_role() = 'parent'
+returns boolean language sql security definer stable
+set search_path = public as $$
+  select exists (
+    select 1 from auth.users
+    where id = auth.uid()
+      and email like '%@parent.nsams.local'
+  )
 $$;
 
 -- P.5a — تطبيع الهاتف: يختزل أي صيغة إلى جوهرها الوطني (مثال: 9XXXXXXXX)
@@ -2841,6 +2846,33 @@ create policy parent_read_linked_grades on public.student_grades
 drop policy if exists authenticated_read_holidays on public.school_holidays;
 create policy authenticated_read_holidays on public.school_holidays
   for select to authenticated using (true);
+
+-- المواد الدراسية: ولي الأمر يرى مواد مدرسة أبنائه (لازمة للـ JOIN في استعلام الدرجات)
+drop policy if exists parent_read_subjects on public.subjects;
+create policy parent_read_subjects on public.subjects
+  for select to authenticated
+  using (
+    current_user_is_parent() and exists (
+      select 1 from public.parent_links pl
+      join public.students s on s.id = pl.student_id
+      where pl.user_id = auth.uid() and s.school_id = subjects.school_id
+    )
+  );
+
+-- مكونات المواد: ولي الأمر يرى مكونات مواد أبنائه (لازمة للـ JOIN في استعلام الدرجات)
+drop policy if exists parent_read_components on public.subject_components;
+create policy parent_read_components on public.subject_components
+  for select to authenticated
+  using (
+    current_user_is_parent() and exists (
+      select 1 from public.subjects sub
+      join public.parent_links pl on true
+      join public.students s on s.id = pl.student_id
+      where sub.id = subject_components.subject_id
+        and pl.user_id = auth.uid()
+        and s.school_id = sub.school_id
+    )
+  );
 
 -- P.7 — سياسات عذر الغياب
 
