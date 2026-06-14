@@ -2629,6 +2629,11 @@ async function parentLogout() {
 }
 
 async function parentGetMyStudents() {
+  // Self-healing link: rebuild parent_links from the caller's phone every load,
+  // so students added (or fixed) after the OTP-verify step still appear. Errors
+  // are non-fatal — fall through to whatever links already exist.
+  try { await db.rpc('parent_sync_links'); } catch (e) { console.warn('[parent] sync_links', e); }
+
   const { data, error } = await db
     .from('parent_links')
     .select('student:student_id(id, full_name, gender, class_id, school_id, school:school_id(id, name), class:class_id(id, name, grade, section))')

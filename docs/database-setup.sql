@@ -2734,6 +2734,47 @@ returns boolean language sql security definer stable as $$
   select current_user_role() = 'parent'
 $$;
 
+-- P.5b — ربط ولي الأمر بطلابه عند القراءة (self-healing)
+-- يستخرج الهاتف من بريد المصادقة {phone}@parent.nsams.local ويطابقه على
+-- students.parent_phone (صيغتا +9639… و 09…) ثم يبني parent_links الناقصة.
+-- يُستدعى من الواجهة عند كل فتح للتطبيق فلا يعتمد الربط على لحظة التحقق فقط.
+create or replace function public.parent_sync_links()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  myemail text;
+  myphone text;
+  mylocal text;
+  n integer;
+begin
+  select email into myemail from auth.users where id = auth.uid();
+  if myemail is null or myemail not like '%@parent.nsams.local' then
+    return 0;
+  end if;
+
+  myphone := split_part(myemail, '@', 1);
+  mylocal := case when myphone ~ '^\+9639'
+                  then '0' || substr(myphone, 5)
+                  else myphone end;
+
+  insert into public.parent_links (user_id, student_id)
+  select auth.uid(), s.id
+    from public.students s
+   where s.is_active = true
+     and s.parent_phone is not null
+     and (s.parent_phone = myphone or s.parent_phone = mylocal)
+  on conflict (user_id, student_id) do nothing;
+
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
+grant execute on function public.parent_sync_links() to authenticated;
+
 -- P.6 — سياسات RLS لقراءة بيانات الطالب من ولي الأمر
 
 -- الطلاب: ولي الأمر يرى أبناءه المرتبطين فقط
