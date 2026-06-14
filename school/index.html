@@ -155,6 +155,14 @@
     <polyline points="9 11 12 14 22 4"/>
     <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
   </symbol>
+  <symbol id="ic-user-group" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="7" r="3"/>
+    <path d="M6.5 21v-1a5.5 5.5 0 0 1 11 0v1"/>
+    <circle cx="4" cy="9" r="2.5"/>
+    <path d="M1 21v-.5A3.5 3.5 0 0 1 4.5 17"/>
+    <circle cx="20" cy="9" r="2.5"/>
+    <path d="M23 21v-.5A3.5 3.5 0 0 0 19.5 17"/>
+  </symbol>
   <symbol id="ic-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
     <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
@@ -311,7 +319,7 @@
     </button>
     <button class="tab-btn" id="tab-personnel" role="tab"
             aria-selected="false" data-tab="personnel">
-      <svg class="icon"><use href="#ic-users"/></svg>
+      <svg class="icon"><use href="#ic-receipt"/></svg>
       الكادر
     </button>
     <button class="tab-btn" id="tab-staff" role="tab"
@@ -331,7 +339,7 @@
     </button>
     <button class="tab-btn" id="tab-registry" role="tab"
             aria-selected="false" data-tab="registry">
-      <svg class="icon"><use href="#ic-receipt"/></svg>
+      <svg class="icon"><use href="#ic-user-group"/></svg>
       الكوادر
     </button>
     <button class="tab-btn" id="tab-statement" role="tab"
@@ -579,11 +587,10 @@
     <section class="section-card">
       <div class="section-card-header">
         <div class="section-card-icon"><svg class="icon icon-sm"><use href="#ic-users"/></svg></div>
-        <div style="flex:1">
-          <div class="section-card-title">كوادر المدرسة</div>
+        <div style="flex:1;min-width:0">
+          <div class="section-card-title">كوادر المدرسة <span id="roster-counts" class="hdr-note"></span></div>
           <div class="section-card-desc">جميع أفراد الكادر التعليمي والإداري</div>
         </div>
-        <span id="roster-counts" class="hdr-note"></span>
         <button class="hdr-btn" id="btn-refresh-roster" aria-label="تحديث">
           <svg class="icon icon-sm" id="roster-refresh-icon"><use href="#ic-refresh"/></svg>
         </button>
@@ -1437,11 +1444,15 @@
           <div class="twin-fields">
             <div class="field-group">
               <label for="req-stu-nid">الرقم الوطني</label>
-              <input id="req-stu-nid" class="field-input" type="text" maxlength="20" inputmode="numeric" />
+              <input id="req-stu-nid" class="field-input" type="text" maxlength="11" inputmode="numeric" />
             </div>
             <div class="field-group">
-              <label for="req-stu-dob">تاريخ الميلاد</label>
-              <input id="req-stu-dob" class="field-input" type="date" />
+              <label>تاريخ الميلاد</label>
+              <div class="dob-row">
+                <input id="req-stu-dob-day"   class="field-input dob-in" type="text" inputmode="numeric" maxlength="2" placeholder="يوم" aria-label="اليوم" />
+                <input id="req-stu-dob-month" class="field-input dob-in" type="text" inputmode="numeric" maxlength="2" placeholder="شهر" aria-label="الشهر" />
+                <input id="req-stu-dob-year"  class="field-input dob-in dob-year" type="text" inputmode="numeric" maxlength="4" placeholder="سنة" aria-label="السنة" />
+              </div>
             </div>
           </div>
         </div>
@@ -1672,14 +1683,18 @@
             <input id="sr-seniority" class="field-input" type="number" min="0" max="50" step="0.5" />
           </div>
           <div class="field-group">
-            <label for="sr-start-date">تاريخ المباشرة</label>
-            <input id="sr-start-date" class="field-input" type="date" />
+            <label>تاريخ المباشرة</label>
+            <div class="dob-row">
+              <input id="sr-start-day"   class="field-input dob-in" type="text" inputmode="numeric" maxlength="2" placeholder="يوم" aria-label="اليوم" />
+              <input id="sr-start-month" class="field-input dob-in" type="text" inputmode="numeric" maxlength="2" placeholder="شهر" aria-label="الشهر" />
+              <input id="sr-start-year"  class="field-input dob-in dob-year" type="text" inputmode="numeric" maxlength="4" placeholder="سنة" aria-label="السنة" />
+            </div>
           </div>
 
           <p class="form-section-label">البيانات الشخصية</p>
           <div class="field-group">
             <label for="sr-national-id">الرقم الوطني</label>
-            <input id="sr-national-id" class="field-input" type="text" maxlength="20"
+            <input id="sr-national-id" class="field-input" type="text" maxlength="11"
                    inputmode="numeric" />
           </div>
           <div class="field-group">
@@ -1711,6 +1726,8 @@
             <label for="sr-edu-zone">المنطقة التعليمية</label>
             <select id="sr-edu-zone" class="field-input">
               <option value="">— لا يوجد —</option>
+              <option value="المدينة">المدينة</option>
+              <option value="الريف">الريف</option>
             </select>
           </div>
 

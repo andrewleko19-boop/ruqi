@@ -2237,7 +2237,10 @@ async function submitRequest() {
       class_id: classId, first_name, father_name, family_name,
       gender:     el('req-stu-gender').value,
       national_id:el('req-stu-nid').value.trim(),
-      birth_date: el('req-stu-dob').value || '',
+      birth_date: (() => {
+        const d = el('req-stu-dob-day')?.value, m = el('req-stu-dob-month')?.value, y = el('req-stu-dob-year')?.value;
+        return (y && m && d) ? `${String(y).padStart(4,'0')}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}` : '';
+      })(),
     };
   } else if (type === 'correct_student') {
     const studentId = el('req-cor-student').value;
@@ -3405,6 +3408,7 @@ function openStudentForm(student) {
   CustomSelect.refresh(el('stu-gov'));
   hide(stuFormError);
   show(modalStudent);
+  if (!student) modalStudent.querySelector('.sheet-body').scrollTop = 0;
 }
 function closeStudentForm() { hide(modalStudent); }
 el('btn-close-student').addEventListener('click', closeStudentForm);
@@ -3976,6 +3980,13 @@ function checkAttendanceReminder() {
   }
 }
 
+// National-ID fields: numeric only, 11 digits max.
+['sr-national-id', 'stu-natid', 'req-stu-nid'].forEach(id => {
+  el(id)?.addEventListener('input', function() {
+    this.value = this.value.replace(/\D/g, '').slice(0, 11);
+  });
+});
+
 // Enhance the school-admin selects once the DOM is parsed.
 CustomSelect.enhance('stu-class-select');
 CustomSelect.enhance('stu-gender');
@@ -4029,7 +4040,9 @@ const srRosterType    = el('sr-roster-type');
 const srCertificate   = el('sr-certificate');
 const srHigherDegree  = el('sr-higher-degree');
 const srSeniority     = el('sr-seniority');
-const srStartDate     = el('sr-start-date');
+const srStartDay      = el('sr-start-day');
+const srStartMonth    = el('sr-start-month');
+const srStartYear     = el('sr-start-year');
 const srNationalId    = el('sr-national-id');
 const srMotherName    = el('sr-mother-name');
 const srDobDay        = el('sr-dob-day');
@@ -4166,10 +4179,9 @@ async function openStaffRecModal(rec) {
       ? ['معلم', 'مدرس', 'مدرس مساعد']
       : await getLookup('support_job');
 
-  const [specs, certs, higher, minDocs, eduZones] = await Promise.all([
+  const [specs, certs, higher, minDocs] = await Promise.all([
     getLookup('specialization'), getLookup('certificate'),
     getLookup('higher_degree'),  getLookup('ministerial_doc'),
-    getLookup('educational_zone'),
   ]);
 
   fillSel(srJobTitle, jobTitles);
@@ -4177,13 +4189,12 @@ async function openStaffRecModal(rec) {
   fillSel(srCertificate, certs);
   fillSel(srHigherDegree, higher, '— لا يوجد —');
   fillSel(srMinDoc, minDocs, '— لا يوجد —');
-  fillSel(srEduZone, eduZones, '— لا يوجد —');
 
   // Subject field visible for teaching only
   if (srSubjectWrap) srSubjectWrap.hidden = _regSegment !== 'teaching';
 
   const textInputs = [srFullName, srNationalId, srMotherName, srDobDay, srDobMonth,
-                      srDobYear, srSubject, srPhone, srResZone, srNotes];
+                      srDobYear, srStartDay, srStartMonth, srStartYear, srSubject, srPhone, srResZone, srNotes];
   const numInputs  = [srSeniority];
 
   if (rec) {
@@ -4195,7 +4206,12 @@ async function openStaffRecModal(rec) {
     srNotes.value       = rec.notes         || '';
     srSubject.value     = rec.subject_taught || '';
     srSeniority.value   = rec.seniority_years ?? '';
-    srStartDate.value   = rec.start_date    || '';
+    if (rec.start_date) {
+      const [sy, sm, sd] = rec.start_date.split('-');
+      srStartYear.value = sy; srStartMonth.value = String(Number(sm)); srStartDay.value = String(Number(sd));
+    } else {
+      srStartYear.value = srStartMonth.value = srStartDay.value = '';
+    }
     if (rec.birth_date) {
       const [y, m, d]  = rec.birth_date.split('-');
       srDobYear.value  = y; srDobMonth.value = m; srDobDay.value = d;
@@ -4214,7 +4230,6 @@ async function openStaffRecModal(rec) {
   } else {
     textInputs.forEach(i => { if (i) i.value = ''; });
     numInputs.forEach(i => { if (i) i.value = ''; });
-    if (srStartDate) srStartDate.value = '';
     srRosterType.value = 'inside';
     [srJobTitle, srSpec, srCertificate, srHigherDegree, srEduZone, srRosterType, srMinDoc]
       .forEach(s => { if (s) { s.value = ''; CustomSelect.refresh(s); } });
@@ -4222,6 +4237,7 @@ async function openStaffRecModal(rec) {
 
   hide(srError);
   show(modalStaffRec);
+  if (!rec) modalStaffRec.querySelector('.sheet-body').scrollTop = 0;
   document.body.style.overflow = 'hidden';
 }
 
@@ -4264,7 +4280,9 @@ btnSaveStaffRec?.addEventListener('click', async () => {
     certificate:      srCertificate?.value || null,
     higher_degree:    srHigherDegree?.value || null,
     seniority_years:  srSeniority?.value ? parseFloat(srSeniority.value) : null,
-    start_date:       srStartDate?.value || null,
+    start_date:       (srStartYear?.value && srStartMonth?.value && srStartDay?.value)
+                        ? `${String(srStartYear.value).padStart(4,'0')}-${String(srStartMonth.value).padStart(2,'0')}-${String(srStartDay.value).padStart(2,'0')}`
+                        : null,
     phone:            srPhone?.value.trim() || null,
     residential_zone: srResZone?.value.trim() || null,
     educational_zone: srEduZone?.value || null,
@@ -4426,6 +4444,7 @@ CustomSelect.enhance('sr-higher-degree');
 CustomSelect.enhance('sr-edu-zone');
 CustomSelect.enhance('sr-min-doc');
 CustomSelect.enhance('leave-type-sel');
+CustomSelect.enhance('leaves-month-sel');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // § البيان الشهري — statement tab
