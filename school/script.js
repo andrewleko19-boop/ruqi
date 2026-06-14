@@ -4179,9 +4179,10 @@ async function openStaffRecModal(rec) {
       ? ['معلم', 'مدرس', 'مدرس مساعد']
       : await getLookup('support_job');
 
-  const [specs, certs, higher, minDocs] = await Promise.all([
+  const [specs, certs, higher, minDocs, eduZones] = await Promise.all([
     getLookup('specialization'), getLookup('certificate'),
     getLookup('higher_degree'),  getLookup('ministerial_doc'),
+    getLookup('educational_zone'),
   ]);
 
   fillSel(srJobTitle, jobTitles);
@@ -4189,6 +4190,7 @@ async function openStaffRecModal(rec) {
   fillSel(srCertificate, certs);
   fillSel(srHigherDegree, higher, '— لا يوجد —');
   fillSel(srMinDoc, minDocs, '— لا يوجد —');
+  fillSel(srEduZone, eduZones, '— لا يوجد —');
 
   // Subject field visible for teaching only
   if (srSubjectWrap) srSubjectWrap.hidden = _regSegment !== 'teaching';
