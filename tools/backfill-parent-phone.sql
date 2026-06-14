@@ -117,7 +117,34 @@ $$;
 
 grant execute on function public.parent_sync_links() to authenticated;
 
--- 6. تحقق — كم طالباً سيُطابَق لرقم معيّن؟ (بدّل الرقم لاختبار يدوي)
+-- 6. سياسات RLS — ولي الأمر يقرأ روابطه وطلابه فقط
+--    يُصلح حالة "لم يُعثر على طلاب" الناتجة عن غياب السياسة أو خطئها.
+--    آمن للتشغيل أكثر من مرة (يحذف القديمة ويُنشئ الصحيحة).
+
+-- 6a. parent_links: كل مستخدم يقرأ سطوره فقط
+drop policy if exists parent_read_own_links on public.parent_links;
+create policy parent_read_own_links
+  on public.parent_links
+  for select
+  to authenticated
+  using (user_id = auth.uid());
+
+-- 6b. students: ولي الأمر يقرأ الطلاب المرتبطين به (بدون current_user_is_parent
+--     لأن أولياء الأمور غير موجودين في public.users بسبب قيد chk_role_school)
+drop policy if exists parent_read_linked_students on public.students;
+create policy parent_read_linked_students
+  on public.students
+  for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.parent_links pl
+      where pl.student_id = students.id
+        and pl.user_id    = auth.uid()
+    )
+  );
+
+-- 7. تحقق — كم طالباً سيُطابَق لرقم معيّن؟ (بدّل الرقم لاختبار يدوي)
 --    select count(*) from public.students
 --    where is_active = true
 --      and public._nsams_phone_core(contact_phone) = public._nsams_phone_core('0961234567');
