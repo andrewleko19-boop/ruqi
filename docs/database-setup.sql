@@ -351,6 +351,26 @@ create policy schools_directorate_update on public.schools
     and exists (select 1 from public.users where id = auth.uid() and role = 'directorate_user')
   );
 
+-- 2.11  users SELECT للمديرية — قراءة مدراء مدارس مديريتها (تبويب «المدراء»)
+--
+--  مدير المدرسة (school_admin) ينتمي لمديرية عبر مدرسته (schools.directorate_id).
+--  بلا هذه السياسة، لا يرى مستخدم المديرية إلا صفّه فقط في public.users فيظهر
+--  تبويب «المدراء» فارغاً. تستخدم current_user_directorate_id() (SECURITY DEFINER)
+--  لتفادي العَوْد اللانهائي في RLS على نفس الجدول.
+drop policy if exists users_directorate_select_principals on public.users;
+create policy users_directorate_select_principals on public.users
+  for select to authenticated
+  using (
+    role = 'school_admin'
+    and current_user_directorate_id() is not null
+    and exists (
+      select 1
+      from   public.schools s
+      where  s.id            = public.users.school_id
+        and  s.directorate_id = current_user_directorate_id()
+    )
+  );
+
 
 -- ════════════════════════════════════════════════════════════════════════════
 --  SECTION 3 — Teacher account credentials (principal-provisioned logins)
