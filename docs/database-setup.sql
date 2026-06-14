@@ -124,6 +124,7 @@ alter table public.students
   add column if not exists card_number      text,
   add column if not exists birth_place      text,
   add column if not exists contact_phone    text,
+  add column if not exists parent_phone     text,
   add column if not exists res_governorate  text,
   add column if not exists res_region       text,
   add column if not exists res_subdistrict  text,
