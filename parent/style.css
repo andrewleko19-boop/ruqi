@@ -173,18 +173,23 @@ input, textarea, select { font-family: inherit; }
 
 /* ── Spinner ────────────────────────────────────────────────────────────── */
 .spinner {
-  width: 18px; height: 18px; border: 2px solid currentColor;
-  border-top-color: transparent; border-radius: 50%;
+  width: 18px; height: 18px;
+  border: 2.5px solid rgba(255,255,255,.35);
+  border-top-color: #fff;
+  border-radius: 50%;
   animation: spin .7s linear infinite; display: inline-block;
 }
-/* Inside a .btn the spinner is taken out of flex-flow so it stays centred
-   regardless of the (hidden) label's width. */
+/* Inside a .btn: use margin centering so keyframe rotation doesn't fight
+   the translate() that was causing the jumping effect. */
 .btn .spinner {
   position: absolute;
   top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
+  margin: -9px 0 0 -9px;
 }
-.spinner-lg { width: 36px; height: 36px; border-width: 3px; color: var(--clr-primary); }
+.spinner-lg {
+  width: 36px; height: 36px; border-width: 3px;
+  border-color: rgba(26,107,60,.25); border-top-color: var(--clr-primary);
+}
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── App Layout ─────────────────────────────────────────────────────────── */
@@ -306,9 +311,10 @@ input, textarea, select { font-family: inherit; }
   background: var(--clr-primary-lt); border-bottom: 1px solid var(--clr-border);
 }
 .cal-weekday {
-  text-align: center; padding: 6px 0;
-  font-size: .72rem; font-weight: 700;
-  color: var(--clr-primary);
+  text-align: center; padding: 6px 1px;
+  font-size: clamp(.52rem, 2.4vw, .7rem); font-weight: 700;
+  color: var(--clr-primary); letter-spacing: -.2px;
+  overflow: hidden; white-space: nowrap;
 }
 .cal-days { display: grid; grid-template-columns: repeat(7, 1fr); }
 .cal-day {
@@ -387,6 +393,8 @@ input, textarea, select { font-family: inherit; }
 }
 .total-label { text-align: right; }
 .grades-actions { display: flex; justify-content: flex-end; padding-top: 4px; }
+.grades-actions .btn { width: auto; padding: 9px 18px; font-size: .88rem; gap: 6px; }
+.grades-actions .btn svg { width: 17px; height: 17px; flex-shrink: 0; }
 
 /* ── Holidays ───────────────────────────────────────────────────────────── */
 .holidays-list {
@@ -569,6 +577,83 @@ input, textarea, select { font-family: inherit; }
   .cert-footer { display: flex; justify-content: space-between; margin-top: 24pt; padding-top: 12pt; border-top: 1pt solid #ccc; }
   .cert-seal, .cert-sig { border: 1pt solid #ccc; padding: 20pt 30pt; text-align: center; font-size: 10pt; color: #999; }
   .cert-date { font-size: 10pt; color: #555; align-self: flex-end; }
+}
+
+/* ── Danger Button ──────────────────────────────────────────────────────── */
+.btn-danger {
+  background: var(--clr-danger); color: #fff;
+  box-shadow: 0 2px 6px rgba(192,57,43,.25);
+}
+.btn-danger:hover:not(:disabled) { background: #a93226; }
+
+/* ── Semester Tabs (pill style) ─────────────────────────────────────────── */
+.semester-tabs {
+  display: flex; gap: 6px; padding: 6px;
+  background: var(--clr-surface); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm); border: none;
+}
+.tab-btn {
+  flex: 1; padding: 8px 12px; border-radius: 8px;
+  font-size: .875rem; font-weight: 600; color: var(--clr-muted);
+  border-bottom: none; margin-bottom: 0;
+  transition: all var(--transition);
+}
+.tab-btn.tab-active {
+  background: var(--clr-primary); color: #fff;
+  border-bottom-color: transparent;
+  box-shadow: 0 1px 4px rgba(26,107,60,.3);
+}
+.grades-content {
+  border-radius: var(--radius-md);
+}
+.grades-table tbody tr:nth-child(even) td { background: #f9fbfa; }
+.grades-table tbody tr:hover td { background: var(--clr-primary-lt); }
+
+/* ── Excuses Section Header ─────────────────────────────────────────────── */
+.excuses-section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 4px;
+}
+.excuses-section-header .section-title { margin-bottom: 0; }
+.btn-submit-excuse {
+  padding: 7px 14px; font-size: .82rem; gap: 5px;
+}
+.btn-submit-excuse svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+/* ── Excuse Date Picker Wrap ────────────────────────────────────────────── */
+.excuse-date-picker-wrap {
+  background: var(--clr-surface); border-radius: var(--radius-md);
+  padding: 14px 16px; box-shadow: var(--shadow-sm);
+  border: 1.5px solid var(--clr-border);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.excuse-date-picker-wrap .field-label { margin-bottom: 0; }
+
+/* ── Children Pills (active is clearer) ─────────────────────────────────── */
+.child-pill.active {
+  background: var(--clr-primary); color: #fff; border-color: var(--clr-primary);
+  box-shadow: 0 2px 6px rgba(26,107,60,.25);
+}
+
+/* ── Attendance Legend spacing ──────────────────────────────────────────── */
+.att-legend { display: flex; gap: 12px; flex-wrap: wrap; padding: 2px 0; }
+.legend-item { font-size: .78rem; }
+
+/* ── Month Calendar today highlight ────────────────────────────────────── */
+.cal-day--today {
+  background: #f0f9f4;
+}
+.cal-day--today .cal-day-num {
+  font-weight: 900; text-decoration: underline; color: var(--clr-primary);
+}
+
+/* ── Holiday list improvements ──────────────────────────────────────────── */
+.holiday-item {
+  transition: box-shadow var(--transition);
+}
+.holiday-item:hover { box-shadow: var(--shadow-md); }
+.holiday-month-header {
+  padding: 6px 4px; margin-top: 4px;
 }
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */

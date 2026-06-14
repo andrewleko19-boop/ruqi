@@ -8,6 +8,7 @@ const {
   parentRequestOtp,
   parentVerifyOtp,
   parentLogout,
+  parentRestoreSession,
   parentGetMyStudents,
   parentGetStudentAttendance,
   parentGetStudentGrades,
@@ -106,11 +107,19 @@ const holidaysEmpty   = $('holidays-empty');
 const holidaysList    = $('holidays-list');
 
 // More
-const schoolNameDisplay = $('school-name-display');
-const schoolPhoneRow    = $('school-phone-row');
-const schoolPhoneLink   = $('school-phone-link');
-const excusesEmpty      = $('excuses-empty');
-const excusesList       = $('excuses-list');
+const schoolNameDisplay   = $('school-name-display');
+const schoolPhoneRow      = $('school-phone-row');
+const schoolPhoneLink     = $('school-phone-link');
+const excusesEmpty        = $('excuses-empty');
+const excusesList         = $('excuses-list');
+const btnNewExcuseMore    = $('btn-new-excuse-more');
+const excuseDatePickerWrap = $('excuse-date-picker-wrap');
+const inpExcuseDate       = $('inp-excuse-date');
+
+// Logout Confirm Modal
+const modalConfirmLogout     = $('modal-confirm-logout');
+const btnConfirmLogoutOk     = $('btn-confirm-logout-ok');
+const btnConfirmLogoutCancel = $('btn-confirm-logout-cancel');
 
 // Excuse Modal
 const modalExcuse      = $('modal-excuse');
@@ -413,7 +422,7 @@ function renderMonthCalendar() {
   const daysInMonth = new Date(y, m + 1, 0).getDate();
   const today = localISO(new Date());
 
-  const weekdays = ['أحد','اثن','ثلا','أرب','خمي','جمع','سبت'];
+  const weekdays = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
   let html = '<div class="cal-weekdays">' +
     weekdays.map(d => `<div class="cal-weekday">${d}</div>`).join('') +
     '</div><div class="cal-days">';
@@ -523,7 +532,7 @@ function renderGrades(semester) {
     if (!bySubject[key]) {
       bySubject[key] = {
         name: g.subject?.name ?? 'مادة',
-        order: g.subject?.display_order ?? 99,
+        order: g.subject?.sort_order ?? 99,
         totalMark: 0,
         totalMax: 0,
         components: [],
@@ -531,7 +540,7 @@ function renderGrades(semester) {
     }
     bySubject[key].components.push(g);
     bySubject[key].totalMark += (g.mark ?? 0);
-    bySubject[key].totalMax  += (g.component?.max_mark ?? g.subject?.max_mark ?? 0);
+    bySubject[key].totalMax  += (g.component?.max_mark ?? g.subject?.max_total ?? 0);
   });
 
   const subjects = Object.values(bySubject).sort((a, b) => a.order - b.order);
@@ -668,12 +677,37 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 });
 
 // ── Logout ────────────────────────────────────────────────────────────────
-btnLogout.addEventListener('click', async () => {
-  if (!confirm('هل تريد تسجيل الخروج؟')) return;
+btnLogout.addEventListener('click', () => {
+  modalConfirmLogout.hidden = false;
+});
+btnConfirmLogoutCancel.addEventListener('click', () => {
+  modalConfirmLogout.hidden = true;
+});
+modalConfirmLogout.addEventListener('click', e => {
+  if (e.target === modalConfirmLogout) modalConfirmLogout.hidden = true;
+});
+btnConfirmLogoutOk.addEventListener('click', async () => {
+  modalConfirmLogout.hidden = true;
   try { await parentLogout(); } catch { /* ignore */ }
   S.students = []; S.activeStudent = null; S.phone = '';
   inpPhone.value = '';
   showScreen('login');
+});
+
+// ── Excuse from More Tab ──────────────────────────────────────────────────
+btnNewExcuseMore.addEventListener('click', () => {
+  excuseDatePickerWrap.hidden = false;
+  const today = localISO(new Date());
+  inpExcuseDate.max = today;
+  inpExcuseDate.value = today;
+  inpExcuseDate.focus();
+});
+
+inpExcuseDate.addEventListener('change', () => {
+  const d = inpExcuseDate.value;
+  if (!d) return;
+  excuseDatePickerWrap.hidden = true;
+  openExcuseModal(d);
 });
 
 // ── Excuse Modal ──────────────────────────────────────────────────────────
@@ -816,9 +850,9 @@ function fillCertSemester(prefix, rows) {
   const bySubject = {};
   rows.forEach(g => {
     const k = g.subject_id;
-    if (!bySubject[k]) bySubject[k] = { name: g.subject?.name ?? 'مادة', order: g.subject?.display_order ?? 99, mark: 0, max: 0 };
+    if (!bySubject[k]) bySubject[k] = { name: g.subject?.name ?? 'مادة', order: g.subject?.sort_order ?? 99, mark: 0, max: 0 };
     bySubject[k].mark += (g.mark ?? 0);
-    bySubject[k].max  += (g.component?.max_mark ?? g.subject?.max_mark ?? 0);
+    bySubject[k].max  += (g.component?.max_mark ?? g.subject?.max_total ?? 0);
   });
   const subjects = Object.values(bySubject).sort((a, b) => a.order - b.order);
   let totalM = 0, totalMx = 0;
@@ -834,4 +868,16 @@ function fillCertSemester(prefix, rows) {
 }
 
 // ── Entry ─────────────────────────────────────────────────────────────────
-showScreen('login');
+(async () => {
+  try {
+    const session = await parentRestoreSession();
+    if (session) {
+      showScreen('app');
+      await loadApp();
+    } else {
+      showScreen('login');
+    }
+  } catch {
+    showScreen('login');
+  }
+})();

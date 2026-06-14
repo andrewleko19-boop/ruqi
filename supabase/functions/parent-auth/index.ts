@@ -163,12 +163,9 @@ Deno.serve(async (req) => {
         if (createErr || !created?.user)
           return json({ error: `تعذّر إنشاء الحساب: ${createErr?.message ?? ""}` }, 500);
         userId = created.user.id;
-
-        // Insert into users table with parent role
-        await admin.from("users").upsert(
-          { id: userId, role: "parent", full_name: phone },
-          { onConflict: "id" }
-        );
+        // Parents authenticate via auth.users + parent_links only.
+        // public.users is for staff (teachers/admins) and has a role+school
+        // constraint that rejects parent rows — do not insert here.
       }
 
       // Build / refresh parent_links by matching the phone against BOTH
