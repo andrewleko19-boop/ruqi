@@ -2,10 +2,10 @@
 
 /* ═══ Design Tokens (identical to school/style.css) ══════════════════════════ */
 :root {
-  --clr-primary:      #0B2B5E;
-  --clr-primary-int:  #1E4A7A;
-  --clr-primary-hov:  #0F3A5A;
-  --clr-primary-dim:  rgba(11,43,94,.12);
+  --clr-primary:      #1a6b3c;
+  --clr-primary-int:  #2e8659;
+  --clr-primary-hov:  #145530;
+  --clr-primary-dim:  rgba(26,107,60,.12);
   --clr-success:      #10B981;
   --clr-success-bg:   #D1FAE5;
   --clr-success-brd:  #6EE7B7;
@@ -69,8 +69,8 @@ ul { list-style: none; }
 .login-bg {
   min-height: 100dvh;
   background:
-    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(30,74,122,.55) 0%, transparent 70%),
-    linear-gradient(160deg, #051830 0%, var(--clr-primary) 45%, #1E4A7A 100%);
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(26,107,60,.55) 0%, transparent 70%),
+    linear-gradient(160deg, #0d3b21 0%, var(--clr-primary) 45%, #2e8659 100%);
   display: flex; align-items: center; justify-content: center;
   padding: 32px 20px; position: relative; overflow: hidden;
 }
@@ -731,7 +731,7 @@ select.csel-native {
 .csel.is-open .csel-trigger {
   border-color: var(--clr-primary-int);
   background: #fff;
-  box-shadow: 0 0 0 3px rgba(30,74,122,.15);
+  box-shadow: 0 0 0 3px rgba(26,107,60,.15);
 }
 .csel-trigger.is-disabled { opacity: .55; cursor: not-allowed; }
 
@@ -899,7 +899,12 @@ select.csel-native {
   padding: 12px 16px;
   border-bottom: 1px solid var(--clr-border, #E2E8F0);
 }
-.notif-item--unread { background: rgba(26,39,68,.05); }
+.notif-item--unread { background: rgba(26,107,60,.05); }
 .notif-item-title { font-size: .9rem; font-weight: 600; }
 .notif-item-body  { font-size: .82rem; color: var(--clr-text-2, #64748B); margin-top: 2px; }
 .notif-item-time  { font-size: .75rem; color: var(--clr-text-3, #94A3B8); margin-top: 4px; }
+/* ── Brand lockup (Ruqí ｜ رُقِيّ) ─────────────────────────────────────────── */
+.brand-lockup { display:inline-flex; align-items:center; white-space:nowrap; }
+.brand-latin  { font-family:'DM Sans',sans-serif; font-weight:600; letter-spacing:-.01em; }
+.brand-sep    { opacity:.45; margin:0 .35em; font-weight:300; }
+.brand-ar     { font-family:'Tajawal',sans-serif; font-weight:700; }

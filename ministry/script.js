@@ -814,7 +814,7 @@ exportBtn.addEventListener('click', () => {
   const totRate      = totEnrolled > 0 ? (totAttending / totEnrolled * 100).toFixed(1) : '';
 
   const csvRows = [
-    `# تقرير الحضور الوطني NSAMS — ${dateStr}`,
+    `# تقرير الحضور الوطني رُقِيّ — ${dateStr}`,
     headers.join(','),
     ...dataLines,
     [

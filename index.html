@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NSAMS — نظام إدارة المدارس الوطني</title>
+  <title>رُقِيّ — نظام إدارة المدارس الوطني</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet" />
@@ -11,17 +11,17 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --navy:       #0B2B5E;
-      --navy-mid:   #0f3570;
-      --navy-light: #164299;
-      --accent:     #2F80ED;
-      --accent-glow:#4fa3ff;
+      --navy:       #1a6b3c;
+      --navy-mid:   #2e8659;
+      --navy-light: #145530;
+      --accent:     #2ecc71;
+      --accent-glow:#1a6b3c;
       --gold:       #F0B429;
-      --surface:    #0d1e3a;
-      --surface-2:  #112347;
-      --border:     rgba(47, 128, 237, 0.18);
-      --text:       #e8edf8;
-      --text-muted: #7a93c0;
+      --surface:    #f4f7f5;
+      --surface-2:  #ffffff;
+      --border:     rgba(26, 107, 60, 0.18);
+      --text:       #1a2e22;
+      --text-muted: #6b8a76;
       --white:      #ffffff;
     }
 
@@ -42,9 +42,9 @@
       position: fixed;
       inset: 0;
       background:
-        radial-gradient(ellipse 80% 60% at 20% 10%,  rgba(15, 53, 112, 0.55) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 50% at 80% 80%,  rgba(11, 43, 94, 0.65)  0%, transparent 55%),
-        radial-gradient(ellipse 40% 40% at 60% 20%,  rgba(47, 128, 237, 0.07) 0%, transparent 50%);
+        radial-gradient(ellipse 80% 60% at 20% 10%,  rgba(26, 107, 60, 0.55) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 80%,  rgba(26, 107, 60, 0.65)  0%, transparent 55%),
+        radial-gradient(ellipse 40% 40% at 60% 20%,  rgba(26, 107, 60, 0.07) 0%, transparent 50%);
       pointer-events: none;
       z-index: 0;
     }
@@ -55,8 +55,8 @@
       position: fixed;
       inset: 0;
       background-image:
-        linear-gradient(rgba(47, 128, 237, 0.04) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(47, 128, 237, 0.04) 1px, transparent 1px);
+        linear-gradient(rgba(26, 107, 60, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(26, 107, 60, 0.04) 1px, transparent 1px);
       background-size: 40px 40px;
       pointer-events: none;
       z-index: 0;
@@ -86,7 +86,7 @@
       background: linear-gradient(135deg, var(--navy-light), var(--accent));
       border-radius: 18px;
       margin-bottom: 24px;
-      box-shadow: 0 0 0 1px var(--border), 0 8px 32px rgba(47, 128, 237, 0.3);
+      box-shadow: 0 0 0 1px var(--border), 0 8px 32px rgba(26, 107, 60, 0.3);
       animation: fadeDown 0.6s ease both;
     }
 
@@ -95,12 +95,12 @@
       font-weight: 900;
       letter-spacing: -0.5px;
       line-height: 1.15;
-      color: var(--white);
+      color: var(--text);
       animation: fadeDown 0.6s 0.1s ease both;
     }
 
     .site-title span {
-      color: var(--accent-glow);
+      color: var(--navy);
     }
 
     .site-subtitle {
@@ -170,8 +170,8 @@
 
     .card:hover {
       transform: translateY(-6px);
-      box-shadow: 0 16px 48px rgba(11, 43, 94, 0.5), 0 0 0 1px rgba(47, 128, 237, 0.3);
-      border-color: rgba(47, 128, 237, 0.4);
+      box-shadow: 0 16px 48px rgba(26, 107, 60, 0.5), 0 0 0 1px rgba(26, 107, 60, 0.3);
+      border-color: rgba(26, 107, 60, 0.4);
     }
 
     .card:hover::before { opacity: 1; }
@@ -183,7 +183,7 @@
       width: 200px;
       height: 200px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(47, 128, 237, 0.12) 0%, transparent 70%);
+      background: radial-gradient(circle, rgba(26, 107, 60, 0.12) 0%, transparent 70%);
       top: -60px;
       right: -60px;
       transition: opacity 0.3s ease;
@@ -196,8 +196,8 @@
     .card-icon {
       width: 52px;
       height: 52px;
-      background: linear-gradient(135deg, rgba(47, 128, 237, 0.15), rgba(47, 128, 237, 0.05));
-      border: 1px solid rgba(47, 128, 237, 0.2);
+      background: linear-gradient(135deg, rgba(26, 107, 60, 0.15), rgba(26, 107, 60, 0.05));
+      border: 1px solid rgba(26, 107, 60, 0.2);
       border-radius: 14px;
       display: flex;
       align-items: center;
@@ -207,8 +207,8 @@
     }
 
     .card:hover .card-icon {
-      background: linear-gradient(135deg, rgba(47, 128, 237, 0.25), rgba(47, 128, 237, 0.1));
-      border-color: rgba(47, 128, 237, 0.4);
+      background: linear-gradient(135deg, rgba(26, 107, 60, 0.25), rgba(26, 107, 60, 0.1));
+      border-color: rgba(26, 107, 60, 0.4);
     }
 
     .card-icon svg {
@@ -227,7 +227,7 @@
     .card-title {
       font-size: 19px;
       font-weight: 700;
-      color: var(--white);
+      color: var(--text);
       margin-bottom: 8px;
       letter-spacing: -0.2px;
     }
@@ -277,7 +277,7 @@
       align-self: flex-start;
     }
 
-    .badge-school      { background: rgba(47, 128, 237, 0.12); color: #64b0ff; border: 1px solid rgba(47, 128, 237, 0.2); }
+    .badge-school      { background: rgba(26, 107, 60, 0.12); color: #1a6b3c; border: 1px solid rgba(26, 107, 60, 0.2); }
     .badge-directorate { background: rgba(240, 180, 41, 0.1);  color: #f0c84a; border: 1px solid rgba(240, 180, 41, 0.2); }
     .badge-ministry    { background: rgba(72, 199, 142, 0.1);  color: #5dd4a3; border: 1px solid rgba(72, 199, 142, 0.2); }
     .badge-teacher     { background: rgba(167, 139, 250, 0.12); color: #b9a4fb; border: 1px solid rgba(167, 139, 250, 0.22); }
@@ -314,6 +314,12 @@
       to   { opacity: 1; transform: translateY(0); }
     }
 
+    /* ── Brand lockup (Ruqí ｜ رُقِيّ) ── */
+    .brand-lockup { display: inline-flex; align-items: center; white-space: nowrap; }
+    .brand-latin  { font-family: 'DM Sans', sans-serif; font-weight: 600; letter-spacing: -0.01em; }
+    .brand-sep    { opacity: 0.45; margin: 0 0.35em; font-weight: 300; }
+    .brand-ar     { font-family: 'Tajawal', sans-serif; font-weight: 700; }
+
     /* ── Responsive ── */
     @media (max-width: 600px) {
       header { padding: 40px 0 28px; }
@@ -326,7 +332,9 @@
   <link rel="icon" type="image/png" sizes="16x16" href="./icons/favicon-16.png" />
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon-180.png" />
   <link rel="manifest" href="./manifest.json" />
-  <meta name="theme-color" content="#0B2B5E" />
+  <meta name="theme-color" content="#1a6b3c" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;600;700&family=Tajawal:wght@500;700;800&display=swap" rel="stylesheet">
   <!-- iOS splash startup images -->
   <link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="./icons/apple-touch-startup-image-828x1792.png" />
   <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./icons/apple-touch-startup-image-1125x2436.png" />
@@ -348,11 +356,11 @@
   <!-- ── Header ── -->
   <header>
     <div class="logo-mark">
-      <img src="./icons/eagle-mark.png" alt="شعار NSAMS" width="48" height="48" style="object-fit:contain;display:block" />
+      <img src="./icons/eagle-mark.png" alt="شعار رُقِيّ" width="48" height="48" style="object-fit:contain;display:block" />
     </div>
 
     <h1 class="site-title">
-      <span>NSAMS</span> — نظام إدارة المدارس الوطني
+      <span class="brand-lockup"><span class="brand-latin">Ruqí</span><span class="brand-sep">｜</span><span class="brand-ar">رُقِيّ</span></span> — نظام إدارة المدارس الوطني
     </h1>
 
     <div class="divider"></div>
@@ -518,7 +526,7 @@
 
   <!-- ── Footer ── -->
   <footer>
-    <strong>NSAMS</strong> — النظام الوطني لإدارة المدارس &nbsp;·&nbsp; جميع الحقوق محفوظة &copy; 2025
+    <span class="brand-lockup"><span class="brand-latin">Ruqí</span><span class="brand-sep">｜</span><span class="brand-ar">رُقِيّ</span></span> — النظام الوطني لإدارة المدارس &nbsp;·&nbsp; جميع الحقوق محفوظة &copy; 2025
   </footer>
 
 </div>
