@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>معاينة هوية رُقِيّ — Ruqi Brand Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=Tajawal:wght@400;500;700;800&family=Aref+Ruqaa:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --green:    #1a6b3c;
+      --green-dk: #145530;
+      --green-lt: #e8f5ee;
+      --bg:       #f4f7f5;
+      --text:     #1a2e22;
+      --muted:    #6b8a76;
+      --border:   #d5e5db;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Tajawal', system-ui, sans-serif;
+      background: var(--bg); color: var(--text);
+      padding: 32px 16px 64px; line-height: 1.5;
+    }
+    .page-head { text-align: center; max-width: 720px; margin: 0 auto 36px; }
+    .page-head h1 { font-size: 1.6rem; color: var(--green); margin-bottom: 8px; font-weight: 800; }
+    .page-head p { color: var(--muted); font-size: .95rem; }
+    .page-head .name-line {
+      margin-top: 14px; font-size: 1.1rem; color: var(--text);
+      background: #fff; display: inline-block; padding: 8px 18px;
+      border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    .harakat { color: var(--green); font-weight: 700; }
+
+    .grid { display: flex; flex-direction: column; gap: 24px; max-width: 760px; margin: 0 auto; }
+
+    .card {
+      background: #fff; border-radius: 18px; overflow: hidden;
+      box-shadow: 0 4px 18px rgba(0,0,0,.10); border: 1px solid var(--border);
+    }
+    .card-tag {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; background: var(--green-lt); border-bottom: 1px solid var(--border);
+    }
+    .card-tag .num {
+      width: 30px; height: 30px; border-radius: 50%; background: var(--green); color: #fff;
+      display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: .95rem;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .card-tag h2 { font-size: 1.05rem; color: var(--green-dk); font-weight: 800; flex: 1; margin-inline-start: 12px; }
+    .card-tag .fonts { font-size: .72rem; color: var(--muted); font-family: 'DM Sans', sans-serif; direction: ltr; }
+
+    /* Hero (large on brand green) */
+    .hero {
+      background: linear-gradient(135deg, var(--green) 0%, var(--green-dk) 100%);
+      padding: 44px 24px; display: flex; align-items: center; justify-content: center;
+    }
+    .hero .lockup { color: #fff; }
+
+    /* Lockup base */
+    .lockup { display: inline-flex; align-items: center; white-space: nowrap; }
+    .lockup .sep { opacity: .4; margin: 0 .42em; font-weight: 300; }
+
+    /* size variants */
+    .sz-hero .latin, .sz-hero .ar { font-size: 3.1rem; }
+    .sz-bar  .latin, .sz-bar  .ar { font-size: 1.35rem; }
+    .sz-icon .latin, .sz-icon .ar { font-size: 1.05rem; }
+
+    /* ───── Option 1: Geometric modern — DM Sans + Tajawal ───── */
+    .opt1 .latin { font-family: 'DM Sans', sans-serif; font-weight: 600; letter-spacing: -.01em; }
+    .opt1 .ar    { font-family: 'Tajawal', sans-serif; font-weight: 700; }
+
+    /* ───── Option 2: Elegant calligraphic — Poppins + Aref Ruqaa ───── */
+    .opt2 .latin { font-family: 'Poppins', sans-serif; font-weight: 600; letter-spacing: -.01em; }
+    .opt2 .ar    { font-family: 'Aref Ruqaa', serif; font-weight: 700; }
+    .opt2.sz-hero .ar { font-size: 3.5rem; line-height: 1; } /* aref runs small */
+
+    /* ───── Option 3: Signature accent — DM Sans (Ruqí) + Tajawal ───── */
+    .opt3 .latin { font-family: 'DM Sans', sans-serif; font-weight: 600; letter-spacing: -.01em; }
+    .opt3 .ar    { font-family: 'Tajawal', sans-serif; font-weight: 700; }
+
+    /* App-bar + icon row */
+    .specimens { display: flex; flex-wrap: wrap; gap: 16px; padding: 22px 20px; align-items: center; }
+    .spec {
+      display: flex; flex-direction: column; gap: 8px; align-items: center;
+      flex: 1; min-width: 150px;
+    }
+    .spec-label { font-size: .7rem; color: var(--muted); font-family: 'DM Sans', sans-serif; }
+    .appbar {
+      width: 100%; background: var(--green); color: #fff; border-radius: 10px;
+      padding: 12px 16px; display: flex; align-items: center; gap: 10px; justify-content: flex-start;
+    }
+    .appbar .dot { width: 22px; height: 22px; border-radius: 6px; background: rgba(255,255,255,.25); flex-shrink: 0; }
+    .icon-tile {
+      width: 84px; height: 84px; border-radius: 20px;
+      background: linear-gradient(135deg, var(--green) 0%, var(--green-dk) 100%);
+      color: #fff; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 6px 16px rgba(26,107,60,.35);
+    }
+    .icon-tile .ar { font-size: 1.9rem; }
+    .on-light .lockup { color: var(--green-dk); }
+    .light-row { padding: 18px 20px; background: #fff; display: flex; justify-content: center; border-top: 1px solid var(--border); }
+
+    .footnote { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 36px; }
+    .footnote strong { color: var(--green-dk); }
+  </style>
+</head>
+<body>
+
+  <div class="page-head">
+    <h1>هوية «رُقِيّ» — ثلاثة تنفيذات</h1>
+    <p>كل خيار معروض بخطوطه الحقيقية: رأس كبير، شريط تطبيق، أيقونة، ونسخة على خلفية فاتحة. اختر رقماً.</p>
+    <div class="name-line">
+      الاسم بالحركات الكاملة: <span class="harakat">رُقِيّ</span> &nbsp;·&nbsp; باللاتينية: <span style="font-family:'DM Sans'">Ruqi</span>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- ════ Option 1 ════ -->
+    <div class="card">
+      <div class="card-tag">
+        <span class="num">1</span>
+        <h2>جيومتري حديث</h2>
+        <span class="fonts">DM Sans · Tajawal</span>
+      </div>
+      <div class="hero">
+        <span class="lockup opt1 sz-hero">
+          <span class="latin">Ruqi</span><span class="sep">｜</span><span class="ar">رُقِيّ</span>
+        </span>
+      </div>
+      <div class="specimens">
+        <div class="spec">
+          <span class="spec-label">شريط التطبيق</span>
+          <div class="appbar"><span class="dot"></span>
+            <span class="lockup opt1 sz-bar"><span class="latin">Ruqi</span><span class="sep">｜</span><span class="ar">رُقِيّ</span></span>
+          </div>
+        </div>
+        <div class="spec">
+          <span class="spec-label">أيقونة</span>
+          <div class="icon-tile"><span class="lockup opt1"><span class="ar">رُقِيّ</span></span></div>
+        </div>
+      </div>
+      <div class="light-row on-light">
+        <span class="lockup opt1 sz-bar"><span class="latin">Ruqi</span><span class="sep">｜</span><span class="ar">رُقِيّ</span></span>
+      </div>
+    </div>
+
+    <!-- ════ Option 2 ════ -->
+    <div class="card">
+      <div class="card-tag">
+        <span class="num">2</span>
+        <h2>كاليغرافي أنيق</h2>
+        <span class="fonts">Poppins · Aref Ruqaa</span>
+      </div>
+      <div class="hero">
+        <span class="lockup opt2 sz-hero">
+          <span class="latin">Ruqi</span><span class="sep">｜</span><span class="ar">رُقِيّ</span>
+        </span>
+      </div>
+      <div class="specimens">
+        <div class="spec">
+          <span class="spec-label">شريط التطبيق</span>
+          <div class="appbar"><span class="dot"></span>
+            <span class="lockup opt2 sz-bar"><span class="latin">Ruqi</span><span class="sep">｜</span><span class="ar">رُقِيّ</span></span>
+          </div>
+        </div>
+        <div class="spec">
+          <span class="spec-label">أيقونة</span>
+          <div class="icon-tile"><span class="lockup opt2"><span class="ar" style="font-size:2.2rem">رُقِيّ</span></span></div>
+        </div>
+      </div>
+      <div class="light-row on-light">
+        <span class="lockup opt2 sz-bar"><span class="latin">Ruqi</span><span class="sep">｜</span><span class="ar">رُقِيّ</span></span>
+      </div>
+    </div>
+
+    <!-- ════ Option 3 ════ -->
+    <div class="card">
+      <div class="card-tag">
+        <span class="num">3</span>
+        <h2>حركة توقيعية</h2>
+        <span class="fonts">DM Sans (Ruqí) · Tajawal</span>
+      </div>
+      <div class="hero">
+        <span class="lockup opt3 sz-hero">
+          <span class="latin">Ruqí</span><span class="sep">｜</span><span class="ar">رُقِيّ</span>
+        </span>
+      </div>
+      <div class="specimens">
+        <div class="spec">
+          <span class="spec-label">شريط التطبيق</span>
+          <div class="appbar"><span class="dot"></span>
+            <span class="lockup opt3 sz-bar"><span class="latin">Ruqí</span><span class="sep">｜</span><span class="ar">رُقِيّ</span></span>
+          </div>
+        </div>
+        <div class="spec">
+          <span class="spec-label">أيقونة</span>
+          <div class="icon-tile"><span class="lockup opt3"><span class="ar">رُقِيّ</span></span></div>
+        </div>
+      </div>
+      <div class="light-row on-light">
+        <span class="lockup opt3 sz-bar"><span class="latin">Ruqí</span><span class="sep">｜</span><span class="ar">رُقِيّ</span></span>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="footnote">
+    افتح هذه الصفحة في المتصفّح (تحتاج اتصال إنترنت لتحميل خطوط Google).
+    ثم قل لي: <strong>«اعتمد رقم ١»</strong> أو ٢ أو ٣.
+  </p>
+
+</body>
+</html>
