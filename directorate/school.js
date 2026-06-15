@@ -107,7 +107,7 @@ const SHIFT_AR       = { morning: 'صباحي', evening: 'مسائي' };
 
 function renderIdentity() {
   document.getElementById('school-name').textContent = school.name ?? '—';
-  document.title = `NSAMS – ${school.name ?? 'ملف المدرسة'}`;
+  document.title = `رُقِيّ – ${school.name ?? 'ملف المدرسة'}`;
 
   const chips = [];
   if (school.school_type)    chips.push(SCHOOL_TYPE_AR[school.school_type] ?? school.school_type);

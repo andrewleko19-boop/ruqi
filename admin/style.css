@@ -2,23 +2,23 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:           #070b14;
-  --surface:      #0d1526;
-  --surface-2:    #111d36;
-  --border:       #1e3058;
-  --accent:       #1a56db;
-  --accent-hover: #1e40af;
+  --bg:           #eef2ee;
+  --surface:      #f4f7f5;
+  --surface-2:    #ffffff;
+  --border:       #d5e5db;
+  --accent:       #1a6b3c;
+  --accent-hover: #145530;
   --green:        #16a34a;
-  --green-bg:     #052e16;
+  --green-bg:     #dcfce7;
   --red:          #dc2626;
-  --red-bg:       #450a0a;
+  --red-bg:       #fee2e2;
   --yellow:       #ca8a04;
-  --yellow-bg:    #422006;
-  --text:         #e2e8f0;
-  --text-muted:   #64748b;
-  --text-dim:     #94a3b8;
+  --yellow-bg:    #fef3c7;
+  --text:         #1a2e22;
+  --text-muted:   #6b8a76;
+  --text-dim:     #7e8a99;
   --radius:       10px;
-  --shadow:       0 4px 24px rgba(0,0,0,0.5);
+  --shadow:       0 4px 24px rgba(0,0,0,0.10);
 }
 
 body {
@@ -37,7 +37,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at 50% 0%, #0d2257 0%, var(--bg) 70%);
+  background: radial-gradient(ellipse at 50% 0%, #e8f5ee 0%, var(--bg) 70%);
   padding: 24px;
 }
 
@@ -66,7 +66,7 @@ body {
   font-size: 26px;
   font-weight: 700;
   letter-spacing: 3px;
-  color: #fff;
+  color: var(--text);
 }
 
 .login-subtitle {
@@ -105,7 +105,7 @@ body {
 .error-msg {
   background: var(--red-bg);
   border: 1px solid var(--red);
-  color: #fca5a5;
+  color: #991b1b;
   padding: 10px 14px;
   border-radius: var(--radius);
   font-size: 13px;
@@ -135,10 +135,10 @@ body {
 
 .btn-danger {
   background: var(--red-bg);
-  color: #fca5a5;
+  color: #991b1b;
   border: 1px solid var(--red);
 }
-.btn-danger:hover:not(:disabled) { background: #5a1212; }
+.btn-danger:hover:not(:disabled) { background: #fbcaca; }
 
 .btn-ghost {
   background: transparent;
@@ -242,7 +242,7 @@ body {
 }
 .tab-btn:hover { color: var(--text); }
 .tab-btn.is-active {
-  color: #fff;
+  color: var(--accent);
   border-bottom-color: var(--accent);
 }
 
@@ -301,7 +301,7 @@ thead th {
 }
 
 tbody tr {
-  border-bottom: 1px solid #0d1a2e;
+  border-bottom: 1px solid var(--border);
   transition: background .15s;
 }
 tbody tr:hover { background: var(--surface-2); }
@@ -324,9 +324,9 @@ td.muted { color: var(--text-muted); font-size: 12px; }
   font-weight: 600;
   white-space: nowrap;
 }
-.role-school-admin    { background: rgba(47,128,237,.12); color: #64b0ff; border: 1px solid rgba(47,128,237,.25); }
-.role-directorate     { background: rgba(240,180,41,.10); color: #f0c84a; border: 1px solid rgba(240,180,41,.22); }
-.role-ministry        { background: rgba(72,199,142,.10); color: #5dd4a3; border: 1px solid rgba(72,199,142,.22); }
+.role-school-admin    { background: rgba(26,107,60,.12); color: #1a6b3c; border: 1px solid rgba(26,107,60,.25); }
+.role-directorate     { background: rgba(240,180,41,.14); color: #a16207; border: 1px solid rgba(240,180,41,.30); }
+.role-ministry        { background: rgba(72,199,142,.14); color: #0f766e; border: 1px solid rgba(72,199,142,.30); }
 
 .badge-inactive {
   display: inline-block;
@@ -335,9 +335,9 @@ td.muted { color: var(--text-muted); font-size: 12px; }
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
-  background: rgba(248,113,113,.10);
-  color: #f87171;
-  border: 1px solid rgba(248,113,113,.25);
+  background: rgba(248,113,113,.12);
+  color: #dc2626;
+  border: 1px solid rgba(248,113,113,.30);
 }
 
 /* ── Credentials modal fields ─────────────────── */
@@ -370,9 +370,9 @@ td.muted { color: var(--text-muted); font-size: 12px; }
   font-size: 11px;
   font-weight: 600;
 }
-.badge-good    { background: var(--green-bg); color: #4ade80; border: 1px solid var(--green); }
-.badge-warning { background: var(--yellow-bg); color: #fde047; border: 1px solid var(--yellow); }
-.badge-danger  { background: var(--red-bg); color: #f87171; border: 1px solid var(--red); }
+.badge-good    { background: var(--green-bg); color: #16a34a; border: 1px solid var(--green); }
+.badge-warning { background: var(--yellow-bg); color: #ca8a04; border: 1px solid var(--yellow); }
+.badge-danger  { background: var(--red-bg); color: #dc2626; border: 1px solid var(--red); }
 .badge-neutral { background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border); }
 
 /* ── Filter bar ───────────────────────────────── */
@@ -440,7 +440,7 @@ td.muted { color: var(--text-muted); font-size: 12px; }
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,.65);
+  background: rgba(0,0,0,.45);
   z-index: 200;
   display: flex;
   align-items: center;
@@ -455,7 +455,7 @@ td.muted { color: var(--text-muted); font-size: 12px; }
   padding: 32px 28px 28px;
   width: 100%;
   max-width: 480px;
-  box-shadow: 0 8px 48px rgba(0,0,0,.7);
+  box-shadow: 0 8px 48px rgba(0,0,0,.18);
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -472,7 +472,7 @@ td.muted { color: var(--text-muted); font-size: 12px; }
 .modal-title {
   font-size: 17px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text);
 }
 
 .modal-footer {
@@ -575,7 +575,7 @@ select.csel-native {
 .csel.is-open .csel-trigger {
   border-color: var(--accent);
   background: var(--surface-2);
-  box-shadow: 0 0 0 3px rgba(26,86,219,.25);
+  box-shadow: 0 0 0 3px rgba(26,107,60,.25);
 }
 .csel-trigger.is-disabled { opacity: .55; cursor: not-allowed; }
 .csel-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -615,7 +615,7 @@ select.csel-native {
   transition: background .18s ease, color .18s ease;
   white-space: normal; line-height: 1.4;
 }
-.csel-option:hover { background: rgba(26,86,219,.22); }
+.csel-option:hover { background: rgba(26,107,60,.12); }
 .csel-option.is-selected { background: var(--accent); color: #fff; font-weight: 600; }
 .csel-option.is-disabled { color: var(--text-dim); cursor: not-allowed; opacity: .7; }
 .csel-option.is-disabled:hover { background: transparent; }
@@ -631,3 +631,8 @@ select.csel-native {
 
 /* Optional: cap menu height inside modal scroll */
 .modal .csel-menu { max-height: 180px; }
+/* ── Brand lockup (Ruqí ｜ رُقِيّ) ─────────────────────────────────────────── */
+.brand-lockup { display:inline-flex; align-items:center; white-space:nowrap; }
+.brand-latin  { font-family:'DM Sans',sans-serif; font-weight:600; letter-spacing:-.01em; }
+.brand-sep    { opacity:.45; margin:0 .35em; font-weight:300; }
+.brand-ar     { font-family:'Tajawal',sans-serif; font-weight:700; }

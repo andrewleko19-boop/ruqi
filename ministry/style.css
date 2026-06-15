@@ -2,23 +2,23 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:           #070b14;
-  --surface:      #0d1526;
-  --surface-2:    #111d36;
-  --border:       #1e3058;
-  --accent:       #1a56db;
-  --accent-hover: #1e40af;
+  --bg:           #eef2ee;
+  --surface:      #f4f7f5;
+  --surface-2:    #ffffff;
+  --border:       #d5e5db;
+  --accent:       #1a6b3c;
+  --accent-hover: #145530;
   --green:        #16a34a;
-  --green-bg:     #052e16;
+  --green-bg:     #dcfce7;
   --red:          #dc2626;
-  --red-bg:       #450a0a;
+  --red-bg:       #fee2e2;
   --yellow:       #ca8a04;
-  --yellow-bg:    #422006;
-  --text:         #e2e8f0;
-  --text-muted:   #64748b;
-  --text-dim:     #94a3b8;
+  --yellow-bg:    #fef3c7;
+  --text:         #1a2e22;
+  --text-muted:   #6b8a76;
+  --text-dim:     #7e8a99;
   --radius:       10px;
-  --shadow:       0 4px 24px rgba(0,0,0,0.5);
+  --shadow:       0 4px 24px rgba(0,0,0,0.10);
 }
 
 body {
@@ -37,7 +37,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at 50% 0%, #0d2257 0%, var(--bg) 70%);
+  background: radial-gradient(ellipse at 50% 0%, #e8f5ee 0%, var(--bg) 70%);
   padding: 24px;
 }
 
@@ -66,7 +66,7 @@ body {
   font-size: 26px;
   font-weight: 700;
   letter-spacing: 3px;
-  color: #fff;
+  color: #1a2e22;
 }
 
 .login-subtitle {
@@ -94,7 +94,7 @@ body {
 .error-msg {
   background: var(--red-bg);
   border: 1px solid var(--red);
-  color: #fca5a5;
+  color: #dc2626;
   padding: 10px 14px;
   border-radius: var(--radius);
   font-size: 13px;
@@ -216,7 +216,7 @@ body {
 
 .stat-card.accent-green { border-color: var(--green); background: linear-gradient(135deg, var(--surface) 60%, var(--green-bg)); }
 .stat-card.accent-red   { border-color: var(--red);   background: linear-gradient(135deg, var(--surface) 60%, var(--red-bg)); }
-.stat-card.accent-blue  { border-color: var(--accent); background: linear-gradient(135deg, var(--surface) 60%, #0d2257); }
+.stat-card.accent-blue  { border-color: var(--accent); background: linear-gradient(135deg, var(--accent) 0%, #145530 100%); }
 
 .stat-label {
   font-size: 12px;
@@ -228,13 +228,13 @@ body {
 .stat-value {
   font-size: 32px;
   font-weight: 700;
-  color: #fff;
+  color: #1a2e22;
   line-height: 1;
 }
 
-.accent-green .stat-value { color: #4ade80; }
-.accent-red   .stat-value { color: #f87171; }
-.accent-blue  .stat-value { color: #93c5fd; }
+.accent-green .stat-value { color: #16a34a; }
+.accent-red   .stat-value { color: #dc2626; }
+.accent-blue  .stat-value { color: #d6f5e3; }
 
 /* ── Section card ─────────────────────────────── */
 .section-card {
@@ -280,7 +280,7 @@ thead th {
 }
 
 tbody tr {
-  border-bottom: 1px solid #0d1a2e;
+  border-bottom: 1px solid #d5e5db;
   transition: background .15s;
 }
 tbody tr:hover { background: var(--surface-2); }
@@ -310,9 +310,9 @@ tfoot td {
   font-weight: 600;
   letter-spacing: .3px;
 }
-.badge-good    { background: var(--green-bg); color: #4ade80; border: 1px solid var(--green); }
-.badge-warning { background: var(--yellow-bg); color: #fde047; border: 1px solid var(--yellow); }
-.badge-poor    { background: var(--red-bg);   color: #f87171; border: 1px solid var(--red); }
+.badge-good    { background: var(--green-bg); color: #16a34a; border: 1px solid var(--green); }
+.badge-warning { background: var(--yellow-bg); color: #ca8a04; border: 1px solid var(--yellow); }
+.badge-poor    { background: var(--red-bg);   color: #dc2626; border: 1px solid var(--red); }
 .badge-none    { background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border); }
 
 /* ── Rate bar ─────────────────────────────────── */
@@ -381,13 +381,13 @@ tfoot td {
   gap: 0.3rem;
   font-size: 0.72rem;
   font-weight: 600;
-  color: #4ade80;
+  color: #16a34a;
 }
 .live-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #4ade80;
+  background: #16a34a;
   animation: live-pulse 1.8s ease-in-out infinite;
   flex-shrink: 0;
 }
@@ -402,14 +402,14 @@ tfoot td {
   gap: 0.25rem;
   padding: 0.18rem 0.6rem;
   border-radius: 9999px;
-  background: rgba(255,255,255,0.12);
+  background: rgba(26,107,60,0.10);
   font-size: 0.75rem;
-  color: rgba(255,255,255,0.7);
+  color: rgba(26,46,34,0.70);
   font-variant-numeric: tabular-nums;
 }
 #countdown-val {
   font-weight: 700;
-  color: #fff;
+  color: #1a6b3c;
   min-width: 2ch;
   display: inline-block;
   text-align: center;
@@ -433,7 +433,7 @@ tfoot td {
 .chart-title {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #94a3b8;
+  color: #6b8a76;
   margin-bottom: 8px;
 }
 /* ارتفاع ثابت إلزامي مع maintainAspectRatio:false */
@@ -451,7 +451,7 @@ tfoot td {
 .period-btn {
   background: transparent;
   border: 1px solid var(--border);
-  color: #94a3b8;
+  color: #475569;
   border-radius: 8px;
   padding: 4px 12px;
   font-size: 0.8rem;
@@ -474,13 +474,13 @@ tfoot td {
    PHASE 2 — DRILL-DOWN
 ══════════════════════════════════════════════ */
 .row-clickable { cursor: pointer; }
-.row-clickable:hover td { background: rgba(26, 86, 219, 0.08); }
+.row-clickable:hover td { background: rgba(26, 107, 60, 0.08); }
 .drill-chevron {
   color: #475569;
   font-size: 0.8rem;
   margin-inline-start: 4px;
 }
-.row-clickable:hover .drill-chevron { color: #60a5fa; }
+.row-clickable:hover .drill-chevron { color: #1a6b3c; }
 
 .breadcrumb {
   display: flex;
@@ -492,14 +492,19 @@ tfoot td {
 .breadcrumb button {
   background: none;
   border: none;
-  color: #60a5fa;
+  color: #1a6b3c;
   cursor: pointer;
   font-size: inherit;
   font-family: inherit;
   padding: 0;
 }
 .breadcrumb button:hover { text-decoration: underline; }
-.breadcrumb .crumb-current { color: #e2e8f0; font-weight: 700; }
+.breadcrumb .crumb-current { color: #1a2e22; font-weight: 700; }
 .breadcrumb .crumb-sep { color: #475569; }
 
 .row-silent td:nth-child(2) { color: #f87171; }
+/* ── Brand lockup (Ruqí ｜ رُقِيّ) ─────────────────────────────────────────── */
+.brand-lockup { display:inline-flex; align-items:center; white-space:nowrap; }
+.brand-latin  { font-family:'DM Sans',sans-serif; font-weight:600; letter-spacing:-.01em; }
+.brand-sep    { opacity:.45; margin:0 .35em; font-weight:300; }
+.brand-ar     { font-family:'Tajawal',sans-serif; font-weight:700; }
