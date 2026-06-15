@@ -789,30 +789,45 @@ function clearCachedStudents(classId) {
 }
 
 // ─── Teacher: get students for a class ───────────────────────────────────────
-async function getClassStudents(classId) {
-  if (!isOnline()) {
-    const cached = getCachedStudents(classId);
-    if (cached) return cached;
-    throw new Error('لا يوجد اتصال ولا توجد بيانات محفوظة لهذا الصف');
+async function getClassStudents(classId, { status } = {}) {
+  // Default (active roster) — the offline-cached hot path used by the teacher
+  // app. status='active' ⇔ is_active=true (kept in sync by t_sync_student_is_active),
+  // so the legacy is_active filter and the cache stay valid unchanged.
+  if (!status || status === 'active') {
+    if (!isOnline()) {
+      const cached = getCachedStudents(classId);
+      if (cached) return cached;
+      throw new Error('لا يوجد اتصال ولا توجد بيانات محفوظة لهذا الصف');
+    }
+    // select('*') (not an explicit column list) so the new SIS columns are
+    // included once the migration runs, while staying safe if it hasn't yet —
+    // same rationale as getSchoolById. Existing consumers keep reading
+    // full_name / national_id / gender / seat_number unchanged.
+    const { data, error } = await db
+      .from('students')
+      .select('*')
+      .eq('class_id',  classId)
+      .eq('is_active', true)
+      .order('seat_number', { ascending: true,  nullsFirst: false })
+      .order('full_name',   { ascending: true });
+
+    if (error) throw error;
+
+    const students = data ?? [];
+    setCachedStudents(classId, students);
+    return students;
   }
 
-  // select('*') (not an explicit column list) so the new SIS columns are
-  // included once the migration runs, while staying safe if it hasn't yet —
-  // same rationale as getSchoolById. Existing consumers keep reading
-  // full_name / national_id / gender / seat_number unchanged.
-  const { data, error } = await db
-    .from('students')
-    .select('*')
-    .eq('class_id',  classId)
-    .eq('is_active', true)
-    .order('seat_number', { ascending: true,  nullsFirst: false })
+  // Explicit lifecycle status (school-admin status tabs) — online, uncached.
+  // status='all' returns every status; otherwise filter on the enum directly.
+  if (!isOnline()) throw new Error('عرض حالات الطلاب يتطلّب اتصالاً بالإنترنت');
+  let q = db.from('students').select('*').eq('class_id', classId);
+  if (status !== 'all') q = q.eq('status', status);
+  const { data, error } = await q
+    .order('seat_number', { ascending: true, nullsFirst: false })
     .order('full_name',   { ascending: true });
-
   if (error) throw error;
-
-  const students = data ?? [];
-  setCachedStudents(classId, students);
-  return students;
+  return data ?? [];
 }
 
 // ─── Student records (SIS): create / edit / transfer / archive ───────────────
@@ -897,6 +912,14 @@ async function syncStudentRecord(item) {
       .update({ class_id: item.classId, updated_at: new Date().toISOString() })
       .eq('id', item.id);
     if (error) throw error;
+  } else if (item.op === 'status') {
+    // Lifecycle status change. is_active + status_changed_at are derived by the
+    // t_sync_student_is_active trigger; we only write status + reason here.
+    const { error } = await db.from('students')
+      .update({ status: item.status, status_reason: item.reason ?? null,
+                updated_at: new Date().toISOString() })
+      .eq('id', item.id);
+    if (error) throw error;
   }
   if (item.audit) await writeAudit(item.audit);
   return true;
@@ -947,15 +970,24 @@ async function saveStudent(input) {
   return enqueueOrSyncStudent(item);
 }
 
-// Soft-delete (never a hard DELETE) — keeps history & references intact.
-async function archiveStudent({ id, schoolId, classId, reason, actorId }) {
+// Lifecycle status change (نشط/منقول/خارج السنة/متخرّج/مرقّن القيد). Offline-first,
+// mirroring archive/transfer. The DB trigger derives is_active + status_changed_at;
+// graduated→* is rejected server-side by t_validate_student_status.
+async function setStudentStatus({ id, schoolId, classId, newStatus, reason, actorId }) {
   const item = {
-    localId: generateLocalId(), op: 'archive', id, classId,
-    audit: { schoolId, entity: 'student', entityId: id, action: 'archive',
-             changes: null, reason: reason ?? null, actorId: actorId ?? null },
+    localId: generateLocalId(), op: 'status', id, classId,
+    status: newStatus, reason: reason ?? null,
+    audit: { schoolId, entity: 'student', entityId: id, action: 'status_change',
+             changes: { status: newStatus }, reason: reason ?? null, actorId: actorId ?? null },
     synced: false, createdAt: new Date().toISOString(),
   };
   return enqueueOrSyncStudent(item);
+}
+
+// Soft-delete (never a hard DELETE) — keeps history & references intact.
+// «أرشفة» now maps to the 'transferred' lifecycle status (left the school).
+async function archiveStudent({ id, schoolId, classId, reason, actorId }) {
+  return setStudentStatus({ id, schoolId, classId, newStatus: 'transferred', reason, actorId });
 }
 
 // Move a student to another class/section (the official «نقل طالب»).
@@ -2461,6 +2493,7 @@ async function flagStudentDropout(studentId, grade) {
     dropout_semester:   semester,
     dropout_grade:      grade,
     dropout_return_at:  returnAt,
+    status:             'struck_off',   // مرقّن القيد ⇒ يغادر القوائم النشطة (trigger يضبط is_active)
   }).eq('id', studentId).is('dropout_flagged_at', null);
   if (error) throw error;
 }
@@ -2809,6 +2842,7 @@ window.NSAMS_DB = {
   saveStudent,
   archiveStudent,
   transferStudent,
+  setStudentStatus,
   findDuplicateStudent,
   bulkImportStudents,
   getPendingStudents,

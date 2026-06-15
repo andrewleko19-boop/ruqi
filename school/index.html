@@ -1078,6 +1078,13 @@
             <input type="search" id="stu-search" class="field-input"
                    placeholder="بحث بالاسم أو الرقم الوطني" />
           </div>
+          <div class="stu-status-chips" id="stu-status-chips" role="tablist" aria-label="حالة الطلاب">
+            <button type="button" class="stu-chip is-on" data-status="active"      role="tab" aria-selected="true">نشط</button>
+            <button type="button" class="stu-chip"       data-status="out_of_year" role="tab" aria-selected="false">خارج السنة</button>
+            <button type="button" class="stu-chip"       data-status="transferred" role="tab" aria-selected="false">منقول</button>
+            <button type="button" class="stu-chip"       data-status="graduated"   role="tab" aria-selected="false">متخرّج</button>
+            <button type="button" class="stu-chip"       data-status="struck_off"  role="tab" aria-selected="false">مرقّن القيد</button>
+          </div>
           <div class="stu-actions-row">
             <button type="button" class="btn btn-ghost btn-sm" id="btn-import-students">
               <svg class="icon icon-sm"><use href="#ic-clipboard"/></svg>
@@ -1320,6 +1327,51 @@
           <svg class="icon icon-sm"><use href="#ic-trash"/></svg>
           <span>تأكيد الأرشفة</span>
           <span class="spinner" id="archive-spinner" hidden></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Change student status modal (دورة حياة الطالب) ════════════════════════ -->
+  <div id="modal-status" class="overlay" hidden aria-modal="true" role="dialog" aria-label="تغيير حالة الطالب">
+    <div class="sheet sheet-sm">
+      <div class="sheet-handle"></div>
+      <div class="sheet-hdr">
+        <div class="sheet-title">
+          <svg class="icon"><use href="#ic-user"/></svg>
+          <span>تغيير حالة الطالب</span>
+        </div>
+        <button class="icon-btn" id="btn-close-status" aria-label="إغلاق">
+          <svg class="icon"><use href="#ic-x"/></svg>
+        </button>
+      </div>
+      <div class="sheet-body">
+        <p style="font-size:.85rem;color:#475569;margin-bottom:6px">
+          الطالب: <strong id="status-name">—</strong>
+        </p>
+        <p style="font-size:.8rem;color:#64748b;margin-bottom:12px">
+          الحالة الحالية: <strong id="status-current">—</strong>
+        </p>
+        <div class="field-group">
+          <label for="status-new">الحالة الجديدة <span class="req">*</span></label>
+          <select id="status-new" class="field-input">
+            <option value="active">نشط</option>
+            <option value="out_of_year">خارج السنة</option>
+            <option value="transferred">منقول</option>
+            <option value="struck_off">مرقّن القيد</option>
+            <option value="graduated">متخرّج</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label for="status-reason">السبب <span class="optional">(اختياري)</span></label>
+          <textarea id="status-reason" class="field-input" rows="2" maxlength="300"
+                    placeholder="مثال: انتقل إلى مدرسة أخرى"></textarea>
+        </div>
+        <div id="status-error" class="msg msg-error" hidden></div>
+        <button type="button" class="btn btn-primary btn-full" id="btn-confirm-status">
+          <svg class="icon icon-sm"><use href="#ic-check"/></svg>
+          <span>تأكيد تغيير الحالة</span>
+          <span class="spinner" id="status-spinner" hidden></span>
         </button>
       </div>
     </div>
