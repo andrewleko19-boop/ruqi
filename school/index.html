@@ -1683,6 +1683,116 @@
       </div>
     </section>
 
+    <!-- ── التكاليف (فني / إداري) ───────────────────────────────────────────── -->
+    <section class="card">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-clipboard"/></svg>
+        <span>التكاليف</span>
+        <button class="hdr-btn" id="btn-refresh-assignments" aria-label="تحديث"
+                style="margin-inline-start:auto">
+          <svg class="icon icon-sm"><use href="#ic-refresh"/></svg>
+        </button>
+      </div>
+      <div class="card-body">
+
+        <div class="reg-seg-bar" role="group" aria-label="نوع التكليف">
+          <button class="asn-seg-btn is-active" data-asn-seg="technical">فني</button>
+          <button class="asn-seg-btn" data-asn-seg="administrative">إداري</button>
+        </div>
+
+        <div id="asn-loading" class="loading-row" hidden><span class="spinner"></span></div>
+        <div id="asn-error" class="msg msg-error" hidden>تعذّر تحميل التكاليف. تحقق من الاتصال وحاول مجدداً.</div>
+        <ul id="asn-list" class="reg-list"></ul>
+        <p id="asn-empty" class="empty-hint" hidden>لا توجد تكاليف في هذا القسم — استخدم زر «إضافة تكليف» أدناه.</p>
+
+        <button type="button" class="btn btn-primary btn-sm" id="btn-add-assignment"
+                style="margin-top:10px">
+          <svg class="icon icon-sm"><use href="#ic-plus"/></svg>
+          إضافة تكليف
+        </button>
+      </div>
+    </section>
+
+    <!-- ── Modal: نموذج التكليف (إضافة / تعديل) ──────────────────────────────── -->
+    <div id="modal-staff-assignment" class="overlay" hidden aria-modal="true" role="dialog"
+         aria-label="بيانات التكليف">
+      <div class="sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-hdr">
+          <div class="sheet-title">
+            <svg class="icon"><use href="#ic-clipboard"/></svg>
+            <span id="asn-title">إضافة تكليف</span>
+          </div>
+          <button class="icon-btn" id="btn-close-assignment" aria-label="إغلاق">
+            <svg class="icon"><use href="#ic-x"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body">
+
+          <p class="form-section-label">نوع التكليف</p>
+          <div class="field-group">
+            <label for="asn-kind">الجهاز</label>
+            <select id="asn-kind" class="field-input">
+              <option value="technical">فني (تدريسي)</option>
+              <option value="administrative">إداري</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="asn-job-title">الصفة / العمل المسند</label>
+            <select id="asn-job-title" class="field-input"><option value="">— اختر —</option></select>
+          </div>
+
+          <!-- حقول التكليف الفني الصفّي -->
+          <div id="asn-technical-fields">
+            <p class="form-section-label">الإسناد الصفّي</p>
+            <div class="field-group">
+              <label for="asn-class">الصف</label>
+              <select id="asn-class" class="field-input"><option value="">— بلا صف —</option></select>
+            </div>
+            <div class="field-group">
+              <label for="asn-section">الشعبة <span class="optional">(اختياري)</span></label>
+              <input id="asn-section" class="field-input" type="text" maxlength="20" />
+            </div>
+            <div class="field-group">
+              <label>المواد المُسندة <span class="optional">(للتدريس)</span></label>
+              <div id="asn-subjects" class="asn-subj-pick"></div>
+            </div>
+            <div class="twin-fields">
+              <div class="field-group">
+                <label for="asn-lesson-count">عدد الدروس</label>
+                <input id="asn-lesson-count" class="field-input" type="number" min="0" max="40" />
+              </div>
+              <div class="field-group">
+                <label for="asn-user">حساب المعلم <span class="optional">(للمزامنة)</span></label>
+                <select id="asn-user" class="field-input"><option value="">— بلا مزامنة —</option></select>
+              </div>
+            </div>
+            <p class="form-hint" id="asn-sync-hint">عند اختيار حساب المعلم وصفٍّ دراسي، ينعكس هذا التكليف فوراً على واجهة المعلم.</p>
+          </div>
+
+          <p class="form-section-label">التواريخ</p>
+          <div class="twin-fields">
+            <div class="field-group"><label for="asn-start-date">تاريخ البدء</label>
+              <input id="asn-start-date" class="field-input" type="date" /></div>
+            <div class="field-group"><label for="asn-commence-date">تاريخ المباشرة</label>
+              <input id="asn-commence-date" class="field-input" type="date" /></div>
+          </div>
+          <div class="twin-fields">
+            <div class="field-group"><label for="asn-assignment-date">تاريخ التكليف</label>
+              <input id="asn-assignment-date" class="field-input" type="date" /></div>
+            <div class="field-group"><label for="asn-execution-start">بدء التنفيذ</label>
+              <input id="asn-execution-start" class="field-input" type="date" /></div>
+          </div>
+
+          <div id="asn-form-error" class="msg msg-error" hidden></div>
+          <button type="button" class="btn btn-primary btn-full" id="btn-save-assignment">
+            حفظ التكليف
+            <span class="spinner" id="asn-save-spinner" hidden></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Modal: نموذج الكادر (إضافة / تعديل) ──────────────────────────────── -->
     <div id="modal-staff-rec" class="overlay" hidden aria-modal="true" role="dialog"
          aria-label="بيانات الكادر">
