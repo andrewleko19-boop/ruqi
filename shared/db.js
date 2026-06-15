@@ -2962,6 +2962,12 @@ window.NSAMS_DB = {
   parentGetAbsenceExcuses,
   parentSubmitAbsenceExcuse,
   parentUploadExcusePhoto,
+
+  // السجل الوطني — المرحلة 2
+  lookupNationalStudent,
+  lookupNationalStaff,
+  linkStudentToRegistry,
+  linkStaffToRegistry,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3113,4 +3119,49 @@ async function reviewMonthlyStatement(statementId, decision, notes = null) {
     p_statement_id: statementId, p_decision: decision, p_notes: notes || null });
   if (error) throw error;
   return true;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// §15 — السجل الوطني (المرحلة 2)
+// ═════════════════════════════════════════════════════════════════════════════
+
+async function _invokeRegistryLookup(kind, id) {
+  const { data, error } = await db.functions.invoke('registry-lookup', {
+    body: { kind, id },
+  });
+  if (error) {
+    let msg = 'تعذّر الاستعلام عن السجل.';
+    try { const j = await error.context?.json?.(); if (j?.error) msg = j.error; } catch { /* ignore */ }
+    throw new Error(msg);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+async function lookupNationalStudent(nationalId) {
+  if (!isOnline()) throw new Error('الاستعلام عن السجل يتطلّب اتصالاً بالإنترنت.');
+  return _invokeRegistryLookup('student', nationalId);
+}
+
+async function lookupNationalStaff(selfNumber) {
+  if (!isOnline()) throw new Error('الاستعلام عن السجل يتطلّب اتصالاً بالإنترنت.');
+  return _invokeRegistryLookup('staff', selfNumber);
+}
+
+async function linkStudentToRegistry(studentId, nationalId) {
+  if (!isOnline()) throw new Error('الربط بالسجل يتطلّب اتصالاً بالإنترنت.');
+  const { data, error } = await db.rpc('link_student_to_registry', {
+    p_student_id: studentId, p_national_id: nationalId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+async function linkStaffToRegistry(staffId, selfNumber) {
+  if (!isOnline()) throw new Error('الربط بالسجل يتطلّب اتصالاً بالإنترنت.');
+  const { data, error } = await db.rpc('link_staff_to_registry', {
+    p_staff_id: staffId, p_self_number: selfNumber,
+  });
+  if (error) throw error;
+  return data;
 }

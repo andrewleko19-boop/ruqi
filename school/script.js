@@ -3471,6 +3471,15 @@ el('btn-save-student').addEventListener('click', async () => {
       ...input, id: _stuEditId || undefined,
       schoolId: schoolId(), classId: _stuClassId, actorId: actorId(),
     });
+    // If a registry lookup was done, link the student to the national registry.
+    if (_stuRegistryData && res.id && res.synced) {
+      try {
+        await NDB.linkStudentToRegistry(res.id, _stuRegistryData.national_id);
+      } catch (linkErr) {
+        console.warn('[NSAMS] linkStudentToRegistry (non-fatal)', linkErr);
+      }
+    }
+    _stuRegistryData = null;
     closeStudentForm();
     toast(res.synced ? (_stuEditId ? 'تم تحديث الطالب' : 'تمت إضافة الطالب')
                      : 'حُفظ محلياً وسيُزامن عند الاتصال', res.synced ? 'success' : 'warning');
@@ -3484,6 +3493,76 @@ el('btn-save-student').addEventListener('click', async () => {
 });
 
 el('btn-add-student').addEventListener('click', () => openStudentForm(null));
+
+// ── Student registry lookup (السجل الوطني للطالب) ────────────────────────────
+let _stuRegistryData = null;
+const stuRegResult    = el('stu-reg-result');
+const btnStuRegLookup = el('btn-stu-reg-lookup');
+
+function openStudentFormOrig() {}  // placeholder — real fn defined above as openStudentForm
+
+// Reset registry state when form opens (patch the existing openStudentForm)
+const _origOpenStudentForm = openStudentForm;
+// @ts-ignore — wrapping the existing function
+window._openStudentForm = (student) => {
+  _stuRegistryData = null;
+  if (stuRegResult) stuRegResult.hidden = true;
+  _origOpenStudentForm(student);
+};
+
+btnStuRegLookup?.addEventListener('click', async () => {
+  const natId = el('stu-natid')?.value.trim();
+  if (!natId) {
+    if (stuRegResult) { _showRegResult(stuRegResult, 'أدخل الرقم الوطني (11 رقماً) أولاً.', 'error'); } return;
+  }
+  if (!/^\d{11}$/.test(natId)) {
+    if (stuRegResult) { _showRegResult(stuRegResult, `الرقم الوطني يجب أن يكون ١١ رقماً — أدخلت ${natId.length}.`, 'error'); }
+    return;
+  }
+  btnStuRegLookup.disabled = true;
+  _showRegResult(stuRegResult, 'جارٍ البحث…', 'info');
+  try {
+    const res = await NDB.lookupNationalStudent(natId);
+    if (!res.ok || !res.data) {
+      _showRegResult(stuRegResult, 'لم يُعثر على الطالب في السجل الوطني.', 'error');
+      _stuRegistryData = null; return;
+    }
+    const d = res.data;
+    _stuRegistryData = d;
+    // Fill personal fields from registry
+    const firstEl  = el('stu-first');
+    const fatherEl = el('stu-father');
+    const familyEl = el('stu-family');
+    const genderEl = el('stu-gender');
+    if (firstEl)  firstEl.value  = d.first_name   || '';
+    if (fatherEl) fatherEl.value = d.father_name  || '';
+    if (familyEl) familyEl.value = d.family_name  || '';
+    if (genderEl) { genderEl.value = d.gender || ''; CustomSelect.refresh(genderEl); }
+    const motherEl    = el('stu-mother');
+    const motherFamEl = el('stu-mother-family');
+    const grandEl     = el('stu-grandfather');
+    const bpEl        = el('stu-birthplace');
+    const cardEl      = el('stu-card');
+    if (motherEl)    motherEl.value    = d.mother_name    || '';
+    if (motherFamEl) motherFamEl.value = d.mother_family  || '';
+    if (grandEl)     grandEl.value     = d.grandfather_name || '';
+    if (bpEl)        bpEl.value        = d.birth_place    || '';
+    if (cardEl)      cardEl.value      = d.card_number    || '';
+    if (d.birth_date) {
+      const [y, m, dd] = d.birth_date.split('-');
+      const dobY = el('stu-dob-year'); const dobM = el('stu-dob-month'); const dobD = el('stu-dob-day');
+      if (dobY) dobY.value = y;
+      if (dobM) dobM.value = String(Number(m));
+      if (dobD) dobD.value = String(Number(dd));
+    }
+    _showRegResult(stuRegResult, `السجل الوطني: ${escapeHtml(d.full_name)} — سيُربط الطالب بالسجل عند الحفظ`, 'success');
+  } catch (err) {
+    _showRegResult(stuRegResult, `تعذّر البحث: ${err.message}`, 'error');
+    _stuRegistryData = null;
+  } finally {
+    btnStuRegLookup.disabled = false;
+  }
+});
 
 // ── Transfer ────────────────────────────────────────────────────────────────
 const modalTransfer = el('modal-transfer');
@@ -4110,6 +4189,11 @@ const srSeniority     = el('sr-seniority');
 const srStartDay      = el('sr-start-day');
 const srStartMonth    = el('sr-start-month');
 const srStartYear     = el('sr-start-year');
+const srSelfNumber    = el('sr-self-number');
+const srGeneralNumber = el('sr-general-number');
+const srGender        = el('sr-gender');
+const srRegResult     = el('sr-reg-result');
+const btnSrRegLookup  = el('btn-sr-reg-lookup');
 const srNationalId    = el('sr-national-id');
 const srMotherName    = el('sr-mother-name');
 const srDobDay        = el('sr-dob-day');
@@ -4123,6 +4207,8 @@ const srNotes         = el('sr-notes');
 const srError         = el('sr-error');
 const srSaveSpinner   = el('sr-save-spinner');
 const btnSaveStaffRec = el('btn-save-staff-rec');
+
+let _srRegistryData = null;   // كائن بيانات السجل الذاتي عند وجود ربط ناجح
 const modalLeaves     = el('modal-staff-leaves');
 const btnCloseLeaves  = el('btn-close-staff-leaves');
 const leavesStaffName = el('leaves-staff-name');
@@ -4194,9 +4280,21 @@ function renderRegistryList() {
   hide(regEmpty);
   if (regList) regList.innerHTML = filtered.map(r => {
     const meta = [r.job_title, r.specialization].filter(Boolean).join(' · ');
+    const genderDot = r.gender === 'female'
+      ? '<span class="gender-dot gender-dot--female" title="أنثى"></span>'
+      : r.gender === 'male'
+        ? '<span class="gender-dot gender-dot--male" title="ذكر"></span>'
+        : '';
+    const nums = [
+      r.self_number    ? `ذاتي: ${escapeHtml(r.self_number)}`    : null,
+      r.general_number ? `عام: ${escapeHtml(r.general_number)}`   : null,
+    ].filter(Boolean).join(' / ');
+    const linkedBadge = r.registry_self_number
+      ? '<span class="reg-linked-badge">مرتبط بالسجل</span>' : '';
     return `<li class="reg-row" data-id="${r.id}">
       <div class="reg-row-main">
-        <div class="reg-name">${escapeHtml(r.full_name)}</div>
+        <div class="reg-name">${genderDot}${escapeHtml(r.full_name)}${linkedBadge}</div>
+        ${nums ? `<div class="reg-nums">${nums}</div>` : ''}
         ${meta ? `<div class="reg-meta">${escapeHtml(meta)}</div>` : ''}
       </div>
       <div class="reg-row-acts">
@@ -4243,6 +4341,7 @@ btnRefreshReg?.addEventListener('click',  loadRegistryRecords);
 // ── Staff Record Modal ────────────────────────────────────────────────────────
 async function openStaffRecModal(rec) {
   _regEditId = rec?.id ?? null;
+  _srRegistryData = null;
   if (staffRecTitle) staffRecTitle.textContent = rec ? 'تعديل بيانات كادر' : 'إضافة كادر جديد';
 
   const jobTitles = _regSegment === 'admin'
@@ -4264,22 +4363,24 @@ async function openStaffRecModal(rec) {
   fillSel(srMinDoc, minDocs, '— لا يوجد —');
   fillSel(srEduZone, eduZones, '— لا يوجد —');
 
-  // Subject field visible for teaching only
   if (srSubjectWrap) srSubjectWrap.hidden = _regSegment !== 'teaching';
 
   const textInputs = [srFullName, srNationalId, srMotherName, srDobDay, srDobMonth,
-                      srDobYear, srStartDay, srStartMonth, srStartYear, srSubject, srPhone, srResZone, srNotes];
+                      srDobYear, srStartDay, srStartMonth, srStartYear, srSubject, srPhone, srResZone, srNotes,
+                      srSelfNumber, srGeneralNumber];
   const numInputs  = [srSeniority];
 
   if (rec) {
-    srFullName.value    = rec.full_name     || '';
-    srNationalId.value  = rec.national_id   || '';
-    srMotherName.value  = rec.mother_name   || '';
-    srPhone.value       = rec.phone         || '';
-    srResZone.value     = rec.residential_zone || '';
-    srNotes.value       = rec.notes         || '';
-    srSubject.value     = rec.subject_taught || '';
-    srSeniority.value   = rec.seniority_years ?? '';
+    srFullName.value      = rec.full_name          || '';
+    srNationalId.value    = rec.national_id        || '';
+    srMotherName.value    = rec.mother_name        || '';
+    srPhone.value         = rec.phone              || '';
+    srResZone.value       = rec.residential_zone   || '';
+    srNotes.value         = rec.notes              || '';
+    srSubject.value       = rec.subject_taught     || '';
+    srSeniority.value     = rec.seniority_years    ?? '';
+    srSelfNumber.value    = rec.self_number        || '';
+    srGeneralNumber.value = rec.general_number     || '';
     if (rec.start_date) {
       const [sy, sm, sd] = rec.start_date.split('-');
       srStartYear.value = sy; srStartMonth.value = String(Number(sm)); srStartDay.value = String(Number(sd));
@@ -4292,27 +4393,57 @@ async function openStaffRecModal(rec) {
     } else {
       srDobYear.value  = srDobMonth.value = srDobDay.value = '';
     }
-    srJobTitle.value    = rec.job_title     || '';
-    srSpec.value        = rec.specialization || '';
-    srCertificate.value = rec.certificate   || '';
-    srHigherDegree.value= rec.higher_degree || '';
+    srJobTitle.value    = rec.job_title        || '';
+    srSpec.value        = rec.specialization   || '';
+    srCertificate.value = rec.certificate      || '';
+    srHigherDegree.value= rec.higher_degree    || '';
     srEduZone.value     = rec.educational_zone || '';
-    srRosterType.value  = rec.roster_type   || 'inside';
-    srMinDoc.value      = rec.ministerial_doc || '';
+    srRosterType.value  = rec.roster_type      || 'inside';
+    srMinDoc.value      = rec.ministerial_doc  || '';
+    srGender && (srGender.value = rec.gender   || '');
     [srJobTitle, srSpec, srCertificate, srHigherDegree, srEduZone, srRosterType, srMinDoc]
       .forEach(s => CustomSelect.refresh(s));
+    if (srGender) CustomSelect.refresh(srGender);
+
+    const isLinked = !!rec.registry_self_number;
+    _lockStaffPersonalFields(isLinked);
+    if (isLinked) {
+      _showRegResult(srRegResult, `مرتبط بالسجل المركزي — الرقم الذاتي: ${escapeHtml(rec.registry_self_number)}`, 'success');
+    } else {
+      hide(srRegResult);
+    }
   } else {
     textInputs.forEach(i => { if (i) i.value = ''; });
     numInputs.forEach(i => { if (i) i.value = ''; });
     srRosterType.value = 'inside';
+    if (srGender) { srGender.value = ''; CustomSelect.refresh(srGender); }
     [srJobTitle, srSpec, srCertificate, srHigherDegree, srEduZone, srRosterType, srMinDoc]
       .forEach(s => { if (s) { s.value = ''; CustomSelect.refresh(s); } });
+    _lockStaffPersonalFields(false);
+    hide(srRegResult);
   }
 
   hide(srError);
   show(modalStaffRec);
   if (!rec) modalStaffRec.querySelector('.sheet-body').scrollTop = 0;
   document.body.style.overflow = 'hidden';
+}
+
+function _lockStaffPersonalFields(locked) {
+  [srFullName, srNationalId, srMotherName, srDobDay, srDobMonth, srDobYear,
+   srGeneralNumber, srGender].forEach(el => {
+    if (!el) return;
+    el.readOnly = locked;
+    el.disabled = locked && el.tagName === 'SELECT';
+    el.classList.toggle('field-locked', locked);
+  });
+}
+
+function _showRegResult(container, msg, type = 'info') {
+  if (!container) return;
+  container.textContent = msg;
+  container.className = `registry-result registry-result--${type}`;
+  container.hidden = false;
 }
 
 function closeStaffRecModal() {
@@ -4322,6 +4453,43 @@ function closeStaffRecModal() {
 }
 btnCloseStaffRec?.addEventListener('click', closeStaffRecModal);
 modalStaffRec?.addEventListener('click', e => { if (e.target === modalStaffRec) closeStaffRecModal(); });
+
+// ── Registry lookup: staff (الرقم الذاتي) ────────────────────────────────────
+btnSrRegLookup?.addEventListener('click', async () => {
+  const selfNum = srSelfNumber?.value.trim();
+  if (!selfNum) {
+    _showRegResult(srRegResult, 'أدخل الرقم الذاتي أولاً.', 'error'); return;
+  }
+  btnSrRegLookup.disabled = true;
+  _showRegResult(srRegResult, 'جارٍ البحث…', 'info');
+  try {
+    const res = await NDB.lookupNationalStaff(selfNum);
+    if (!res.ok || !res.data) {
+      _showRegResult(srRegResult, 'لم يُعثر على سجل بهذا الرقم الذاتي.', 'error');
+      _srRegistryData = null; _lockStaffPersonalFields(false); return;
+    }
+    const d = res.data;
+    _srRegistryData = d;
+    srFullName.value      = d.full_name      || '';
+    srNationalId.value    = d.national_id    || '';
+    srMotherName.value    = d.mother_name    || '';
+    srGeneralNumber.value = d.general_number || '';
+    if (srGender) { srGender.value = d.gender || ''; CustomSelect.refresh(srGender); }
+    if (d.birth_date) {
+      const [y, m, dd] = d.birth_date.split('-');
+      if (srDobYear)  srDobYear.value  = y;
+      if (srDobMonth) srDobMonth.value = String(Number(m));
+      if (srDobDay)   srDobDay.value   = String(Number(dd));
+    }
+    _lockStaffPersonalFields(true);
+    _showRegResult(srRegResult, `تمّ العثور على السجل: ${escapeHtml(d.full_name)}`, 'success');
+  } catch (err) {
+    _showRegResult(srRegResult, `تعذّر البحث: ${err.message}`, 'error');
+    _srRegistryData = null; _lockStaffPersonalFields(false);
+  } finally {
+    btnSrRegLookup.disabled = false;
+  }
+});
 
 btnSaveStaffRec?.addEventListener('click', async () => {
   const fullName = srFullName?.value.trim();
@@ -4348,6 +4516,9 @@ btnSaveStaffRec?.addEventListener('click', async () => {
     national_id:      srNationalId?.value.trim() || null,
     mother_name:      srMotherName?.value.trim() || null,
     birth_date,
+    gender:           srGender?.value || null,
+    self_number:      srSelfNumber?.value.trim() || null,
+    general_number:   srGeneralNumber?.value.trim() || null,
     job_title:        jt,
     specialization:   srSpec?.value || null,
     subject_taught:   _regSegment === 'teaching' ? (srSubject?.value.trim() || null) : null,
@@ -4369,13 +4540,22 @@ btnSaveStaffRec?.addEventListener('click', async () => {
   if (srSaveSpinner) srSaveSpinner.hidden = false;
   hide(srError);
   try {
+    let savedId = _regEditId;
     if (_regEditId) {
       await NDB.updateStaffRecord(_regEditId, payload);
-      toast('تم تحديث البيانات', 'success');
     } else {
-      await NDB.createStaffRecord(payload);
-      toast('تمت الإضافة إلى السجل', 'success');
+      const row = await NDB.createStaffRecord(payload);
+      savedId = row.id;
     }
+    // If a registry lookup was done in this session, establish the formal link.
+    if (_srRegistryData && savedId) {
+      try {
+        await NDB.linkStaffToRegistry(savedId, _srRegistryData.self_number);
+      } catch (linkErr) {
+        console.warn('[NSAMS] linkStaffToRegistry (non-fatal)', linkErr);
+      }
+    }
+    toast(_regEditId ? 'تم تحديث البيانات' : 'تمت الإضافة إلى السجل', 'success');
     closeStaffRecModal();
     await loadRegistryRecords();
   } catch (err) {

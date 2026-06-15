@@ -1494,3 +1494,53 @@ select.csel-native {
 .stu-status-badge.st-struck_off {
   background: var(--clr-danger-bg, #FEE2E2); color: #991b1b; border-color: var(--clr-danger-brd, #FCA5A5);
 }
+
+/* ── National Registry (المرحلة 2) ──────────────────────────────────────────── */
+.input-with-action {
+  display: flex; gap: 6px; align-items: center;
+}
+.input-with-action .field-input { flex: 1; min-width: 0; }
+.btn.btn-outline.btn-sm {
+  padding: 6px 10px; border-radius: 8px; font-size: .78rem; font-weight: 600;
+  background: transparent; color: var(--clr-primary, #1a2744);
+  border: 1px solid var(--clr-primary, #1a2744); cursor: pointer; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.btn.btn-outline.btn-sm:hover { background: var(--clr-primary-bg, #eef0f8); }
+.btn.btn-outline.btn-sm:disabled { opacity: .5; cursor: not-allowed; }
+.registry-result {
+  padding: 7px 12px; border-radius: 8px; font-size: .8rem;
+  margin-top: 6px; border: 1px solid transparent;
+}
+.registry-result--success {
+  background: var(--clr-success-bg, #dcfce7); color: #166534;
+  border-color: var(--clr-success-brd, #86efac);
+}
+.registry-result--error {
+  background: var(--clr-danger-bg, #FEE2E2); color: #991b1b;
+  border-color: var(--clr-danger-brd, #FCA5A5);
+}
+.registry-result--info {
+  background: var(--clr-info-bg, #dbeafe); color: #1e40af;
+  border-color: var(--clr-info-brd, #93c5fd);
+}
+.gender-dot {
+  display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+  margin-inline-end: 6px; vertical-align: middle; flex-shrink: 0;
+}
+.gender-dot--male   { background: #3b82f6; }
+.gender-dot--female { background: #ec4899; }
+.reg-linked-badge {
+  display: inline-block; margin-inline-start: 8px;
+  padding: 1px 7px; border-radius: 999px; font-size: .65rem; font-weight: 700;
+  background: var(--clr-info-bg, #dbeafe); color: #1e40af;
+  border: 1px solid var(--clr-info-brd, #93c5fd); vertical-align: middle;
+}
+.reg-nums {
+  font-size: .75rem; color: #64748b; margin-top: 2px;
+}
+.field-locked {
+  background: var(--clr-surface-2, #f8fafc) !important;
+  color: #64748b !important; cursor: not-allowed;
+  border-color: var(--clr-border, #e2e8f0) !important;
+}

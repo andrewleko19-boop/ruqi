@@ -812,14 +812,16 @@ delHolidayConfirm.addEventListener('click', async () => {
 // ══════════════════════════════════════════════
 
 const LIST_TYPE_LABELS = {
-  admin_role:       'الأعمال الإدارية',
-  specialization:   'الاختصاصات',
-  certificate:      'الشهادات',
-  higher_degree:    'الشهادات العليا',
-  leave_type:       'أنواع الإجازات',
-  ministerial_doc:  'الوثائق / الموافقات',
-  support_job:      'الأعمال المساندة',
-  educational_zone: 'المناطق التعليمية (لكل مديرية)',
+  admin_role:         'الأعمال الإدارية',
+  specialization:     'الاختصاصات',
+  certificate:        'الشهادات',
+  higher_degree:      'الشهادات العليا',
+  leave_type:         'أنواع الإجازات',
+  ministerial_doc:    'الوثائق / الموافقات',
+  support_job:        'الأعمال المساندة',
+  educational_zone:   'المناطق التعليمية (لكل مديرية)',
+  job_title:          'الصفة الوظيفية — التكليف الفني',
+  school_admin_role:  'الصفة الإدارية — التكليف الإداري',
 };
 
 // Lookups DOM refs
