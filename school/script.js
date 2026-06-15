@@ -3329,11 +3329,20 @@ stuClassSelect.addEventListener('change', async () => {
   await loadStudents();
 });
 
+// Lifecycle status → Arabic label + badge modifier (دورة حياة الطالب).
+const STU_STATUS_LABELS = {
+  active: 'نشط', transferred: 'منقول', out_of_year: 'خارج السنة',
+  graduated: 'متخرّج', struck_off: 'مرقّن القيد',
+};
+let _stuStatus = 'active';
+
 async function loadStudents() {
   if (!_stuClassId) return;
   show(stuLoading); stuListEl.innerHTML = ''; hide(stuEmpty); hide(stuNoResults);
   try {
-    _stuList = await NDB.getClassStudents(_stuClassId);
+    // Default chip (active) uses the cached/offline path; other statuses are online-only.
+    const opts = _stuStatus && _stuStatus !== 'active' ? { status: _stuStatus } : {};
+    _stuList = await NDB.getClassStudents(_stuClassId, opts);
     renderStudents();
   } catch (err) {
     console.error('[NSAMS] loadStudents', err);
@@ -3352,14 +3361,19 @@ function renderStudents() {
   if (_stuList.length === 0) { stuListEl.innerHTML = ''; show(stuEmpty); return; }
   if (list.length === 0)     { stuListEl.innerHTML = ''; show(stuNoResults); return; }
   stuListEl.innerHTML = list.map((s, i) => {
+    const st = s.status || 'active';
+    // Show the status badge only when it isn't the plain active roster.
+    const badge = st !== 'active'
+      ? `<span class="stu-status-badge st-${st}">${STU_STATUS_LABELS[st] || st}</span>`
+      : '';
     return (
       `<li class="stu-row" data-id="${escapeHtml(s.id)}">` +
         `<span class="stu-seat">${i + 1}</span>` +
-        `<span class="stu-info"><span class="stu-name">${escapeHtml(s.full_name || '—')}</span></span>` +
+        `<span class="stu-info"><span class="stu-name">${escapeHtml(s.full_name || '—')}</span>${badge}</span>` +
         `<span class="stu-acts">` +
           `<button class="icon-btn-sm" data-act="edit" title="تعديل"><svg class="icon icon-sm"><use href="#ic-edit"/></svg></button>` +
-          `<button class="icon-btn-sm" data-act="transfer" title="نقل"><svg class="icon icon-sm"><use href="#ic-arrow-right"/></svg></button>` +
-          `<button class="icon-btn-sm danger" data-act="archive" title="أرشفة"><svg class="icon icon-sm"><use href="#ic-trash"/></svg></button>` +
+          `<button class="icon-btn-sm" data-act="transfer" title="نقل بين الشعب"><svg class="icon icon-sm"><use href="#ic-arrow-right"/></svg></button>` +
+          `<button class="icon-btn-sm" data-act="status" title="تغيير الحالة"><svg class="icon icon-sm"><use href="#ic-user"/></svg></button>` +
         `</span>` +
       `</li>`
     );
@@ -3378,7 +3392,20 @@ stuListEl.addEventListener('click', (e) => {
   if (!student) return;
   if (btn.dataset.act === 'edit')     openStudentForm(student);
   if (btn.dataset.act === 'transfer') openTransfer(student);
-  if (btn.dataset.act === 'archive')  openArchive(student);
+  if (btn.dataset.act === 'status')   openStatus(student);
+});
+
+// ── Status filter chips (دورة حياة الطالب) ───────────────────────────────────
+el('stu-status-chips')?.addEventListener('click', (e) => {
+  const chip = e.target.closest('.stu-chip');
+  if (!chip || chip.classList.contains('is-on')) return;
+  el('stu-status-chips').querySelectorAll('.stu-chip').forEach(c => {
+    const on = c === chip;
+    c.classList.toggle('is-on', on);
+    c.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  _stuStatus = chip.dataset.status || 'active';
+  if (_stuClassId) loadStudents();
 });
 
 // ── Student editor ──────────────────────────────────────────────────────────
@@ -3520,6 +3547,46 @@ el('btn-confirm-archive').addEventListener('click', async () => {
     el('archive-error').textContent = 'تعذّرت الأرشفة.'; show(el('archive-error'));
   } finally {
     btn.disabled = false; hide(el('archive-spinner'));
+  }
+});
+
+// ── Change lifecycle status (دورة حياة الطالب) ────────────────────────────────
+const modalStatus = el('modal-status');
+function openStatus(student) {
+  _stuActionStudent = student;
+  const cur = student.status || 'active';
+  el('status-name').textContent    = student.full_name || '—';
+  el('status-current').textContent = STU_STATUS_LABELS[cur] || cur;
+  el('status-new').value    = cur;
+  el('status-reason').value = '';
+  hide(el('status-error'));
+  CustomSelect.refresh(el('status-new'));
+  show(modalStatus);
+}
+el('btn-close-status').addEventListener('click', () => hide(modalStatus));
+el('btn-confirm-status').addEventListener('click', async () => {
+  const newStatus = el('status-new').value;
+  const cur = _stuActionStudent?.status || 'active';
+  if (cur === 'graduated') {
+    el('status-error').textContent = 'لا يمكن تغيير حالة طالب متخرّج.'; show(el('status-error')); return;
+  }
+  if (newStatus === cur) {
+    el('status-error').textContent = 'اختر حالة مختلفة عن الحالية.'; show(el('status-error')); return;
+  }
+  const btn = el('btn-confirm-status'); btn.disabled = true; show(el('status-spinner'));
+  try {
+    const res = await NDB.setStudentStatus({
+      id: _stuActionStudent.id, schoolId: schoolId(), classId: _stuClassId,
+      newStatus, reason: el('status-reason').value.trim() || null, actorId: actorId(),
+    });
+    hide(modalStatus);
+    toast(res.synced ? 'تم تغيير حالة الطالب' : 'سيُحدَّث عند الاتصال', res.synced ? 'success' : 'warning');
+    await loadStudents();
+  } catch (err) {
+    console.error('[NSAMS] setStudentStatus', err);
+    el('status-error').textContent = 'تعذّر تغيير الحالة.'; show(el('status-error'));
+  } finally {
+    btn.disabled = false; hide(el('status-spinner'));
   }
 });
 
