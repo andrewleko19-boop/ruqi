@@ -2968,6 +2968,12 @@ window.NSAMS_DB = {
   lookupNationalStaff,
   linkStudentToRegistry,
   linkStaffToRegistry,
+
+  // التكاليف — المرحلة 3أ
+  getStaffAssignments,
+  upsertStaffAssignment,
+  endStaffAssignment,
+  getDirectorateSchoolAssignments,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3164,4 +3170,46 @@ async function linkStaffToRegistry(staffId, selfNumber) {
   });
   if (error) throw error;
   return data;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// §16 — التكاليف (staff_assignments) — المرحلة 3أ
+// ═════════════════════════════════════════════════════════════════════════════
+// سجلّ HR للتكليف الإداري/الفني، منفصل عن class_teacher. التكليف الفني الصفّي
+// التدريسي (بحساب دخول) يُزامَن آلياً إلى class_teacher عبر RPC upsert_staff_assignment.
+
+async function getStaffAssignments(schoolId) {
+  const { data, error } = await db.from('staff_assignments')
+    .select('*')
+    .eq('school_id', schoolId)
+    .eq('active', true)
+    .order('assignment_kind')
+    .order('job_title');
+  if (error) throw error;
+  return data || [];
+}
+
+// إنشاء/تعديل تكليف. يُمرّر الحمولة كاملةً للـ RPC الذي يتكفّل بالمزامنة.
+async function upsertStaffAssignment(payload) {
+  if (!isOnline()) throw new Error('حفظ التكليف يتطلّب اتصالاً بالإنترنت.');
+  const { data, error } = await db.rpc('upsert_staff_assignment', { p: payload });
+  if (error) throw error;
+  return data;   // معرّف التكليف
+}
+
+// إنهاء تكليف (وحذف جسر class_teacher المُزامَن إن وُجد).
+async function endStaffAssignment(id) {
+  if (!isOnline()) throw new Error('إنهاء التكليف يتطلّب اتصالاً بالإنترنت.');
+  const { error } = await db.rpc('end_staff_assignment', { p_id: id });
+  if (error) throw error;
+  return true;
+}
+
+// المديرية: قراءة تكاليف مدرسة ضمن نطاقها (منقّحة، دون حقول حسّاسة).
+async function getDirectorateSchoolAssignments(schoolId) {
+  const { data, error } = await db.rpc('get_school_assignments_for_directorate', {
+    p_school_id: schoolId,
+  });
+  if (error) throw error;
+  return data || [];
 }

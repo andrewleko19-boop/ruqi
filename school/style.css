@@ -1363,6 +1363,26 @@ select.csel-native {
   background:var(--clr-primary-dim,rgba(26,107,60,.1));
   color:var(--clr-primary,#1a6b3c); border-color:var(--clr-primary,#1a6b3c);
 }
+/* التكاليف — segments share the registry segment look */
+.asn-seg-btn {
+  flex:1; padding:6px 8px; font-size:.8rem; font-weight:600;
+  border:1px solid var(--clr-border-lt,#E2E8F0); border-radius:var(--r-md,10px);
+  background:transparent; color:var(--clr-text-3,#94A3B8); cursor:pointer;
+  transition:background .15s, color .15s, border-color .15s; white-space:nowrap;
+}
+.asn-seg-btn.is-active {
+  background:var(--clr-primary-dim,rgba(26,107,60,.1));
+  color:var(--clr-primary,#1a6b3c); border-color:var(--clr-primary,#1a6b3c);
+}
+.asn-subj-pick { display:flex; flex-wrap:wrap; gap:6px; }
+.asn-subj-chip {
+  display:inline-flex; align-items:center; gap:5px; cursor:pointer;
+  padding:5px 10px; border-radius:999px; font-size:.78rem;
+  border:1px solid var(--clr-border,#CBD5E1); background:var(--clr-surface,#fff);
+}
+.asn-subj-chip input { accent-color:var(--clr-primary,#1a6b3c); }
+.form-hint { font-size:.74rem; color:var(--clr-text-3,#94A3B8); margin:6px 0 0; }
+
 .reg-list { list-style:none; padding:0; margin:0; }
 .reg-row {
   display:flex; align-items:center; gap:10px; padding:11px 4px;

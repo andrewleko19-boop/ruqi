@@ -4249,7 +4249,7 @@ function fillSel(sel, values, blank = '— اختر —') {
 
 async function initRegistryTab() {
   _registryLoaded = true;
-  await loadRegistryRecords();
+  await Promise.all([loadRegistryRecords(), loadAssignments()]);
 }
 
 async function loadRegistryRecords() {
@@ -4699,6 +4699,272 @@ CustomSelect.enhance('sr-edu-zone');
 CustomSelect.enhance('sr-min-doc');
 CustomSelect.enhance('leave-type-sel');
 CustomSelect.enhance('leaves-month-sel');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// § التكاليف (staff_assignments) — المرحلة 3أ
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _asnSegment   = 'technical';   // 'technical' | 'administrative'
+let _asnAll       = [];
+let _asnEditId    = null;
+let _asnClasses   = [];
+let _asnTeachers  = [];
+let _asnSubjects  = [];            // subjects for the currently selected class grade
+
+const asnList         = el('asn-list');
+const asnLoading      = el('asn-loading');
+const asnError        = el('asn-error');
+const asnEmpty        = el('asn-empty');
+const btnRefreshAsn   = el('btn-refresh-assignments');
+const btnAddAsn       = el('btn-add-assignment');
+const modalAsn        = el('modal-staff-assignment');
+const btnCloseAsn     = el('btn-close-assignment');
+const asnTitle        = el('asn-title');
+const asnKind         = el('asn-kind');
+const asnJobTitle     = el('asn-job-title');
+const asnTechFields   = el('asn-technical-fields');
+const asnClass        = el('asn-class');
+const asnSection      = el('asn-section');
+const asnSubjects     = el('asn-subjects');
+const asnLessonCount  = el('asn-lesson-count');
+const asnUser         = el('asn-user');
+const asnStartDate    = el('asn-start-date');
+const asnCommenceDate = el('asn-commence-date');
+const asnAssignDate   = el('asn-assignment-date');
+const asnExecStart    = el('asn-execution-start');
+const asnFormError    = el('asn-form-error');
+const asnSaveSpinner  = el('asn-save-spinner');
+const btnSaveAsn      = el('btn-save-assignment');
+
+CustomSelect.enhance('asn-kind');
+CustomSelect.enhance('asn-job-title');
+CustomSelect.enhance('asn-class');
+CustomSelect.enhance('asn-user');
+
+async function loadAssignments() {
+  if (!S.school?.id) return;
+  show(asnLoading); hide(asnError);
+  try {
+    _asnAll = await NDB.getStaffAssignments(S.school.id);
+    renderAssignments();
+  } catch (err) {
+    console.error('[NSAMS] loadAssignments', err);
+    show(asnError);
+  } finally {
+    hide(asnLoading);
+  }
+}
+
+function renderAssignments() {
+  const filtered = _asnAll.filter(a => a.assignment_kind === _asnSegment);
+  if (!filtered.length) {
+    show(asnEmpty);
+    if (asnList) asnList.innerHTML = '';
+    return;
+  }
+  hide(asnEmpty);
+  if (asnList) asnList.innerHTML = filtered.map(a => {
+    const cls = a.class_id ? (_asnClasses.find(c => c.id === a.class_id)) : null;
+    const clsLabel = cls ? (cls.name || `${gradeLabel(cls.grade)} / ${cls.section ?? ''}`.trim()) : '';
+    const synced = a.assignment_kind === 'technical' && a.class_id && a.user_id
+      ? '<span class="reg-linked-badge">مُزامَن مع صلاحية المعلّم</span>' : '';
+    const meta = [clsLabel, a.section ? `شعبة ${a.section}` : '',
+      a.lesson_count != null ? `${a.lesson_count} درساً` : ''].filter(Boolean).join(' · ');
+    return `<li class="reg-row" data-id="${a.id}">
+      <div class="reg-row-main">
+        <div class="reg-name">${escapeHtml(a.job_title)}${synced}</div>
+        ${meta ? `<div class="reg-meta">${escapeHtml(meta)}</div>` : ''}
+      </div>
+      <div class="reg-row-acts">
+        <button class="icon-btn" data-act="edit" aria-label="تعديل" title="تعديل">
+          <svg class="icon icon-sm"><use href="#ic-edit"/></svg>
+        </button>
+        <button class="icon-btn" data-act="end" aria-label="إنهاء" title="إنهاء التكليف">
+          <svg class="icon icon-sm"><use href="#ic-trash"/></svg>
+        </button>
+      </div>
+    </li>`;
+  }).join('');
+}
+
+// Segment switching
+document.querySelectorAll('.asn-seg-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    _asnSegment = btn.dataset.asnSeg;
+    document.querySelectorAll('.asn-seg-btn').forEach(b =>
+      b.classList.toggle('is-active', b === btn));
+    renderAssignments();
+  });
+});
+
+// Row actions
+asnList?.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  const li  = btn.closest('.reg-row');
+  const asn = _asnAll.find(a => a.id === li?.dataset.id);
+  if (!asn) return;
+  if (btn.dataset.act === 'edit') openAssignmentModal(asn);
+  else if (btn.dataset.act === 'end') {
+    if (!confirm('إنهاء هذا التكليف؟ سيُزال جسر الصلاحية المُزامَن إن وُجد.')) return;
+    try {
+      await NDB.endStaffAssignment(asn.id);
+      toast('أُنهي التكليف', 'success');
+      await loadAssignments();
+    } catch (err) {
+      console.error('[NSAMS] endStaffAssignment', err);
+      toast('تعذّر إنهاء التكليف', 'error');
+    }
+  }
+});
+
+btnAddAsn?.addEventListener('click', () => openAssignmentModal(null));
+btnRefreshAsn?.addEventListener('click', loadAssignments);
+
+function _renderAsnKindFields() {
+  const isTech = asnKind.value === 'technical';
+  if (asnTechFields) asnTechFields.hidden = !isTech;
+}
+
+function _fillAsnSubjects(selectedIds = []) {
+  if (!asnSubjects) return;
+  if (!_asnSubjects.length) {
+    asnSubjects.innerHTML = '<span class="empty-hint">اختر صفاً لعرض المواد.</span>';
+    return;
+  }
+  asnSubjects.innerHTML = _asnSubjects.map(s => `
+    <label class="asn-subj-chip">
+      <input type="checkbox" value="${escapeHtml(s.id)}" ${selectedIds.includes(s.id) ? 'checked' : ''} />
+      <span>${escapeHtml(s.name)}</span>
+    </label>`).join('');
+}
+
+async function _loadAsnSubjectsForClass(classId, selectedIds = []) {
+  const cls = _asnClasses.find(c => c.id === classId);
+  if (!cls) { _asnSubjects = []; _fillAsnSubjects([]); return; }
+  try {
+    _asnSubjects = (await NDB.getSchoolSubjects(S.school.id, cls.grade)).filter(s => s.is_active);
+  } catch { _asnSubjects = []; }
+  _fillAsnSubjects(selectedIds);
+}
+
+asnKind?.addEventListener('change', _renderAsnKindFields);
+asnClass?.addEventListener('change', () => _loadAsnSubjectsForClass(asnClass.value, []));
+
+async function openAssignmentModal(asn) {
+  _asnEditId = asn?.id ?? null;
+  if (asnTitle) asnTitle.textContent = asn ? 'تعديل تكليف' : 'إضافة تكليف';
+
+  // Load classes + teacher accounts once per open (cheap, keeps data fresh).
+  try {
+    [_asnClasses, _asnTeachers] = await Promise.all([
+      NDB.getSchoolClasses(S.school.id),
+      NDB.getTeachersBySchool(S.school.id),
+    ]);
+  } catch (err) { console.warn('[NSAMS] openAssignmentModal load', err); }
+
+  // Kind
+  asnKind.value = asn?.assignment_kind || _asnSegment;
+  CustomSelect.refresh(asnKind);
+  _renderAsnKindFields();
+
+  // Job title list depends on kind
+  const listType = asnKind.value === 'technical' ? 'job_title' : 'school_admin_role';
+  const titles = await getLookup(listType);
+  fillSel(asnJobTitle, titles);
+  asnJobTitle.value = asn?.job_title || '';
+  CustomSelect.refresh(asnJobTitle);
+
+  // Classes
+  asnClass.innerHTML = '<option value="">— بلا صف —</option>' + _asnClasses.map(c =>
+    `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name || `${gradeLabel(c.grade)} / ${c.section ?? ''}`.trim())}</option>`
+  ).join('');
+  asnClass.value = asn?.class_id || '';
+  CustomSelect.refresh(asnClass);
+
+  // Teacher accounts (for sync)
+  asnUser.innerHTML = '<option value="">— بلا مزامنة —</option>' + _asnTeachers.map(t =>
+    `<option value="${escapeHtml(t.id)}">${escapeHtml(t.fullName)}</option>`).join('');
+  asnUser.value = asn?.user_id || '';
+  CustomSelect.refresh(asnUser);
+
+  // Subjects for the selected class
+  await _loadAsnSubjectsForClass(asn?.class_id || '', asn?.subject_ids || []);
+
+  asnSection.value      = asn?.section        || '';
+  asnLessonCount.value  = asn?.lesson_count   ?? '';
+  asnStartDate.value    = asn?.start_date     || '';
+  asnCommenceDate.value = asn?.commence_date  || '';
+  asnAssignDate.value   = asn?.assignment_date|| '';
+  asnExecStart.value    = asn?.execution_start|| '';
+
+  hide(asnFormError);
+  show(modalAsn);
+  if (!asn) modalAsn.querySelector('.sheet-body').scrollTop = 0;
+  document.body.style.overflow = 'hidden';
+}
+
+function closeAssignmentModal() {
+  hide(modalAsn);
+  document.body.style.overflow = '';
+  _asnEditId = null;
+}
+btnCloseAsn?.addEventListener('click', closeAssignmentModal);
+modalAsn?.addEventListener('click', e => { if (e.target === modalAsn) closeAssignmentModal(); });
+
+// Update job-title list when kind changes inside the modal
+asnKind?.addEventListener('change', async () => {
+  const listType = asnKind.value === 'technical' ? 'job_title' : 'school_admin_role';
+  const titles = await getLookup(listType);
+  const prev = asnJobTitle.value;
+  fillSel(asnJobTitle, titles);
+  asnJobTitle.value = titles.includes(prev) ? prev : '';
+  CustomSelect.refresh(asnJobTitle);
+});
+
+btnSaveAsn?.addEventListener('click', async () => {
+  hide(asnFormError);
+  const kind = asnKind.value;
+  const jobTitle = asnJobTitle.value;
+  if (!jobTitle) {
+    asnFormError.textContent = 'اختر الصفة / العمل المسند.'; show(asnFormError); return;
+  }
+  const selectedSubjects = asnSubjects
+    ? [...asnSubjects.querySelectorAll('input[type="checkbox"]:checked')].map(c => c.value)
+    : [];
+
+  const payload = {
+    id:              _asnEditId || undefined,
+    assignment_kind: kind,
+    job_title:       jobTitle,
+    class_id:        kind === 'technical' ? (asnClass.value || undefined) : undefined,
+    section:         kind === 'technical' ? (asnSection.value.trim() || undefined) : undefined,
+    subject_ids:     kind === 'technical' ? selectedSubjects : [],
+    lesson_count:    kind === 'technical' && asnLessonCount.value ? Number(asnLessonCount.value) : undefined,
+    user_id:         kind === 'technical' ? (asnUser.value || undefined) : undefined,
+    start_date:      asnStartDate.value || undefined,
+    commence_date:   asnCommenceDate.value || undefined,
+    assignment_date: asnAssignDate.value || undefined,
+    execution_start: asnExecStart.value || undefined,
+    academic_year:   NDB.getAcademicYear(),
+  };
+
+  if (btnSaveAsn) btnSaveAsn.disabled = true;
+  if (asnSaveSpinner) asnSaveSpinner.hidden = false;
+  try {
+    await NDB.upsertStaffAssignment(payload);
+    toast(_asnEditId ? 'تم تحديث التكليف' : 'تمت إضافة التكليف', 'success');
+    closeAssignmentModal();
+    await loadAssignments();
+  } catch (err) {
+    console.error('[NSAMS] upsertStaffAssignment', err);
+    asnFormError.textContent = 'تعذّر حفظ التكليف. تحقق من البيانات وحاول مجدداً.';
+    show(asnFormError);
+  } finally {
+    if (btnSaveAsn) btnSaveAsn.disabled = false;
+    if (asnSaveSpinner) asnSaveSpinner.hidden = true;
+  }
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // § البيان الشهري — statement tab
