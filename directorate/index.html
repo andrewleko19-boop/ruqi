@@ -487,6 +487,54 @@
         </div>
       </div>
 
+      <!-- الجلاءات (اعتماد النتائج النهائية) -->
+      <section class="panel" id="result-sheets-card">
+        <div class="panel-header">
+          <h2>
+            <svg class="icon"><use href="#icon-clipboard"/></svg>
+            الجلاءات
+          </h2>
+          <span class="badge badge--amber" id="dir-rs-count" hidden></span>
+        </div>
+        <div id="dir-rs-loading" class="dir-req-loading">
+          <div class="spinner"></div>
+        </div>
+        <div class="table-wrapper" id="dir-rs-table-wrap" hidden>
+          <table class="data-table" id="dir-rs-table">
+            <thead>
+              <tr>
+                <th>المدرسة</th>
+                <th>الصف / الفصل</th>
+                <th>الحالة</th>
+                <th>إجراء / ملاحظة</th>
+              </tr>
+            </thead>
+            <tbody id="dir-rs-list"></tbody>
+          </table>
+        </div>
+        <p id="dir-rs-empty" class="empty-state" hidden>لا توجد جلاءات حتى الآن.</p>
+      </section>
+
+      <!-- مودال مراجعة/إصدار الجلاء -->
+      <div id="dir-rs-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+        <div class="modal-box">
+          <h3 id="dir-rs-title">مراجعة الجلاء</h3>
+          <div id="dir-rs-body" class="dir-review-body"></div>
+          <div class="form-group" style="margin-top:12px">
+            <label for="dir-rs-notes" style="font-size:.88rem;color:var(--text-secondary)">السبب / ملاحظة (اختياري)</label>
+            <textarea id="dir-rs-notes" class="field-input" rows="2"
+              style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;font-size:.9rem;resize:vertical;margin-top:4px"></textarea>
+          </div>
+          <p id="dir-rs-msg" class="dir-review-msg" hidden></p>
+          <div class="modal-actions">
+            <button class="btn btn-sm" id="dir-rs-approve" style="background:var(--green-dim);color:var(--green);border:1px solid var(--green)">موافقة ✓</button>
+            <button class="btn btn-sm" id="dir-rs-issue"   style="background:var(--green-dim);color:var(--green);border:1px solid var(--green)" hidden>إصدار نهائي ✓</button>
+            <button class="btn btn-sm" id="dir-rs-reject"  style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)">رفض ✗</button>
+            <button class="btn btn-ghost btn-sm" id="dir-rs-cancel">إلغاء</button>
+          </div>
+        </div>
+      </div>
+
       <!-- جدول التقارير الكامل -->
       <section class="panel">
         <div class="panel-header">

@@ -334,6 +334,7 @@ async function loadAllData() {
     renderDrill();         // يعيد رسم مستوى التعمق الحالي ببيانات طازجة
     loadNationalTrend();          // try/catch داخلي — فشل RPC لا يمسّ اللوحة
     loadNationalPeriodicReports(); // نفس النمط
+    loadNationalResultSheets();    // الجلاءات الصادرة (إشراف وطني)
     setLastUpdated();
 
   } catch (err) {
@@ -879,6 +880,51 @@ async function loadNationalPeriodicReports() {
 
 document.getElementById('reload-nat-periodic-btn')
   ?.addEventListener('click', loadNationalPeriodicReports);
+
+// ── الجلاءات الصادرة (إشراف وطني — قراءة فقط) ───────────────────────────────
+const RS_TERM_AR = { s1: 'الفصل الأول', s2: 'الفصل الثاني', year: 'النتيجة السنوية' };
+
+async function loadNationalResultSheets() {
+  const loadingEl = document.getElementById('nat-rs-loading');
+  const tableWrap = document.getElementById('nat-rs-table-wrap');
+  const emptyEl   = document.getElementById('nat-rs-empty');
+  const tbody     = document.getElementById('nat-rs-tbody');
+  if (!tbody) return;
+
+  loadingEl?.classList.remove('hidden');
+  tableWrap?.setAttribute('hidden', '');
+  emptyEl?.classList.add('hidden');
+  tbody.innerHTML = '';
+
+  try {
+    const sheets = await window.NSAMS_DB.getMinistryResultSheets();
+    loadingEl?.classList.add('hidden');
+    if (!sheets.length) { emptyEl?.classList.remove('hidden'); return; }
+
+    sheets.forEach(s => {
+      const students = Array.isArray(s.snapshot_data?.students) ? s.snapshot_data.students : [];
+      const passed = students.filter(x => x.result === 'ناجح').length;
+      const failed = students.filter(x => x.result === 'راسب').length;
+      const clsLabel = s.class ? `الصف ${s.class.grade} / ${s.class.section ?? ''}`.trim() : '—';
+      const termLabel = RS_TERM_AR[s.term] ?? s.term;
+      const issued = s.issued_at ? new Date(s.issued_at).toLocaleDateString('ar-SY') : '—';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${esc(s.school?.name ?? '—')}</td>
+        <td>${esc(clsLabel)} <small style="color:var(--text-secondary)">(${esc(termLabel)})</small></td>
+        <td>${passed} / ${failed}</td>
+        <td>${esc(issued)}</td>`;
+      tbody.appendChild(tr);
+    });
+    tableWrap?.removeAttribute('hidden');
+  } catch (err) {
+    loadingEl?.classList.add('hidden');
+    if (emptyEl) { emptyEl.textContent = 'تعذّر تحميل الجلاءات الصادرة.'; emptyEl.classList.remove('hidden'); }
+  }
+}
+
+document.getElementById('reload-nat-rs-btn')
+  ?.addEventListener('click', loadNationalResultSheets);
 
 function printNationalReport(rep) {
   const d = rep.data || {};

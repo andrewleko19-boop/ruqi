@@ -234,6 +234,35 @@
         </p>
       </section>
 
+      <!-- الجلاءات الصادرة (إشراف وطني — قراءة فقط) -->
+      <section class="section-card" id="nat-rs-panel">
+        <div class="section-header">
+          <h2 class="section-title">الجلاءات الصادرة</h2>
+          <button id="reload-nat-rs-btn" class="btn btn-icon" title="تحديث">
+            <svg width="18" height="18"><use href="#icon-refresh"/></svg>
+          </button>
+        </div>
+        <div id="nat-rs-loading" class="table-loading hidden">
+          <div class="spinner"></div><span>جارٍ التحميل…</span>
+        </div>
+        <div class="table-wrapper" id="nat-rs-table-wrap" hidden>
+          <table id="nat-rs-table">
+            <thead>
+              <tr>
+                <th>المدرسة</th>
+                <th>الصف / الفصل</th>
+                <th>ناجح / راسب</th>
+                <th>تاريخ الإصدار</th>
+              </tr>
+            </thead>
+            <tbody id="nat-rs-tbody"></tbody>
+          </table>
+        </div>
+        <p id="nat-rs-empty" class="table-empty hidden">
+          لا توجد جلاءات صادرة بعد.
+        </p>
+      </section>
+
       <!-- التعمق: محافظة ← مديرية ← مدرسة -->
       <section class="section-card hidden" id="drill-card">
         <div class="section-header">
