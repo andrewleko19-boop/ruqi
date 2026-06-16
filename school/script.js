@@ -2458,19 +2458,103 @@ async function loadReports(classId) {
       syncMinAttField();
     }
     const cards = _repData.students || [];
-    if (cards.length === 0) { repEmpty.hidden = false; return; }
+    if (cards.length === 0) { repEmpty.hidden = false; hide(el('rs-block')); return; }
     cards.forEach((card, i) => repListEl.appendChild(buildReportRow(card, i + 1)));
     show(btnPrintAll);
     // زر الترفيع يظهر فقط عند شهادة السنة وكل الطلاب مكتملون
     if (currentTerm() === 'year' && cards.length > 0 && cards.every(c => c.complete)) {
       show(btnPromoteClass);
     }
+    // كتلة الجلاء (اعتماد المديرية) — تظهر دائماً عند وجود طلاب
+    await _loadResultSheetStatus(classId);
   } catch (err) {
     console.error('[NSAMS] loadReports', err);
     hide(repLoading);
     toast(gradesErr(err, 'تعذّر تحميل النتائج'), 'error');
   }
 }
+
+// ── الجلاء (result_sheets): حالة + إرسال للمديرية ─────────────────────────────
+async function _loadResultSheetStatus(classId) {
+  const block = el('rs-block');
+  if (!block) return;
+  show(block);
+  try {
+    const st = await NDB.getResultSheet(classId, _repData.academicYear, currentTerm());
+    _renderResultSheetStatus(st);
+  } catch (err) {
+    console.warn('[NSAMS] getResultSheet', err);
+    _renderResultSheetStatus(null);
+  }
+}
+
+function _renderResultSheetStatus(st) {
+  const banner = el('rs-status-banner');
+  const btn    = el('btn-submit-result-sheet');
+  const label  = el('rs-submit-label');
+  const status = st?.status || 'none';
+  const map = {
+    none:      { cls: 'stmt-status--draft',     txt: 'لم يُرسَل الجلاء بعد — يمكنك إرساله للمديرية للاعتماد.' },
+    draft:     { cls: 'stmt-status--draft',     txt: 'مسودة — لم يُرسَل بعد.' },
+    submitted: { cls: 'stmt-status--submitted', txt: 'مُرسَل للمديرية — بانتظار المراجعة.' },
+    approved:  { cls: 'stmt-status--approved',  txt: 'معتمد من المديرية — بانتظار الإصدار النهائي.' },
+    issued:    { cls: 'stmt-status--approved',  txt: 'صدر الجلاء نهائياً ✓ (غير قابل للتعديل)' },
+    rejected:  { cls: 'stmt-status--rejected',  txt: 'رُفض الجلاء' + (st?.notes ? ' — ' + st.notes : '') },
+  };
+  const m = map[status] || map.none;
+  if (banner) { banner.className = 'stmt-status-banner ' + m.cls; banner.textContent = m.txt; banner.hidden = false; }
+  if (btn) {
+    const locked = (status === 'submitted' || status === 'approved' || status === 'issued');
+    btn.disabled = locked;
+    if (label) label.textContent = status === 'rejected' ? 'إعادة إرسال الجلاء للمديرية' : 'إرسال الجلاء للمديرية';
+  }
+}
+
+el('btn-submit-result-sheet')?.addEventListener('click', async () => {
+  const classId = repClassSelect.value;
+  if (!classId || !_repData) return;
+  const cards = _repData.students || [];
+  const incomplete = cards.filter(c => !c.complete);
+  if (currentTerm() === 'year' && incomplete.length > 0) {
+    toast(`${incomplete.length} طالب لم تكتمل نتائجه — أكمل الدرجات قبل إرسال الجلاء`, 'error');
+    return;
+  }
+  if (!confirm('إرسال الجلاء للمديرية؟ لن يمكن تعديله حتى تُراجعه المديرية.')) return;
+
+  const btn = el('btn-submit-result-sheet');
+  const spinner = el('rs-submit-spinner');
+  const errEl = el('rs-error');
+  if (btn) btn.disabled = true;
+  if (spinner) spinner.hidden = false;
+  hide(errEl);
+  try {
+    // اللقطة = نتائج getClassReportCards مُقلَّمة (دون كائنات ثقيلة).
+    const snapshot = {
+      academicYear: _repData.academicYear,
+      term:         currentTerm(),
+      classLabel:   _repData.class ? `${gradeLabel(_repData.class.grade)} / ${_repData.class.section ?? ''}`.trim() : '',
+      generatedAt:  new Date().toISOString(),
+      students: cards.map(c => ({
+        studentId:    c.student?.id,
+        name:         c.student?.full_name,
+        finalPercent: c.finalPercent ?? null,
+        result:       c.result ?? null,
+        complete:     !!c.complete,
+        conductMark:  c.conductMark ?? null,
+        attendancePercent: c.attendancePercent ?? null,
+      })),
+    };
+    await NDB.submitResultSheet(classId, schoolId(), _repData.academicYear, currentTerm(), snapshot);
+    toast('أُرسل الجلاء للمديرية ✓', 'success');
+    await _loadResultSheetStatus(classId);
+  } catch (err) {
+    console.error('[NSAMS] submitResultSheet', err);
+    if (errEl) { errEl.textContent = 'تعذّر إرسال الجلاء — ' + (err?.message || err); show(errEl); }
+    if (btn) btn.disabled = false;
+  } finally {
+    if (spinner) spinner.hidden = true;
+  }
+});
 
 function resultBadge(card) {
   if (!card.complete) return { cls: 'pending', text: 'غير مكتمل' };

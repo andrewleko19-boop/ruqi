@@ -18,6 +18,8 @@ const {
   reviewSchoolRequest,
   getDirectorateStatements,
   reviewMonthlyStatement,
+  getDirectorateResultSheets,
+  reviewResultSheet,
   resolveReportPhotos,
   localDateISO,
 } = window.NSAMS_DB;
@@ -1085,7 +1087,7 @@ document.getElementById('reload-dropout-btn')?.addEventListener('click', loadDro
 document.getElementById('reload-periodic-btn')?.addEventListener('click', loadPeriodicReports);
 
 async function loadAll() {
-  await Promise.allSettled([loadStats(), loadMapAndCompliance(), loadReports(), loadTrend(), loadRequests(), loadStatements(), loadDropoutSummary(), loadPeriodicReports()]);
+  await Promise.allSettled([loadStats(), loadMapAndCompliance(), loadReports(), loadTrend(), loadRequests(), loadStatements(), loadResultSheets(), loadDropoutSummary(), loadPeriodicReports()]);
 }
 
 // ══════════════════════════════════════════════
@@ -1375,6 +1377,7 @@ function initNotificationsDir(userId) {
     }
     if (notif.type === 'report_new') loadReports().catch(() => {});
     if (notif.type === 'statement_submitted') loadStatements().catch(() => {});
+    if (notif.type === 'result_sheet_submitted') loadResultSheets().catch(() => {});
   });
 
   Notification.requestPermission().then((perm) => {
@@ -1702,6 +1705,161 @@ document.getElementById('dir-stmt-modal')?.addEventListener('click', (e) => {
 function closeStmtModal() {
   _reviewingStmtId = null;
   document.getElementById('dir-stmt-modal')?.classList.add('hidden');
+}
+
+// ══════════════════════════════════════════════
+//  الجلاءات (مراجعة/إصدار النتائج النهائية)
+// ══════════════════════════════════════════════
+let _reviewingSheetId = null;
+let _reviewingSheetStatus = null;
+const RS_TERM_AR = { s1: 'الفصل الأول', s2: 'الفصل الثاني', year: 'النتيجة السنوية' };
+
+async function loadResultSheets() {
+  if (!currentUser?.directorateId) return;
+  const listEl  = document.getElementById('dir-rs-list');
+  const loadEl  = document.getElementById('dir-rs-loading');
+  const wrapEl  = document.getElementById('dir-rs-table-wrap');
+  const emptyEl = document.getElementById('dir-rs-empty');
+  const countEl = document.getElementById('dir-rs-count');
+  if (!listEl) return;
+
+  if (loadEl) loadEl.hidden = false;
+  if (wrapEl) wrapEl.hidden = true;
+  listEl.innerHTML = '';
+  if (emptyEl) emptyEl.hidden = true;
+
+  try {
+    const sheets = await getDirectorateResultSheets();
+    if (loadEl) loadEl.hidden = true;
+    // المُرسَل أولاً، ثم المعتمد (بانتظار الإصدار)، ثم الأحدث
+    const rank = s => s.status === 'submitted' ? 0 : s.status === 'approved' ? 1 : 2;
+    sheets.sort((a, b) => rank(a) - rank(b) ||
+      (new Date(b.submitted_at || 0) - new Date(a.submitted_at || 0)));
+    const pending = sheets.filter(s => s.status === 'submitted' || s.status === 'approved').length;
+    if (countEl) {
+      countEl.textContent = pending ? `${pending} بانتظار الإجراء` : '';
+      countEl.hidden = !pending;
+    }
+    if (!sheets.length) { if (emptyEl) emptyEl.hidden = false; return; }
+    sheets.forEach(s => listEl.appendChild(buildRsRow(s)));
+    if (wrapEl) wrapEl.hidden = false;
+  } catch (err) {
+    console.error('[DirResultSheets] load', err);
+    if (loadEl) loadEl.hidden = true;
+  }
+}
+
+function buildRsRow(s) {
+  const tr = document.createElement('tr');
+  const schoolName = s.school?.name ?? '—';
+  const clsLabel = s.class ? `الصف ${s.class.grade} / ${s.class.section ?? ''}`.trim() : '—';
+  const termLabel = RS_TERM_AR[s.term] ?? s.term;
+  const badge = {
+    submitted: ['dir-req-badge--pending',  'بانتظار المراجعة'],
+    approved:  ['dir-req-badge--pending',  'معتمد — بانتظار الإصدار'],
+    issued:    ['dir-req-badge--approved', 'صادر ✓'],
+    rejected:  ['dir-req-badge--rejected', 'مرفوض ✗'],
+    draft:     ['', 'مسودة'],
+  }[s.status] || ['', s.status];
+  const statusHtml = `<span class="dir-req-badge ${badge[0]}">${esc(badge[1])}</span>`;
+
+  const actionable = s.status === 'submitted' || s.status === 'approved';
+  const actionHtml = actionable
+    ? `<button class="btn btn-sm btn-primary dir-rs-review-btn" data-id="${esc(s.id)}"
+         data-status="${esc(s.status)}" data-school="${esc(schoolName)}"
+         data-label="${esc(clsLabel + ' — ' + termLabel)}"
+         data-snap='${esc(JSON.stringify(s.snapshot_data || {}))}'>${s.status === 'approved' ? 'إصدار' : 'مراجعة'}</button>`
+    : `<span class="dir-req-reason">${s.notes ? esc(s.notes) : '—'}</span>`;
+
+  tr.innerHTML = `
+    <td>${esc(schoolName)}</td>
+    <td>${esc(clsLabel)} <small style="color:var(--text-secondary)">(${esc(termLabel)})</small></td>
+    <td>${statusHtml}</td>
+    <td>${actionHtml}</td>
+  `;
+  return tr;
+}
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.dir-rs-review-btn');
+  if (!btn) return;
+  _reviewingSheetId = btn.dataset.id;
+  _reviewingSheetStatus = btn.dataset.status;
+  let snap = {};
+  try { snap = JSON.parse(btn.dataset.snap || '{}'); } catch { /* tolerate */ }
+
+  document.getElementById('dir-rs-title').textContent =
+    `${_reviewingSheetStatus === 'approved' ? 'إصدار جلاء' : 'مراجعة جلاء'}: ${btn.dataset.school} — ${btn.dataset.label}`;
+  document.getElementById('dir-rs-body').innerHTML = buildRsSummary(snap);
+  document.getElementById('dir-rs-notes').value = '';
+  document.getElementById('dir-rs-msg').hidden = true;
+
+  // أزرار حسب الحالة: submitted → موافقة/رفض · approved → إصدار/رفض
+  const approveBtn = document.getElementById('dir-rs-approve');
+  const issueBtn   = document.getElementById('dir-rs-issue');
+  if (approveBtn) approveBtn.hidden = _reviewingSheetStatus !== 'submitted';
+  if (issueBtn)   issueBtn.hidden   = _reviewingSheetStatus !== 'approved';
+
+  document.getElementById('dir-rs-modal').classList.remove('hidden');
+});
+
+function buildRsSummary(snap) {
+  const students = Array.isArray(snap.students) ? snap.students : [];
+  const total = students.length;
+  const passed = students.filter(s => s.result === 'ناجح').length;
+  const failed = students.filter(s => s.result === 'راسب').length;
+  const incomplete = students.filter(s => !s.complete).length;
+  const rows = [
+    ['الفصل', RS_TERM_AR[snap.term] ?? snap.term ?? '—'],
+    ['إجمالي الطلاب', total],
+    ['ناجح', passed],
+    ['راسب', failed],
+  ];
+  if (incomplete) rows.push(['غير مكتمل', incomplete]);
+  return rows.map(([k, v]) =>
+    `<div class="dir-req-detail"><span>${esc(k)}</span><strong>${esc(String(v ?? '—'))}</strong></div>`
+  ).join('');
+}
+
+document.getElementById('dir-rs-approve')?.addEventListener('click', () => doRsReview('approved'));
+document.getElementById('dir-rs-issue')?.addEventListener('click',   () => doRsReview('issued'));
+document.getElementById('dir-rs-reject')?.addEventListener('click',  () => doRsReview('rejected'));
+
+async function doRsReview(decision) {
+  if (!_reviewingSheetId) return;
+  const notes      = document.getElementById('dir-rs-notes')?.value.trim() || null;
+  const msgEl      = document.getElementById('dir-rs-msg');
+  const buttons    = ['dir-rs-approve','dir-rs-issue','dir-rs-reject'].map(id => document.getElementById(id));
+  buttons.forEach(b => { if (b) b.disabled = true; });
+  if (msgEl) msgEl.hidden = true;
+  try {
+    await reviewResultSheet(_reviewingSheetId, decision, notes);
+    closeRsModal();
+    const msg = decision === 'issued' ? 'صدر الجلاء نهائياً ✓'
+      : decision === 'approved' ? 'تم اعتماد الجلاء ✓' : 'تم رفض الجلاء';
+    showToast(msg, '', decision === 'rejected' ? 'info' : 'success');
+    loadResultSheets();
+  } catch (err) {
+    console.error('[DirResultSheets] review', err);
+    if (msgEl) {
+      msgEl.className = 'msg msg-error';
+      msgEl.textContent = err?.message ?? 'تعذّرت المراجعة';
+      msgEl.hidden = false;
+    }
+  } finally {
+    buttons.forEach(b => { if (b) b.disabled = false; });
+  }
+}
+
+document.getElementById('dir-rs-cancel')?.addEventListener('click', closeRsModal);
+document.getElementById('dir-rs-modal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'dir-rs-modal') closeRsModal();
+});
+
+function closeRsModal() {
+  _reviewingSheetId = null;
+  _reviewingSheetStatus = null;
+  document.getElementById('dir-rs-modal')?.classList.add('hidden');
 }
 
 // ══════════════════════════════════════════════

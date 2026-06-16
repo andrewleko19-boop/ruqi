@@ -1644,6 +1644,18 @@
           <svg class="icon icon-sm"><use href="#ic-award"/></svg>
           تنفيذ الترفيع السنوي للصف
         </button>
+
+        <!-- ── الجلاء: اعتماد النتائج النهائية بخطوة أعلى ──────────────────── -->
+        <div id="rs-block" hidden style="margin-top:16px;padding-top:14px;border-top:1px solid var(--clr-border-lt,#E2E8F0)">
+          <div class="block-label"><svg class="icon icon-sm"><use href="#ic-file-text"/></svg><span>الجلاء (اعتماد المديرية)</span></div>
+          <div id="rs-status-banner" class="stmt-status-banner" hidden></div>
+          <button type="button" class="btn btn-primary btn-full" id="btn-submit-result-sheet" style="margin-top:10px">
+            <svg class="icon icon-sm"><use href="#ic-send"/></svg>
+            <span id="rs-submit-label">إرسال الجلاء للمديرية</span>
+            <span class="spinner" id="rs-submit-spinner" hidden></span>
+          </button>
+          <div id="rs-error" class="msg msg-error" hidden></div>
+        </div>
       </div>
     </section>
   </main><!-- /page (reports) -->

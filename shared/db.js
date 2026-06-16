@@ -2974,6 +2974,13 @@ window.NSAMS_DB = {
   upsertStaffAssignment,
   endStaffAssignment,
   getDirectorateSchoolAssignments,
+
+  // الجلاءات — المرحلة 3ب
+  getResultSheet,
+  submitResultSheet,
+  getDirectorateResultSheets,
+  reviewResultSheet,
+  getMinistryResultSheets,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3212,4 +3219,64 @@ async function getDirectorateSchoolAssignments(schoolId) {
   });
   if (error) throw error;
   return data || [];
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// §17 — الجلاءات (result_sheets) — المرحلة 3ب
+// ═════════════════════════════════════════════════════════════════════════════
+// خط اعتماد النتائج النهائية (مدرسة → مديرية → إصدار). يستنسخ نمط monthly_statements.
+
+async function getResultSheet(classId, academicYear, term) {
+  const { data, error } = await db.from('result_sheets')
+    .select('id, status, notes, submitted_at, reviewed_at, issued_at')
+    .eq('class_id', classId).eq('academic_year', academicYear).eq('term', term)
+    .maybeSingle();
+  if (error) throw error;
+  return data;   // null إن لم يوجد
+}
+
+// إرسال/إعادة إرسال الجلاء (select-then-insert/update لاحترام RLS)
+async function submitResultSheet(classId, schoolId, academicYear, term, snapshot) {
+  const existing = await getResultSheet(classId, academicYear, term);
+  if (existing && (existing.status === 'approved' || existing.status === 'issued'))
+    throw new Error('الجلاء معتمد/صادر ولا يمكن تعديله');
+  if (existing && existing.status === 'submitted')
+    throw new Error('الجلاء مُرسَل بالفعل وبانتظار المراجعة');
+  const row = { school_id: schoolId, class_id: classId, academic_year: academicYear,
+                term, status: 'submitted', snapshot_data: snapshot,
+                submitted_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+  if (existing) {       // draft|rejected → submitted (RLS يسمح)
+    const { error } = await db.from('result_sheets').update(row).eq('id', existing.id);
+    if (error) throw error;
+  } else {              // insert جديد
+    const { error } = await db.from('result_sheets').insert(row);
+    if (error) throw error;
+  }
+}
+
+// المديرية: كل جلاءات مدارسها (RLS يُرشِّح تلقائياً) + اسم المدرسة والصف
+async function getDirectorateResultSheets() {
+  const { data, error } = await db.from('result_sheets')
+    .select('id, school_id, class_id, academic_year, term, status, notes, submitted_at, reviewed_at, issued_at, snapshot_data, school:schools(name), class:classes(grade, section)')
+    .order('submitted_at', { ascending: false }).limit(300);
+  if (error) throw error;
+  return data ?? [];    // الترتيب «المُرسَل أولاً» يتم في الواجهة
+}
+
+// المديرية: اعتماد/رفض/إصدار جلاء (عبر RPC)
+async function reviewResultSheet(sheetId, decision, notes = null) {
+  const { error } = await db.rpc('review_result_sheet', {
+    p_sheet_id: sheetId, p_decision: decision, p_notes: notes || null });
+  if (error) throw error;
+  return true;
+}
+
+// الوزارة: إشراف وطني — قراءة الجلاءات الصادرة فقط (RLS يحصر ministry_user بـ issued)
+async function getMinistryResultSheets() {
+  const { data, error } = await db.from('result_sheets')
+    .select('id, school_id, class_id, academic_year, term, issued_at, snapshot_data, school:schools(name), class:classes(grade, section)')
+    .eq('status', 'issued')
+    .order('issued_at', { ascending: false }).limit(500);
+  if (error) throw error;
+  return data ?? [];
 }
