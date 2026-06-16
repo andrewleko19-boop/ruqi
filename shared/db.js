@@ -52,6 +52,195 @@ function generateReceiptNumber() {
 
 function isOnline() { return navigator.onLine; }
 
+// ─── Device identity ──────────────────────────────────────────────────────────
+function getDeviceId() {
+  let id = localStorage.getItem('nsams_device_id');
+  if (!id) { id = crypto.randomUUID(); localStorage.setItem('nsams_device_id', id); }
+  return id;
+}
+
+// ─── IndexedDB layer (المرحلة 4ب) ────────────────────────────────────────────
+// مخزنان: outbox (قائمة الانتظار الموحّدة) + delta_cache (ذاكرة السحب التدريجي)
+const IDB_NAME    = 'nsams-idb';
+const IDB_VERSION = 1;
+let _idbPromise   = null;
+
+function openIDB() {
+  if (_idbPromise) return _idbPromise;
+  _idbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = e => {
+      const idb = e.target.result;
+      if (!idb.objectStoreNames.contains('outbox')) {
+        const os = idb.createObjectStore('outbox', { keyPath: 'localId' });
+        os.createIndex('by_table', 'table', { unique: false });
+        os.createIndex('by_ts',    'localTs', { unique: false });
+      }
+      if (!idb.objectStoreNames.contains('delta_cache')) {
+        idb.createObjectStore('delta_cache', { keyPath: 'cacheKey' });
+      }
+    };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror   = () => { _idbPromise = null; reject(new Error('IDB open failed')); };
+    req.onblocked = () => { _idbPromise = null; reject(new Error('IDB blocked'));     };
+  });
+  return _idbPromise;
+}
+
+async function idbPut(storeName, record) {
+  const idb = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx  = idb.transaction(storeName, 'readwrite');
+    const req = tx.objectStore(storeName).put(record);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+async function idbGetAll(storeName) {
+  const idb = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx  = idb.transaction(storeName, 'readonly');
+    const req = tx.objectStore(storeName).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+async function idbDelete(storeName, key) {
+  const idb = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx  = idb.transaction(storeName, 'readwrite');
+    const req = tx.objectStore(storeName).delete(key);
+    req.onsuccess = () => resolve();
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+// LS key → table name (لاستخدامهما في الهجرة والسقوط الآمن)
+const _LS_QUEUE_TABLE = {
+  [QUEUE_ATTENDANCE]: 'attendance_submissions',
+  [QUEUE_REPORTS]:    'emergency_reports',
+  [QUEUE_STU_ATT]:   'daily_student_attendance',
+  [QUEUE_GRADES]:     'student_grades',
+  [QUEUE_CONDUCT]:    'student_conduct',
+  [QUEUE_STAFF_ATT]: 'staff_attendance',
+  [QUEUE_STUDENTS]:   'students',
+};
+
+// table name → LS key (للسقوط الآمن عند تعذّر IDB)
+const _TABLE_LS_QUEUE = Object.fromEntries(
+  Object.entries(_LS_QUEUE_TABLE).map(([k, v]) => [v, k])
+);
+
+// هجرة لمرة واحدة: ينقل عناصر LS غير المُزامَنة إلى IDB outbox ثم يمسحها
+async function migrateQueuesFromLS() {
+  if (localStorage.getItem('nsams_idb_migrated')) return;
+  try {
+    for (const [lsKey, tableName] of Object.entries(_LS_QUEUE_TABLE)) {
+      const items = readQueue(lsKey).filter(r => !r.synced);
+      for (const item of items) {
+        await idbPut('outbox', {
+          ...item, table: tableName,
+          localId:  item.localId  || generateLocalId(),
+          localTs:  item.localTs  || Date.now(),
+          deviceId: item.deviceId || getDeviceId(),
+        });
+      }
+    }
+    localStorage.setItem('nsams_idb_migrated', '1');
+  } catch { /* IDB غير متاح — تبقى العناصر في LS وتُهاجَر في المرة القادمة */ }
+}
+
+// إضافة عنصر إلى IDB outbox (مع سقوط آمن إلى LS الخاصة بالجدول)
+async function enqueueOutbox(record) {
+  try {
+    await idbPut('outbox', {
+      ...record,
+      localTs:  record.localTs  || Date.now(),
+      deviceId: record.deviceId || getDeviceId(),
+    });
+  } catch {
+    const lsKey = _TABLE_LS_QUEUE[record.table] || QUEUE_STUDENTS;
+    const q = readQueue(lsKey); q.push(record); writeQueue(lsKey, q);
+  }
+  if ('serviceWorker' in navigator && 'SyncManager' in window) {
+    navigator.serviceWorker.ready
+      .then(reg => reg.sync.register('nsams-sync'))
+      .catch(() => {});
+  }
+}
+
+async function readOutbox() {
+  try { return await idbGetAll('outbox'); } catch { return []; }
+}
+
+async function deleteOutboxItem(localId) {
+  try { await idbDelete('outbox', localId); } catch { /* non-fatal */ }
+}
+
+// ─── Delta pull (سحب تدريجي من الخادم — المرحلة 4ب) ─────────────────────────
+const _DELTA_RPC = {
+  students:                 'pull_students_delta',
+  student_grades:           'pull_grades_delta',
+  daily_student_attendance: 'pull_attendance_delta',
+  student_conduct:          'pull_conduct_delta',
+};
+
+const _DELTA_PK = {
+  students:                 r => r.id,
+  student_grades:           r => `${r.student_id}:${r.component_id}:${r.semester}:${r.academic_year}`,
+  daily_student_attendance: r => `${r.student_id}:${r.date}`,
+  student_conduct:          r => `${r.student_id}:${r.academic_year}`,
+};
+
+async function getLastPulledAt(tableName, deviceId) {
+  try {
+    const { data, error } = await db.rpc('get_sync_state', {
+      p_device_id: deviceId, p_table_name: tableName });
+    if (error || !data) return '1970-01-01T00:00:00Z';
+    return data;
+  } catch { return '1970-01-01T00:00:00Z'; }
+}
+
+async function _applyDeltaRows(tableName, rows) {
+  const getPk = _DELTA_PK[tableName] || (r => r.id);
+  for (const row of rows) {
+    const cacheKey = `${tableName}:${getPk(row)}`;
+    if (row.deleted_at) {
+      await idbDelete('delta_cache', cacheKey).catch(() => {});
+    } else {
+      await idbPut('delta_cache',
+        { cacheKey, table: tableName, data: row, cachedAt: Date.now() }
+      ).catch(() => {});
+    }
+  }
+}
+
+async function pullDelta(tableName, classId, deviceId) {
+  const rpcName = _DELTA_RPC[tableName];
+  if (!rpcName) return;
+  const since = await getLastPulledAt(tableName, deviceId);
+  const { data, error } = await db.rpc(rpcName, { p_class_id: classId, p_since: since });
+  if (error) throw error;
+  const rows = data || [];
+  if (!rows.length) return;
+  await _applyDeltaRows(tableName, rows);
+  await db.rpc('upsert_sync_state', {
+    p_device_id: deviceId, p_table_name: tableName,
+    p_pulled_at: rows[rows.length - 1].updated_at,
+  }).catch(() => {});
+}
+
+// سحب دلتا كل الجداول لصف واحد — يُستدعى صراحةً من الواجهة بعد معرفة الصف
+async function pullAllDelta(classId) {
+  if (!classId || !isOnline()) return;
+  const deviceId = getDeviceId();
+  for (const table of Object.keys(_DELTA_RPC)) {
+    await pullDelta(table, classId, deviceId).catch(() => {});
+  }
+}
+
 // ── Report photo storage ──────────────────────────────────────────────────────
 // The bucket 'report-photos' is PRIVATE. uploadDataUri() uploads the file and
 // returns the storage PATH (e.g. "reports/1234_abc.jpg"), not a public URL.
@@ -327,9 +516,7 @@ async function saveAttendance(record) {
   const enriched = { ...record, localId, synced: false, createdAt: new Date().toISOString() };
 
   if (!isOnline()) {
-    const queue = readQueue(QUEUE_ATTENDANCE);
-    queue.push(enriched);
-    writeQueue(QUEUE_ATTENDANCE, queue);
+    await enqueueOutbox({ ...enriched, table: 'attendance_submissions' });
     return { success: true, localId, synced: false };
   }
 
@@ -337,9 +524,7 @@ async function saveAttendance(record) {
     await syncAttendanceRecord(enriched);
     return { success: true, localId, synced: true };
   } catch {
-    const queue = readQueue(QUEUE_ATTENDANCE);
-    queue.push(enriched);
-    writeQueue(QUEUE_ATTENDANCE, queue);
+    await enqueueOutbox({ ...enriched, table: 'attendance_submissions' });
     return { success: true, localId, synced: false };
   }
 }
@@ -379,9 +564,7 @@ async function submitReport(report) {
   };
 
   if (!isOnline()) {
-    const queue = readQueue(QUEUE_REPORTS);
-    queue.push(enriched);
-    writeQueue(QUEUE_REPORTS, queue);
+    await enqueueOutbox({ ...enriched, table: 'emergency_reports' });
     return { id: localId, receiptNumber, createdAt: enriched.createdAt, status: "open" };
   }
 
@@ -394,9 +577,7 @@ async function submitReport(report) {
       status: result.status,
     };
   } catch {
-    const queue = readQueue(QUEUE_REPORTS);
-    queue.push(enriched);
-    writeQueue(QUEUE_REPORTS, queue);
+    await enqueueOutbox({ ...enriched, table: 'emergency_reports' });
     return { id: localId, receiptNumber, createdAt: enriched.createdAt, status: "open" };
   }
 }
@@ -939,14 +1120,14 @@ async function enqueueOrSyncStudent(item) {
   [item.classId, item.fromClassId].forEach(clearCachedStudents);
 
   if (!isOnline()) {
-    const q = readQueue(QUEUE_STUDENTS); q.push(item); writeQueue(QUEUE_STUDENTS, q);
+    await enqueueOutbox({ ...item, table: 'students' });
     return { success: true, id: item.id, synced: false };
   }
   try {
     await syncStudentRecord(item);
     return { success: true, id: item.id, synced: true };
   } catch (err) {
-    const q = readQueue(QUEUE_STUDENTS); q.push(item); writeQueue(QUEUE_STUDENTS, q);
+    await enqueueOutbox({ ...item, table: 'students' });
     console.warn('[NSAMS] saveStudent: falling back to queue', err);
     return { success: true, id: item.id, synced: false };
   }
@@ -1324,9 +1505,7 @@ async function saveStudentAttendance({ records, classId, schoolId, date, teacher
   };
 
   if (!isOnline()) {
-    const queue = readQueue(QUEUE_STU_ATT);
-    queue.push(payload);
-    writeQueue(QUEUE_STU_ATT, queue);
+    await enqueueOutbox({ ...payload, table: 'daily_student_attendance' });
     return { success: true, localId, synced: false };
   }
 
@@ -1334,9 +1513,7 @@ async function saveStudentAttendance({ records, classId, schoolId, date, teacher
     await syncStudentAttendanceRecord(payload);
     return { success: true, localId, synced: true };
   } catch (err) {
-    const queue = readQueue(QUEUE_STU_ATT);
-    queue.push(payload);
-    writeQueue(QUEUE_STU_ATT, queue);
+    await enqueueOutbox({ ...payload, table: 'daily_student_attendance' });
     console.warn('[NSAMS] saveStudentAttendance: falling back to queue', err);
     return { success: true, localId, synced: false };
   }
@@ -1434,14 +1611,14 @@ async function queueOrSyncStaff(payload) {
   const localId  = generateLocalId();
   const enriched = { ...payload, localId, synced: false, createdAt: new Date().toISOString() };
   if (!isOnline()) {
-    const q = readQueue(QUEUE_STAFF_ATT); q.push(enriched); writeQueue(QUEUE_STAFF_ATT, q);
+    await enqueueOutbox({ ...enriched, table: 'staff_attendance' });
     return { success: true, localId, synced: false };
   }
   try {
     await syncStaffAttendanceRecord(enriched);
     return { success: true, localId, synced: true };
   } catch (err) {
-    const q = readQueue(QUEUE_STAFF_ATT); q.push(enriched); writeQueue(QUEUE_STAFF_ATT, q);
+    await enqueueOutbox({ ...enriched, table: 'staff_attendance' });
     console.warn('[NSAMS] staff attendance: falling back to queue', err);
     return { success: true, localId, synced: false };
   }
@@ -1897,9 +2074,7 @@ async function saveStudentGrades({ records, classId, schoolId, subjectId, semest
   };
 
   if (!isOnline()) {
-    const queue = readQueue(QUEUE_GRADES);
-    queue.push(payload);
-    writeQueue(QUEUE_GRADES, queue);
+    await enqueueOutbox({ ...payload, table: 'student_grades' });
     return { success: true, localId, synced: false };
   }
 
@@ -1907,9 +2082,7 @@ async function saveStudentGrades({ records, classId, schoolId, subjectId, semest
     await syncStudentGradesRecord(payload);
     return { success: true, localId, synced: true };
   } catch (err) {
-    const queue = readQueue(QUEUE_GRADES);
-    queue.push(payload);
-    writeQueue(QUEUE_GRADES, queue);
+    await enqueueOutbox({ ...payload, table: 'student_grades' });
     console.warn('[NSAMS] saveStudentGrades: falling back to queue', err);
     return { success: true, localId, synced: false };
   }
@@ -1967,14 +2140,14 @@ async function saveStudentConduct({ records, classId, schoolId, teacherId }) {
     synced: false, createdAt: new Date().toISOString(),
   };
   if (!isOnline()) {
-    const q = readQueue(QUEUE_CONDUCT); q.push(payload); writeQueue(QUEUE_CONDUCT, q);
+    await enqueueOutbox({ ...payload, table: 'student_conduct' });
     return { success: true, localId, synced: false };
   }
   try {
     await syncStudentConductRecord(payload);
     return { success: true, localId, synced: true };
   } catch (err) {
-    const q = readQueue(QUEUE_CONDUCT); q.push(payload); writeQueue(QUEUE_CONDUCT, q);
+    await enqueueOutbox({ ...payload, table: 'student_conduct' });
     console.warn('[NSAMS] saveStudentConduct: falling back to queue', err);
     return { success: true, localId, synced: false };
   }
@@ -2221,7 +2394,8 @@ async function getStudentReportCard(classId, studentId, academicYear = getAcadem
 }
 
 // ─── Sync ─────────────────────────────────────────────────────────────────────
-async function syncPendingV2() {
+// يقبل opts.classId اختيارياً لتفعيل مرحلة السحب التدريجي (delta pull)
+async function syncPendingV2({ classId } = {}) {
   const results = {
     attendance: { synced: 0, failed: 0 },
     reports:    { synced: 0, failed: 0 },
@@ -2232,6 +2406,40 @@ async function syncPendingV2() {
     students:   { synced: 0, failed: 0 },
   };
 
+  // المرحلة 0: هجرة LS→IDB لمرة واحدة (idempotent بعد أول تشغيل)
+  await migrateQueuesFromLS().catch(() => {});
+
+  // المرحلة 1أ: تصريف IDB outbox (العناصر الجديدة)
+  const _idbSyncFn = {
+    attendance_submissions:   syncAttendanceRecord,
+    emergency_reports:        syncReportRecord,
+    daily_student_attendance: syncStudentAttendanceRecord,
+    student_grades:           syncStudentGradesRecord,
+    student_conduct:          syncStudentConductRecord,
+    staff_attendance:         syncStaffAttendanceRecord,
+    students:                 syncStudentRecord,
+  };
+  const _idbResultKey = {
+    attendance_submissions:   'attendance',
+    emergency_reports:        'reports',
+    daily_student_attendance: 'studentAtt',
+    student_grades:           'grades',
+    student_conduct:          'conduct',
+    staff_attendance:         'staffAtt',
+    students:                 'students',
+  };
+  for (const item of await readOutbox()) {
+    const syncFn  = _idbSyncFn[item.table];
+    const rKey    = _idbResultKey[item.table];
+    if (!syncFn || !rKey) continue;
+    try {
+      await syncFn(item);
+      await deleteOutboxItem(item.localId);
+      results[rKey].synced++;
+    } catch { results[rKey].failed++; }
+  }
+
+  // المرحلة 1ب: تصريف قوائم LS القديمة (fallback + عناصر ما قبل الهجرة)
   for (const record of getPendingAttendance()) {
     try {
       await syncAttendanceRecord(record);
@@ -2286,6 +2494,11 @@ async function syncPendingV2() {
       markStudentSynced(item.localId);
       results.students.synced++;
     } catch { results.students.failed++; }
+  }
+
+  // المرحلة 2: سحب تدريجي من الخادم (يتطلّب classId من الواجهة)
+  if (classId && isOnline()) {
+    await pullAllDelta(classId).catch(() => {});
   }
 
   return results;
@@ -2981,6 +3194,11 @@ window.NSAMS_DB = {
   getDirectorateResultSheets,
   reviewResultSheet,
   getMinistryResultSheets,
+
+  // المزامنة التدريجية + IndexedDB — المرحلة 4ب
+  getDeviceId,
+  migrateQueuesFromLS,
+  pullAllDelta,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
