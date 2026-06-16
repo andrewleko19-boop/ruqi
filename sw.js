@@ -10,7 +10,7 @@
  * which avoids serving a half-updated mix of old HTML + new JS mid-session.
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'nsams-v75';
+const CACHE = 'nsams-v76';
 
 const PRECACHE = [
   './',
@@ -115,4 +115,19 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(clients.openWindow(event.notification.data?.url || '/'));
+});
+
+// Background Sync — يوقظ الـ client النشط ليُشغّل syncPendingV2
+// (الـ SW لا يملك auth session مباشرةً → postMessage → doSync في الواجهة)
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'nsams-sync') {
+    event.waitUntil(
+      self.clients.matchAll({ type: 'window', includeUncontrolled: false })
+        .then((windowClients) => {
+          if (windowClients.length > 0) {
+            windowClients[0].postMessage({ type: 'BG_SYNC' });
+          }
+        })
+    );
+  }
 });

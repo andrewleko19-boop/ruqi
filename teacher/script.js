@@ -285,6 +285,12 @@ async function doSync() {
 btnSync.addEventListener('click', doSync);
 btnSyncBar.addEventListener('click', doSync);
 
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data?.type === 'BG_SYNC') doSync();
+  });
+}
+
 // ── Password toggle ───────────────────────────────────────────────────────────
 btnTogglePw.addEventListener('click', () => {
   const isPw = inPw.type === 'password';
