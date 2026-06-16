@@ -397,6 +397,12 @@ async function doSync() {
 
 btnSync.addEventListener('click', doSync);
 
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data?.type === 'BG_SYNC') doSync();
+  });
+}
+
 // ── Status Card ───────────────────────────────────────────────────────────────
 function setStatusDone(synced) {
   statusCard.className = 'status-card status-done';
