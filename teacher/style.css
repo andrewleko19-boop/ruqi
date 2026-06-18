@@ -2,10 +2,10 @@
 
 /* ═══ Design Tokens (identical to school/style.css) ══════════════════════════ */
 :root {
-  --clr-primary:      #1a6b3c;
-  --clr-primary-int:  #2e8659;
-  --clr-primary-hov:  #145530;
-  --clr-primary-dim:  rgba(26,107,60,.12);
+  --clr-primary:      #06b6d4;
+  --clr-primary-int:  #0891b2;
+  --clr-primary-hov:  #0e7490;
+  --clr-primary-dim:  rgba(6,182,212,.12);
   --clr-success:      #10B981;
   --clr-success-bg:   #D1FAE5;
   --clr-success-brd:  #6EE7B7;
@@ -69,8 +69,9 @@ ul { list-style: none; }
 .login-bg {
   min-height: 100dvh;
   background:
-    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(26,107,60,.55) 0%, transparent 70%),
-    linear-gradient(160deg, #0d3b21 0%, var(--clr-primary) 45%, #2e8659 100%);
+    radial-gradient(1200px 600px at 100% -20%, rgba(6,182,212,0.15), transparent 60%),
+    radial-gradient(900px 500px at -10% 120%, rgba(15,39,68,0.40), transparent 60%),
+    linear-gradient(-135deg, #0c1e35 0%, #060f1e 100%);
   display: flex; align-items: center; justify-content: center;
   padding: 32px 20px; position: relative; overflow: hidden;
 }
@@ -87,6 +88,16 @@ ul { list-style: none; }
   padding: 36px 28px;
   width: 100%; max-width: 400px;
   box-shadow: var(--sh-lg);
+  animation: float 2.6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-card { animation: none; }
 }
 .login-logo {
   display: flex; flex-direction: column; align-items: center;
