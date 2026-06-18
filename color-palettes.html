@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>معاينة لوحات الألوان — رُقِيّ</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Tajawal', sans-serif;
+  background: #111827;
+  color: #f9fafb;
+  min-height: 100vh;
+  padding: 0;
+}
+
+/* ─── Page Header ─── */
+.page-hdr {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  padding: 24px 24px 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.page-hdr-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.page-logo {
+  font-size: 1.6rem;
+  font-weight: 900;
+  letter-spacing: -1px;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.page-title {
+  flex: 1;
+}
+.page-title h1 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f9fafb;
+}
+.page-title p {
+  font-size: .8rem;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+.old-color-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(6,182,212,.1);
+  border: 1px solid rgba(6,182,212,.25);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: .78rem;
+  color: #67e8f9;
+}
+.old-swatch {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: #06b6d4;
+  flex-shrink: 0;
+}
+
+/* ─── Palette Selector Tabs ─── */
+.palette-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 0;
+}
+.palette-tabs::-webkit-scrollbar { display: none; }
+
+.ptab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px 14px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  border-bottom: 3px solid transparent;
+  color: #64748b;
+  font-family: 'Tajawal', sans-serif;
+  font-size: .8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color .2s, border-color .2s;
+  flex-shrink: 0;
+}
+.ptab:hover { color: #cbd5e1; }
+.ptab.active {
+  color: #f9fafb;
+  border-bottom-color: var(--tab-accent);
+}
+.ptab-dot {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  position: relative;
+  overflow: hidden;
+}
+.ptab-dot::before {
+  content: '';
+  position: absolute;
+  inset: 0 50% 0 0;
+  background: var(--tab-primary);
+}
+.ptab-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 0 50%;
+  background: var(--tab-accent);
+}
+
+/* ─── Main Content ─── */
+.palette-panel {
+  display: none;
+  padding: 28px 20px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+.palette-panel.active { display: block; }
+
+/* ─── Palette Meta Card ─── */
+.palette-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 14px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+}
+.palette-swatches {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.swatch {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.15);
+}
+.palette-info { flex: 1; }
+.palette-info h2 { font-size: 1rem; font-weight: 700; color: #f1f5f9; }
+.palette-info p { font-size: .8rem; color: #94a3b8; margin-top: 3px; }
+.palette-codes {
+  display: flex;
+  gap: 8px;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.code-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .72rem;
+  color: #64748b;
+  font-family: monospace;
+}
+.code-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+/* ─── Mock Phone Frame ─── */
+.phone-frame {
+  background: #1e293b;
+  border: 2px solid rgba(255,255,255,.1);
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 40px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.05);
+  position: relative;
+}
+.phone-notch {
+  height: 10px;
+  background: #111827;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.phone-notch::after {
+  content: '';
+  width: 60px; height: 5px;
+  background: rgba(255,255,255,.15);
+  border-radius: 3px;
+}
+
+/* ─── App Shell ─── */
+.app-shell {
+  background: var(--bg);
+  min-height: 600px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* App Header */
+.app-header {
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  gap: 12px;
+  position: relative;
+}
+.app-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 1px;
+  background: rgba(0,0,0,.15);
+}
+.hdr-start { display: flex; align-items: center; gap: 10px; }
+.hdr-logo {
+  width: 30px; height: 30px;
+  background: rgba(255,255,255,.15);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .9rem;
+  color: rgba(255,255,255,.9);
+  font-weight: 900;
+}
+.hdr-school-name { font-size: .82rem; font-weight: 700; color: rgba(255,255,255,.95); }
+.hdr-date { font-size: .68rem; color: rgba(255,255,255,.65); margin-top: 1px; }
+.hdr-end { display: flex; align-items: center; gap: 8px; }
+.hdr-icon-btn {
+  width: 32px; height: 32px;
+  background: rgba(255,255,255,.12);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .75rem; color: rgba(255,255,255,.85);
+}
+.hdr-status {
+  display: flex; align-items: center; gap: 4px;
+  background: rgba(255,255,255,.12);
+  border-radius: 20px;
+  padding: 4px 8px;
+  font-size: .68rem;
+  color: rgba(255,255,255,.9);
+}
+.hdr-status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #4ade80;
+}
+
+/* Tab Bar */
+.app-tabbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0 8px;
+}
+.app-tabbar::-webkit-scrollbar { display: none; }
+.app-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 12px;
+  cursor: default;
+  font-size: .65rem;
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  flex-shrink: 0;
+}
+.app-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  background: var(--primary-dim);
+}
+.tab-icon { font-size: .9rem; }
+
+/* Content Area */
+.app-content {
+  flex: 1;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+/* Status Card */
+.status-card {
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.status-icon {
+  width: 36px; height: 36px;
+  background: var(--accent);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem;
+  color: #fff;
+  flex-shrink: 0;
+}
+.status-title { font-size: .82rem; font-weight: 700; color: var(--text-1); }
+.status-sub { font-size: .7rem; color: var(--text-2); margin-top: 2px; }
+
+/* Section Card */
+.section-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  border-inline-end: 4px solid var(--primary);
+  overflow: hidden;
+}
+.section-card-hdr {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.section-card-title { font-size: .82rem; font-weight: 700; color: var(--text-1); }
+.section-card-sub { font-size: .68rem; color: var(--text-2); margin-top: 2px; }
+.section-card-body { padding: 12px 14px; }
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.stat-box {
+  border-radius: 10px;
+  padding: 10px 8px;
+  text-align: center;
+  border: 1px solid transparent;
+}
+.stat-box.present {
+  background: #dcfce7; border-color: #86efac; color: #15803d;
+}
+.stat-box.absent {
+  background: #fee2e2; border-color: #fca5a5; color: #b91c1c;
+}
+.stat-box.total {
+  background: var(--primary-dim); border-color: var(--primary-border); color: var(--primary-dark);
+}
+.stat-num { font-size: 1.5rem; font-weight: 800; line-height: 1; }
+.stat-label { font-size: .62rem; font-weight: 600; margin-top: 4px; opacity: .8; }
+
+/* Form Elements */
+.field-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.mini-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mini-label { font-size: .65rem; font-weight: 600; color: var(--text-2); }
+.mini-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: .75rem;
+  font-family: 'Tajawal', sans-serif;
+  color: var(--text-1);
+  text-align: center;
+}
+
+/* Primary Button */
+.btn-primary-mock {
+  width: 100%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 11px 16px;
+  font-size: .82rem;
+  font-weight: 700;
+  font-family: 'Tajawal', sans-serif;
+  cursor: default;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.15);
+}
+
+/* Mini badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: .64rem;
+  font-weight: 700;
+  background: var(--primary-dim);
+  color: var(--primary);
+  border: 1px solid var(--primary-border);
+}
+
+/* Divider */
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 10px 0;
+}
+
+/* Teachers list preview */
+.teacher-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.teacher-item:last-child { border-bottom: none; }
+.teacher-avatar {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: var(--primary-dim);
+  border: 1.5px solid var(--primary-border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: .7rem; color: var(--primary); font-weight: 700;
+}
+.teacher-name { font-size: .75rem; font-weight: 600; color: var(--text-1); flex: 1; }
+.teacher-status {
+  font-size: .62rem; font-weight: 600;
+  padding: 2px 7px; border-radius: 20px;
+}
+.teacher-status.present { background: #dcfce7; color: #15803d; }
+.teacher-status.absent  { background: #fee2e2; color: #b91c1c; }
+
+</style>
+</head>
+<body>
+
+<!-- Page Header -->
+<div class="page-hdr">
+  <div class="page-hdr-top">
+    <div class="page-logo">رُقِيّ</div>
+    <div class="page-title">
+      <h1>معاينة لوحات الألوان</h1>
+      <p>اختر اللوحة المناسبة لتطبيق وزارة التربية</p>
+    </div>
+    <div class="old-color-badge">
+      <div class="old-swatch"></div>
+      اللون الحالي
+    </div>
+  </div>
+
+  <!-- Palette Tabs -->
+  <div class="palette-tabs" role="tablist">
+    <button class="ptab active" onclick="switchPalette(0)" role="tab"
+      style="--tab-primary:#1a3a6e;--tab-accent:#c9952a">
+      <div class="ptab-dot"></div>
+      النيلي والذهب
+    </button>
+    <button class="ptab" onclick="switchPalette(1)" role="tab"
+      style="--tab-primary:#1e3a5f;--tab-accent:#d4a017">
+      <div class="ptab-dot"></div>
+      الملكي والعنبر
+    </button>
+    <button class="ptab" onclick="switchPalette(2)" role="tab"
+      style="--tab-primary:#1a4231;--tab-accent:#8b6f47">
+      <div class="ptab-dot"></div>
+      الأخضر والبرونز
+    </button>
+    <button class="ptab" onclick="switchPalette(3)" role="tab"
+      style="--tab-primary:#2d1b5e;--tab-accent:#c9952a">
+      <div class="ptab-dot"></div>
+      البنفسجي والذهب
+    </button>
+    <button class="ptab" onclick="switchPalette(4)" role="tab"
+      style="--tab-primary:#1a2744;--tab-accent:#3b82f6">
+      <div class="ptab-dot"></div>
+      الليلي والكهربائي
+    </button>
+    <button class="ptab" onclick="switchPalette(5)" role="tab"
+      style="--tab-primary:#7c2d12;--tab-accent:#1e3a5f">
+      <div class="ptab-dot"></div>
+      الخمري والأردوازي
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     PALETTE 1: النيلي والذهب الحكومي
+════════════════════════════════════════════════════════ -->
+<div class="palette-panel active" id="panel-0">
+  <div class="palette-meta">
+    <div class="palette-swatches">
+      <div class="swatch" style="background:#1a3a6e"></div>
+      <div class="swatch" style="background:#2d5fa8"></div>
+      <div class="swatch" style="background:#c9952a"></div>
+      <div class="swatch" style="background:#f5f3ee"></div>
+      <div class="swatch" style="background:#1a1a2e"></div>
+    </div>
+    <div class="palette-info">
+      <h2>النيلي والذهب الحكومي</h2>
+      <p>كلاسيكي ورسمي — مستخدم في وزارات الإمارات والسعودية والأردن</p>
+    </div>
+    <div class="palette-codes">
+      <div class="code-badge"><div class="code-dot" style="background:#1a3a6e"></div>#1a3a6e</div>
+      <div class="code-badge"><div class="code-dot" style="background:#c9952a"></div>#c9952a</div>
+    </div>
+  </div>
+
+  <div class="phone-frame">
+    <div class="phone-notch"></div>
+    <div class="app-shell" style="
+      --primary:#1a3a6e; --primary-dark:#122952; --primary-dim:rgba(26,58,110,.1); --primary-border:rgba(26,58,110,.2);
+      --accent:#c9952a;  --accent-dim:#fdf4e0; --accent-border:#e8c97a;
+      --bg:#f5f3ee; --surface:#ffffff; --border:#e0d8c8;
+      --text-1:#1a1a2e; --text-2:#4a4a6a;
+    ">
+      <div class="app-header">
+        <div class="hdr-start">
+          <div class="hdr-logo">ر</div>
+          <div>
+            <div class="hdr-school-name">مدرسة الفاروق الأساسية</div>
+            <div class="hdr-date">الأربعاء، ١٨ يونيو ٢٠٢٦</div>
+          </div>
+        </div>
+        <div class="hdr-end">
+          <div class="hdr-status"><div class="hdr-status-dot"></div>متصل</div>
+          <div class="hdr-icon-btn">🔔</div>
+          <div class="hdr-icon-btn">↩</div>
+        </div>
+      </div>
+      <div class="app-tabbar">
+        <div class="app-tab active"><div class="tab-icon">📋</div>الدوام</div>
+        <div class="app-tab"><div class="tab-icon">👥</div>الصفوف</div>
+        <div class="app-tab"><div class="tab-icon">👤</div>الطلاب</div>
+        <div class="app-tab"><div class="tab-icon">🏫</div>الكادر</div>
+        <div class="app-tab"><div class="tab-icon">⚙️</div>الإعدادات</div>
+      </div>
+      <div class="app-content">
+        <div class="status-card">
+          <div class="status-icon">⏳</div>
+          <div>
+            <div class="status-title">لم يُرسل سجل الحضور بعد</div>
+            <div class="status-sub">يرجى إكمال البيانات وإرسالها للمديرية</div>
+          </div>
+        </div>
+        <div class="section-card">
+          <div class="section-card-hdr">
+            <div>
+              <div class="section-card-title">سجل الحضور اليومي</div>
+              <div class="section-card-sub">تسجيل حضور الكادر ورفعه للمديرية</div>
+            </div>
+            <div class="badge">الهيئة التدريسية</div>
+          </div>
+          <div class="section-card-body">
+            <div class="stats-grid">
+              <div class="stat-box present"><div class="stat-num">24</div><div class="stat-label">حاضر</div></div>
+              <div class="stat-box absent"><div class="stat-num">3</div><div class="stat-label">غائب</div></div>
+              <div class="stat-box total"><div class="stat-num">27</div><div class="stat-label">الإجمالي</div></div>
+            </div>
+            <div class="field-row">
+              <div class="mini-field"><div class="mini-label">الإداريون الحاضرون</div><input class="mini-input" value="5" readonly></div>
+              <div class="mini-field"><div class="mini-label">الإداريون الغائبون</div><input class="mini-input" value="1" readonly></div>
+            </div>
+            <div class="divider"></div>
+            <div class="teacher-item">
+              <div class="teacher-avatar">أح</div>
+              <div class="teacher-name">أحمد محمد الخالد</div>
+              <div class="teacher-status present">حاضر</div>
+            </div>
+            <div class="teacher-item">
+              <div class="teacher-avatar">سم</div>
+              <div class="teacher-name">سمر علي النجار</div>
+              <div class="teacher-status absent">غائب</div>
+            </div>
+            <div class="teacher-item">
+              <div class="teacher-avatar">خل</div>
+              <div class="teacher-name">خلود إبراهيم حسن</div>
+              <div class="teacher-status present">حاضر</div>
+            </div>
+          </div>
+        </div>
+        <button class="btn-primary-mock">📤 إرسال سجل الحضور</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     PALETTE 2: الأزرق الملكي والعنبر
+════════════════════════════════════════════════════════ -->
+<div class="palette-panel" id="panel-1">
+  <div class="palette-meta">
+    <div class="palette-swatches">
+      <div class="swatch" style="background:#1e3a5f"></div>
+      <div class="swatch" style="background:#2e5a8e"></div>
+      <div class="swatch" style="background:#d4a017"></div>
+      <div class="swatch" style="background:#f4f6f9"></div>
+      <div class="swatch" style="background:#0d1b2e"></div>
+    </div>
+    <div class="palette-info">
+      <h2>الأزرق الملكي والعنبر</h2>
+      <p>راقٍ وأكاديمي — نادر الاستخدام في المنطقة، مستوحى من مؤسسات التعليم العالي</p>
+    </div>
+    <div class="palette-codes">
+      <div class="code-badge"><div class="code-dot" style="background:#1e3a5f"></div>#1e3a5f</div>
+      <div class="code-badge"><div class="code-dot" style="background:#d4a017"></div>#d4a017</div>
+    </div>
+  </div>
+
+  <div class="phone-frame">
+    <div class="phone-notch"></div>
+    <div class="app-shell" style="
+      --primary:#1e3a5f; --primary-dark:#162c48; --primary-dim:rgba(30,58,95,.1); --primary-border:rgba(30,58,95,.2);
+      --accent:#d4a017;  --accent-dim:#fdf6e0; --accent-border:#e8d07a;
+      --bg:#f4f6f9; --surface:#ffffff; --border:#d8e0eb;
+      --text-1:#0d1b2e; --text-2:#3d5270;
+    ">
+      <div class="app-header">
+        <div class="hdr-start">
+          <div class="hdr-logo">ر</div>
+          <div>
+            <div class="hdr-school-name">مدرسة الفاروق الأساسية</div>
+            <div class="hdr-date">الأربعاء، ١٨ يونيو ٢٠٢٦</div>
+          </div>
+        </div>
+        <div class="hdr-end">
+          <div class="hdr-status"><div class="hdr-status-dot"></div>متصل</div>
+          <div class="hdr-icon-btn">🔔</div>
+          <div class="hdr-icon-btn">↩</div>
+        </div>
+      </div>
+      <div class="app-tabbar">
+        <div class="app-tab active"><div class="tab-icon">📋</div>الدوام</div>
+        <div class="app-tab"><div class="tab-icon">👥</div>الصفوف</div>
+        <div class="app-tab"><div class="tab-icon">👤</div>الطلاب</div>
+        <div class="app-tab"><div class="tab-icon">🏫</div>الكادر</div>
+        <div class="app-tab"><div class="tab-icon">⚙️</div>الإعدادات</div>
+      </div>
+      <div class="app-content">
+        <div class="status-card">
+          <div class="status-icon">⏳</div>
+          <div>
+            <div class="status-title">لم يُرسل سجل الحضور بعد</div>
+            <div class="status-sub">يرجى إكمال البيانات وإرسالها للمديرية</div>
+          </div>
+        </div>
+        <div class="section-card">
+          <div class="section-card-hdr">
+            <div>
+              <div class="section-card-title">سجل الحضور اليومي</div>
+              <div class="section-card-sub">تسجيل حضور الكادر ورفعه للمديرية</div>
+            </div>
+            <div class="badge">الهيئة التدريسية</div>
+          </div>
+          <div class="section-card-body">
+            <div class="stats-grid">
+              <div class="stat-box present"><div class="stat-num">24</div><div class="stat-label">حاضر</div></div>
+              <div class="stat-box absent"><div class="stat-num">3</div><div class="stat-label">غائب</div></div>
+              <div class="stat-box total"><div class="stat-num">27</div><div class="stat-label">الإجمالي</div></div>
+            </div>
+            <div class="field-row">
+              <div class="mini-field"><div class="mini-label">الإداريون الحاضرون</div><input class="mini-input" value="5" readonly></div>
+              <div class="mini-field"><div class="mini-label">الإداريون الغائبون</div><input class="mini-input" value="1" readonly></div>
+            </div>
+            <div class="divider"></div>
+            <div class="teacher-item">
+              <div class="teacher-avatar">أح</div>
+              <div class="teacher-name">أحمد محمد الخالد</div>
+              <div class="teacher-status present">حاضر</div>
+            </div>
+            <div class="teacher-item">
+              <div class="teacher-avatar">سم</div>
+              <div class="teacher-name">سمر علي النجار</div>
+              <div class="teacher-status absent">غائب</div>
+            </div>
+            <div class="teacher-item">
+              <div class="teacher-avatar">خل</div>
+              <div class="teacher-name">خلود إبراهيم حسن</div>
+              <div class="teacher-status present">حاضر</div>
+            </div>
+          </div>
+        </div>
+        <button class="btn-primary-mock">📤 إرسال سجل الحضور</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     PALETTE 3: الأخضر العميق والبرونز
+════════════════════════════════════════════════════════ -->
+<div class="palette-panel" id="panel-2">
+  <div class="palette-meta">
+    <div class="palette-swatches">
+      <div class="swatch" style="background:#1a4231"></div>
+      <div class="swatch" style="background:#2d6b52"></div>
+      <div class="swatch" style="background:#8b6f47"></div>
+      <div class="swatch" style="background:#f4f7f5"></div>
+      <div class="swatch" style="background:#0d1a14"></div>
+    </div>
+    <div class="palette-info">
+      <h2>الأخضر العميق والبرونز</h2>
+      <p>يرمز للنمو والتعليم — مناسب لوزارة تربية، دافئ وطبيعي مع ثقل مؤسسي</p>
+    </div>
+    <div class="palette-codes">
+      <div class="code-badge"><div class="code-dot" style="background:#1a4231"></div>#1a4231</div>
+      <div class="code-badge"><div class="code-dot" style="background:#8b6f47"></div>#8b6f47</div>
+    </div>
+  </div>
+
+  <div class="phone-frame">
+    <div class="phone-notch"></div>
+    <div class="app-shell" style="
+      --primary:#1a4231; --primary-dark:#12301f; --primary-dim:rgba(26,66,49,.1); --primary-border:rgba(26,66,49,.2);
+      --accent:#8b6f47;  --accent-dim:#f7f0e6; --accent-border:#c8a87a;
+      --bg:#f4f7f5; --surface:#ffffff; --border:#d4e0d8;
+      --text-1:#0d1a14; --text-2:#3a5045;
+    ">
+      <div class="app-header">
+        <div class="hdr-start">
+          <div class="hdr-logo">ر</div>
+          <div>
+            <div class="hdr-school-name">مدرسة الفاروق الأساسية</div>
+            <div class="hdr-date">الأربعاء، ١٨ يونيو ٢٠٢٦</div>
+          </div>
+        </div>
+        <div class="hdr-end">
+          <div class="hdr-status"><div class="hdr-status-dot"></div>متصل</div>
+          <div class="hdr-icon-btn">🔔</div>
+          <div class="hdr-icon-btn">↩</div>
+        </div>
+      </div>
+      <div class="app-tabbar">
+        <div class="app-tab active"><div class="tab-icon">📋</div>الدوام</div>
+        <div class="app-tab"><div class="tab-icon">👥</div>الصفوف</div>
+        <div class="app-tab"><div class="tab-icon">👤</div>الطلاب</div>
+        <div class="app-tab"><div class="tab-icon">🏫</div>الكادر</div>
+        <div class="app-tab"><div class="tab-icon">⚙️</div>الإعدادات</div>
+      </div>
+      <div class="app-content">
+        <div class="status-card">
+          <div class="status-icon">⏳</div>
+          <div>
+            <div class="status-title">لم يُرسل سجل الحضور بعد</div>
+            <div class="status-sub">يرجى إكمال البيانات وإرسالها للمديرية</div>
+          </div>
+        </div>
+        <div class="section-card">
+          <div class="section-card-hdr">
+            <div>
+              <div class="section-card-title">سجل الحضور اليومي</div>
+              <div class="section-card-sub">تسجيل حضور الكادر ورفعه للمديرية</div>
+            </div>
+            <div class="badge">الهيئة التدريسية</div>
+          </div>
+          <div class="section-card-body">
+            <div class="stats-grid">
+              <div class="stat-box present"><div class="stat-num">24</div><div class="stat-label">حاضر</div></div>
+              <div class="stat-box absent"><div class="stat-num">3</div><div class="stat-label">غائب</div></div>
+              <div class="stat-box total"><div class="stat-num">27</div><div class="stat-label">الإجمالي</div></div>
+            </div>
+            <div class="field-row">
+              <div class="mini-field"><div class="mini-label">الإداريون الحاضرون</div><input class="mini-input" value="5" readonly></div>
+              <div class="mini-field"><div class="mini-label">الإداريون الغائبون</div><input class="mini-input" value="1" readonly></div>
+            </div>
+            <div class="divider"></div>
+            <div class="teacher-item">
+              <div class="teacher-avatar">أح</div>
+              <div class="teacher-name">أحمد محمد الخالد</div>
+              <div class="teacher-status present">حاضر</div>
+            </div>
+            <div class="teacher-item">
+              <div class="teacher-avatar">سم</div>
+              <div class="teacher-name">سمر علي النجار</div>
+              <div class="teacher-status absent">غائب</div>
+            </div>
+            <div class="teacher-item">
+              <div class="teacher-avatar">خل</div>
+              <div class="teacher-name">خلود إبراهيم حسن</div>
+              <div class="teacher-status present">حاضر</div>
+            </div>
+          </div>
+        </div>
+        <button class="btn-primary-mock">📤 إرسال سجل الحضور</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     PALETTE 4: البنفسجي الملكي والذهب
+════════════════════════════════════════════════════════ -->
+<div class="palette-panel" id="panel-3">
+  <div class="palette-meta">
+    <div class="palette-swatches">
+      <div class="swatch" style="background:#2d1b5e"></div>
+      <div class="swatch" style="background:#4a2d8e"></div>
+      <div class="swatch" style="background:#c9952a"></div>
+      <div class="swatch" style="background:#f7f5fc"></div>
+      <div class="swatch" style="background:#1a0d2e"></div>
+    </div>
+    <div class="palette-info">
+      <h2>البنفسجي الملكي والذهب</h2>
+      <p>فريد وحصري — نادر جداً في التطبيقات الحكومية العربية، يمنح هوية بصرية لا تُنسى</p>
+    </div>
+    <div class="palette-codes">
+      <div class="code-badge"><div class="code-dot" style="background:#2d1b5e"></div>#2d1b5e</div>
+      <div class="code-badge"><div class="code-dot" style="background:#c9952a"></div>#c9952a</div>
+    </div>
+  </div>
+
+  <div class="phone-frame">
+    <div class="phone-notch"></div>
+    <div class="app-shell" style="
+      --primary:#2d1b5e; --primary-dark:#200f45; --primary-dim:rgba(45,27,94,.1); --primary-border:rgba(45,27,94,.2);
+      --accent:#c9952a;  --accent-dim:#fdf4e0; --accent-border:#e8c97a;
+      --bg:#f7f5fc; --surface:#ffffff; --border:#e0d8f0;
+      --text-1:#1a0d2e; --text-2:#4a3870;
+    ">
+      <div class="app-header">
+        <div class="hdr-start">
+          <div class="hdr-logo">ر</div>
+          <div>
+            <div class="hdr-school-name">مدرسة الفاروق الأساسية</div>
+            <div class="hdr-date">الأربعاء، ١٨ يونيو ٢٠٢٦</div>
+          </div>
+        </div>
+        <div class="hdr-end">
+          <div class="hdr-status"><div class="hdr-status-dot"></div>متصل</div>
+          <div class="hdr-icon-btn">🔔</div>
+          <div class="hdr-icon-btn">↩</div>
+        </div>
+      </div>
+      <div class="app-tabbar">
+        <div class="app-tab active"><div class="tab-icon">📋</div>الدوام</div>
+        <div class="app-tab"><div class="tab-icon">👥</div>الصفوف</div>
+        <div class="app-tab"><div class="tab-icon">👤</div>الطلاب</div>
+        <div class="app-tab"><div class="tab-icon">🏫</div>الكادر</div>
+        <div class="app-tab"><div class="tab-icon">⚙️</div>الإعدادات</div>
+      </div>
+      <div class="app-content">
+        <div class="status-card">
+          <div class="status-icon">⏳</div>
+          <div>
+            <div class="status-title">لم يُرسل سجل الحضور بعد</div>
+            <div class="status-sub">يرجى إكمال البيانات وإرسالها للمديرية</div>
+          </div>
+        </div>
+        <div class="section-card">
+          <div class="section-card-hdr">
+            <div>
+              <div class="section-card-title">سجل الحضور اليومي</div>
+              <div class="section-card-sub">تسجيل حضور الكادر ورفعه للمديرية</div>
+            </div>
+            <div class="badge">الهيئة التدريسية</div>
+          </div>
+          <div class="section-card-body">
+            <div class="stats-grid">
+              <div class="stat-box present"><div class="stat-num">24</div><div class="stat-label">حاضر</div></div>
+              <div class="stat-box absent"><div class="stat-num">3</div><div class="stat-label">غائب</div></div>
+              <div class="stat-box total"><div class="stat-num">27</div><div class="stat-label">الإجمالي</div></div>
+            </div>
+            <div class="field-row">
+              <div class="mini-field"><div class="mini-label">الإداريون الحاضرون</div><input class="mini-input" value="5" readonly></div>
+              <div class="mini-field"><div class="mini-label">الإداريون الغائبون</div><input class="mini-input" value="1" readonly></div>
+            </div>
+            <div class="divider"></div>
+            <div class="teacher-item">
+              <div class="teacher-avatar">أح</div>
+              <div class="teacher-name">أحمد محمد الخالد</div>
+              <div class="teacher-status present">حاضر</div>
+            </div>
+            <div class="teacher-item">
+              <div class="teacher-avatar">سم</div>
+              <div class="teacher-name">سمر علي النجار</div>
+              <div class="teacher-status absent">غائب</div>
+            </div>
+            <div class="teacher-item">
+              <div class="teacher-avatar">خل</div>
+              <div class="teacher-name">خلود إبراهيم حسن</div>
+              <div class="teacher-status present">حاضر</div>
+            </div>
+          </div>
+        </div>
+        <button class="btn-primary-mock">📤 إرسال سجل الحضور</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     PALETTE 5: الليلي والأزرق الكهربائي
+════════════════════════════════════════════════════════ -->
+<div class="palette-panel" id="panel-4">
+  <div class="palette-meta">
+    <div class="palette-swatches">
+      <div class="swatch" style="background:#1a2744"></div>
+      <div class="swatch" style="background:#243968"></div>
+      <div class="swatch" style="background:#3b82f6"></div>
+      <div class="swatch" style="background:#f0f4fa"></div>
+      <div class="swatch" style="background:#0a1628"></div>
+    </div>
+    <div class="palette-info">
+      <h2>الليلي والأزرق الكهربائي</h2>
+      <p>عصري وتقني — يجمع بين الرسمية والحداثة، مستخدم في تطبيقات Gov-Tech الحديثة</p>
+    </div>
+    <div class="palette-codes">
+      <div class="code-badge"><div class="code-dot" style="background:#1a2744"></div>#1a2744</div>
+      <div class="code-badge"><div class="code-dot" style="background:#3b82f6"></div>#3b82f6</div>
+    </div>
+  </div>
+
+  <div class="phone-frame">
+    <div class="phone-notch"></div>
+    <div class="app-shell" style="
+      --primary:#1a2744; --primary-dark:#101a30; --primary-dim:rgba(26,39,68,.1); --primary-border:rgba(26,39,68,.2);
+      --accent:#3b82f6;  --accent-dim:#eff6ff; --accent-border:#93c5fd;
+      --bg:#f0f4fa; --surface:#ffffff; --border:#c8d8ec;
+      --text-1:#0a1628; --text-2:#354b6e;
+    ">
+      <div class="app-header">
+        <div class="hdr-start">
+          <div class="hdr-logo">ر</div>
+          <div>
+            <div class="hdr-school-name">مدرسة الفاروق الأساسية</div>
+            <div class="hdr-date">الأربعاء، ١٨ يونيو ٢٠٢٦</div>
+          </div>
+        </div>
+        <div class="hdr-end">
+          <div class="hdr-status"><div class="hdr-status-dot"></div>متصل</div>
+          <div class="hdr-icon-btn">🔔</div>
+          <div class="hdr-icon-btn">↩</div>
+        </div>
+      </div>
+      <div class="app-tabbar">
+        <div class="app-tab active"><div class="tab-icon">📋</div>الدوام</div>
+        <div class="app-tab"><div class="tab-icon">👥</div>الصفوف</div>
+        <div class="app-tab"><div class="tab-icon">👤</div>الطلاب</div>
+        <div class="app-tab"><div class="tab-icon">🏫</div>الكادر</div>
+        <div class="app-tab"><div class="tab-icon">⚙️</div>الإعدادات</div>
+      </div>
+      <div class="app-content">
+        <div class="status-card">
+          <div class="status-icon">⏳</div>
+          <div>
+            <div class="status-title">لم يُرسل سجل الحضور بعد</div>
+            <div class="status-sub">يرجى إكمال البيانات وإرسالها للمديرية</div>
+          </div>
+        </div>
+        <div class="section-card">
+          <div class="section-card-hdr">
+            <div>
+              <div class="section-card-title">سجل الحضور اليومي</div>
+              <div class="section-card-sub">تسجيل حضور الكادر ورفعه للمديرية</div>
+            </div>
+            <div class="badge">الهيئة التدريسية</div>
+          </div>
+          <div class="section-card-body">
+            <div class="stats-grid">
+              <div class="stat-box present"><div class="stat-num">24</div><div class="stat-label">حاضر</div></div>
+              <div class="stat-box absent"><div class="stat-num">3</div><div class="stat-label">غائب</div></div>
+              <div class="stat-box total"><div class="stat-num">27</div><div class="stat-label">الإجمالي</div></div>
+            </div>
+            <div class="field-row">
+              <div class="mini-field"><div class="mini-label">الإداريون الحاضرون</div><input class="mini-input" value="5" readonly></div>
+              <div class="mini-field"><div class="mini-label">الإداريون الغائبون</div><input class="mini-input" value="1" readonly></div>
+            </div>
+            <div class="divider"></div>
+            <div class="teacher-item">
+              <div class="teacher-avatar">أح</div>
+              <div class="teacher-name">أحمد محمد الخالد</div>
+              <div class="teacher-status present">حاضر</div>
+            </div>
+            <div class="teacher-item">
+              <div class="teacher-avatar">سم</div>
+              <div class="teacher-name">سمر علي النجار</div>
+              <div class="teacher-status absent">غائب</div>
+            </div>
+            <div class="teacher-item">
+              <div class="teacher-avatar">خل</div>
+              <div class="teacher-name">خلود إبراهيم حسن</div>
+              <div class="teacher-status present">حاضر</div>
+            </div>
+          </div>
+        </div>
+        <button class="btn-primary-mock">📤 إرسال سجل الحضور</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     PALETTE 6: الخمري والأردوازي
+════════════════════════════════════════════════════════ -->
+<div class="palette-panel" id="panel-5">
+  <div class="palette-meta">
+    <div class="palette-swatches">
+      <div class="swatch" style="background:#7c2d12"></div>
+      <div class="swatch" style="background:#b44d28"></div>
+      <div class="swatch" style="background:#1e3a5f"></div>
+      <div class="swatch" style="background:#faf5f2"></div>
+      <div class="swatch" style="background:#1a0a06"></div>
+    </div>
+    <div class="palette-info">
+      <h2>الخمري والأردوازي الداكن</h2>
+      <p>تقليدي وراقٍ — مستوحى من الجامعات والمؤسسات التعليمية العريقة، دافئ وموثوق</p>
+    </div>
+    <div class="palette-codes">
+      <div class="code-badge"><div class="code-dot" style="background:#7c2d12"></div>#7c2d12</div>
+      <div class="code-badge"><div class="code-dot" style="background:#1e3a5f"></div>#1e3a5f</div>
+    </div>
+  </div>
+
+  <div class="phone-frame">
+    <div class="phone-notch"></div>
+    <div class="app-shell" style="
+      --primary:#7c2d12; --primary-dark:#5c1f09; --primary-dim:rgba(124,45,18,.1); --primary-border:rgba(124,45,18,.2);
+      --accent:#1e3a5f;  --accent-dim:#eff4fb; --accent-border:#93aed0;
+      --bg:#faf5f2; --surface:#ffffff; --border:#e8d8ce;
+      --text-1:#1a0a06; --text-2:#5a3828;
+    ">
+      <div class="app-header">
+        <div class="hdr-start">
+          <div class="hdr-logo">ر</div>
+          <div>
+            <div class="hdr-school-name">مدرسة الفاروق الأساسية</div>
+            <div class="hdr-date">الأربعاء، ١٨ يونيو ٢٠٢٦</div>
+          </div>
+        </div>
+        <div class="hdr-end">
+          <div class="hdr-status"><div class="hdr-status-dot"></div>متصل</div>
+          <div class="hdr-icon-btn">🔔</div>
+          <div class="hdr-icon-btn">↩</div>
+        </div>
+      </div>
+      <div class="app-tabbar">
+        <div class="app-tab active"><div class="tab-icon">📋</div>الدوام</div>
+        <div class="app-tab"><div class="tab-icon">👥</div>الصفوف</div>
+        <div class="app-tab"><div class="tab-icon">👤</div>الطلاب</div>
+        <div class="app-tab"><div class="tab-icon">🏫</div>الكادر</div>
+        <div class="app-tab"><div class="tab-icon">⚙️</div>الإعدادات</div>
+      </div>
+      <div class="app-content">
+        <div class="status-card">
+          <div class="status-icon">⏳</div>
+          <div>
+            <div class="status-title">لم يُرسل سجل الحضور بعد</div>
+            <div class="status-sub">يرجى إكمال البيانات وإرسالها للمديرية</div>
+          </div>
+        </div>
+        <div class="section-card">
+          <div class="section-card-hdr">
+            <div>
+              <div class="section-card-title">سجل الحضور اليومي</div>
+              <div class="section-card-sub">تسجيل حضور الكادر ورفعه للمديرية</div>
+            </div>
+            <div class="badge">الهيئة التدريسية</div>
+          </div>
+          <div class="section-card-body">
+            <div class="stats-grid">
+              <div class="stat-box present"><div class="stat-num">24</div><div class="stat-label">حاضر</div></div>
+              <div class="stat-box absent"><div class="stat-num">3</div><div class="stat-label">غائب</div></div>
+              <div class="stat-box total"><div class="stat-num">27</div><div class="stat-label">الإجمالي</div></div>
+            </div>
+            <div class="field-row">
+              <div class="mini-field"><div class="mini-label">الإداريون الحاضرون</div><input class="mini-input" value="5" readonly></div>
+              <div class="mini-field"><div class="mini-label">الإداريون الغائبون</div><input class="mini-input" value="1" readonly></div>
+            </div>
+            <div class="divider"></div>
+            <div class="teacher-item">
+              <div class="teacher-avatar">أح</div>
+              <div class="teacher-name">أحمد محمد الخالد</div>
+              <div class="teacher-status present">حاضر</div>
+            </div>
+            <div class="teacher-item">
+              <div class="teacher-avatar">سم</div>
+              <div class="teacher-name">سمر علي النجار</div>
+              <div class="teacher-status absent">غائب</div>
+            </div>
+            <div class="teacher-item">
+              <div class="teacher-avatar">خل</div>
+              <div class="teacher-name">خلود إبراهيم حسن</div>
+              <div class="teacher-status present">حاضر</div>
+            </div>
+          </div>
+        </div>
+        <button class="btn-primary-mock">📤 إرسال سجل الحضور</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function switchPalette(idx) {
+  document.querySelectorAll('.ptab').forEach((t, i) => t.classList.toggle('active', i === idx));
+  document.querySelectorAll('.palette-panel').forEach((p, i) => p.classList.toggle('active', i === idx));
+}
+</script>
+</body>
+</html>
