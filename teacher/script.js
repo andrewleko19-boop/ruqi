@@ -706,16 +706,16 @@ function renderSubmissionBanners() {
 function renderStudentsList() {
   studentsList.innerHTML = '';
 
-  S.students.forEach((stu, idx) => {
-    const rec    = S.attendance[stu.id] ?? { status: DEFAULT_STATUS, reason: null };
-    const li     = buildStudentRow(stu, idx + 1, rec);
+  S.students.forEach((stu) => {
+    const rec = S.attendance[stu.id] ?? { status: DEFAULT_STATUS, reason: null };
+    const li  = buildStudentRow(stu, rec);
     studentsList.appendChild(li);
   });
 
   show(studentsList);
 }
 
-function buildStudentRow(stu, num, rec) {
+function buildStudentRow(stu, rec) {
   const li = document.createElement('li');
   li.className    = 'student-row';
   li.dataset.id   = stu.id;
@@ -723,9 +723,14 @@ function buildStudentRow(stu, num, rec) {
   li.setAttribute('role', 'listitem');
 
   const showReason = rec.reason && REASON_STATUSES.has(rec.status);
+  const gDot = stu.gender === 'female'
+    ? '<span class="gender-dot gender-dot--female" title="أنثى"></span>'
+    : stu.gender === 'male'
+      ? '<span class="gender-dot gender-dot--male" title="ذكر"></span>'
+      : '<span class="gender-dot" style="background:var(--clr-border)"></span>';
 
   li.innerHTML = `
-    <span class="student-num">${num}</span>
+    ${gDot}
     <div class="student-name-wrap">
       <div class="student-name">${escapeHtml(stu.full_name)}</div>
       ${showReason

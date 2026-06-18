@@ -3450,15 +3450,19 @@ function renderStudents() {
   hide(stuEmpty); hide(stuNoResults);
   if (_stuList.length === 0) { stuListEl.innerHTML = ''; show(stuEmpty); return; }
   if (list.length === 0)     { stuListEl.innerHTML = ''; show(stuNoResults); return; }
-  stuListEl.innerHTML = list.map((s, i) => {
+  stuListEl.innerHTML = list.map((s) => {
     const st = s.status || 'active';
-    // Show the status badge only when it isn't the plain active roster.
     const badge = st !== 'active'
       ? `<span class="stu-status-badge st-${st}">${STU_STATUS_LABELS[st] || st}</span>`
       : '';
+    const gDot = s.gender === 'female'
+      ? '<span class="gender-dot gender-dot--female" title="أنثى"></span>'
+      : s.gender === 'male'
+        ? '<span class="gender-dot gender-dot--male" title="ذكر"></span>'
+        : '<span class="gender-dot" style="background:var(--clr-border)"></span>';
     return (
       `<li class="stu-row" data-id="${escapeHtml(s.id)}">` +
-        `<span class="stu-seat">${i + 1}</span>` +
+        gDot +
         `<span class="stu-info"><span class="stu-name">${escapeHtml(s.full_name || '—')}</span>${badge}</span>` +
         `<span class="stu-acts">` +
           `<button class="icon-btn-sm" data-act="edit" title="تعديل"><svg class="icon icon-sm"><use href="#ic-edit"/></svg></button>` +
@@ -3468,6 +3472,11 @@ function renderStudents() {
       `</li>`
     );
   }).join('');
+  const cntBadge = el('stu-count-badge');
+  if (cntBadge) {
+    cntBadge.hidden = !list.length;
+    cntBadge.textContent = list.length ? `${list.length} طالب` : '';
+  }
 }
 
 stuSearch.addEventListener('input', renderStudents);
@@ -4780,6 +4789,7 @@ btnConfirmDel?.addEventListener('click', async () => {
 });
 
 // Registry tab selects (populated dynamically — enhance once, refresh on populate)
+CustomSelect.enhance('sr-gender');
 CustomSelect.enhance('sr-job-title');
 CustomSelect.enhance('sr-specialization');
 CustomSelect.enhance('sr-roster-type');
@@ -4789,6 +4799,7 @@ CustomSelect.enhance('sr-edu-zone');
 CustomSelect.enhance('sr-min-doc');
 CustomSelect.enhance('leave-type-sel');
 CustomSelect.enhance('leaves-month-sel');
+CustomSelect.enhance('status-new');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // § التكاليف (staff_assignments) — المرحلة 3أ
