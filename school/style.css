@@ -1530,6 +1530,7 @@ select.csel-native {
   display: flex; gap: 6px; align-items: center;
 }
 .input-with-action .field-input { flex: 1; min-width: 0; }
+.input-with-action .btn { flex-shrink: 0; }
 .btn.btn-outline.btn-sm {
   padding: 6px 10px; border-radius: 8px; font-size: .78rem; font-weight: 600;
   background: transparent; color: var(--clr-primary, #1a2744);
@@ -1560,6 +1561,12 @@ select.csel-native {
 }
 .gender-dot--male   { background: #3b82f6; }
 .gender-dot--female { background: #ec4899; }
+.stu-count-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 99px;
+  background: var(--clr-primary-dim); color: var(--clr-primary-hov);
+  font-size: 0.82rem; font-weight: 600; margin-inline-start: 8px;
+}
 .reg-linked-badge {
   display: inline-block; margin-inline-start: 8px;
   padding: 1px 7px; border-radius: 999px; font-size: .65rem; font-weight: 700;
