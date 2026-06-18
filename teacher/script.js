@@ -345,9 +345,20 @@ function setLoginBusy(busy) {
 }
 
 // ── Logout ────────────────────────────────────────────────────────────────────
-btnLogout.addEventListener('click', async () => {
+const modalConfirmLogout = document.getElementById('modal-confirm-logout');
+const btnLogoutCancel    = document.getElementById('btn-logout-cancel');
+const btnLogoutOk        = document.getElementById('btn-logout-ok');
+
+btnLogout.addEventListener('click', () => {
   if (S.isDirty && !confirm('يوجد تغييرات غير محفوظة. هل تريد الخروج؟')) return;
-  if (!S.isDirty && !confirm('هل تريد تسجيل الخروج؟')) return;
+  modalConfirmLogout.hidden = false;
+});
+btnLogoutCancel.addEventListener('click', () => { modalConfirmLogout.hidden = true; });
+modalConfirmLogout.addEventListener('click', e => {
+  if (e.target === modalConfirmLogout) modalConfirmLogout.hidden = true;
+});
+btnLogoutOk.addEventListener('click', async () => {
+  modalConfirmLogout.hidden = true;
   try { await logout(); } catch { /* ignore */ }
   S.user        = null;
   S.classes     = [];
