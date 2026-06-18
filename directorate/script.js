@@ -776,6 +776,11 @@ function setupFilters() {
   CustomSelect.enhance('filter-status');
   CustomSelect.enhance('filter-type');
   CustomSelect.enhance('filter-severity');
+  CustomSelect.enhance('dir-sm-classification');
+  CustomSelect.enhance('dir-sm-education-type');
+  CustomSelect.enhance('dir-sm-shift');
+  CustomSelect.enhance('dir-sm-student-type');
+  CustomSelect.enhance('dir-pm-school');
   document.getElementById('filter-status')?.addEventListener('change', renderReportsTable);
   document.getElementById('filter-type')?.addEventListener('change', renderReportsTable);
   document.getElementById('filter-severity')?.addEventListener('change', renderReportsTable);
@@ -1928,6 +1933,7 @@ async function loadDirSchools() {
   if (pmSchoolEl) {
     while (pmSchoolEl.options.length > 1) pmSchoolEl.remove(1);
     _dirAllSchools.forEach(s => pmSchoolEl.add(new Option(s.name, s.id)));
+    CustomSelect.refresh('dir-pm-school');
   }
 
   if (_dirAllSchools.length === 0) { emptyEl?.classList.remove('hidden'); return; }

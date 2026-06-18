@@ -80,6 +80,13 @@ Deno.serve(async (req) => {
       if (password.length < 8)              return json({ error: "كلمة المرور ٨ أحرف على الأقل" }, 400);
       if (!schoolId)                         return json({ error: "يجب تحديد مدرسة" }, 400);
 
+      // تحقق أن المدرسة تتبع مديرية المستدعي قبل إنشاء أي مستخدم
+      if (isDirectorate) {
+        const { data: school } = await admin.from("schools").select("directorate_id").eq("id", schoolId).maybeSingle();
+        if (!school || school.directorate_id !== callerDirectorateId)
+          return json({ error: "المدرسة لا تتبع مديريتك" }, 403);
+      }
+
       const { data: created, error: createErr } = await admin.auth.admin.createUser({
         email, password, email_confirm: true,
         user_metadata: { full_name: fullName },
@@ -90,13 +97,6 @@ Deno.serve(async (req) => {
                     dup ? 409 : 400);
       }
       const newId = created.user.id;
-
-      // تحقق أن المدرسة تتبع مديرية المستدعي (عند استدعاء مستخدم مديرية)
-      if (isDirectorate) {
-        const { data: school } = await admin.from("schools").select("directorate_id").eq("id", schoolId).maybeSingle();
-        if (!school || school.directorate_id !== callerDirectorateId)
-          return json({ error: "المدرسة لا تتبع مديريتك" }, 403);
-      }
 
       const { error: uErr } = await admin.from("users").upsert({
         id: newId, role: "school_admin", school_id: schoolId, full_name: fullName,
@@ -121,6 +121,9 @@ Deno.serve(async (req) => {
       if (password.length < 8)              return json({ error: "كلمة المرور ٨ أحرف على الأقل" }, 400);
       if (!directorateId)                    return json({ error: "يجب تحديد مديرية" }, 400);
 
+      if (!isMinistry)
+        return json({ error: "إنشاء مشرف مديرية مخصّص لمشرف الوزارة فقط" }, 403);
+
       const { data: created, error: createErr } = await admin.auth.admin.createUser({
         email, password, email_confirm: true,
         user_metadata: { full_name: fullName },
@@ -131,9 +134,6 @@ Deno.serve(async (req) => {
                     dup ? 409 : 400);
       }
       const newId = created.user.id;
-
-      if (!isMinistry)
-        return json({ error: "إنشاء مشرف مديرية مخصّص لمشرف الوزارة فقط" }, 403);
 
       const { error: uErr } = await admin.from("users").upsert({
         id: newId, role: "directorate_user", directorate_id: directorateId, full_name: fullName,
