@@ -5,10 +5,10 @@
 
 /* ── Variables ─────────────────────────────────────────────────────────── */
 :root {
-  --clr-primary:    #06b6d4;
-  --clr-primary-lt: #ecfeff;
-  --clr-primary-dk: #0e7490;
-  --clr-accent:     #22d3ee;
+  --clr-primary:    #2563eb;
+  --clr-primary-lt: #eff6ff;
+  --clr-primary-dk: #1a2744;
+  --clr-accent:     #60a5fa;
   --clr-danger:     #c0392b;
   --clr-danger-lt:  #fdf2f2;
   --clr-warn:       #e67e22;
@@ -131,7 +131,7 @@ input, textarea, select { font-family: inherit; }
 .btn-full { width: 100%; }
 .btn-primary {
   background: var(--clr-primary); color: #fff;
-  box-shadow: 0 2px 6px rgba(6,182,212,.25);
+  box-shadow: 0 2px 6px rgba(37, 99, 235,.25);
 }
 .btn-primary:hover:not(:disabled) { background: var(--clr-primary-dk); }
 .btn-primary:disabled { opacity: .55; cursor: not-allowed; }
@@ -188,7 +188,7 @@ input, textarea, select { font-family: inherit; }
 }
 .spinner-lg {
   width: 36px; height: 36px; border-width: 3px;
-  border-color: rgba(6,182,212,.25); border-top-color: var(--clr-primary);
+  border-color: rgba(37, 99, 235,.25); border-top-color: var(--clr-primary);
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -557,22 +557,22 @@ input, textarea, select { font-family: inherit; }
     padding: 20mm; color: #000;
   }
   .cert-header {
-    text-align: center; border-bottom: 2px solid #06b6d4;
+    text-align: center; border-bottom: 2px solid #2563eb;
     padding-bottom: 12pt; margin-bottom: 16pt;
   }
   .cert-ministry { font-size: 10pt; color: #555; margin-bottom: 6pt; }
-  .cert-title { font-size: 18pt; font-weight: 900; color: #06b6d4; margin-bottom: 4pt; }
+  .cert-title { font-size: 18pt; font-weight: 900; color: #2563eb; margin-bottom: 4pt; }
   .cert-year { font-size: 11pt; color: #555; }
   .cert-info-table { width: 100%; border-collapse: collapse; margin-bottom: 16pt; }
   .cert-info-table td { padding: 5pt 8pt; border: 1pt solid #ccc; font-size: 11pt; }
   .cert-info-label { background: #f0f9f4; font-weight: 700; width: 80pt; }
   .cert-semesters { display: grid; grid-template-columns: 1fr 1fr; gap: 12pt; margin-bottom: 20pt; }
-  .cert-sem-title { font-size: 12pt; font-weight: 700; color: #06b6d4; margin-bottom: 6pt; text-align: center; }
+  .cert-sem-title { font-size: 12pt; font-weight: 700; color: #2563eb; margin-bottom: 6pt; text-align: center; }
   .cert-grades-table { width: 100%; border-collapse: collapse; font-size: 10pt; }
-  .cert-grades-table th { background: #ecfeff; color: #06b6d4; padding: 5pt; border: 1pt solid #ccc; text-align: center; }
+  .cert-grades-table th { background: #eff6ff; color: #2563eb; padding: 5pt; border: 1pt solid #ccc; text-align: center; }
   .cert-grades-table td { padding: 4pt 6pt; border: 1pt solid #ccc; text-align: center; }
   .cert-grades-table td:first-child { text-align: right; }
-  .cert-grades-table tfoot td { background: #ecfeff; font-weight: 700; }
+  .cert-grades-table tfoot td { background: #eff6ff; font-weight: 700; }
   .cert-total-label { text-align: right; }
   .cert-footer { display: flex; justify-content: space-between; margin-top: 24pt; padding-top: 12pt; border-top: 1pt solid #ccc; }
   .cert-seal, .cert-sig { border: 1pt solid #ccc; padding: 20pt 30pt; text-align: center; font-size: 10pt; color: #999; }
@@ -601,7 +601,7 @@ input, textarea, select { font-family: inherit; }
 .tab-btn.tab-active {
   background: var(--clr-primary); color: #fff;
   border-bottom-color: transparent;
-  box-shadow: 0 1px 4px rgba(6,182,212,.3);
+  box-shadow: 0 1px 4px rgba(37, 99, 235,.3);
 }
 .grades-content {
   border-radius: var(--radius-md);
@@ -632,7 +632,7 @@ input, textarea, select { font-family: inherit; }
 /* ── Children Pills (active is clearer) ─────────────────────────────────── */
 .child-pill.active {
   background: var(--clr-primary); color: #fff; border-color: var(--clr-primary);
-  box-shadow: 0 2px 6px rgba(6,182,212,.25);
+  box-shadow: 0 2px 6px rgba(37, 99, 235,.25);
 }
 
 /* ── Attendance Legend spacing ──────────────────────────────────────────── */

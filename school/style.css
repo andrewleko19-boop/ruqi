@@ -22,6 +22,7 @@
   --grad-tab:    linear-gradient(180deg, #1a2744 0%, #1e3a5f 100%);
   --grad-btn:    linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
   --grad-card:   linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+  --grad-icon:   linear-gradient(135deg, #1e3a5f 0%, #2563eb 60%, #60a5fa 100%);
 
   /* ── Semantic ── */
   --clr-success:     #22c55e;
@@ -435,60 +436,79 @@ select.field-input option:disabled { color: var(--clr-text-3); }
 .msg-success { background: var(--clr-success-bg); border: 1px solid var(--clr-success-brd); color: #065f46; }
 
 /* ═══ Header ═════════════════════════════════════════════════════════════════ */
+/* ═══ App Header — tall gradient hero (non-sticky; scrolls away) ════════════ */
 .app-header {
-  position: sticky;
-  top: 0;
-  z-index: 100;
+  position: relative;
   background: var(--grad-header);
   color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  gap: 10px;
-  box-shadow: 0 4px 20px rgba(10,22,40,.3);
-  /* Safe area for notch phones */
-  padding-top: env(safe-area-inset-top, 0);
-  height: calc(var(--header-h) + env(safe-area-inset-top, 0));
   overflow: hidden;
+  box-shadow: 0 4px 20px rgba(10,22,40,.3);
+  padding-top: env(safe-area-inset-top, 0);
 }
 .app-header::before {
   content: '';
   position: absolute; inset: 0;
-  background: radial-gradient(ellipse 70% 120% at 80% 50%,
-    rgba(96,165,250,.15) 0%, transparent 70%);
+  background: radial-gradient(ellipse 80% 70% at 20% 40%,
+    rgba(96,165,250,.14) 0%, transparent 70%);
   pointer-events: none;
 }
 
-.header-start {
+.header-inner {
+  position: relative; z-index: 1;
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: rgba(255,255,255,.8);
+  gap: 13px;
+  padding: 18px 16px 8px;
 }
 
-.header-meta { min-width: 0; }
+.logo-wrap {
+  width: 46px; height: 46px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255,255,255,.18), rgba(255,255,255,.06));
+  border: 1px solid rgba(255,255,255,.25);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 18px rgba(96,165,250,.3), 0 2px 8px rgba(0,0,0,.25);
+  flex-shrink: 0;
+}
 
-.header-school {
-  font-size: 0.85rem;
+.school-info { flex: 1; min-width: 0; }
+
+.school-name {
+  font-size: 0.92rem;
   font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
   color: #fff;
+  text-shadow: 0 0 20px rgba(96,165,250,.5);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-.header-date {
+.school-sub {
   font-size: 0.68rem;
-  color: rgba(255,255,255,.6);
+  color: rgba(255,255,255,.65);
   margin-top: 1px;
 }
 
-.header-end {
+.header-badge {
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: var(--r-pill);
+  padding: 4px 11px;
+  font-size: 0.66rem;
+  color: rgba(255,255,255,.85);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.header-gear { flex-shrink: 0; }
+
+.header-actions {
+  position: relative; z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 12px 14px;
+}
+.header-actions-end {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -582,6 +602,139 @@ select.field-input option:disabled { color: var(--clr-text-3); }
 
 .status-title { font-size: 0.88rem; font-weight: 700; }
 .status-sub   { font-size: 0.75rem; color: var(--clr-text-2); margin-top: 2px; line-height: 1.4; }
+
+/* ═══ Mockup views (الرئيسية / الغياب / التقارير) ═════════════════════════════ */
+.status-card-mockup {
+  background: var(--clr-surface);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--clr-border-lt);
+  box-shadow: 0 2px 14px rgba(10,22,40,.08);
+  padding: 22px 20px 20px;
+  margin-top: -34px;          /* emerges upward over the header wave */
+  position: relative;
+  z-index: 18;                /* above .header-wave (z-index 15) */
+}
+
+.status-header-row {
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 16px;
+}
+.status-icon-grad {
+  width: 50px; height: 50px;
+  border-radius: 14px;
+  background: var(--grad-icon);
+  box-shadow: var(--sh-blue);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; color: #fff;
+}
+.status-title-lg { font-size: 1rem;   font-weight: 700; color: var(--clr-text-1); }
+.status-date-sm  { font-size: 0.72rem; color: var(--clr-text-2); margin-top: 2px; }
+
+/* Segmented filter toggle */
+.status-toggle {
+  display: flex; gap: 6px;
+  background: #eef2ff;
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 14px;
+}
+.toggle-btn {
+  flex: 1; padding: 7px;
+  border: none; border-radius: 7px;
+  font-family: inherit; font-size: .78rem; font-weight: 600;
+  color: var(--clr-text-2);
+  background: transparent;
+  cursor: pointer;
+  transition: all .22s var(--ease);
+}
+.toggle-btn.active {
+  background: var(--grad-btn);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(37,99,235,.35);
+}
+
+/* Mini wave separator inside cards */
+.wave-sep { margin: 14px -20px 4px; line-height: 0; opacity: .55; }
+.wave-sep svg { width: 100%; height: 20px; display: block; }
+
+/* Decorative palette strip */
+.palette-strip {
+  display: flex;
+  height: 7px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(10,22,40,.1);
+}
+.palette-strip span { flex: 1; }
+
+/* Section label with trailing rule */
+.section-label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: .82rem; font-weight: 700;
+  color: var(--clr-text-2);
+  margin: 6px 0 2px;
+}
+.section-label::after {
+  content: ''; flex: 1; height: 1px; background: var(--clr-border-lt);
+}
+
+/* Class cards */
+.home-class-list { display: flex; flex-direction: column; gap: 8px; }
+.class-card {
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border-lt);
+  border-radius: 11px;
+  padding: 12px 14px;
+  display: flex; align-items: center; gap: 12px;
+  box-shadow: var(--sh-sm);
+  transition: transform .16s var(--ease), box-shadow .16s var(--ease);
+}
+.class-card[hidden] { display: none; }
+.class-card:hover {
+  transform: translateX(-2px);
+  box-shadow: 0 4px 18px rgba(37,99,235,.15);
+}
+.class-icon {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--p-500); flex-shrink: 0;
+}
+.class-icon .icon { width: 20px; height: 20px; }
+.class-body { flex: 1; min-width: 0; }
+.class-name { font-size: .88rem; font-weight: 600; color: var(--clr-text-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.class-meta { font-size: .72rem; color: var(--clr-text-2); margin-top: 2px; }
+.class-pill {
+  padding: 3px 10px; border-radius: var(--r-pill);
+  font-size: .72rem; font-weight: 600; white-space: nowrap; flex-shrink: 0;
+}
+.pill-done     { background: #dcfce7; color: #166534; }
+.pill-pending  { background: #fef9c3; color: #92400e; }
+.pill-rejected { background: #fee2e2; color: #991b1b; }
+
+/* Absence history rows */
+.absence-history-list { display: flex; flex-direction: column; gap: 8px; }
+.absence-day-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 14px;
+  background: #f1f5ff;
+  border: 1px solid var(--clr-border-lt);
+  border-radius: 10px;
+}
+.absence-day-label { font-weight: 600; font-size: .84rem; color: var(--clr-text-1); }
+.absence-badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+/* Summary report rows */
+.report-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 2px;
+  border-bottom: 1px solid #eef2ff;
+}
+.report-row:last-child { border-bottom: none; }
+.report-row-label { font-size: .82rem; color: var(--clr-text-2); }
+.report-row-value { font-weight: 700; font-size: .95rem; }
 
 /* ═══ Card ═══════════════════════════════════════════════════════════════════ */
 .card {

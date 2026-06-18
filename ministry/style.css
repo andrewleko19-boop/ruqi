@@ -6,8 +6,8 @@
   --surface:      #f0f4fa;
   --surface-2:    #ffffff;
   --border:       #cbd5e1;
-  --accent:       #06b6d4;
-  --accent-hover: #0e7490;
+  --accent:       #2563eb;
+  --accent-hover: #1a2744;
   --green:        #16a34a;
   --green-bg:     #dcfce7;
   --red:          #dc2626;
@@ -37,7 +37,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at 50% 0%, #ecfeff 0%, var(--bg) 70%);
+  background: radial-gradient(ellipse at 50% 0%, #eff6ff 0%, var(--bg) 70%);
   padding: 24px;
 }
 
@@ -216,7 +216,7 @@ body {
 
 .stat-card.accent-green { border-color: var(--green); background: linear-gradient(135deg, var(--surface) 60%, var(--green-bg)); }
 .stat-card.accent-red   { border-color: var(--red);   background: linear-gradient(135deg, var(--surface) 60%, var(--red-bg)); }
-.stat-card.accent-blue  { border-color: var(--accent); background: linear-gradient(135deg, var(--accent) 0%, #0e7490 100%); }
+.stat-card.accent-blue  { border-color: var(--accent); background: linear-gradient(135deg, var(--accent) 0%, #1a2744 100%); }
 
 .stat-label {
   font-size: 12px;
@@ -402,14 +402,14 @@ tfoot td {
   gap: 0.25rem;
   padding: 0.18rem 0.6rem;
   border-radius: 9999px;
-  background: rgba(6,182,212,0.10);
+  background: rgba(37, 99, 235,0.10);
   font-size: 0.75rem;
   color: rgba(26,46,34,0.70);
   font-variant-numeric: tabular-nums;
 }
 #countdown-val {
   font-weight: 700;
-  color: #06b6d4;
+  color: #2563eb;
   min-width: 2ch;
   display: inline-block;
   text-align: center;
@@ -474,13 +474,13 @@ tfoot td {
    PHASE 2 — DRILL-DOWN
 ══════════════════════════════════════════════ */
 .row-clickable { cursor: pointer; }
-.row-clickable:hover td { background: rgba(6, 182, 212, 0.08); }
+.row-clickable:hover td { background: rgba(37, 99, 235, 0.08); }
 .drill-chevron {
   color: #475569;
   font-size: 0.8rem;
   margin-inline-start: 4px;
 }
-.row-clickable:hover .drill-chevron { color: #06b6d4; }
+.row-clickable:hover .drill-chevron { color: #2563eb; }
 
 .breadcrumb {
   display: flex;
@@ -492,7 +492,7 @@ tfoot td {
 .breadcrumb button {
   background: none;
   border: none;
-  color: #06b6d4;
+  color: #2563eb;
   cursor: pointer;
   font-size: inherit;
   font-family: inherit;

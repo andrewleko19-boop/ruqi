@@ -6,8 +6,8 @@
   --surface:      #f0f4fa;
   --surface-2:    #ffffff;
   --border:       #cbd5e1;
-  --accent:       #06b6d4;
-  --accent-hover: #0e7490;
+  --accent:       #2563eb;
+  --accent-hover: #1a2744;
   --green:        #16a34a;
   --green-bg:     #dcfce7;
   --red:          #dc2626;
@@ -37,7 +37,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at 50% 0%, #ecfeff 0%, var(--bg) 70%);
+  background: radial-gradient(ellipse at 50% 0%, #eff6ff 0%, var(--bg) 70%);
   padding: 24px;
 }
 
@@ -324,7 +324,7 @@ td.muted { color: var(--text-muted); font-size: 12px; }
   font-weight: 600;
   white-space: nowrap;
 }
-.role-school-admin    { background: rgba(6,182,212,.12); color: #06b6d4; border: 1px solid rgba(6,182,212,.25); }
+.role-school-admin    { background: rgba(37, 99, 235,.12); color: #2563eb; border: 1px solid rgba(37, 99, 235,.25); }
 .role-directorate     { background: rgba(240,180,41,.14); color: #a16207; border: 1px solid rgba(240,180,41,.30); }
 .role-ministry        { background: rgba(72,199,142,.14); color: #0f766e; border: 1px solid rgba(72,199,142,.30); }
 
@@ -575,7 +575,7 @@ select.csel-native {
 .csel.is-open .csel-trigger {
   border-color: var(--accent);
   background: var(--surface-2);
-  box-shadow: 0 0 0 3px rgba(6,182,212,.25);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235,.25);
 }
 .csel-trigger.is-disabled { opacity: .55; cursor: not-allowed; }
 .csel-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -615,7 +615,7 @@ select.csel-native {
   transition: background .18s ease, color .18s ease;
   white-space: normal; line-height: 1.4;
 }
-.csel-option:hover { background: rgba(6,182,212,.12); }
+.csel-option:hover { background: rgba(37, 99, 235,.12); }
 .csel-option.is-selected { background: var(--accent); color: #fff; font-weight: 600; }
 .csel-option.is-disabled { color: var(--text-dim); cursor: not-allowed; opacity: .7; }
 .csel-option.is-disabled:hover { background: transparent; }
@@ -642,12 +642,12 @@ select.csel-native {
   display: inline-flex; align-items: center; justify-content: center;
   flex-shrink: 0;
   width: 32px; height: 32px;
-  border: none; background: rgba(6,182,212,.08);
+  border: none; background: rgba(37, 99, 235,.08);
   border-radius: 8px; cursor: pointer;
-  color: var(--accent, #06b6d4); transition: background .15s;
+  color: var(--accent, #2563eb); transition: background .15s;
   margin-inline-end: 6px;
 }
-.tab-back-btn:hover { background: rgba(6,182,212,.16); }
+.tab-back-btn:hover { background: rgba(37, 99, 235,.16); }
 .tab-back-btn svg { transform: scaleX(-1); }
 
 /* ─── Logout Confirm Modal ─────────────────────────────────────────────────── */
