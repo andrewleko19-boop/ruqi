@@ -5,10 +5,10 @@
 
 /* ── Variables ─────────────────────────────────────────────────────────── */
 :root {
-  --clr-primary:    #1a6b3c;
+  --clr-primary:    #06b6d4;
   --clr-primary-lt: #e8f5ee;
-  --clr-primary-dk: #145530;
-  --clr-accent:     #2ecc71;
+  --clr-primary-dk: #0e7490;
+  --clr-accent:     #22d3ee;
   --clr-danger:     #c0392b;
   --clr-danger-lt:  #fdf2f2;
   --clr-warn:       #e67e22;
