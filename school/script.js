@@ -1227,12 +1227,12 @@ async function printClassSheet(win) {
     "body{font-family:'Cairo',Arial,sans-serif;color:#0f172a;padding:24px;margin:0}" +
     '.head{text-align:center;margin-bottom:6px}' +
     '.logo{width:90px;height:90px;object-fit:contain;display:block;margin:0 auto 8px}' +
-    'h1{font-size:19px;margin:0 0 2px;color:#1a6b3c}' +
+    'h1{font-size:19px;margin:0 0 2px;color:#06b6d4}' +
     '.sub{color:#475569;font-size:13px;margin:2px 0}' +
     '.sum{margin-top:10px;font-size:13px;font-weight:700;text-align:center}' +
     'table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}' +
     'th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:right}' +
-    'th{background:#1a6b3c;color:#fff}' +
+    'th{background:#06b6d4;color:#fff}' +
     'tr:nth-child(even) td{background:#f8fafc}' +
     '@media print{@page{margin:14mm}}' +
     '</style></head><body>' +
@@ -2728,12 +2728,12 @@ async function printReportDoc(win, cards, term = 'year') {
     '.card-page:last-child{page-break-after:auto}' +
     '.rc-head{text-align:center;margin-bottom:8px}' +
     '.logo{width:84px;height:84px;object-fit:contain;display:block;margin:0 auto 8px}' +
-    'h1{font-size:19px;margin:0 0 2px;color:#1a6b3c}' +
+    'h1{font-size:19px;margin:0 0 2px;color:#06b6d4}' +
     '.sub{color:#475569;font-size:13px;margin:2px 0}' +
     '.rc-meta{display:flex;justify-content:space-between;font-size:13px;margin:14px 0 8px;gap:12px}' +
     'table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}' +
     'th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:center}' +
-    'th{background:#1a6b3c;color:#fff}' +
+    'th{background:#06b6d4;color:#fff}' +
     'td:first-child{text-align:right}' +
     'tr:nth-child(even) td{background:#f8fafc}' +
     '.rc-final{margin-top:14px;font-size:15px;text-align:center}' +

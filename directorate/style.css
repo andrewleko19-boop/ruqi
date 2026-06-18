@@ -4,15 +4,15 @@
    Design tokens – same system as school app
 ══════════════════════════════════════════════ */
 :root {
-  --bg-base:      #eef2ee;
-  --bg-surface:   #f4f7f5;
+  --bg-base:      #f0f4fa;
+  --bg-surface:   #f0f4fa;
   --bg-card:      #ffffff;
-  --bg-hover:     #eef5f0;
-  --border:       #d5e5db;
-  --border-light: #e2e8e4;
+  --bg-hover:     #f0fafb;
+  --border:       #cbd5e1;
+  --border-light: #e2e8f0;
 
   --blue:         #06b6d4;
-  --blue-dim:     #e8f5ee;
+  --blue-dim:     #ecfeff;
   --blue-dark:    #0e7490;
   --green:        #22c55e;
   --green-dim:    #dcfce7;
@@ -23,9 +23,9 @@
   --purple:       #a855f7;
   --purple-dim:   #f3e8ff;
 
-  --text-primary:   #1a2e22;
+  --text-primary:   #0f172a;
   --text-secondary: #475569;
-  --text-muted:     #6b8a76;
+  --text-muted:     #64748b;
 
   --radius-sm: 6px;
   --radius:    10px;
@@ -61,7 +61,7 @@ body {
 .login-overlay {
   position: fixed;
   inset: 0;
-  background: radial-gradient(ellipse at 30% 40%, #e8f5ee 0%, #f4f7f5 70%);
+  background: radial-gradient(ellipse at 30% 40%, #ecfeff 0%, #f0f4fa 70%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -205,7 +205,7 @@ body {
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .btn-primary { background: var(--blue); color: #fff; }
-.btn-primary:hover:not(:disabled) { background: #145530; }
+.btn-primary:hover:not(:disabled) { background: #0e7490; }
 
 .btn-ghost {
   background: transparent;
@@ -298,12 +298,12 @@ input::placeholder { color: var(--text-muted); }
 }
 
 #stat-reports .stat-value {
-  color: #1a2e22;    /* الرقم فقط باللون الأبيض */
+  color: #0f172a;    /* الرقم فقط باللون الأبيض */
 }
 
 #stat-reports .stat-label,
 #stat-reports .stat-sub {
-  color: #6b8a76;    /* النص العلوي والسفلي باللون الرمادي */
+  color: #64748b;    /* النص العلوي والسفلي باللون الرمادي */
 }
 
 #stat-reports .stat-icon svg {
@@ -387,7 +387,7 @@ input::placeholder { color: var(--text-muted); }
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(ellipse 120% 90% at 50% 38%, #e8f5ee 0%, #f4f7f5 55%, #ffffff 100%);
+    radial-gradient(ellipse 120% 90% at 50% 38%, #ecfeff 0%, #f0f4fa 55%, #ffffff 100%);
 }
 #globe-viz[hidden] { display: none; }
 #globe-viz canvas { display: block; cursor: grab; }
@@ -414,7 +414,7 @@ input::placeholder { color: var(--text-muted); }
 .view-toggle:hover {
   background: var(--blue-dim);
   border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(26,107,60,0.12);
+  box-shadow: 0 0 0 3px rgba(6,182,212,0.12);
 }
 
 /* globe.gl HTML tooltip — match the dark popup theme */
@@ -740,7 +740,7 @@ tr.row-overdue td:first-child {
    PHASE 1 — ROW FLASH (new report)
 ══════════════════════════════════════════════ */
 @keyframes row-flash-in {
-  0%   { background: rgba(26, 107, 60, 0.35); }
+  0%   { background: rgba(6, 182, 212, 0.35); }
   100% { background: transparent; }
 }
 tr.row-flash {
@@ -851,7 +851,7 @@ tr.row-flash {
   display: block;
   height: 100%;
   border-radius: 3px;
-  background: var(--blue, #1a6b3c);
+  background: var(--blue, #06b6d4);
   transition: width 0.6s ease;
 }
 
@@ -1270,7 +1270,7 @@ select.csel-native {
 .csel.is-open .csel-trigger {
   border-color: var(--blue);
   background: var(--bg-surface);
-  box-shadow: 0 0 0 3px rgba(26,107,60,.18);
+  box-shadow: 0 0 0 3px rgba(6,182,212,.18);
 }
 .csel-trigger.is-disabled { opacity: .55; cursor: not-allowed; }
 .csel-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

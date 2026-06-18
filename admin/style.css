@@ -2,10 +2,10 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:           #eef2ee;
-  --surface:      #f4f7f5;
+  --bg:           #f0f4fa;
+  --surface:      #f0f4fa;
   --surface-2:    #ffffff;
-  --border:       #d5e5db;
+  --border:       #cbd5e1;
   --accent:       #06b6d4;
   --accent-hover: #0e7490;
   --green:        #16a34a;
@@ -14,8 +14,8 @@
   --red-bg:       #fee2e2;
   --yellow:       #ca8a04;
   --yellow-bg:    #fef3c7;
-  --text:         #1a2e22;
-  --text-muted:   #6b8a76;
+  --text:         #0f172a;
+  --text-muted:   #64748b;
   --text-dim:     #7e8a99;
   --radius:       10px;
   --shadow:       0 4px 24px rgba(0,0,0,0.10);
@@ -37,7 +37,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at 50% 0%, #e8f5ee 0%, var(--bg) 70%);
+  background: radial-gradient(ellipse at 50% 0%, #ecfeff 0%, var(--bg) 70%);
   padding: 24px;
 }
 
@@ -324,7 +324,7 @@ td.muted { color: var(--text-muted); font-size: 12px; }
   font-weight: 600;
   white-space: nowrap;
 }
-.role-school-admin    { background: rgba(26,107,60,.12); color: #1a6b3c; border: 1px solid rgba(26,107,60,.25); }
+.role-school-admin    { background: rgba(6,182,212,.12); color: #06b6d4; border: 1px solid rgba(6,182,212,.25); }
 .role-directorate     { background: rgba(240,180,41,.14); color: #a16207; border: 1px solid rgba(240,180,41,.30); }
 .role-ministry        { background: rgba(72,199,142,.14); color: #0f766e; border: 1px solid rgba(72,199,142,.30); }
 
@@ -575,7 +575,7 @@ select.csel-native {
 .csel.is-open .csel-trigger {
   border-color: var(--accent);
   background: var(--surface-2);
-  box-shadow: 0 0 0 3px rgba(26,107,60,.25);
+  box-shadow: 0 0 0 3px rgba(6,182,212,.25);
 }
 .csel-trigger.is-disabled { opacity: .55; cursor: not-allowed; }
 .csel-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -615,7 +615,7 @@ select.csel-native {
   transition: background .18s ease, color .18s ease;
   white-space: normal; line-height: 1.4;
 }
-.csel-option:hover { background: rgba(26,107,60,.12); }
+.csel-option:hover { background: rgba(6,182,212,.12); }
 .csel-option.is-selected { background: var(--accent); color: #fff; font-weight: 600; }
 .csel-option.is-disabled { color: var(--text-dim); cursor: not-allowed; opacity: .7; }
 .csel-option.is-disabled:hover { background: transparent; }

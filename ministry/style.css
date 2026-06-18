@@ -2,10 +2,10 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:           #eef2ee;
-  --surface:      #f4f7f5;
+  --bg:           #f0f4fa;
+  --surface:      #f0f4fa;
   --surface-2:    #ffffff;
-  --border:       #d5e5db;
+  --border:       #cbd5e1;
   --accent:       #06b6d4;
   --accent-hover: #0e7490;
   --green:        #16a34a;
@@ -14,8 +14,8 @@
   --red-bg:       #fee2e2;
   --yellow:       #ca8a04;
   --yellow-bg:    #fef3c7;
-  --text:         #1a2e22;
-  --text-muted:   #6b8a76;
+  --text:         #0f172a;
+  --text-muted:   #64748b;
   --text-dim:     #7e8a99;
   --radius:       10px;
   --shadow:       0 4px 24px rgba(0,0,0,0.10);
@@ -37,7 +37,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at 50% 0%, #e8f5ee 0%, var(--bg) 70%);
+  background: radial-gradient(ellipse at 50% 0%, #ecfeff 0%, var(--bg) 70%);
   padding: 24px;
 }
 
@@ -66,7 +66,7 @@ body {
   font-size: 26px;
   font-weight: 700;
   letter-spacing: 3px;
-  color: #1a2e22;
+  color: #0f172a;
 }
 
 .login-subtitle {
@@ -216,7 +216,7 @@ body {
 
 .stat-card.accent-green { border-color: var(--green); background: linear-gradient(135deg, var(--surface) 60%, var(--green-bg)); }
 .stat-card.accent-red   { border-color: var(--red);   background: linear-gradient(135deg, var(--surface) 60%, var(--red-bg)); }
-.stat-card.accent-blue  { border-color: var(--accent); background: linear-gradient(135deg, var(--accent) 0%, #145530 100%); }
+.stat-card.accent-blue  { border-color: var(--accent); background: linear-gradient(135deg, var(--accent) 0%, #0e7490 100%); }
 
 .stat-label {
   font-size: 12px;
@@ -228,7 +228,7 @@ body {
 .stat-value {
   font-size: 32px;
   font-weight: 700;
-  color: #1a2e22;
+  color: #0f172a;
   line-height: 1;
 }
 
@@ -280,7 +280,7 @@ thead th {
 }
 
 tbody tr {
-  border-bottom: 1px solid #d5e5db;
+  border-bottom: 1px solid #cbd5e1;
   transition: background .15s;
 }
 tbody tr:hover { background: var(--surface-2); }
@@ -402,14 +402,14 @@ tfoot td {
   gap: 0.25rem;
   padding: 0.18rem 0.6rem;
   border-radius: 9999px;
-  background: rgba(26,107,60,0.10);
+  background: rgba(6,182,212,0.10);
   font-size: 0.75rem;
   color: rgba(26,46,34,0.70);
   font-variant-numeric: tabular-nums;
 }
 #countdown-val {
   font-weight: 700;
-  color: #1a6b3c;
+  color: #06b6d4;
   min-width: 2ch;
   display: inline-block;
   text-align: center;
@@ -433,7 +433,7 @@ tfoot td {
 .chart-title {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #6b8a76;
+  color: #64748b;
   margin-bottom: 8px;
 }
 /* ارتفاع ثابت إلزامي مع maintainAspectRatio:false */
@@ -474,13 +474,13 @@ tfoot td {
    PHASE 2 — DRILL-DOWN
 ══════════════════════════════════════════════ */
 .row-clickable { cursor: pointer; }
-.row-clickable:hover td { background: rgba(26, 107, 60, 0.08); }
+.row-clickable:hover td { background: rgba(6, 182, 212, 0.08); }
 .drill-chevron {
   color: #475569;
   font-size: 0.8rem;
   margin-inline-start: 4px;
 }
-.row-clickable:hover .drill-chevron { color: #1a6b3c; }
+.row-clickable:hover .drill-chevron { color: #06b6d4; }
 
 .breadcrumb {
   display: flex;
@@ -492,14 +492,14 @@ tfoot td {
 .breadcrumb button {
   background: none;
   border: none;
-  color: #1a6b3c;
+  color: #06b6d4;
   cursor: pointer;
   font-size: inherit;
   font-family: inherit;
   padding: 0;
 }
 .breadcrumb button:hover { text-decoration: underline; }
-.breadcrumb .crumb-current { color: #1a2e22; font-weight: 700; }
+.breadcrumb .crumb-current { color: #0f172a; font-weight: 700; }
 .breadcrumb .crumb-sep { color: #475569; }
 
 .row-silent td:nth-child(2) { color: #f87171; }
