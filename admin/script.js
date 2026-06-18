@@ -257,7 +257,17 @@ function showDashboard(email) {
   });
 }
 
-logoutBtn.addEventListener('click', async () => {
+const modalConfirmLogout = document.getElementById('modal-confirm-logout');
+const btnLogoutCancel    = document.getElementById('btn-logout-cancel');
+const btnLogoutOk        = document.getElementById('btn-logout-ok');
+
+logoutBtn.addEventListener('click', () => { modalConfirmLogout.hidden = false; });
+btnLogoutCancel.addEventListener('click', () => { modalConfirmLogout.hidden = true; });
+modalConfirmLogout.addEventListener('click', e => {
+  if (e.target === modalConfirmLogout) modalConfirmLogout.hidden = true;
+});
+btnLogoutOk.addEventListener('click', async () => {
+  modalConfirmLogout.hidden = true;
   await supabase.auth.signOut();
   location.reload();
 });
@@ -266,16 +276,39 @@ loginBtn.addEventListener('click', doLogin);
 emailInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') passwordInput.focus(); });
 passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
 
-// ── Tabs ──────────────────────────────────────────────────────────────────────
+// ── Tabs + history ────────────────────────────────────────────────────────────
+let _adminNavDepth = 0;
+const _adminBackBtn = document.getElementById('btn-back-nav');
+
+function _adminActivateTab(tabName) {
+  tabBtns.forEach(b => b.classList.remove('is-active'));
+  tabPanels.forEach(p => p.classList.remove('is-active'));
+  const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+  if (btn) btn.classList.add('is-active');
+  document.getElementById(`tab-${tabName}`)?.classList.add('is-active');
+}
+
+history.replaceState({ tab: 'schools', d: 0 }, '', '#schools');
+
 tabBtns.forEach(btn => {
   btn.addEventListener('click', () => {
-    const tab = btn.dataset.tab;
-    tabBtns.forEach(b => b.classList.remove('is-active'));
-    tabPanels.forEach(p => p.classList.remove('is-active'));
-    btn.classList.add('is-active');
-    document.getElementById(`tab-${tab}`).classList.add('is-active');
+    _adminNavDepth++;
+    history.pushState({ tab: btn.dataset.tab, d: _adminNavDepth }, '', '#' + btn.dataset.tab);
+    if (_adminBackBtn) _adminBackBtn.hidden = false;
+    _adminActivateTab(btn.dataset.tab);
   });
 });
+
+window.addEventListener('popstate', e => {
+  _adminNavDepth = e.state?.d ?? 0;
+  if (_adminBackBtn) _adminBackBtn.hidden = (_adminNavDepth === 0);
+  const tab = e.state?.tab;
+  if (tab) _adminActivateTab(tab);
+});
+
+if (_adminBackBtn) {
+  _adminBackBtn.addEventListener('click', () => history.back());
+}
 
 // ── Directorates (shared lookup) ──────────────────────────────────────────────
 async function loadDirectorates() {

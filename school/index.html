@@ -288,6 +288,9 @@
         <svg class="icon icon-sm"><use href="#ic-bell"/></svg>
         <span class="notif-badge" id="notif-badge" hidden></span>
       </button>
+      <button class="hdr-btn hdr-btn-sm" id="btn-change-pwd" title="تغيير كلمة المرور" aria-label="تغيير كلمة المرور">
+        <svg class="icon icon-sm"><use href="#ic-lock"/></svg>
+      </button>
       <button class="hdr-btn hdr-btn-sm" id="btn-logout" title="تسجيل الخروج" aria-label="تسجيل الخروج">
         <svg class="icon icon-sm"><use href="#ic-logout"/></svg>
       </button>
@@ -311,6 +314,9 @@
 
   <!-- Tab bar (school admin) — 6 tabs, horizontally scrollable -->
   <nav class="tabbar" role="tablist" aria-label="أقسام لوحة المدير">
+    <button class="tab-back-btn" id="btn-back-nav" hidden title="رجوع" aria-label="رجوع">
+      <svg class="icon icon-sm"><use href="#ic-arrow-right"/></svg>
+    </button>
     <button class="tab-btn is-active" id="tab-attendance" role="tab"
             aria-selected="true" data-tab="attendance">
       <svg class="icon"><use href="#ic-clipboard"/></svg>
@@ -2766,6 +2772,56 @@
 
 <!-- Toast zone -->
 <div id="toasts" class="toast-zone" aria-live="polite" aria-atomic="false"></div>
+
+<!-- Change Password Drawer -->
+<div id="pwd-drawer-overlay" class="pwd-overlay" hidden role="dialog" aria-modal="true" aria-label="تغيير كلمة المرور">
+  <aside id="pwd-drawer" class="pwd-drawer">
+    <div class="pwd-drawer-hdr">
+      <button id="btn-close-pwd" class="pwd-close-btn" aria-label="إغلاق">
+        <svg class="icon"><use href="#ic-x"/></svg>
+      </button>
+      <h2 class="pwd-drawer-title">تغيير كلمة المرور</h2>
+    </div>
+    <div class="pwd-drawer-body">
+      <div class="pwd-avatar-wrap">
+        <div class="pwd-avatar">
+          <svg class="icon icon-lg"><use href="#ic-user"/></svg>
+        </div>
+        <p id="pwd-user-info" class="pwd-user-info"></p>
+      </div>
+      <form id="form-pwd" novalidate autocomplete="off">
+        <div class="field">
+          <label class="field-label" for="pwd-current">كلمة المرور الحالية</label>
+          <input id="pwd-current" type="password" class="field-input" autocomplete="current-password" required>
+        </div>
+        <div class="field">
+          <label class="field-label" for="pwd-new">كلمة المرور الجديدة</label>
+          <input id="pwd-new" type="password" class="field-input" autocomplete="new-password" required minlength="8">
+        </div>
+        <div class="field">
+          <label class="field-label" for="pwd-confirm">تأكيد كلمة المرور</label>
+          <input id="pwd-confirm" type="password" class="field-input" autocomplete="new-password" required>
+        </div>
+        <p id="pwd-msg" class="pwd-msg" hidden></p>
+        <button type="submit" id="btn-pwd-save" class="btn btn-primary" style="width:100%;margin-top:8px">
+          حفظ التغييرات
+        </button>
+      </form>
+    </div>
+  </aside>
+</div>
+
+<!-- Logout Confirm Modal -->
+<div id="modal-confirm-logout" class="confirm-modal-overlay" hidden role="dialog" aria-modal="true">
+  <div class="confirm-modal-sheet">
+    <h2 class="confirm-modal-title">تسجيل الخروج</h2>
+    <p class="confirm-modal-sub">هل تريد تسجيل الخروج من بوابة المدرسة؟</p>
+    <div class="confirm-modal-actions">
+      <button type="button" class="btn btn-outline" id="btn-logout-cancel">إلغاء</button>
+      <button type="button" class="btn btn-danger" id="btn-logout-ok">خروج</button>
+    </div>
+  </div>
+</div>
 
 <!-- Load order: Supabase → shared DB → this module -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

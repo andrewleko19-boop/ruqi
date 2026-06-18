@@ -174,7 +174,18 @@ function showApp(session) {
 //  Logout
 // ══════════════════════════════════════════════
 function setupLogout() {
-  document.getElementById('logout-btn').addEventListener('click', async () => {
+  const logoutBtn          = document.getElementById('logout-btn');
+  const modalConfirmLogout = document.getElementById('modal-confirm-logout');
+  const btnLogoutCancel    = document.getElementById('btn-logout-cancel');
+  const btnLogoutOk        = document.getElementById('btn-logout-ok');
+
+  logoutBtn.addEventListener('click', () => { modalConfirmLogout.hidden = false; });
+  btnLogoutCancel.addEventListener('click', () => { modalConfirmLogout.hidden = true; });
+  modalConfirmLogout.addEventListener('click', e => {
+    if (e.target === modalConfirmLogout) modalConfirmLogout.hidden = true;
+  });
+  btnLogoutOk.addEventListener('click', async () => {
+    modalConfirmLogout.hidden = true;
     clearAutoRefresh();
     await logout();
     location.reload();
@@ -1887,19 +1898,43 @@ async function dirEdgeFetch(path, body) {
 }
 
 // ══════════════════════════════════════════════
-//  Tab switching
+//  Tab switching + history
 // ══════════════════════════════════════════════
+let _dirNavDepth = 0;
+const _dirBackBtn = document.getElementById('btn-back-nav');
+
+function _dirActivateTab(tabName) {
+  document.querySelectorAll('.dir-tab-btn').forEach(b => b.classList.remove('is-active'));
+  document.querySelectorAll('.dir-tab-panel').forEach(p => p.classList.remove('is-active'));
+  const btn = document.querySelector(`.dir-tab-btn[data-tab="${tabName}"]`);
+  if (btn) btn.classList.add('is-active');
+  document.getElementById(`dir-tab-${tabName}`)?.classList.add('is-active');
+  if (tabName === 'schools')    loadDirSchools();
+  if (tabName === 'principals') loadDirPrincipals();
+}
+
 function setupDirTabs() {
+  history.replaceState({ tab: 'overview', d: 0 }, '', '#overview');
+
   document.querySelectorAll('.dir-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.dir-tab-btn').forEach(b => b.classList.remove('is-active'));
-      document.querySelectorAll('.dir-tab-panel').forEach(p => p.classList.remove('is-active'));
-      btn.classList.add('is-active');
-      document.getElementById(`dir-tab-${btn.dataset.tab}`)?.classList.add('is-active');
-      if (btn.dataset.tab === 'schools')    loadDirSchools();
-      if (btn.dataset.tab === 'principals') loadDirPrincipals();
+      _dirNavDepth++;
+      history.pushState({ tab: btn.dataset.tab, d: _dirNavDepth }, '', '#' + btn.dataset.tab);
+      if (_dirBackBtn) _dirBackBtn.hidden = false;
+      _dirActivateTab(btn.dataset.tab);
     });
   });
+
+  window.addEventListener('popstate', e => {
+    _dirNavDepth = e.state?.d ?? 0;
+    if (_dirBackBtn) _dirBackBtn.hidden = (_dirNavDepth === 0);
+    const tab = e.state?.tab;
+    if (tab) _dirActivateTab(tab);
+  });
+
+  if (_dirBackBtn) {
+    _dirBackBtn.addEventListener('click', () => history.back());
+  }
 }
 
 // ══════════════════════════════════════════════

@@ -2994,6 +2994,7 @@ window.NSAMS_DB = {
   login,
   logout,
   getCurrentUser,
+  changePassword,
 
   // Schools
   getSchools,
@@ -3497,4 +3498,11 @@ async function getMinistryResultSheets() {
     .order('issued_at', { ascending: false }).limit(500);
   if (error) throw error;
   return data ?? [];
+}
+async function changePassword(email, currentPassword, newPassword) {
+  const { error: reErr } = await db.auth.signInWithPassword({ email, password: currentPassword });
+  if (reErr) return { error: 'كلمة المرور الحالية غير صحيحة' };
+  const { error: upErr } = await db.auth.updateUser({ password: newPassword });
+  if (upErr) return { error: upErr.message };
+  return { ok: true };
 }

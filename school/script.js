@@ -13,13 +13,14 @@ const {
   login,
   logout,
   getCurrentUser,
-  getSchoolById,       // ← NEW: fetches real school row from DB
+  getSchoolById,
   saveAttendance,
   submitReport,
   syncPending,
   getPendingAttendance,
   getPendingReports,
   localDateISO,
+  changePassword,
 } = window.NSAMS_DB;
 
 // ── App state ─────────────────────────────────────────────────────────────────
@@ -741,8 +742,17 @@ function setLoginBusy(busy) {
 }
 
 // ── Logout ────────────────────────────────────────────────────────────────────
-btnLogout.addEventListener('click', async () => {
-  if (!confirm('هل تريد تسجيل الخروج؟')) return;
+const modalConfirmLogout = el('modal-confirm-logout');
+const btnLogoutCancel    = el('btn-logout-cancel');
+const btnLogoutOk        = el('btn-logout-ok');
+
+btnLogout.addEventListener('click', () => { modalConfirmLogout.hidden = false; });
+btnLogoutCancel.addEventListener('click', () => { modalConfirmLogout.hidden = true; });
+modalConfirmLogout.addEventListener('click', e => {
+  if (e.target === modalConfirmLogout) modalConfirmLogout.hidden = true;
+});
+btnLogoutOk.addEventListener('click', async () => {
+  modalConfirmLogout.hidden = true;
   try { await logout(); } catch { /* ignore */ }
   S.user           = null;
   S.school         = null;
@@ -751,9 +761,90 @@ btnLogout.addEventListener('click', async () => {
   showScreen('login');
 });
 
+// ── Change Password Drawer ────────────────────────────────────────────────────
+const pwdOverlay   = el('pwd-drawer-overlay');
+const btnChangePwd = el('btn-change-pwd');
+const btnClosePwd  = el('btn-close-pwd');
+const formPwd      = el('form-pwd');
+const pwdUserInfo  = el('pwd-user-info');
+const pwdMsg       = el('pwd-msg');
+
+function openPwdDrawer() {
+  pwdUserInfo.textContent = S.user?.user?.email ?? '';
+  formPwd.reset();
+  pwdMsg.hidden = true;
+  pwdMsg.className = 'pwd-msg';
+  pwdOverlay.hidden = false;
+  setTimeout(() => el('pwd-current')?.focus(), 50);
+}
+function closePwdDrawer() { pwdOverlay.hidden = true; }
+
+btnChangePwd.addEventListener('click', openPwdDrawer);
+btnClosePwd.addEventListener('click', closePwdDrawer);
+pwdOverlay.addEventListener('click', e => { if (e.target === pwdOverlay) closePwdDrawer(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !pwdOverlay.hidden) closePwdDrawer(); });
+
+formPwd.addEventListener('submit', async e => {
+  e.preventDefault();
+  const cur  = el('pwd-current').value;
+  const nw   = el('pwd-new').value;
+  const conf = el('pwd-confirm').value;
+
+  pwdMsg.hidden = true;
+  pwdMsg.className = 'pwd-msg';
+
+  if (nw.length < 8) {
+    pwdMsg.textContent = 'كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل';
+    pwdMsg.classList.add('is-error'); pwdMsg.hidden = false; return;
+  }
+  if (nw !== conf) {
+    pwdMsg.textContent = 'كلمة المرور الجديدة وتأكيدها غير متطابقين';
+    pwdMsg.classList.add('is-error'); pwdMsg.hidden = false; return;
+  }
+
+  const saveBtn = el('btn-pwd-save');
+  saveBtn.disabled = true;
+
+  const result = await changePassword(S.user?.user?.email ?? '', cur, nw);
+  if (result.error) {
+    pwdMsg.textContent = result.error;
+    pwdMsg.classList.add('is-error'); pwdMsg.hidden = false;
+  } else {
+    pwdMsg.textContent = 'تم تغيير كلمة المرور بنجاح ✓';
+    pwdMsg.classList.add('is-success'); pwdMsg.hidden = false;
+    formPwd.reset();
+    setTimeout(closePwdDrawer, 1600);
+  }
+  saveBtn.disabled = false;
+});
+
+// ── Tab History (back navigation) ─────────────────────────────────────────────
+let _navDepth = 0;
+const backNavBtn = el('btn-back-nav');
+
+function pushTabHistory(tabName) {
+  _navDepth++;
+  history.pushState({ tab: tabName, d: _navDepth }, '', '#' + tabName);
+  if (backNavBtn) backNavBtn.hidden = false;
+}
+
+window.addEventListener('popstate', e => {
+  _navDepth = e.state?.d ?? 0;
+  if (backNavBtn) backNavBtn.hidden = (_navDepth === 0);
+  const tab = e.state?.tab;
+  if (tab) switchTab(tab, true);
+});
+
+if (backNavBtn) {
+  backNavBtn.addEventListener('click', () => history.back());
+}
+
 // ── App init ──────────────────────────────────────────────────────────────────
 async function initApp() {
   showScreen('app');
+  history.replaceState({ tab: 'attendance', d: 0 }, '', '#attendance');
+  _navDepth = 0;
+  if (backNavBtn) backNavBtn.hidden = true;
 
   // ── Fetch real school data from DB (offline-safe) ──────────────────────────
   await loadSchoolData();
@@ -802,7 +893,9 @@ async function initApp() {
   updateConnUI();
 
   // Default to the attendance tab on each app entry; other tabs load lazily.
-  switchTab('attendance');
+  // fromHistory=true: initApp already seeds history via replaceState, so this
+  // initial activation must not push a new state or reveal the back button.
+  switchTab('attendance', true);
   _manageLoaded    = false;
   _subjectsLoaded  = false;
   _mngSubjectsInit = false;
@@ -1354,7 +1447,7 @@ const TABS = {
   personnel:  { tab: tabPersonnel,  view: viewPersonnel },
 };
 
-function switchTab(tab) {
+function switchTab(tab, fromHistory = false) {
   for (const [name, { tab: t, view: v }] of Object.entries(TABS)) {
     const active = name === tab;
     if (v) v.hidden = !active;
@@ -1363,12 +1456,11 @@ function switchTab(tab) {
       t.setAttribute('aria-selected', String(active));
     }
   }
-  // The emergency-report FAB belongs to the attendance view only.
   if (fabReport) fabReport.hidden = tab !== 'attendance';
-  // The «المزيد» hamburger lights up whenever a non-primary section is active,
-  // and the menu closes after a selection.
   if (btnMore) btnMore.classList.toggle('is-active', tab !== 'attendance');
   closeMoreMenu();
+
+  if (!fromHistory) pushTabHistory(tab);
 
   if (tab === 'manage'   && !_manageLoaded)  loadManageClasses();
   if (tab === 'manage'   && !_mngSubjectsInit) initManageSubjects();

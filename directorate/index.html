@@ -66,6 +66,9 @@
     <symbol id="icon-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
     </symbol>
+    <symbol id="icon-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 12h14M12 5l7 7-7 7"/>
+    </symbol>
   </svg>
   <link rel="icon" href="../icons/favicon.ico" sizes="any" />
   <link rel="icon" type="image/png" sizes="32x32" href="../icons/favicon-32.png" />
@@ -148,6 +151,9 @@
 
     <!-- شريط التبويبات -->
     <nav class="dir-tab-bar" role="tablist">
+      <button class="tab-back-btn" id="btn-back-nav" hidden title="رجوع" aria-label="رجوع">
+        <svg class="icon icon-sm"><use href="#icon-arrow-right"/></svg>
+      </button>
       <button class="dir-tab-btn is-active" data-tab="overview" role="tab">النظرة العامة</button>
       <button class="dir-tab-btn" data-tab="schools" role="tab">المدارس</button>
       <button class="dir-tab-btn" data-tab="principals" role="tab">المدراء</button>
@@ -852,6 +858,18 @@
     </figure>
     <button class="lightbox-nav lightbox-nav--next" id="lightbox-next" aria-label="التالي">&#10094;</button>
   </div>
+
+<!-- Logout Confirm Modal -->
+<div id="modal-confirm-logout" class="confirm-modal-overlay" hidden role="dialog" aria-modal="true">
+  <div class="confirm-modal-sheet">
+    <h2 class="confirm-modal-title">تسجيل الخروج</h2>
+    <p class="confirm-modal-sub">هل تريد تسجيل الخروج من بوابة المديرية؟</p>
+    <div class="confirm-modal-actions">
+      <button type="button" class="btn btn-outline" id="btn-logout-cancel">إلغاء</button>
+      <button type="button" class="btn btn-danger" id="btn-logout-ok">خروج</button>
+    </div>
+  </div>
+</div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/globe.gl@2"></script>

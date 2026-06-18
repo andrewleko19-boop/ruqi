@@ -193,7 +193,17 @@ loginBtn.addEventListener('click', async () => {
   showDashboard(data.user.email);
 });
 
-logoutBtn.addEventListener('click', async () => {
+const modalConfirmLogout = document.getElementById('modal-confirm-logout');
+const btnLogoutCancel    = document.getElementById('btn-logout-cancel');
+const btnLogoutOk        = document.getElementById('btn-logout-ok');
+
+logoutBtn.addEventListener('click', () => { modalConfirmLogout.hidden = false; });
+btnLogoutCancel.addEventListener('click', () => { modalConfirmLogout.hidden = true; });
+modalConfirmLogout.addEventListener('click', e => {
+  if (e.target === modalConfirmLogout) modalConfirmLogout.hidden = true;
+});
+btnLogoutOk.addEventListener('click', async () => {
+  modalConfirmLogout.hidden = true;
   stopAutoRefresh();
   await supabase.auth.signOut();
   dashboard.classList.add('hidden');

@@ -371,6 +371,13 @@ select.field-input option:disabled { color: var(--clr-text-3); }
   box-shadow: 0 4px 12px rgba(239,68,68,.4);
 }
 
+.btn-outline {
+  background: transparent;
+  border: 1.5px solid var(--clr-border);
+  color: var(--clr-text-2, #475569);
+}
+.btn-outline:hover:not(:disabled) { background: var(--clr-bg, #f8fafc); }
+
 .btn-ghost {
   background: transparent;
   border-color: var(--clr-border);
@@ -1581,3 +1588,97 @@ select.csel-native {
   color: #64748b !important; cursor: not-allowed;
   border-color: var(--clr-border, #e2e8f0) !important;
 }
+
+/* ─── Tab back button ─────────────────────────────────────────────────────── */
+.tab-back-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  width: 36px; height: 36px;
+  border: none; background: var(--clr-bg, #f1f5f9);
+  border-radius: 8px; cursor: pointer;
+  color: var(--clr-primary); transition: background .15s;
+  margin-inline-end: 4px;
+}
+.tab-back-btn:hover { background: var(--clr-primary-dim); }
+.tab-back-btn svg { transform: scaleX(-1); }
+
+/* ─── Change-Password Side Drawer ─────────────────────────────────────────── */
+.pwd-overlay {
+  position: fixed; inset: 0; z-index: 9100;
+  background: rgba(6,15,30,.55);
+  backdrop-filter: blur(4px);
+  display: flex; justify-content: flex-end;
+}
+.pwd-overlay[hidden] { display: none; }
+
+.pwd-drawer {
+  width: min(390px, 100vw); height: 100%;
+  background: var(--clr-surface);
+  border-inline-start: 1px solid var(--clr-border);
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  animation: pwdSlideIn .28s cubic-bezier(.4,0,.2,1);
+}
+@keyframes pwdSlideIn {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+.pwd-drawer-hdr {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--clr-border);
+  position: sticky; top: 0;
+  background: var(--clr-surface); z-index: 1;
+}
+.pwd-drawer-title { flex: 1; font-size: 1.05rem; font-weight: 700; margin: 0; }
+.pwd-close-btn {
+  background: none; border: none; cursor: pointer;
+  padding: 6px; border-radius: 8px; color: var(--clr-text-3);
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.pwd-close-btn:hover { background: var(--clr-border); }
+.pwd-drawer-body {
+  padding: 28px 20px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+.pwd-avatar-wrap {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.pwd-avatar {
+  width: 76px; height: 76px; border-radius: 50%;
+  background: var(--clr-primary-dim);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--clr-primary);
+  box-shadow: 0 0 0 6px rgba(6,182,212,.08);
+}
+.pwd-user-info {
+  font-size: .9rem; color: var(--clr-text-3); text-align: center; margin: 0;
+}
+.pwd-msg { padding: 10px 14px; border-radius: 8px; font-size: .88rem; font-weight: 500; }
+.pwd-msg[hidden] { display: none; }
+.pwd-msg.is-error  { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; }
+.pwd-msg.is-success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; }
+
+/* ─── Logout Confirm Modal ─────────────────────────────────────────────────── */
+.confirm-modal-overlay {
+  position: fixed; inset: 0; z-index: 9200;
+  background: rgba(6,15,30,.6);
+  backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+.confirm-modal-overlay[hidden] { display: none; }
+.confirm-modal-sheet {
+  background: var(--clr-surface, #fff);
+  border-radius: 16px;
+  padding: 28px 24px 20px;
+  width: min(340px, 100%);
+  box-shadow: 0 20px 60px rgba(0,0,0,.3);
+  text-align: center;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.confirm-modal-title { font-size: 1.1rem; font-weight: 700; margin: 0; }
+.confirm-modal-sub   { font-size: .9rem; color: var(--clr-text-3, #666); margin: 0 0 8px; }
+.confirm-modal-actions { display: flex; gap: 10px; margin-top: 4px; }
+.confirm-modal-actions .btn { flex: 1; }
