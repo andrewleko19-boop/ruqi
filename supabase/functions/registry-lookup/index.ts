@@ -55,6 +55,15 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userErr } = await anonClient.auth.getUser(jwt);
     if (userErr || !user) return json({ ok: false, error: `جلسة غير صالحة: ${userErr?.message ?? "no user"}` }, 401);
 
+    // 1b) Role check — only staff roles that legitimately need the registry.
+    const { data: callerRow } = await createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
+    }).from("users").select("role").eq("id", user.id).single();
+    const ALLOWED = new Set(["school_admin", "directorate_user", "ministry_user"]);
+    if (!callerRow || !ALLOWED.has(callerRow.role)) {
+      return json({ ok: false, error: "غير مخوّل للوصول للسجل الوطني" }, 403);
+    }
+
     // 2) Parse and validate the request body.
     const body = await req.json().catch(() => ({}));
     const kind = String(body.kind ?? "").trim();

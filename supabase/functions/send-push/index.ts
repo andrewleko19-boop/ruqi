@@ -171,6 +171,11 @@ Deno.serve(async (req) => {
 
     if (!VAPID_PUBLIC || !VAPID_PRIVATE) return json({ ok: true, skipped: "no VAPID keys" });
 
+    // Only the DB trigger (notify_user via pg_net) may call this function.
+    // It sends the service-role key as Bearer token — verify it matches.
+    const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+    if (!bearer || bearer !== SERVICE_KEY) return json({ error: "غير مصرّح" }, 401);
+
     const { notificationId, recipientId } = await req.json();
     if (!notificationId || !recipientId)  return json({ error: "missing params" }, 400);
 
