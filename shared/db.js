@@ -18,6 +18,12 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 export { db as supabase };
 export { SUPABASE_URL as supabaseUrl };
 
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker
+    .register(new URL('../sw.js', import.meta.url))
+    .catch(err => console.warn('[NSAMS] SW registration failed', err));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Queue helpers (offline support)
 // ─────────────────────────────────────────────────────────────────────────────
