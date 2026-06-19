@@ -1767,25 +1767,30 @@ async function computeStaffDailyCounts(schoolId, date) {
 
 // ─── School admin: daily summary per class ───────────────────────────────────
 async function getSchoolDailySummary(schoolId, date) {
-  const isoDate      = date instanceof Date ? localDateISO(date) : date;
-  const academicYear = getAcademicYear(new Date(isoDate));
+  const isoDate = date instanceof Date ? localDateISO(date) : date;
 
-  const { data: classRows, error: classErr } = await db
+  const { data: allClasses, error: classErr } = await db
     .from('classes')
     .select(`
-      id, grade, section,
+      id, grade, section, academic_year,
       class_teacher!left (
         role,
         teacher_id,
         users:teacher_id ( full_name )
       )
     `)
-    .eq('school_id',    schoolId)
-    .eq('academic_year', academicYear);
+    .eq('school_id', schoolId);
 
   if (classErr) throw classErr;
 
-  const classIds = (classRows ?? []).map(c => c.id);
+  // Use the latest academic_year stored in DB (avoids JS vs SQL year-boundary mismatch)
+  const years = [...new Set((allClasses ?? []).map(c => c.academic_year).filter(Boolean))];
+  const latestYear = years.sort().at(-1) ?? null;
+  const classRows = latestYear
+    ? (allClasses ?? []).filter(c => c.academic_year === latestYear)
+    : (allClasses ?? []);
+
+  const classIds = classRows.map(c => c.id);
   if (classIds.length === 0) return [];
 
   const [subRes, attRes, stuRes] = await Promise.all([
