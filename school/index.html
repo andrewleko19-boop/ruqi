@@ -2649,14 +2649,16 @@
 <style>
 /* ── Class submissions table ──────────────────────────── */
 .csub-row {
-  display: flex; align-items: center; gap: 10px;
-  flex-wrap: wrap; row-gap: 8px;
+  display: flex; flex-direction: column; gap: 8px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--clr-border-lt, #E2E8F0);
   font-size: .875rem;
   cursor: pointer;
 }
 .csub-row:last-child { border-bottom: none; }
+
+.csub-main { display: flex; align-items: center; gap: 10px; }
+.csub-foot { display: flex; align-items: center; gap: 6px; }
 
 .csub-grade {
   min-width: 32px; height: 32px;
@@ -2667,13 +2669,13 @@
   font-weight: 800; font-size: .85rem; flex-shrink: 0;
 }
 .csub-info { flex: 1; min-width: 0; }
-.csub-name { font-weight: 600; color: #0F172A;
-             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.csub-name { font-weight: 600; color: #0F172A; }
 .csub-teacher { font-size: .75rem; color: #94A3B8; margin-top: 1px; }
 
 .csub-stats {
   display: flex; gap: 6px; flex-shrink: 0;
   font-size: .75rem; font-weight: 700;
+  margin-inline-start: auto;
 }
 .cstat-p { color: #10B981; }
 .cstat-a { color: #EF4444; }

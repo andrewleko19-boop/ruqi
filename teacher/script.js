@@ -149,6 +149,7 @@ const submitSpinner  = $('submit-spinner');
 // Reason modal
 const modalReason       = $('modal-reason');
 const reasonStudentName = $('reason-student-name');
+const reasonTitle       = $('reason-title');
 const reasonInput       = $('reason-input');
 const btnReasonCancel   = $('btn-reason-cancel');
 const btnReasonSave     = $('btn-reason-save');
@@ -822,7 +823,15 @@ let _reasonSid = null; // student id being edited
 
 function openReasonModal(sid) {
   _reasonSid = sid;
-  const stu = S.students.find(s => s.id === sid);
+  const stu    = S.students.find(s => s.id === sid);
+  const status = S.attendance[sid]?.status ?? DEFAULT_STATUS;
+  const meta = {
+    absent:  ['سبب الغياب',      'مثال: غائب بسبب المرض (إفادة طبية)'],
+    late:    ['سبب التأخير',     'مثال: تأخّر بسبب ازدحام الطريق'],
+    excused: ['سبب الغياب بعذر', 'مثال: مغادرة مبكّرة بإذن وليّ الأمر'],
+  }[status] ?? ['الملاحظة', 'اكتب ملاحظة…'];
+  reasonTitle.textContent     = meta[0];
+  reasonInput.placeholder     = meta[1];
   reasonStudentName.textContent = stu?.full_name ?? '—';
   reasonInput.value = S.attendance[sid]?.reason ?? '';
   show(modalReason);

@@ -1092,14 +1092,18 @@ function buildClassRow(s) {
   div.dataset.classId = s.classId;
   div.dataset.status  = status;
   div.innerHTML = `
-    <div class="csub-grade">${s.grade}</div>
-    <div class="csub-info">
-      <div class="csub-name">${escapeHtml(s.displayName)}</div>
-      <div class="csub-teacher">${escapeHtml(s.teacherName)}</div>
+    <div class="csub-main">
+      <div class="csub-grade">${s.grade}</div>
+      <div class="csub-info">
+        <div class="csub-name">${escapeHtml(s.displayName)}</div>
+        <div class="csub-teacher">${escapeHtml(s.teacherName)}</div>
+      </div>
+      <div class="csub-stats">${statsHtml}</div>
     </div>
-    <div class="csub-stats">${statsHtml}</div>
-    <span class="csub-badge ${badgeCls}">${badgeTxt}</span>
-    ${actionsHtml}
+    <div class="csub-foot">
+      <span class="csub-badge ${badgeCls}">${badgeTxt}</span>
+      ${actionsHtml}
+    </div>
   `;
   return div;
 }
