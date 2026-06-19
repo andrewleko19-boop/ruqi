@@ -610,10 +610,11 @@ select.field-input option:disabled { color: var(--clr-text-3); }
   border: 1px solid var(--clr-border-lt);
   box-shadow: 0 2px 14px rgba(10,22,40,.08);
   padding: 22px 20px 20px;
-  margin-top: -34px;          /* emerges upward over the header wave */
+  margin-top: -28px;
   position: relative;
-  z-index: 18;                /* above .header-wave (z-index 15) */
+  z-index: 18;
 }
+.csub-row[hidden] { display: none; }
 
 .status-header-row {
   display: flex; align-items: center; gap: 14px;
@@ -1256,7 +1257,7 @@ select.field-input option:disabled { color: var(--clr-text-3); }
 
 @media (min-width: 600px) {
   :root { --page-px: 20px; }
-  .header-school { max-width: 100%; }
+  .school-name { max-width: 100%; }
 }
 /* ═══ Header Wave Transition ════════════════════════════════════════════════ */
 .header-wave {
