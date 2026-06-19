@@ -843,7 +843,7 @@ if (backNavBtn) {
 // ── App init ──────────────────────────────────────────────────────────────────
 async function initApp() {
   showScreen('app');
-  history.replaceState({ tab: 'home', d: 0 }, '', '#home');
+  history.replaceState({ tab: 'attendance', d: 0 }, '', '#attendance');
   _navDepth = 0;
   if (backNavBtn) backNavBtn.hidden = true;
 
@@ -893,10 +893,10 @@ async function initApp() {
   resetReportForm();
   updateConnUI();
 
-  // Default to the home tab on each app entry; other tabs load lazily.
+  // Default to the attendance tab on each app entry; other tabs load lazily.
   // fromHistory=true: initApp already seeds history via replaceState, so this
   // initial activation must not push a new state or reveal the back button.
-  switchTab('home', true);
+  // Flags reset BEFORE switchTab so the first switch sees fresh state.
   _manageLoaded    = false;
   _subjectsLoaded  = false;
   _mngSubjectsInit = false;
@@ -905,6 +905,7 @@ async function initApp() {
   _registryLoaded  = false;
   _statementLoaded = false;
   _lookupCache     = {};
+  switchTab('attendance', true);
 
   // Kick off sync of any offline-queued records
   await doSync();
@@ -1013,6 +1014,36 @@ async function loadClassSummaries() {
     }
     show(clasSubList);
 
+    // Update the overview card counters and date
+    const ovDate = el('att-overview-date');
+    if (ovDate) ovDate.textContent = formatDateAr(todayISO());
+
+    const clsConfirmed = summaries.filter(s => (s.submission?.status ?? 'none') === 'confirmed').length;
+    const clsTotal     = summaries.length;
+    const clsPending   = clsTotal - clsConfirmed;
+    if (el('cls-confirmed')) el('cls-confirmed').textContent = clsConfirmed;
+    if (el('cls-pending'))   el('cls-pending').textContent   = clsPending;
+    if (el('cls-total'))     el('cls-total').textContent     = clsTotal;
+
+    // Wire the class filter toggle to .csub-row elements (idempotent)
+    const filterToggle = el('class-filter-toggle');
+    if (filterToggle && !filterToggle.dataset.wired) {
+      filterToggle.dataset.wired = '1';
+      filterToggle.addEventListener('click', (e) => {
+        const btn = e.target.closest('.toggle-btn');
+        if (!btn) return;
+        filterToggle.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const filter = btn.dataset.filter;
+        el('class-sub-list')?.querySelectorAll('.csub-row').forEach(row => {
+          const st = row.dataset.status ?? 'none';
+          row.hidden = filter === 'all'       ? false
+                     : filter === 'confirmed' ? st !== 'confirmed'
+                     : /* pending */           st === 'confirmed';
+        });
+      });
+    }
+
     // Auto-populate aggregate student counts from teacher data
     // Excused (بعذر) counts as attending, NOT absent — matches the system-wide
     // convention (directorate/ministry use attending = present + late + excused).
@@ -1059,6 +1090,7 @@ function buildClassRow(s) {
   const div = document.createElement('div');
   div.className = 'csub-row';
   div.dataset.classId = s.classId;
+  div.dataset.status  = status;
   div.innerHTML = `
     <div class="csub-grade">${s.grade}</div>
     <div class="csub-info">
@@ -1072,136 +1104,57 @@ function buildClassRow(s) {
   return div;
 }
 
-// ── New tabs: الرئيسية / الغياب / التقارير (mockup views) ──────────────────────
-function _summaryStatus(s) {
-  return s.submission?.status ?? 'none';
-}
-
-async function loadHomeView() {
-  const DB = window.NSAMS_DB;
-  const dateEl = el('home-date');
-  if (dateEl) dateEl.textContent = formatDateAr(todayISO());
-  if (!S.school?.id || !DB?.getSchoolDailySummary) return;
-
-  try {
-    const summaries = await DB.getSchoolDailySummary(S.school.id, todayISO());
-    const confirmed = summaries.filter(s => _summaryStatus(s) === 'confirmed').length;
-    const total     = summaries.length;
-    const pending   = total - confirmed;
-
-    if (el('home-confirmed'))     el('home-confirmed').textContent     = confirmed;
-    if (el('home-pending'))       el('home-pending').textContent       = pending;
-    if (el('home-total-classes')) el('home-total-classes').textContent = total;
-
-    const listEl = el('home-class-list');
-    if (!listEl) return;
-    if (summaries.length === 0) {
-      listEl.innerHTML = `<div style="padding:24px 16px;text-align:center;color:#94A3B8;font-size:.85rem">لا توجد صفوف دراسية مسجلة</div>`;
-      return;
-    }
-    listEl.innerHTML = summaries.map(s => {
-      const st = _summaryStatus(s);
-      const pillClass = st === 'confirmed' ? 'pill-done'
-                      : st === 'rejected'  ? 'pill-rejected'
-                      : 'pill-pending';
-      const pillText  = st === 'confirmed' ? 'مكتمل'
-                      : st === 'rejected'  ? 'مُعاد'
-                      : st === 'pending'   ? 'معلّق'
-                      : 'لم يُرسل';
-      return `<div class="class-card" data-status="${st}">
-        <div class="class-icon"><svg class="icon"><use href="#ic-users"/></svg></div>
-        <div class="class-body">
-          <div class="class-name">${escapeHtml(s.displayName)}</div>
-          <div class="class-meta">${s.totalStudents} طالباً • ${escapeHtml(s.teacherName || '—')}</div>
-        </div>
-        <span class="class-pill ${pillClass}">${pillText}</span>
-      </div>`;
-    }).join('');
-
-    // Wire the filter toggle (idempotent — rebuilt each load)
-    const toggle = el('home-filter-toggle');
-    if (toggle && !toggle.dataset.wired) {
-      toggle.dataset.wired = '1';
-      toggle.addEventListener('click', (e) => {
-        const btn = e.target.closest('.toggle-btn');
-        if (!btn) return;
-        toggle.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const filter = btn.dataset.filter;
-        listEl.querySelectorAll('.class-card').forEach(card => {
-          const st = card.dataset.status;
-          card.hidden = filter === 'all'       ? false
-                      : filter === 'confirmed' ? st !== 'confirmed'
-                      : /* pending */           st === 'confirmed';
-        });
-      });
-    }
-  } catch (err) {
-    console.error('[NSAMS] loadHomeView', err);
-  }
-}
-
 async function loadAbsenceView() {
-  const DB = window.NSAMS_DB;
   const listEl = el('absence-history-list');
-  if (!listEl || !S.school?.id || !DB?.getSchoolDailySummary) return;
-
-  const DAY_NAMES = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-  try {
-    const today = new Date();
-    const jobs = [];
-    for (let i = 4; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      const iso = d.toISOString().slice(0, 10);
-      jobs.push(
-        DB.getSchoolDailySummary(S.school.id, iso).then(summaries => {
-          const confirmed = summaries.filter(s => _summaryStatus(s) === 'confirmed').length;
-          const pending   = summaries.length - confirmed;
-          return { label: DAY_NAMES[d.getDay()], confirmed, pending };
-        })
-      );
-    }
-    const rows = await Promise.all(jobs);
-    listEl.innerHTML = rows.map(r => `
+  if (!listEl) return;
+  if (Object.keys(_summaryByClass).length === 0) {
+    await loadClassSummaries();
+  }
+  const summaries = Object.values(_summaryByClass);
+  if (summaries.length === 0) {
+    listEl.innerHTML = `<div style="text-align:center;padding:24px;color:#94A3B8">لا توجد بيانات لليوم</div>`;
+    return;
+  }
+  const submitted = summaries.filter(s => s.submission).sort((a, b) => b.stats.absent - a.stats.absent);
+  listEl.innerHTML = submitted.length === 0
+    ? `<div style="text-align:center;padding:24px;color:#94A3B8">لم يُرسل أيّ معلم كشفه بعد</div>`
+    : submitted.map(s => `
       <div class="absence-day-row">
-        <span class="absence-day-label">${r.label}</span>
+        <span class="absence-day-label">${escapeHtml(s.displayName)}</span>
         <div class="absence-badges">
-          <span class="class-pill pill-done">${r.confirmed} مكتمل</span>
-          ${r.pending > 0 ? `<span class="class-pill pill-pending">${r.pending} معلّق</span>` : ''}
+          ${s.stats.present > 0 ? `<span class="class-pill pill-done">${s.stats.present} حاضر</span>` : ''}
+          ${s.stats.absent  > 0 ? `<span class="class-pill pill-rejected">${s.stats.absent} غائب</span>` : ''}
+          ${s.stats.late    > 0 ? `<span class="class-pill pill-pending">${s.stats.late} متأخر</span>` : ''}
         </div>
       </div>`).join('');
-  } catch (err) {
-    console.error('[NSAMS] loadAbsenceView', err);
-  }
 }
 
 async function loadSummaryReports() {
-  const DB = window.NSAMS_DB;
   const bodyEl  = el('summary-reports-body');
   const monthEl = el('reports-month');
   if (monthEl) monthEl.textContent = formatDateAr(todayISO());
-  if (!bodyEl || !S.school?.id || !DB?.getSchoolDailySummary) return;
-
-  try {
-    const summaries = await DB.getSchoolDailySummary(S.school.id, todayISO());
-    const confirmed = summaries.filter(s => _summaryStatus(s) === 'confirmed').length;
-    const total     = summaries.length;
-    const pct       = total > 0 ? Math.round(confirmed / total * 100) : 0;
-    const students  = summaries.reduce((a, s) => a + (s.totalStudents || 0), 0);
-    const rows = [
-      { label: 'نسبة تسليم الكشوف اليوم', val: pct + '٪',                color: '#2563eb' },
-      { label: 'الصفوف التي سلّمت',        val: `${confirmed} / ${total}`, color: '#16a34a' },
-      { label: 'إجمالي الطلاب',            val: students,                  color: '#7c3aed' },
-    ];
-    bodyEl.innerHTML = rows.map(r => `
-      <div class="report-row">
-        <span class="report-row-label">${r.label}</span>
-        <span class="report-row-value" style="color:${r.color}">${r.val}</span>
-      </div>`).join('');
-  } catch (err) {
-    console.error('[NSAMS] loadSummaryReports', err);
+  if (!bodyEl) return;
+  if (Object.keys(_summaryByClass).length === 0) {
+    await loadClassSummaries();
   }
+  const summaries  = Object.values(_summaryByClass);
+  const confirmed  = summaries.filter(s => s.submission?.status === 'confirmed').length;
+  const total      = summaries.length;
+  const pct        = total > 0 ? Math.round(confirmed / total * 100) : 0;
+  const totPresent = summaries.reduce((a, s) => a + s.stats.present + s.stats.late + s.stats.excused, 0);
+  const totAbsent  = summaries.reduce((a, s) => a + s.stats.absent, 0);
+  const totStudents= summaries.reduce((a, s) => a + (s.totalStudents || 0), 0);
+  const rows = [
+    { label: 'نسبة تسليم الكشوف',     val: `${pct}٪ (${confirmed}/${total})`, color: '#2563eb' },
+    { label: 'الطلاب الحاضرون اليوم', val: totPresent,                         color: '#16a34a' },
+    { label: 'الطلاب الغائبون اليوم', val: totAbsent,                          color: '#dc2626' },
+    { label: 'إجمالي الطلاب المسجّلين', val: totStudents,                      color: '#7c3aed' },
+  ];
+  bodyEl.innerHTML = rows.map(r => `
+    <div class="report-row">
+      <span class="report-row-label">${r.label}</span>
+      <span class="report-row-value" style="color:${r.color}">${r.val}</span>
+    </div>`).join('');
 }
 
 // ── Confirm ───────────────────────────────────────────────────────────────────
@@ -1543,8 +1496,6 @@ const tabStatement    = el('tab-statement');
 const viewStatement   = el('view-statement');
 const tabPersonnel    = el('tab-personnel');
 const viewPersonnel   = el('view-personnel');
-const tabHome           = el('tab-home');
-const viewHome          = el('view-home');
 const tabAbsence        = el('tab-absence');
 const viewAbsence       = el('view-absence');
 const tabSummaryReports = el('tab-summary-reports');
@@ -1575,8 +1526,7 @@ let _manageLoaded = false;   // classes dropdown loaded once per session
 let _mngBusy      = false;
 
 const TABS = {
-  home:           { tab: tabHome,           view: viewHome },
-  absence:        { tab: tabAbsence,        view: viewAbsence },
+  absence:           { tab: tabAbsence,        view: viewAbsence },
   'summary-reports': { tab: tabSummaryReports, view: viewSummaryReports },
   attendance: { tab: tabAttendance, view: viewAttendance },
   manage:     { tab: tabManage,     view: viewManage },
@@ -1604,7 +1554,6 @@ function switchTab(tab, fromHistory = false) {
 
   if (!fromHistory) pushTabHistory(tab);
 
-  if (tab === 'home')            loadHomeView();
   if (tab === 'absence')         loadAbsenceView();
   if (tab === 'summary-reports') loadSummaryReports();
   if (tab === 'manage'   && !_manageLoaded)  loadManageClasses();
@@ -1617,7 +1566,6 @@ function switchTab(tab, fromHistory = false) {
   if (tab === 'statement' && !_statementLoaded) initStatementTab();
 }
 
-tabHome?.addEventListener('click',           () => switchTab('home'));
 tabAbsence?.addEventListener('click',        () => switchTab('absence'));
 tabSummaryReports?.addEventListener('click', () => switchTab('summary-reports'));
 tabAttendance.addEventListener('click', () => switchTab('attendance'));

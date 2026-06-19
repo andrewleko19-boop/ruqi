@@ -337,8 +337,8 @@
     <button class="tab-back-btn" id="btn-back-nav" hidden title="رجوع" aria-label="رجوع">
       <svg class="icon icon-sm"><use href="#ic-arrow-right"/></svg>
     </button>
-    <button class="tab-btn is-active" id="tab-home" role="tab"
-            aria-selected="true" data-tab="home">
+    <button class="tab-btn is-active" id="tab-attendance" role="tab"
+            aria-selected="true" data-tab="attendance">
       <svg class="icon"><use href="#ic-home"/></svg>
       الرئيسية
     </button>
@@ -351,11 +351,6 @@
             aria-selected="false" data-tab="summary-reports">
       <svg class="icon"><use href="#ic-bar-chart"/></svg>
       التقارير
-    </button>
-    <button class="tab-btn" id="tab-attendance" role="tab"
-            aria-selected="false" data-tab="attendance">
-      <svg class="icon"><use href="#ic-clipboard"/></svg>
-      الدوام
     </button>
     <button class="tab-btn" id="tab-manage" role="tab"
             aria-selected="false" data-tab="manage">
@@ -406,66 +401,6 @@
     </svg>
   </div>
 
-  <!-- ═══ VIEW: الرئيسية (Mockup Home) ═══════════════════════════════════════ -->
-  <main class="page" id="view-home" role="tabpanel" aria-labelledby="tab-home">
-
-    <div class="status-card-mockup">
-      <div class="status-header-row">
-        <div class="status-icon-grad">
-          <svg class="icon icon-lg"><use href="#ic-clipboard"/></svg>
-        </div>
-        <div>
-          <div class="status-title-lg">تسجيل الحضور اليومي</div>
-          <div class="status-date-sm" id="home-date">—</div>
-        </div>
-      </div>
-
-      <div class="status-toggle" id="home-filter-toggle">
-        <button class="toggle-btn active" data-filter="all">الكل</button>
-        <button class="toggle-btn" data-filter="confirmed">مكتمل ✓</button>
-        <button class="toggle-btn" data-filter="pending">معلّق ◌</button>
-      </div>
-
-      <div class="wave-sep" aria-hidden="true">
-        <svg viewBox="0 0 400 20" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M0,10 C50,18 100,2 150,10 C200,18 250,2 300,10 C350,18 380,4 400,10"
-                fill="none" stroke="#3b82f6" stroke-width="1.5" opacity=".6"/>
-        </svg>
-      </div>
-
-      <div class="counters" id="home-counters">
-        <div class="counter counter-green">
-          <span class="counter-num" id="home-confirmed">—</span>
-          <span class="counter-lbl">مكتمل</span>
-        </div>
-        <div class="counter counter-red">
-          <span class="counter-num" id="home-pending">—</span>
-          <span class="counter-lbl">معلّق</span>
-        </div>
-        <div class="counter counter-blue">
-          <span class="counter-num" id="home-total-classes">—</span>
-          <span class="counter-lbl">الإجمالي</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="palette-strip" aria-hidden="true">
-      <span style="background:#0a1628"></span>
-      <span style="background:#1a2744"></span>
-      <span style="background:#1e3a5f"></span>
-      <span style="background:#2563eb"></span>
-      <span style="background:#3b82f6"></span>
-      <span style="background:#60a5fa"></span>
-    </div>
-
-    <div class="section-label">الصفوف الدراسية</div>
-    <div id="home-class-list" class="home-class-list">
-      <div class="dskel" style="height:60px;border-radius:11px"></div>
-      <div class="dskel" style="height:60px;border-radius:11px;opacity:.7"></div>
-      <div class="dskel" style="height:60px;border-radius:11px;opacity:.4"></div>
-    </div>
-  </main><!-- /view-home -->
-
   <!-- ═══ VIEW: الغياب (Absence History) ═════════════════════════════════════ -->
   <main class="page" id="view-absence" role="tabpanel" aria-labelledby="tab-absence" hidden>
     <div class="status-card-mockup">
@@ -506,7 +441,48 @@
     </div>
   </main><!-- /view-summary-reports -->
 
-  <main class="page" id="view-attendance" role="tabpanel" aria-labelledby="tab-attendance" hidden>
+  <main class="page" id="view-attendance" role="tabpanel" aria-labelledby="tab-attendance">
+
+    <!-- Overview card -->
+    <div class="status-card-mockup">
+      <div class="status-header-row">
+        <div class="status-icon-grad">
+          <svg class="icon icon-lg"><use href="#ic-clipboard"/></svg>
+        </div>
+        <div>
+          <div class="status-title-lg">الحضور اليومي</div>
+          <div class="status-date-sm" id="att-overview-date">—</div>
+        </div>
+      </div>
+
+      <div class="status-toggle" id="class-filter-toggle">
+        <button class="toggle-btn active" data-filter="all">الكل</button>
+        <button class="toggle-btn" data-filter="confirmed">مكتمل ✓</button>
+        <button class="toggle-btn" data-filter="pending">معلّق ◌</button>
+      </div>
+
+      <div class="wave-sep" aria-hidden="true">
+        <svg viewBox="0 0 400 20" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M0,10 C50,18 100,2 150,10 C200,18 250,2 300,10 C350,18 380,4 400,10"
+                fill="none" stroke="#3b82f6" stroke-width="1.5" opacity=".6"/>
+        </svg>
+      </div>
+
+      <div class="counters">
+        <div class="counter counter-green">
+          <span class="counter-num" id="cls-confirmed">—</span>
+          <span class="counter-lbl">مكتمل</span>
+        </div>
+        <div class="counter counter-red">
+          <span class="counter-num" id="cls-pending">—</span>
+          <span class="counter-lbl">معلّق</span>
+        </div>
+        <div class="counter counter-blue">
+          <span class="counter-num" id="cls-total">—</span>
+          <span class="counter-lbl">فصل</span>
+        </div>
+      </div>
+    </div>
 
     <!-- Status card -->
     <div id="status-card" class="status-card status-pending">
