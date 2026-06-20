@@ -1658,20 +1658,50 @@ async function getMyStaffAttendanceToday(teacherId) {
   const date = localDateISO();
   const { data, error } = await db
     .from('staff_attendance')
-    .select('status, check_in_original, check_in_adjusted, check_out, late_minutes, source')
+    .select('date, status, check_in_original, check_in_adjusted, check_out, late_minutes, source')
     .eq('teacher_id', teacherId)
     .eq('date', date)
     .maybeSingle();
   if (error) throw error;
-  if (!data) return null;
-  return {
+
+  // Only accept the row if the DB echoes back today's date — guards against any
+  // edge case where a stale cached response slips through.
+  let result = (data && data.date === date) ? {
+    date,
     status:          data.status,
     checkInOriginal: data.check_in_original,
     checkInAdjusted: data.check_in_adjusted,
     checkOut:        data.check_out,
     lateMinutes:     data.late_minutes,
     source:          data.source,
-  };
+  } : null;
+
+  // Merge any pending outbox items for today so that an offline/failed checkout
+  // is immediately reflected without waiting for the next sync.  New items land
+  // in the IDB outbox (via enqueueOutbox), so we read readOutbox() — not the
+  // legacy LS queue read by getPendingStaffAttendance().
+  try {
+    const outbox = await readOutbox();
+    for (const item of outbox) {
+      if (item.table !== 'staff_attendance') continue;
+      if (item.row?.teacher_id !== teacherId || item.row?.date !== date) continue;
+      if (item.op === 'checkin' && !result) {
+        result = {
+          date,
+          status:          item.row.status ?? null,
+          checkInOriginal: item.row.check_in_original,
+          checkInAdjusted: null,
+          checkOut:        null,
+          lateMinutes:     item.row.late_minutes ?? 0,
+          source:          'self',
+        };
+      } else if (item.op === 'checkout' && result) {
+        result = { ...result, checkOut: item.row.check_out };
+      }
+    }
+  } catch { /* outbox read is best-effort; proceed with DB-only result */ }
+
+  return result;
 }
 
 // ── Manager view: every staff member for a date, grouped by category ──

@@ -433,6 +433,15 @@ function fmtTime(iso) {
 function renderDutyCard() {
   if (!dutyCard) return;
   const rec = S.duty;
+
+  // Discard any record that isn't strictly for today — prevents a stale cached
+  // or wrong-date result from enabling checkout on a fresh session.
+  if (rec && rec.date !== todayISO()) {
+    S.duty = null;
+    loadDutyCard().catch(() => {});
+    return;
+  }
+
   const effIn = rec?.checkInAdjusted ?? rec?.checkInOriginal ?? null;
 
   // Status pill
