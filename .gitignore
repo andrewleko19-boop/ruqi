@@ -12,3 +12,6 @@ supabase/.temp/
 supabase/.branches/
 supabase/.env
 **/.env.local
+
+# Test password files — never commit credentials used by TestSprite or manual testing
+*-pass.txt
