@@ -10,7 +10,7 @@
  * which avoids serving a half-updated mix of old HTML + new JS mid-session.
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'nsams-v80';
+const CACHE = 'nsams-v81';
 
 const PRECACHE = [
   './',
@@ -40,6 +40,10 @@ const PRECACHE = [
 ];
 
 self.addEventListener('install', (event) => {
+  // skipWaiting so the new SW takes control immediately on every deploy,
+  // even if an existing tab is open. Required for security/logic fixes in
+  // db.js to reach all clients without waiting for a full tab cycle.
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE).then((cache) =>
       // allSettled: a single 404 must not abort the whole precache.
