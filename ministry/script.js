@@ -56,7 +56,10 @@ const esc = (str) => String(str ?? '')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const fmt  = (n) => (n === null || n === undefined) ? '—' : Number(n).toLocaleString();
 const pct  = (part, total) => total > 0 ? ((part / total) * 100).toFixed(1) + '%' : '—';
-const today = () => new Date().toISOString().split('T')[0];
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
 
 const presentOf  = (agg) => agg.present + agg.late + agg.excused;
 const enrolledOf = (agg) => agg.present + agg.late + agg.excused + agg.absent;

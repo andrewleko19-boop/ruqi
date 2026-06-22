@@ -31,8 +31,11 @@ const JS_FILES = [
   'shared/db.js',
   'school/script.js',
   'directorate/script.js',
+  'directorate/school.js',
   'ministry/script.js',
   'teacher/script.js',
+  'parent/script.js',
+  'admin/script.js',
 ];
 
 // HTML pages that might carry inline <script> blocks.
@@ -40,8 +43,11 @@ const HTML_FILES = [
   'index.html',
   'school/index.html',
   'directorate/index.html',
+  'directorate/school.html',
   'ministry/index.html',
   'teacher/index.html',
+  'parent/index.html',
+  'admin/index.html',
 ];
 
 // Match <script>...</script> blocks but skip ones with src="..." (external).

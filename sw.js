@@ -6,8 +6,6 @@
  *   - Other same-origin GETs: stale-while-revalidate (fast + self-updating).
  *   - Cross-origin (Supabase API, Google Fonts) is left to the network.
  *
- * NOTE: no self.skipWaiting(). A new SW activates only once old tabs close,
- * which avoids serving a half-updated mix of old HTML + new JS mid-session.
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
 const CACHE = 'nsams-v81';
@@ -37,6 +35,8 @@ const PRECACHE = [
   './parent/index.html',
   './parent/script.js',
   './parent/style.css',
+  './icons/apple-touch-icon-180.png',
+  './icons/favicon-32.png',
 ];
 
 self.addEventListener('install', (event) => {

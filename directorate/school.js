@@ -1,5 +1,11 @@
 // directorate/school.js — صفحة ملف المدرسة (drill-down من لوحة المديرية)
 // الجلسة مشتركة مع اللوحة (LAYER يُكتشف من مقطع المسار /directorate/)
+if (!window.NSAMS_DB) {
+  document.body.innerHTML =
+    '<p style="padding:24px;color:#EF4444;font-family:sans-serif;direction:rtl">' +
+    'خطأ: تعذّر تحميل طبقة البيانات. تأكد من تضمين shared/db.js قبل هذا الملف.</p>';
+  throw new Error('window.NSAMS_DB is not defined');
+}
 const {
   logout,
   getCurrentUser,
@@ -313,7 +319,7 @@ async function countWorkingDays(daysBack) {
   for (let i = 1; i <= daysBack; i++) {
     d.setDate(d.getDate() - 1);
     const dow = d.getDay(); // 0=Sun … 5=Fri 6=Sat
-    const iso = d.toISOString().slice(0, 10);
+    const iso = localDateISO(d);
     if (dow !== 5 && dow !== 6 && !holidays.has(iso)) count++;
   }
   return count;

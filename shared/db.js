@@ -2740,7 +2740,7 @@ async function flagStudentDropout(studentId, grade) {
   const month = new Date().getMonth() + 1;
   const semester = month >= 9 ? '1' : '2';
   const returnAt = grade <= 9
-    ? new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10)
+    ? localDateISO(new Date(Date.now() + 15 * 86400000))
     : null;
   const { error } = await db.from('students').update({
     dropout_flagged_at: new Date().toISOString(),
