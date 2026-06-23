@@ -198,7 +198,7 @@ Deno.serve(async (req) => {
     });
 
     const [{ data: notif }, { data: subs }, { data: recipient }] = await Promise.all([
-      admin.from("notifications").select("title,body,type").eq("id", notificationId).maybeSingle(),
+      admin.from("notifications").select("title,body,type,entity_id").eq("id", notificationId).maybeSingle(),
       admin.from("push_subscriptions").select("endpoint,p256dh,auth_key").eq("user_id", recipientId),
       admin.from("users").select("role").eq("id", recipientId).maybeSingle(),
     ]);
@@ -217,7 +217,12 @@ Deno.serve(async (req) => {
     };
     const path = PORTAL_BY_ROLE[recipient?.role ?? ""] ?? "";
 
-    const payload = JSON.stringify({ title: notif.title, body: notif.body ?? "", type: notif.type, path });
+    // Stable per-topic tag: re-sends about the same entity replace the old
+    // notification and re-alert (with renotify in the SW) instead of stacking
+    // silently. Distinct events keep distinct tags.
+    const tag = `${notif.type}-${notif.entity_id ?? recipientId}`;
+
+    const payload = JSON.stringify({ title: notif.title, body: notif.body ?? "", type: notif.type, path, tag });
 
     const results = await Promise.allSettled(
       subs.map((s) => sendWebPush(s, payload, VAPID_PUBLIC, VAPID_PRIVATE, VAPID_SUBJECT)),

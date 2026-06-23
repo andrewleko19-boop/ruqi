@@ -8,7 +8,7 @@
  *
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'nsams-v83';
+const CACHE = 'nsams-v84';
 
 const PRECACHE = [
   './',
@@ -115,14 +115,23 @@ self.addEventListener('push', (event) => {
   const data = event.data?.json() ?? {};
   event.waitUntil(
     self.registration.showNotification(data.title || 'رُقِيّ', {
-      body:  data.body || '',
-      icon:  appUrl('icons/icon-192.png'),   // colored app icon (large)
-      badge: appUrl('icons/eagle-mark.png'), // transparent silhouette → crisp white badge
-      dir:   'rtl',
-      lang:  'ar',
+      body:    data.body || '',
+      icon:    appUrl('icons/icon-192.png'),   // colored app icon (large)
+      badge:   appUrl('icons/eagle-mark.png'), // transparent silhouette → crisp white badge
+      dir:     'rtl',
+      lang:    'ar',
+      // Alert hints: vibrate + silent:false raise interruptiveness so Android
+      // shows a heads-up banner and plays the channel sound; tag + renotify make
+      // a re-send about the same thing replace the old one yet still re-alert.
+      vibrate: [200, 100, 200],
+      silent:  false,
+      renotify: true,
+      tag:     data.tag || 'nsams',
+      requireInteraction: false,
+      timestamp: Date.now(),
       // send-push provides `path` (portal folder for the recipient's role); fall
       // back to the app root. `type` is kept for any future finer-grained routing.
-      data:  { url: appUrl(data.path || ''), type: data.type || null },
+      data:    { url: appUrl(data.path || ''), type: data.type || null },
     })
   );
 });

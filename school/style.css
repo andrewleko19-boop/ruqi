@@ -1016,6 +1016,16 @@ select.field-input option:disabled { color: var(--clr-text-3); }
 }
 .done-title { font-weight: 700; font-size: 0.92rem; color: #065f46; }
 .done-sub   { font-size: 0.77rem; color: var(--clr-text-2); margin-top: 2px; }
+.done-details { margin-top: 8px; display: flex; flex-direction: column; gap: 3px; }
+.done-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.75rem;
+  color: var(--clr-text-2);
+}
+.done-row .done-k { font-weight: 600; }
+.done-row .done-v { text-align: left; }
 
 /* ═══ FAB ════════════════════════════════════════════════════════════════════ */
 .fab {

@@ -14,6 +14,7 @@ const {
   logout,
   getCurrentUser,
   getSchoolById,
+  getDailyAttendance,
   saveAttendance,
   submitReport,
   syncPending,
@@ -268,6 +269,7 @@ const btnSubmitAtt  = el('btn-submit-att');
 const attCard       = el('att-card');
 const attDone       = el('att-done');
 const attDoneSub    = el('att-done-sub');
+const attDoneDetails = el('att-done-details');
 
 // Elements – report modal
 const modalReport    = el('modal-report');
@@ -421,6 +423,36 @@ function setStatusPending() {
   statusSub.textContent   = 'يرجى تعبئة النموذج وإرساله قبل نهاية الدوام';
 }
 
+// Render a compact, read-only audit summary of the submitted record.
+function renderAttDetails(rec) {
+  const rows = [
+    ['المعلمون',  `حاضرون ${rec.teachers_present ?? 0} · غائبون ${rec.teachers_absent ?? 0}`],
+    ['الإداريون', `حاضرون ${rec.admins_present ?? 0} · غائبون ${rec.admins_absent ?? 0}`],
+    ['المستخدمون', `حاضرون ${rec.workers_present ?? 0} · غائبون ${rec.workers_absent ?? 0}`],
+    ['الطلاب الحاضرون', String(rec.students_present ?? 0)],
+  ];
+  if (rec.notes) rows.push(['ملاحظات', escapeHtml(rec.notes)]);
+  if (rec.submitted_at) {
+    const d = new Date(rec.submitted_at);
+    const time = d.toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' });
+    rows.push(['وقت الإرسال', `${formatDateAr(localDateISO(d))} — ${time}`]);
+  }
+  return rows
+    .map(([k, v]) => `<div class="done-row"><span class="done-k">${k}</span><span class="done-v">${v}</span></div>`)
+    .join('');
+}
+
+// Switch the attendance tab into its submitted (read-only) confirmation state.
+// Reused by the submit handler and by initApp (restore on reload). DRY.
+function markAttendanceSubmitted(synced, rec) {
+  S.attSubmitted = true;
+  hide(attCard);
+  show(attDone);
+  attDoneSub.textContent = `${formatDateAr(todayISO())} — ${synced ? 'تم الإرسال' : 'محفوظ محلياً'}`;
+  attDoneDetails.innerHTML = rec ? renderAttDetails(rec) : '';
+  setStatusDone(synced);
+}
+
 // ── Teacher counter ───────────────────────────────────────────────────────────
 function animateBump(numEl) {
   numEl.classList.remove('bump');
@@ -521,16 +553,10 @@ btnSubmitAtt.addEventListener('click', async () => {
   try {
     const result = await saveAttendance(record);
 
-    S.attSubmitted = true;
-    hide(attCard);
-    show(attDone);
-    attDoneSub.textContent = `${formatDateAr(todayISO())} — ${
-      result.synced ? 'تم الإرسال' : 'محفوظ محلياً'
-    }`;
-    setStatusDone(result.synced);
+    markAttendanceSubmitted(result.synced, record);
 
     if (result.synced) {
-      toast('تم إرسال سجل الحضور بنجاح', 'success');
+      toast('تم إرسال سجل الحضور بنجاح', 'success', 4000);
     } else {
       toast('حُفظ السجل محلياً وسيُرسل عند توفر الاتصال', 'warning');
       refreshPendingBar();
@@ -878,17 +904,30 @@ async function initApp() {
     }
   })();
 
-  // Reset attendance state
+  // Reset attendance inputs to a clean slate.
   S.absentTeachers = [];
-  S.attSubmitted   = false;
-  show(attCard);
-  hide(attDone);
   inStuPresent.value = '0';
   inStuAbsent.value  = '0';
   inNotes.value      = '';
   btnSubmitAtt.disabled = false;
 
-  setStatusPending();
+  // Restore the submitted/pending state from the DB so a successful submit
+  // persists across reloads (no double-submit, no editable zeroed form).
+  let todayRec = null;
+  try {
+    todayRec = await getDailyAttendance(S.school.id, todayISO());
+  } catch (e) {
+    // Offline or fetch error → conservatively show the pending form.
+    console.warn('[NSAMS] getDailyAttendance failed, treating as pending', e);
+  }
+  if (todayRec) {
+    markAttendanceSubmitted(true, todayRec);
+  } else {
+    S.attSubmitted = false;
+    show(attCard);
+    hide(attDone);
+    setStatusPending();
+  }
   renderAbsentList();
   resetReportForm();
   updateConnUI();

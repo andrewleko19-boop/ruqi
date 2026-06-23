@@ -415,6 +415,20 @@ async function getSchoolStatus(schoolId, date) {
   };
 }
 
+// School-admin: fetch today's submitted daily_attendance row (or null). Used to
+// restore the "submitted" confirmation state on reload and show audit details.
+async function getDailyAttendance(schoolId, date) {
+  const iso = date instanceof Date ? localDateISO(date) : date;
+  const { data, error } = await db
+    .from("daily_attendance")
+    .select("teachers_present,teachers_absent,admins_present,admins_absent,workers_present,workers_absent,students_present,notes,submitted_at")
+    .eq("school_id", schoolId)
+    .eq("date", iso)
+    .maybeSingle();
+  if (error) throw error;
+  return data; // null when not yet submitted
+}
+
 async function getSchoolById(schoolId) {
   // select('*') so school_type is included once the migration runs, while
   // staying safe (no "column does not exist" error) if it hasn't yet.
@@ -3040,6 +3054,7 @@ window.NSAMS_DB = {
   // Schools
   getSchools,
   getSchoolStatus,
+  getDailyAttendance,
   getSchoolById,
   updateSchool,
 

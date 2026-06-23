@@ -544,7 +544,7 @@ input::placeholder { color: var(--text-muted); }
 }
 .data-table th {
   padding: 0.75rem 1rem;
-  text-align: left;
+  text-align: right;
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
