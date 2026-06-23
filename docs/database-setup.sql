@@ -526,18 +526,19 @@ begin
     v_url := 'https://xocrzpjfvizgnsybegwr.supabase.co';
     v_key := 'YOUR_SB_SECRET_KEY_HERE';
     if v_url is not null and v_key is not null then
-      perform extensions.http_post(
+      -- pg_net exposes http_post in the `net` schema (NOT `extensions`, even when
+      -- the extension itself is installed there). Its body parameter is jsonb —
+      -- passing a bytea (e.g. convert_to(...)) raises "function does not exist",
+      -- which the EXCEPTION handler below would silently swallow → no push sent.
+      perform net.http_post(
         url     := v_url || '/functions/v1/send-push',
         headers := jsonb_build_object(
                      'Content-Type',  'application/json',
                      'Authorization', 'Bearer ' || v_key
                    ),
-        body    := convert_to(
-                     jsonb_build_object(
-                       'notificationId', v_notif_id,
-                       'recipientId',    p_recipient_id
-                     )::text,
-                     'utf8'
+        body    := jsonb_build_object(
+                     'notificationId', v_notif_id,
+                     'recipientId',    p_recipient_id
                    ),
         timeout_milliseconds := 3000
       );

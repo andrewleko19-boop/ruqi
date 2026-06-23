@@ -51,21 +51,36 @@ async function buildVapidToken(
   })));
   const sigInput = new TextEncoder().encode(`${header}.${payload}`);
 
-  // VAPID private keys from web-push CLI are raw 32-byte EC scalars, not PKCS8.
-  // Import via JWK by pairing the scalar (d) with x/y extracted from the public key.
-  // The public key is an uncompressed P-256 point: 0x04 || x(32 bytes) || y(32 bytes).
-  const pubBytes = base64urlDecode(publicKeyB64);
-  const x = base64urlEncode(pubBytes.slice(1, 33));
-  const y = base64urlEncode(pubBytes.slice(33, 65));
-  const privateKey = await crypto.subtle.importKey(
-    "jwk",
-    { kty: "EC", crv: "P-256", d: privateKeyB64, x, y, key_ops: ["sign"] },
+  const privateKey = await importVapidPrivateKey(privateKeyB64, publicKeyB64);
+  const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, privateKey, sigInput);
+  return `${header}.${payload}.${base64urlEncode(sig)}`;
+}
+
+// VAPID private keys come in two shapes depending on how they were generated:
+//   • raw 32-byte EC scalar  (web-push CLI, browser-style) → import via JWK
+//   • PKCS8 DER-wrapped key   (Node crypto, openssl)        → import via "pkcs8"
+// Detect by decoded length so either format works.
+async function importVapidPrivateKey(privateKeyB64: string, publicKeyB64: string): Promise<CryptoKey> {
+  const raw = base64urlDecode(privateKeyB64);
+  if (raw.length === 32) {
+    const pub = base64urlDecode(publicKeyB64); // 0x04 || x(32) || y(32)
+    const x = base64urlEncode(pub.slice(1, 33));
+    const y = base64urlEncode(pub.slice(33, 65));
+    return await crypto.subtle.importKey(
+      "jwk",
+      { kty: "EC", crv: "P-256", d: privateKeyB64, x, y, key_ops: ["sign"] },
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["sign"],
+    );
+  }
+  return await crypto.subtle.importKey(
+    "pkcs8",
+    raw,
     { name: "ECDSA", namedCurve: "P-256" },
     false,
     ["sign"],
   );
-  const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, privateKey, sigInput);
-  return `${header}.${payload}.${base64urlEncode(sig)}`;
 }
 
 async function sendWebPush(
@@ -195,12 +210,17 @@ Deno.serve(async (req) => {
       subs.map((s) => sendWebPush(s, payload, VAPID_PUBLIC, VAPID_PRIVATE, VAPID_SUBJECT)),
     );
 
-    const sent = results.filter((r) => r.status === "fulfilled").length;
+    const sent   = results.filter((r) => r.status === "fulfilled").length;
+    const errors = results
+      .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+      .map((r) => String(r.reason?.message ?? r.reason));
+    if (errors.length) console.error("[send-push] failures:", errors);
+
     await admin.from("notifications")
       .update({ push_sent_at: new Date().toISOString() })
       .eq("id", notificationId);
 
-    return json({ ok: true, sent, total: subs.length });
+    return json({ ok: true, sent, total: subs.length, errors });
   } catch (e) {
     console.error("[send-push]", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
