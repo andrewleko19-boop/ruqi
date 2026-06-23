@@ -1388,9 +1388,8 @@ function initNotificationsDir(userId) {
   _dirUnsubNotif = window.NSAMS_DB.subscribeNotifications(userId, (notif) => {
     updateDirNotifBadge(_dirUnreadCount + 1);
     showToast(notif.title, notif.body ?? '', 'info');
-    if (Notification.permission === 'granted') {
-      new Notification(notif.title, { body: notif.body ?? '', dir: 'rtl', lang: 'ar' });
-    }
+    // OS notifications come from web push (the SW push handler). The page-context
+    // `new Notification()` constructor throws on Android, so it is not used here.
     if (notif.type === 'report_new') loadReports().catch(() => {});
     if (notif.type === 'statement_submitted') loadStatements().catch(() => {});
     if (notif.type === 'result_sheet_submitted') loadResultSheets().catch(() => {});

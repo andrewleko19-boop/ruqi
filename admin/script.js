@@ -248,6 +248,15 @@ function showDashboard(email) {
   hide(loginScreen);
   show(dashboard);
   userEmailEl.textContent = email;
+
+  // Web Push registration (fire-and-forget) — admin users are ministry_user and
+  // must subscribe here to receive OS push notifications.
+  if ('Notification' in window) {
+    Notification.requestPermission().then((perm) => {
+      if (perm === 'granted') window.NSAMS_DB.registerPushSubscription().catch(() => {});
+    });
+  }
+
   loadDirectorates().then(() => {
     loadSchools();
     loadUsers();

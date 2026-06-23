@@ -228,6 +228,14 @@ function showDashboard(email) {
   setTodayLabel();
   loadAllData();
   startAutoRefresh();
+
+  // Web Push registration (fire-and-forget) — ministry_user devices must
+  // subscribe here or they never receive OS push notifications.
+  if ('Notification' in window) {
+    Notification.requestPermission().then((perm) => {
+      if (perm === 'granted') window.NSAMS_DB.registerPushSubscription().catch(() => {});
+    });
+  }
 }
 
 // ── Data Fetching ─────────────────────────────────────────────────────────────

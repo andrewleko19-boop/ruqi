@@ -4428,9 +4428,8 @@ function initNotifications(userId) {
   _unsubNotif = window.NSAMS_DB.subscribeNotifications(userId, (notif) => {
     updateNotifBadge(_unreadCount + 1);
     toast(notif.title, 'info', 5000);
-    if (Notification.permission === 'granted') {
-      new Notification(notif.title, { body: notif.body ?? '', dir: 'rtl', lang: 'ar' });
-    }
+    // OS notifications come from web push (the SW push handler). The page-context
+    // `new Notification()` constructor throws on Android, so it is not used here.
   });
 
   // Web Push registration (fire-and-forget)
