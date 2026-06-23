@@ -33,8 +33,9 @@ function base64urlDecode(s: string): Uint8Array {
   return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 }
 
-function base64urlEncode(buf: ArrayBuffer): string {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+function base64urlEncode(buf: ArrayBuffer | Uint8Array): string {
+  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  return btoa(String.fromCharCode(...bytes))
     .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
@@ -50,9 +51,15 @@ async function buildVapidToken(
   })));
   const sigInput = new TextEncoder().encode(`${header}.${payload}`);
 
+  // VAPID private keys from web-push CLI are raw 32-byte EC scalars, not PKCS8.
+  // Import via JWK by pairing the scalar (d) with x/y extracted from the public key.
+  // The public key is an uncompressed P-256 point: 0x04 || x(32 bytes) || y(32 bytes).
+  const pubBytes = base64urlDecode(publicKeyB64);
+  const x = base64urlEncode(pubBytes.slice(1, 33));
+  const y = base64urlEncode(pubBytes.slice(33, 65));
   const privateKey = await crypto.subtle.importKey(
-    "pkcs8",
-    base64urlDecode(privateKeyB64),
+    "jwk",
+    { kty: "EC", crv: "P-256", d: privateKeyB64, x, y, key_ops: ["sign"] },
     { name: "ECDSA", namedCurve: "P-256" },
     false,
     ["sign"],
@@ -68,19 +75,18 @@ async function sendWebPush(
   vapidPrivate: string,
   vapidSubject: string,
 ): Promise<void> {
-  const url       = new URL(sub.endpoint);
-  const audience  = `${url.protocol}//${url.host}`;
-  const jwt       = await buildVapidToken(audience, vapidSubject, vapidPublic, vapidPrivate);
+  const url      = new URL(sub.endpoint);
+  const audience = `${url.protocol}//${url.host}`;
+  const jwt      = await buildVapidToken(audience, vapidSubject, vapidPublic, vapidPrivate);
 
-  // Encrypt the payload (RFC 8291) ── use the aesgcm variant supported by all browsers.
-  // We rely on the Content-Encoding: aesgcm path for simplicity:
-  // Generate a salt and an ephemeral key pair.
+  // RFC 8291 aes128gcm encryption.
   const salt          = crypto.getRandomValues(new Uint8Array(16));
   const serverKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
-  const serverPublic  = await crypto.subtle.exportKey("raw", serverKeyPair.publicKey);
+  const serverPublic  = new Uint8Array(await crypto.subtle.exportKey("raw", serverKeyPair.publicKey));
 
-  const clientPublic  = await crypto.subtle.importKey(
-    "raw", base64urlDecode(sub.p256dh), { name: "ECDH", namedCurve: "P-256" }, false, [],
+  const clientPublicRaw = base64urlDecode(sub.p256dh);
+  const clientPublic    = await crypto.subtle.importKey(
+    "raw", clientPublicRaw, { name: "ECDH", namedCurve: "P-256" }, false, [],
   );
   const authSecret = base64urlDecode(sub.auth_key);
 
@@ -88,56 +94,49 @@ async function sendWebPush(
     { name: "ECDH", public: clientPublic }, serverKeyPair.privateKey, 256,
   );
 
-  // PRK = HKDF-Extract(auth_secret, sharedBits)  key_length=32
-  const baseHkdf = await crypto.subtle.importKey("raw", sharedBits, "HKDF", false, ["deriveBits"]);
-  const prk = await crypto.subtle.deriveBits(
-    { name: "HKDF", hash: "SHA-256", salt: authSecret, info: new TextEncoder().encode("Content-Encoding: auth\0") },
-    baseHkdf, 256,
+  // Step 1: derive 32-byte IKM from shared secret, keyed by auth secret (RFC 8291 §3.3).
+  const keyInfo  = concatBuffers(
+    new TextEncoder().encode("WebPush: info\x00"),
+    clientPublicRaw,
+    serverPublic,
+  );
+  const sharedKey = await crypto.subtle.importKey("raw", sharedBits, "HKDF", false, ["deriveBits"]);
+  const ikm = await crypto.subtle.deriveBits(
+    { name: "HKDF", hash: "SHA-256", salt: authSecret, info: keyInfo }, sharedKey, 256,
   );
 
-  const prkKey  = await crypto.subtle.importKey("raw", prk, "HKDF", false, ["deriveBits"]);
-  const prkInfo = concatBuffers(
-    new TextEncoder().encode("Content-Encoding: aesgcm\0"),
-    new Uint8Array([0, 65]),
-    new Uint8Array(serverPublic),
-    new Uint8Array([0, 65]),
-    base64urlDecode(sub.p256dh),
-  );
-  const prkInfoKey = new TextEncoder().encode("Content-Encoding: nonce\0");
-  const prkInfoNonce = concatBuffers(
-    prkInfoKey,
-    new Uint8Array([0, 65]),
-    new Uint8Array(serverPublic),
-    new Uint8Array([0, 65]),
-    base64urlDecode(sub.p256dh),
-  );
-
-  const contentEncKey = await crypto.subtle.deriveBits(
-    { name: "HKDF", hash: "SHA-256", salt, info: prkInfo }, prkKey, 128,
+  // Step 2: derive CEK (16 bytes) and nonce (12 bytes) from IKM + random salt.
+  const ikmKey = await crypto.subtle.importKey("raw", ikm, "HKDF", false, ["deriveBits"]);
+  const cek = await crypto.subtle.deriveBits(
+    { name: "HKDF", hash: "SHA-256", salt, info: new TextEncoder().encode("Content-Encoding: aes128gcm\x00") },
+    ikmKey, 128,
   );
   const nonce = await crypto.subtle.deriveBits(
-    { name: "HKDF", hash: "SHA-256", salt, info: prkInfoNonce }, prkKey, 96,
+    { name: "HKDF", hash: "SHA-256", salt, info: new TextEncoder().encode("Content-Encoding: nonce\x00") },
+    ikmKey, 96,
   );
 
-  const aesKey = await crypto.subtle.importKey("raw", contentEncKey, "AES-GCM", false, ["encrypt"]);
-  const enc    = new TextEncoder().encode(payload);
-  // Prepend padding length (uint16 big-endian = 0) per RFC 8291 aesgcm
-  const padded = concatBuffers(new Uint8Array([0, 0]), enc);
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: nonce }, aesKey, padded,
-  );
+  // Encrypt: append 0x02 last-record delimiter (RFC 8188) then AES-128-GCM.
+  const aesKey    = await crypto.subtle.importKey("raw", cek, "AES-GCM", false, ["encrypt"]);
+  const plaintext = concatBuffers(new TextEncoder().encode(payload), new Uint8Array([0x02]));
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, aesKey, plaintext);
 
-  const headers: Record<string, string> = {
-    "Authorization":     `vapid t=${jwt},k=${vapidPublic}`,
-    "Content-Type":      "application/octet-stream",
-    "Content-Encoding":  "aesgcm",
-    "Encryption":        `salt=${base64urlEncode(salt)}`,
-    "Crypto-Key":        `dh=${base64urlEncode(serverPublic)};p256ecdsa=${vapidPublic}`,
-    "TTL":               "86400",
-    "Content-Length":    String(ciphertext.byteLength),
-  };
+  // aes128gcm body: salt(16) || rs_uint32_be(4) || idlen(1=65) || serverPublicKey(65) || ciphertext.
+  const rs = new Uint8Array(4);
+  new DataView(rs.buffer).setUint32(0, 4096, false);
+  const body = concatBuffers(salt, rs, new Uint8Array([65]), serverPublic, new Uint8Array(ciphertext));
 
-  const res = await fetch(sub.endpoint, { method: "POST", headers, body: ciphertext });
+  const res = await fetch(sub.endpoint, {
+    method: "POST",
+    headers: {
+      "Authorization":    `vapid t=${jwt}, k=${vapidPublic}`,
+      "Content-Type":     "application/octet-stream",
+      "Content-Encoding": "aes128gcm",
+      "TTL":              "86400",
+      "Content-Length":   String(body.byteLength),
+    },
+    body,
+  });
   if (!res.ok && res.status !== 201) {
     const text = await res.text().catch(() => "");
     throw new Error(`Push failed ${res.status}: ${text}`);
@@ -145,7 +144,7 @@ async function sendWebPush(
 }
 
 function concatBuffers(...bufs: (ArrayBuffer | Uint8Array)[]): Uint8Array {
-  const total  = bufs.reduce((n, b) => n + (b instanceof Uint8Array ? b.byteLength : b.byteLength), 0);
+  const total  = bufs.reduce((n, b) => n + b.byteLength, 0);
   const result = new Uint8Array(total);
   let   offset = 0;
   for (const b of bufs) {
