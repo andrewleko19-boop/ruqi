@@ -197,14 +197,27 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    const [{ data: notif }, { data: subs }] = await Promise.all([
-      admin.from("notifications").select("title,body").eq("id", notificationId).maybeSingle(),
+    const [{ data: notif }, { data: subs }, { data: recipient }] = await Promise.all([
+      admin.from("notifications").select("title,body,type").eq("id", notificationId).maybeSingle(),
       admin.from("push_subscriptions").select("endpoint,p256dh,auth_key").eq("user_id", recipientId),
+      admin.from("users").select("role").eq("id", recipientId).maybeSingle(),
     ]);
 
     if (!notif || !subs?.length) return json({ ok: true, sent: 0 });
 
-    const payload = JSON.stringify({ title: notif.title, body: notif.body ?? "" });
+    // Map the recipient's role to its portal folder so the SW opens the right
+    // page on click. The SW resolves this against its scope (the /nsams/ base);
+    // an empty string falls back to the app root.
+    const PORTAL_BY_ROLE: Record<string, string> = {
+      school_admin:     "school/",
+      directorate_user: "directorate/",
+      ministry_user:    "ministry/",
+      teacher:          "teacher/",
+      parent:           "parent/",
+    };
+    const path = PORTAL_BY_ROLE[recipient?.role ?? ""] ?? "";
+
+    const payload = JSON.stringify({ title: notif.title, body: notif.body ?? "", type: notif.type, path });
 
     const results = await Promise.allSettled(
       subs.map((s) => sendWebPush(s, payload, VAPID_PUBLIC, VAPID_PRIVATE, VAPID_SUBJECT)),

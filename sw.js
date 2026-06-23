@@ -8,7 +8,7 @@
  *
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'nsams-v82';
+const CACHE = 'nsams-v83';
 
 const PRECACHE = [
   './',
@@ -37,6 +37,8 @@ const PRECACHE = [
   './parent/style.css',
   './icons/apple-touch-icon-180.png',
   './icons/favicon-32.png',
+  './icons/icon-192.png',
+  './icons/eagle-mark.png',
 ];
 
 self.addEventListener('install', (event) => {
@@ -102,23 +104,45 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+// Resolve a path against the SW registration scope so notification assets and
+// click targets are correct under any deploy base — GitHub Pages serves the app
+// under /nsams/, so self.location.origin alone (no /nsams/) would 404.
+function appUrl(path) {
+  return new URL(path || '', self.registration.scope).href;
+}
+
 self.addEventListener('push', (event) => {
   const data = event.data?.json() ?? {};
   event.waitUntil(
     self.registration.showNotification(data.title || 'رُقِيّ', {
       body:  data.body || '',
-      icon:  './icons/apple-touch-icon-180.png',
-      badge: './icons/favicon-32.png',
+      icon:  appUrl('icons/icon-192.png'),   // colored app icon (large)
+      badge: appUrl('icons/eagle-mark.png'), // transparent silhouette → crisp white badge
       dir:   'rtl',
       lang:  'ar',
-      data:  { url: self.location.origin },
+      // send-push provides `path` (portal folder for the recipient's role); fall
+      // back to the app root. `type` is kept for any future finer-grained routing.
+      data:  { url: appUrl(data.path || ''), type: data.type || null },
     })
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(clients.openWindow(event.notification.data?.url || '/'));
+  const base   = appUrl('');
+  const target = event.notification.data?.url || base;
+  event.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    // Reuse an already-open app window; otherwise open a fresh one at the target.
+    for (const w of wins) {
+      if (w.url.startsWith(base)) {
+        await w.focus();
+        if ('navigate' in w && w.url !== target) { try { await w.navigate(target); } catch (_) {} }
+        return;
+      }
+    }
+    await self.clients.openWindow(target);
+  })());
 });
 
 // Background Sync — يوقظ الـ client النشط ليُشغّل syncPendingV2
