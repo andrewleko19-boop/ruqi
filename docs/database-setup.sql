@@ -2985,3 +2985,49 @@ begin
     end if;
   end loop;
 end $$;
+
+-- ════════════════════════════════════════════════════════════════════════════
+--  SECTION 12.3 — Convert application functions to SECURITY INVOKER (lint 0029)
+--
+--  Resolves: 0029_authenticated_security_definer_function_executable
+--
+--  Converts NSAMS application-logic functions to SECURITY INVOKER so they
+--  run with the caller's privileges and are subject to normal RLS.
+--
+--  PERMANENTLY EXCLUDED (remain SECURITY DEFINER):
+--    • 12 RLS helper functions (auth_role, current_user_school_id, etc.) —
+--      called from inside RLS USING clauses; SECURITY INVOKER would cause
+--      infinite policy evaluation loops.
+--    • parent_sync_links — reads auth.users which authenticated cannot access.
+--    • get_school_staff_for_directorate, get_school_assignments_for_directorate —
+--      query staff_records whose RLS intentionally has no directorate SELECT;
+--      these functions provide a curated non-sensitive view via SECURITY DEFINER.
+-- ════════════════════════════════════════════════════════════════════════════
+
+do $$
+declare r record;
+begin
+  for r in
+    select p.oid::regprocedure as sig
+    from   pg_proc      p
+    join   pg_namespace n on n.oid = p.pronamespace
+    where  n.nspname = 'public'
+      and  p.prosecdef
+      and  p.prorettype <> 'pg_catalog.trigger'::regtype
+      and  not exists (
+             select 1 from pg_depend d
+             where d.objid = p.oid and d.deptype = 'e'
+           )
+      and  has_function_privilege('authenticated', p.oid, 'EXECUTE')
+      and  p.proname not in (
+             'auth_role', 'auth_school_id', 'auth_directorate_id',
+             'current_user_role', 'current_user_school_id', 'current_user_directorate_id',
+             'current_user_is_parent', 'teaches_class', 'class_belongs_to_my_school',
+             'class_in_my_school', 'school_in_my_directorate', 'is_principal_in_my_directorate',
+             'parent_sync_links',
+             'get_school_staff_for_directorate', 'get_school_assignments_for_directorate'
+           )
+  loop
+    execute format('alter function %s security invoker', r.sig);
+  end loop;
+end $$;
