@@ -17,6 +17,7 @@ const {
   parentSubmitAbsenceExcuse,
   parentUploadExcusePhoto,
   getAcademicYear,
+  registerPushSubscription,
 } = window.NSAMS_DB;
 
 // ── State ─────────────────────────────────────────────────────────────────
@@ -342,6 +343,38 @@ async function loadApp() {
     toast('تعذَّر تحميل البيانات: ' + err.message, 'error');
   } finally {
     mainLoading.hidden = true;
+  }
+
+  setupPushNotifications();
+}
+
+// ── Web Push: notify the parent when their child is marked absent ───────────
+// granted → register silently. default → show a dismissible banner with an
+// enable button (no forced permission prompt). denied → nothing.
+function setupPushNotifications() {
+  if (!('Notification' in window) || typeof registerPushSubscription !== 'function') return;
+
+  const banner = document.getElementById('push-banner');
+
+  if (Notification.permission === 'granted') {
+    registerPushSubscription().catch(() => {});
+    if (banner) banner.hidden = true;
+    return;
+  }
+
+  if (Notification.permission === 'default' && banner) {
+    banner.hidden = false;
+    const enableBtn = document.getElementById('push-banner-enable');
+    const closeBtn  = document.getElementById('push-banner-close');
+    if (closeBtn) closeBtn.onclick = () => { banner.hidden = true; };
+    if (enableBtn) enableBtn.onclick = async () => {
+      enableBtn.disabled = true;
+      try {
+        const perm = await Notification.requestPermission();
+        if (perm === 'granted') await registerPushSubscription();
+      } catch (_) { /* ignore */ }
+      banner.hidden = true;
+    };
   }
 }
 

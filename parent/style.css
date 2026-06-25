@@ -665,3 +665,31 @@ input, textarea, select { font-family: inherit; }
   .otp-cell { width: 38px; height: 46px; font-size: 1.2rem; }
   .otp-grid { gap: 5px; }
 }
+
+/* ── Push notification banner ───────────────────────────────────────────── */
+.push-banner {
+  display: flex; align-items: center; gap: 10px;
+  justify-content: space-between;
+  margin: 10px 12px 0;
+  padding: 10px 14px;
+  background: var(--clr-primary-lt);
+  border: 1px solid var(--clr-accent);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+.push-banner-text { font-size: .9rem; color: var(--clr-primary-dk); line-height: 1.5; }
+.push-banner-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.push-banner-enable {
+  background: var(--clr-primary); color: #fff; border: none;
+  padding: 7px 16px; border-radius: var(--radius-sm);
+  font-family: inherit; font-size: .88rem; font-weight: 600;
+  cursor: pointer; transition: background var(--transition);
+}
+.push-banner-enable:hover  { background: #1d4ed8; }
+.push-banner-enable:disabled { opacity: .6; cursor: default; }
+.push-banner-close {
+  background: transparent; border: none; color: var(--clr-muted);
+  font-size: 1.4rem; line-height: 1; cursor: pointer;
+  padding: 0 4px; transition: color var(--transition);
+}
+.push-banner-close:hover { color: var(--clr-text); }
