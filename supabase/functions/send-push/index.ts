@@ -215,7 +215,9 @@ Deno.serve(async (req) => {
       teacher:          "teacher/",
       parent:           "parent/",
     };
-    const path = PORTAL_BY_ROLE[recipient?.role ?? ""] ?? "";
+    // Parents live in auth.users only (not public.users), so the role lookup
+    // above returns no row → fall back to the parent portal for absence pushes.
+    const path = PORTAL_BY_ROLE[recipient?.role ?? ""] ?? (notif.type === "student_absent" ? "parent/" : "");
 
     // Stable per-topic tag: re-sends about the same entity replace the old
     // notification and re-alert (with renotify in the SW) instead of stacking

@@ -456,7 +456,9 @@ create extension if not exists pg_cron   schema pg_catalog;
 -- 5.1  جدول اشتراكات Web Push
 create table if not exists public.push_subscriptions (
   id         uuid primary key default gen_random_uuid(),
-  user_id    uuid not null references public.users(id) on delete cascade,
+  -- auth.users (لا public.users): أولياء الأمور موجودون في auth.users فقط.
+  -- متوافق رجعياً للموظفين لأن public.users.id = auth.uid().
+  user_id    uuid not null references auth.users(id) on delete cascade,
   endpoint   text not null unique,
   p256dh     text not null,
   auth_key   text not null,
@@ -477,8 +479,9 @@ grant select                  on public.push_subscriptions to service_role;
 -- 5.2  جدول صندوق الإشعارات
 create table if not exists public.notifications (
   id           uuid primary key default gen_random_uuid(),
-  recipient_id uuid not null references public.users(id) on delete cascade,
-  type         text not null,  -- report_new | report_status | duty_adjusted | attendance_reminder
+  -- auth.users (لا public.users): يشمل أولياء الأمور؛ متوافق رجعياً (public.users.id = auth.uid()).
+  recipient_id uuid not null references auth.users(id) on delete cascade,
+  type         text not null,  -- report_new | report_status | duty_adjusted | attendance_reminder | student_absent
   title        text not null,
   body         text,
   entity       text,
@@ -500,6 +503,53 @@ grant select, insert, update on public.notifications to service_role;
 
 -- تفعيل Realtime (يُرسل INSERT للعميل المشترك فوراً)
 alter publication supabase_realtime add table public.notifications;
+
+-- 5.2b  إعادة توجيه مفاتيح FK إلى auth.users — لدعم إشعارات أولياء الأمور
+--   أولياء الأمور موجودون في auth.users فقط (ليسوا في public.users، عمداً)، بينما
+--   كانت notifications.recipient_id و push_subscriptions.user_id تشيران إلى
+--   public.users(id). نُعيد توجيههما إلى auth.users(id) (مع إبقاء on delete cascade).
+--   متوافق رجعياً تماماً لأن public.users.id = auth.uid(). الـ DO block يكتشف اسم
+--   القيد ديناميكياً (قد يختلف بين القواعد) فيُسقطه ثم يُعيد إنشاءه — idempotent.
+do $$
+declare
+  v_constraint text;
+begin
+  -- notifications.recipient_id → auth.users(id)
+  for v_constraint in
+    select tc.constraint_name
+    from   information_schema.table_constraints tc
+    join   information_schema.key_column_usage  kcu
+           on  kcu.constraint_name   = tc.constraint_name
+           and kcu.constraint_schema = tc.constraint_schema
+    where  tc.constraint_type = 'FOREIGN KEY'
+      and  tc.table_schema    = 'public'
+      and  tc.table_name      = 'notifications'
+      and  kcu.column_name    = 'recipient_id'
+  loop
+    execute format('alter table public.notifications drop constraint %I', v_constraint);
+  end loop;
+  alter table public.notifications
+    add constraint notifications_recipient_id_fkey
+    foreign key (recipient_id) references auth.users(id) on delete cascade;
+
+  -- push_subscriptions.user_id → auth.users(id)
+  for v_constraint in
+    select tc.constraint_name
+    from   information_schema.table_constraints tc
+    join   information_schema.key_column_usage  kcu
+           on  kcu.constraint_name   = tc.constraint_name
+           and kcu.constraint_schema = tc.constraint_schema
+    where  tc.constraint_type = 'FOREIGN KEY'
+      and  tc.table_schema    = 'public'
+      and  tc.table_name      = 'push_subscriptions'
+      and  kcu.column_name    = 'user_id'
+  loop
+    execute format('alter table public.push_subscriptions drop constraint %I', v_constraint);
+  end loop;
+  alter table public.push_subscriptions
+    add constraint push_subscriptions_user_id_fkey
+    foreign key (user_id) references auth.users(id) on delete cascade;
+end $$;
 
 -- 5.3  دالة مساعدة: إدراج إشعار + استدعاء send-push عبر pg_net
 create or replace function public.notify_user(
@@ -675,6 +725,40 @@ select cron.schedule(
   );
   $$
 );
+
+-- 5.8  Trigger ٤ — تسجيل غياب طالب → إشعار أولياء أمره
+--   يُطلق after insert or update على daily_student_attendance. يُشعِر فقط عند
+--   الحالة 'absent' (لا late/excused)، ويمنع التكرار: إن كانت OLD.status='absent'
+--   فلا حدث جديد (إعادة الحفظ بنفس الحالة لا تُرسل إشعاراً ثانياً). يستدعي
+--   notify_user لكل ولي أمر مرتبط بالطالب عبر parent_links.
+create or replace function public._notify_parents_absent()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_name text;
+begin
+  if new.status is distinct from 'absent'      then return new; end if;  -- absent فقط
+  if old.status is not distinct from 'absent'  then return new; end if;  -- منع التكرار
+
+  select full_name into v_name from public.students where id = new.student_id;
+
+  perform public.notify_user(
+    pl.user_id,
+    'student_absent',
+    'تغيّب ' || coalesce(v_name, 'الطالب'),
+    'سُجِّل غياب ابنك/ابنتك بتاريخ ' || new.date::text,
+    'daily_student_attendance',
+    new.id
+  )
+  from public.parent_links pl
+  where pl.student_id = new.student_id;
+
+  return new;
+end; $$;
+
+drop trigger if exists t_notify_parents_absent on public.daily_student_attendance;
+create trigger t_notify_parents_absent
+  after insert or update on public.daily_student_attendance
+  for each row execute function public._notify_parents_absent();
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- 6. التزام المدارس اليومي + تذكير يدوي من المديرية (Phase 1)
