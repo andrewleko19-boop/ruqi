@@ -1864,9 +1864,43 @@ create table if not exists public.student_year_results (
 );
 alter table public.student_year_results enable row level security;
 
+-- القراءة مقيَّدة بالدور (كانت using(true) تُسرّب نتائج كل الطلاب لأي مستخدم مصادَق
+-- بما فيهم أولياء الأمور). نقصر القراءة على: كادر مدرسة الطالب، ومستخدم المديرية
+-- التابعة لها المدرسة، ومستخدم الوزارة، وولي الأمر المرتبط بالطالب فقط.
 drop policy if exists syr_read on public.student_year_results;
 create policy syr_read on public.student_year_results
-  for select to authenticated using (true);
+  for select to authenticated
+  using (
+    -- كادر مدرسة الطالب (نفس نطاق الكتابة)
+    exists (
+      select 1 from public.students s
+      join public.classes c on c.id = s.class_id
+      join public.users   u on u.school_id = c.school_id and u.id = auth.uid()
+      where s.id = student_year_results.student_id
+    )
+    -- مستخدم المديرية: مدارس مديريته فقط
+    or exists (
+      select 1 from public.students s
+      join public.classes c  on c.id  = s.class_id
+      join public.schools sc on sc.id = c.school_id
+      join public.users   me on me.id = auth.uid()
+      where s.id = student_year_results.student_id
+        and me.role = 'directorate_user'
+        and sc.directorate_id = me.directorate_id
+    )
+    -- مستخدم الوزارة: على مستوى القطر
+    or exists (
+      select 1 from public.users me
+      where me.id = auth.uid() and me.role = 'ministry_user'
+    )
+    -- ولي الأمر: أبناؤه المرتبطون فقط
+    or (
+      public.current_user_is_parent() and exists (
+        select 1 from public.parent_links pl
+        where pl.user_id = auth.uid() and pl.student_id = student_year_results.student_id
+      )
+    )
+  );
 
 drop policy if exists syr_write on public.student_year_results;
 create policy syr_write on public.student_year_results
