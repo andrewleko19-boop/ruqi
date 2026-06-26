@@ -63,6 +63,11 @@ Deno.serve(async (req) => {
     if (!profile || profile.role !== "school_admin")
       return json({ error: "هذا الإجراء مخصّص لمدير المدرسة فقط" }, 403);
     const schoolId = profile.school_id;
+    // A school_admin with no school_id must not pass the cross-school checks
+    // below: target.school_id !== schoolId would become null !== null = false,
+    // silently authorizing edits to any school-less user.
+    if (!schoolId)
+      return json({ error: "حساب مدير المدرسة غير مرتبط بمدرسة" }, 403);
 
     // 3) Admin client (service-role) — only used for auth.admin.* operations.
     const admin = createClient(SUPABASE_URL, SERVICE_KEY, {

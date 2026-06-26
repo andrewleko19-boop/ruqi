@@ -57,7 +57,19 @@ async function sha256(text: string): Promise<string> {
 }
 
 function generateOtp(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  // Cryptographically secure 6-digit code. Math.random() is NOT suitable for
+  // security tokens — it is predictable from internal state.
+  const buf = crypto.getRandomValues(new Uint32Array(1));
+  return String(100000 + (buf[0] % 900000));
+}
+
+// Strong random password for the transient sign-in flow below. 256 bits of
+// entropy + a fixed suffix guaranteeing Supabase's character-class requirements.
+function genSecurePassword(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const b64 = btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+  return `${b64}Aa1!`;
 }
 
 Deno.serve(async (req) => {
@@ -83,6 +95,16 @@ Deno.serve(async (req) => {
       const phone = normalizePhone(String(body.phone ?? ""));
       if (!phone.match(/^\+9639[0-9]{8}$/))
         return json({ error: "رقم الهاتف غير صالح (مثال: 0961234567)" }, 400);
+
+      // Rate limit: at most 5 OTP requests per phone per hour. Blocks OTP
+      // flooding and brute-force amplification (issuing many codes then guessing).
+      const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const { count: recentCount } = await admin.from("parent_otps")
+        .select("id", { count: "exact", head: true })
+        .eq("phone", phone)
+        .gt("created_at", since);
+      if ((recentCount ?? 0) >= 5)
+        return json({ error: "تجاوزت الحد المسموح لطلبات الرمز، حاول بعد ساعة" }, 429);
 
       const code = generateOtp();
       const hash = await sha256(code);
@@ -153,7 +175,7 @@ Deno.serve(async (req) => {
       if (existingUser) {
         userId = existingUser.id;
       } else {
-        const tmpPassword = `${phone}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const tmpPassword = genSecurePassword();
         const { data: created, error: createErr } = await admin.auth.admin.createUser({
           email,
           password: tmpPassword,
@@ -198,7 +220,7 @@ Deno.serve(async (req) => {
       });
       if (sessErr || !sessionData) {
         // Fallback: use signInWithPassword with a new random password set now
-        const newPwd = `P${Date.now()}${Math.random().toString(36).slice(2)}!`;
+        const newPwd = genSecurePassword();
         await admin.auth.admin.updateUserById(userId, { password: newPwd });
         const anonClient = createClient(SUPABASE_URL, ANON_KEY);
         const { data: signInData, error: signInErr } = await anonClient.auth.signInWithPassword({ email, password: newPwd });
@@ -233,7 +255,7 @@ Deno.serve(async (req) => {
       }
 
       // Final fallback: set known password and sign in
-      const finalPwd = `Px${Date.now()}${Math.random().toString(36).slice(2)}!`;
+      const finalPwd = genSecurePassword();
       await admin.auth.admin.updateUserById(userId, { password: finalPwd });
       const anonClient2 = createClient(SUPABASE_URL, ANON_KEY);
       const { data: sd2, error: se2 } = await anonClient2.auth.signInWithPassword({ email, password: finalPwd });
