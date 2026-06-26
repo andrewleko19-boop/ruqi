@@ -3044,6 +3044,18 @@ async function parentUploadExcusePhoto(dataUri) {
   return data.publicUrl;
 }
 
+// Canonical HTML escaper for safe interpolation of user/DB text into innerHTML.
+// Escapes the five characters that can break out of element text or attribute
+// contexts. Use this in every portal that builds markup from DB strings.
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 window.NSAMS_DB = {
   // Auth
   login,
@@ -3173,6 +3185,7 @@ window.NSAMS_DB = {
   markAllNotificationsRead,
   subscribeNotifications,
   registerPushSubscription,
+  escapeHtml,
 
   // Holiday calendar
   getHolidays,

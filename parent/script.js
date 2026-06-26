@@ -18,6 +18,7 @@ const {
   parentUploadExcusePhoto,
   getAcademicYear,
   registerPushSubscription,
+  escapeHtml,
 } = window.NSAMS_DB;
 
 // ── State ─────────────────────────────────────────────────────────────────
@@ -386,7 +387,7 @@ function renderChildrenBar() {
     pill.className = 'child-pill' + (i === S.activeIdx ? ' active' : '');
     pill.role = 'listitem';
     pill.innerHTML = `
-      <span>${stu.full_name || 'طالب'}</span>
+      <span>${escapeHtml(stu.full_name || 'طالب')}</span>
       <span class="child-pill-gender">${stu.gender === 'female' ? 'أنثى' : 'ذكر'}</span>
     `;
     pill.addEventListener('click', () => switchChild(i));
@@ -592,7 +593,7 @@ function renderGrades(semester) {
     totalMx += s.totalMax;
     const pct = s.totalMax > 0 ? Math.round(s.totalMark / s.totalMax * 100) : '—';
     return `<tr>
-      <td>${s.name}</td>
+      <td>${escapeHtml(s.name)}</td>
       <td>${s.totalMark}</td>
       <td>${s.totalMax}</td>
       <td>${pct}${typeof pct === 'number' ? '%' : ''}</td>
@@ -652,7 +653,7 @@ function renderHolidays(holidays) {
     }
     return `${monthHeader}<li class="holiday-item">
       <span class="holiday-date">${d.toLocaleDateString('ar-SY', { day: 'numeric', month: 'short' })}</span>
-      <span class="holiday-name">${h.name || 'عطلة رسمية'}</span>
+      <span class="holiday-name">${escapeHtml(h.name || 'عطلة رسمية')}</span>
     </li>`;
   }).join('');
 }
@@ -686,16 +687,21 @@ function renderExcuses() {
   excusesEmpty.hidden = true;
   excusesList.hidden = false;
   const statusLabel = { pending: 'بانتظار المراجعة', accepted: 'مقبول', rejected: 'مرفوض' };
-  excusesList.innerHTML = excuses.map(e => `
+  excusesList.innerHTML = excuses.map(e => {
+    // Constrain status to the known enum before using it in a class name, and
+    // escape all free-text/DB values before injecting them into innerHTML.
+    const status = ['pending', 'accepted', 'rejected'].includes(e.status) ? e.status : 'pending';
+    return `
     <li class="excuse-item">
-      <div class="excuse-status-dot excuse-status-dot--${e.status}"></div>
+      <div class="excuse-status-dot excuse-status-dot--${status}"></div>
       <div class="excuse-body">
-        <div class="excuse-date">${formatDate(e.date)}</div>
-        <div class="excuse-reason">${e.reason}</div>
+        <div class="excuse-date">${escapeHtml(formatDate(e.date))}</div>
+        <div class="excuse-reason">${escapeHtml(e.reason)}</div>
       </div>
-      <span class="excuse-status-label excuse-status-label--${e.status}">${statusLabel[e.status] ?? e.status}</span>
+      <span class="excuse-status-label excuse-status-label--${status}">${escapeHtml(statusLabel[status])}</span>
     </li>
-  `).join('');
+  `;
+  }).join('');
 }
 
 // ── Navigation ────────────────────────────────────────────────────────────
@@ -894,7 +900,7 @@ function fillCertSemester(prefix, rows) {
     totalM  += s.mark;
     totalMx += s.max;
     const pct = s.max > 0 ? Math.round(s.mark / s.max * 100) + '%' : '—';
-    return `<tr><td>${s.name}</td><td>${s.mark}</td><td>${s.max}</td><td>${pct}</td></tr>`;
+    return `<tr><td>${escapeHtml(s.name)}</td><td>${s.mark}</td><td>${s.max}</td><td>${pct}</td></tr>`;
   }).join('');
   $(`${prefix}-max`).textContent = totalMx;
   $(`${prefix}-pct`).textContent = totalMx > 0 ? Math.round(totalM / totalMx * 100) + '%' : '—';
