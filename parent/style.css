@@ -218,7 +218,7 @@ input, textarea, select { font-family: inherit; }
   border-bottom: 1px solid var(--clr-border);
   padding: 10px 16px; overflow-x: auto;
 }
-.children-pills { display: flex; gap: 8px; min-width: max-content; }
+.children-pills { display: flex; gap: 8px; min-width: max-content; list-style: none; }
 .child-pill {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 6px 14px; border-radius: 20px;

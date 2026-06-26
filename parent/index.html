@@ -97,7 +97,7 @@
 
   <!-- ───── مبدّل الأبناء ───── -->
   <div class="children-bar" id="children-bar" hidden>
-    <div class="children-pills" id="children-pills" role="list" aria-label="الأبناء"></div>
+    <ul class="children-pills" id="children-pills" role="list" aria-label="الأبناء"></ul>
   </div>
 
   <!-- ───── شريط تفعيل إشعارات الغياب (مخفي افتراضياً) ───── -->
@@ -289,7 +289,7 @@
             </svg>
             <span>إرفاق صورة</span>
           </div>
-          <img id="photo-preview" class="photo-preview" src="" alt="معاينة الصورة" hidden>
+          <img id="photo-preview" class="photo-preview" alt="معاينة الصورة" hidden>
           <button type="button" class="photo-remove-btn" id="photo-remove-btn" hidden aria-label="حذف الصورة">✕</button>
         </div>
         <!-- Hidden file inputs — one for camera, one for gallery -->
@@ -352,10 +352,12 @@
     <div class="cert-year" id="cert-year"></div>
   </div>
   <table class="cert-info-table">
-    <tr><td class="cert-info-label">اسم الطالب</td><td id="cert-student-name"></td>
-        <td class="cert-info-label">المدرسة</td><td id="cert-school-name"></td></tr>
-    <tr><td class="cert-info-label">الصف</td><td id="cert-class-name"></td>
-        <td class="cert-info-label">السنة الدراسية</td><td id="cert-academic-year"></td></tr>
+    <tbody>
+      <tr><td class="cert-info-label">اسم الطالب</td><td id="cert-student-name"></td>
+          <td class="cert-info-label">المدرسة</td><td id="cert-school-name"></td></tr>
+      <tr><td class="cert-info-label">الصف</td><td id="cert-class-name"></td>
+          <td class="cert-info-label">السنة الدراسية</td><td id="cert-academic-year"></td></tr>
+    </tbody>
   </table>
   <div class="cert-semesters">
     <div class="cert-semester" id="cert-s1-section">

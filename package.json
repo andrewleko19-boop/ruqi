@@ -6,7 +6,7 @@
   "scripts": {
     "check": "npm run check:js && npm run check:html && npm run check:versions && npm run check:manifest",
     "check:js": "node tools/check-js-syntax.mjs",
-    "check:html": "html-validate index.html school/index.html directorate/index.html ministry/index.html teacher/index.html",
+    "check:html": "html-validate index.html school/index.html directorate/index.html directorate/school.html ministry/index.html teacher/index.html parent/index.html admin/index.html",
     "check:versions": "node tools/check-versions.mjs",
     "check:manifest": "node tools/check-manifest.mjs",
     "serve": "npx serve . -l 8000",
