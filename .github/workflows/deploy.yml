@@ -31,15 +31,16 @@ jobs:
       - run: node tools/check-versions.mjs
       - run: node tools/check-manifest.mjs
 
-  deploy:
-    name: Deploy to GitHub Pages
+  # Build and deploy are intentionally separate jobs (GitHub's canonical Pages
+  # pattern). Keeping the artifact upload out of the deploy job means that
+  # clicking "Re-run failed jobs" after a deploy failure re-runs ONLY deploy —
+  # it does not re-upload, so the run never ends up with two artifacts named
+  # "github-pages" (the cause of the past "Multiple artifacts" deploy failure).
+  build:
+    name: Build Pages artifact
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,6 +51,16 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: '.'
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
