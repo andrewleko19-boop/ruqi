@@ -185,12 +185,6 @@
           </tfoot>
         </table>
       </div>
-      <div class="grades-actions">
-        <button type="button" class="btn btn-outline" id="btn-print-cert">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-          طباعة الشهادة
-        </button>
-      </div>
     </div>
 
     <!-- ─── شاشة التقويم ─── -->
@@ -341,46 +335,6 @@
       </button>
     </div>
     <button type="button" class="btn btn-outline btn-full" id="btn-photo-source-cancel">إلغاء</button>
-  </div>
-</div>
-
-<!-- ═════════════════════════════ شهادة الطباعة ══════════════════════════════ -->
-<div id="print-cert" class="print-cert" aria-hidden="true">
-  <div class="cert-header">
-    <div class="cert-ministry">وزارة التربية والتعليم — الجمهورية العربية السورية</div>
-    <h1 class="cert-title">كشف العلامات</h1>
-    <div class="cert-year" id="cert-year"></div>
-  </div>
-  <table class="cert-info-table">
-    <tbody>
-      <tr><td class="cert-info-label">اسم الطالب</td><td id="cert-student-name"></td>
-          <td class="cert-info-label">المدرسة</td><td id="cert-school-name"></td></tr>
-      <tr><td class="cert-info-label">الصف</td><td id="cert-class-name"></td>
-          <td class="cert-info-label">السنة الدراسية</td><td id="cert-academic-year"></td></tr>
-    </tbody>
-  </table>
-  <div class="cert-semesters">
-    <div class="cert-semester" id="cert-s1-section">
-      <h2 class="cert-sem-title">الفصل الأول</h2>
-      <table class="cert-grades-table" id="cert-s1-table">
-        <thead><tr><th>المادة</th><th>الدرجة</th><th>من</th><th>%</th></tr></thead>
-        <tbody id="cert-s1-tbody"></tbody>
-        <tfoot><tr><td class="cert-total-label" colspan="2">المجموع</td><td id="cert-s1-max"></td><td id="cert-s1-pct"></td></tr></tfoot>
-      </table>
-    </div>
-    <div class="cert-semester" id="cert-s2-section">
-      <h2 class="cert-sem-title">الفصل الثاني</h2>
-      <table class="cert-grades-table" id="cert-s2-table">
-        <thead><tr><th>المادة</th><th>الدرجة</th><th>من</th><th>%</th></tr></thead>
-        <tbody id="cert-s2-tbody"></tbody>
-        <tfoot><tr><td class="cert-total-label" colspan="2">المجموع</td><td id="cert-s2-max"></td><td id="cert-s2-pct"></td></tr></tfoot>
-      </table>
-    </div>
-  </div>
-  <div class="cert-footer">
-    <div class="cert-seal">ختم المدرسة</div>
-    <div class="cert-sig">توقيع المدير</div>
-    <div class="cert-date" id="cert-print-date"></div>
   </div>
 </div>
 

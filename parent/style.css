@@ -392,9 +392,6 @@ input, textarea, select { font-family: inherit; }
   border-bottom: none;
 }
 .total-label { text-align: right; }
-.grades-actions { display: flex; justify-content: flex-end; padding-top: 4px; }
-.grades-actions .btn { width: auto; padding: 9px 18px; font-size: .88rem; gap: 6px; }
-.grades-actions .btn svg { width: 17px; height: 17px; flex-shrink: 0; }
 
 /* ── Holidays ───────────────────────────────────────────────────────────── */
 .holidays-list {
@@ -540,45 +537,6 @@ input, textarea, select { font-family: inherit; }
 .toast--info    { background: var(--clr-info); color: #fff; }
 @keyframes toast-in { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   Print Certificate — shown only when printing
-   ══════════════════════════════════════════════════════════════════════════ */
-.print-cert { display: none; }
-
-@media print {
-  /* Hide everything except the certificate */
-  body > *:not(#print-cert) { display: none !important; }
-  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-
-  .print-cert {
-    display: block !important;
-    font-family: 'Segoe UI', 'Cairo', serif;
-    font-size: 12pt; direction: rtl;
-    padding: 20mm; color: #000;
-  }
-  .cert-header {
-    text-align: center; border-bottom: 2px solid #2563eb;
-    padding-bottom: 12pt; margin-bottom: 16pt;
-  }
-  .cert-ministry { font-size: 10pt; color: #555; margin-bottom: 6pt; }
-  .cert-title { font-size: 18pt; font-weight: 900; color: #2563eb; margin-bottom: 4pt; }
-  .cert-year { font-size: 11pt; color: #555; }
-  .cert-info-table { width: 100%; border-collapse: collapse; margin-bottom: 16pt; }
-  .cert-info-table td { padding: 5pt 8pt; border: 1pt solid #ccc; font-size: 11pt; }
-  .cert-info-label { background: #f0f9f4; font-weight: 700; width: 80pt; }
-  .cert-semesters { display: grid; grid-template-columns: 1fr 1fr; gap: 12pt; margin-bottom: 20pt; }
-  .cert-sem-title { font-size: 12pt; font-weight: 700; color: #2563eb; margin-bottom: 6pt; text-align: center; }
-  .cert-grades-table { width: 100%; border-collapse: collapse; font-size: 10pt; }
-  .cert-grades-table th { background: #eff6ff; color: #2563eb; padding: 5pt; border: 1pt solid #ccc; text-align: center; }
-  .cert-grades-table td { padding: 4pt 6pt; border: 1pt solid #ccc; text-align: center; }
-  .cert-grades-table td:first-child { text-align: right; }
-  .cert-grades-table tfoot td { background: #eff6ff; font-weight: 700; }
-  .cert-total-label { text-align: right; }
-  .cert-footer { display: flex; justify-content: space-between; margin-top: 24pt; padding-top: 12pt; border-top: 1pt solid #ccc; }
-  .cert-seal, .cert-sig { border: 1pt solid #ccc; padding: 20pt 30pt; text-align: center; font-size: 10pt; color: #999; }
-  .cert-date { font-size: 10pt; color: #555; align-self: flex-end; }
-}
-
 /* ── Danger Button ──────────────────────────────────────────────────────── */
 .btn-danger {
   background: var(--clr-danger); color: #fff;
@@ -628,6 +586,15 @@ input, textarea, select { font-family: inherit; }
   display: flex; flex-direction: column; gap: 8px;
 }
 .excuse-date-picker-wrap .field-label { margin-bottom: 0; }
+/* Native date inputs render their value LTR; inside the RTL page the day/month/
+   year segments get reordered into a garbled string. Isolate the bidi context
+   and pin the field (and its internal edit fields) to LTR so it reads dd/mm/yyyy. */
+#inp-excuse-date {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+}
+#inp-excuse-date::-webkit-datetime-edit { direction: ltr; unicode-bidi: isolate; text-align: left; }
 
 /* ── Children Pills (active is clearer) ─────────────────────────────────── */
 .child-pill.active {

@@ -101,7 +101,6 @@ const gradesTable   = $('grades-table');
 const gradesTbody   = $('grades-tbody');
 const totalMax      = $('total-max');
 const totalPct      = $('total-pct');
-const btnPrintCert  = $('btn-print-cert');
 
 // Calendar
 const holidaysLoading = $('holidays-loading');
@@ -858,53 +857,6 @@ formExcuse.addEventListener('submit', async e => {
     btnExcuseSubmit.disabled = false;
   }
 });
-
-// ── Print Certificate ─────────────────────────────────────────────────────
-btnPrintCert.addEventListener('click', () => {
-  buildCertificate();
-  window.print();
-});
-
-function buildCertificate() {
-  const stu = S.activeStudent;
-  if (!stu) return;
-  const year = getAcademicYear ? getAcademicYear() : getCurrentAcademicYear();
-  $('cert-student-name').textContent = stu.full_name ?? '—';
-  $('cert-school-name').textContent  = stu.school?.name ?? '—';
-  $('cert-class-name').textContent   = formatClassName(stu.class);
-  $('cert-academic-year').textContent = year;
-  $('cert-year').textContent = `السنة الدراسية ${year}`;
-  $('cert-print-date').textContent = new Date().toLocaleDateString('ar-SY');
-
-  fillCertSemester('cert-s1', S.grades.s1);
-  fillCertSemester('cert-s2', S.grades.s2);
-}
-
-function formatClassName(cls) {
-  if (!cls) return '—';
-  return [cls.grade ? `الصف ${cls.grade}` : '', cls.section ? `/ ${cls.section}` : '', cls.name ? cls.name : ''].filter(Boolean).join(' ') || '—';
-}
-
-function fillCertSemester(prefix, rows) {
-  const bySubject = {};
-  rows.forEach(g => {
-    const k = g.subject_id;
-    if (!bySubject[k]) bySubject[k] = { name: g.subject?.name ?? 'مادة', order: g.subject?.sort_order ?? 99, mark: 0, max: 0 };
-    bySubject[k].mark += (g.mark ?? 0);
-    bySubject[k].max  += (g.component?.max_mark ?? g.subject?.max_total ?? 0);
-  });
-  const subjects = Object.values(bySubject).sort((a, b) => a.order - b.order);
-  let totalM = 0, totalMx = 0;
-  const tbody = $(`${prefix}-tbody`);
-  tbody.innerHTML = subjects.map(s => {
-    totalM  += s.mark;
-    totalMx += s.max;
-    const pct = s.max > 0 ? Math.round(s.mark / s.max * 100) + '%' : '—';
-    return `<tr><td>${escapeHtml(s.name)}</td><td>${s.mark}</td><td>${s.max}</td><td>${pct}</td></tr>`;
-  }).join('');
-  $(`${prefix}-max`).textContent = totalMx;
-  $(`${prefix}-pct`).textContent = totalMx > 0 ? Math.round(totalM / totalMx * 100) + '%' : '—';
-}
 
 // ── Entry ─────────────────────────────────────────────────────────────────
 (async () => {
