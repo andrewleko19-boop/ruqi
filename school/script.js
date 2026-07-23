@@ -2878,6 +2878,12 @@ function classDisplay() {
   return `${gradeNameLabel(c.grade)} / شعبة ${c.section ?? ''}`.trim();
 }
 
+function ordinalAr(n) {
+  const words = ['', 'الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس',
+                 'السابع', 'الثامن', 'التاسع', 'العاشر'];
+  return words[n] || ('الـ ' + n);
+}
+
 function reportCardHtml(card, term) {
   const isS1 = term === 's1';
   const st   = card.student || {};
@@ -2895,20 +2901,40 @@ function reportCardHtml(card, term) {
   const infoGrid =
     '<div class="rc-info">' +
       box('المديرية', info.directorate) +
+      box('المجمّع', S.school?.complex_name) +
       box('المدرسة', S.school?.name) +
       box('الصف', gradeNameLabel(cls.grade)) +
       box('الشعبة', cls.section) +
       box('اسم الطالب', st.full_name, true) +
       box('اسم الأم', st.mother_name) +
-      box('الرقم الوطني', st.national_id) +
       box('تاريخ الميلاد', st.birth_date) +
       box('مكان الميلاد', st.birth_place) +
-      box('رقم القيد', st.card_number) +
-      box('العام الدراسي', info.academicYear) +
+      box('الرقم في السجل العام', st.card_number) +
     '</div>';
 
   // ── جدول الدرجات ──
-  let colgroup, thead, rows;
+  // الصفوف ١–٤: لا تُفصل درجة الأعمال — تُعرض 0 وتوضع العلامة كلها في الامتحان.
+  const gradeNum  = parseInt(cls.grade, 10);
+  const earlyGrade = gradeNum >= 1 && gradeNum <= 4;
+  const workOf = (total, work) => earlyGrade ? (total == null ? null : 0) : work;
+  const examOf = (total, exam) => earlyGrade ? total : exam;
+  // «العظمى / المحصّل» مثل 100 / 93
+  const outOf = (max, mark) => g(max) + ' / ' + g(mark);
+  // مجاميع الأعمدة لصفّ «المجموع»
+  const T = { min:0, max:0, w1:0, e1:0, t1:0, w2:0, e2:0, t2:0, avg:0 };
+  card.subjects.forEach(s => {
+    T.min += Number(s.passMark) || 0;
+    T.max += Number(s.maxTotal) || 0;
+    T.w1  += Number(workOf(s.sem1, s.sem1Work)) || 0;
+    T.e1  += Number(examOf(s.sem1, s.sem1Exam)) || 0;
+    T.t1  += Number(s.sem1) || 0;
+    T.w2  += Number(workOf(s.sem2, s.sem2Work)) || 0;
+    T.e2  += Number(examOf(s.sem2, s.sem2Exam)) || 0;
+    T.t2  += Number(s.sem2) || 0;
+    T.avg += Number(s.mark) || 0;
+  });
+
+  let colgroup, thead, rows, tfoot;
   if (isS1) {
     colgroup = '<colgroup><col class="c-sub"><col class="c-mm"><col class="c-mm">' +
       '<col class="c-g"><col class="c-g"><col class="c-g"></colgroup>';
@@ -2919,9 +2945,12 @@ function reportCardHtml(card, term) {
       '<tr' + (s.passed === false ? ' class="fail"' : '') + '>' +
         '<td class="subject">' + escapeHtml(s.name) + '</td>' +
         '<td>' + g(s.passMark) + '</td><td>' + g(s.maxTotal) + '</td>' +
-        '<td>' + g(s.sem1Work) + '</td><td>' + g(s.sem1Exam) + '</td><td>' + g(s.sem1) + '</td>' +
+        '<td>' + g(workOf(s.sem1, s.sem1Work)) + '</td><td>' + g(examOf(s.sem1, s.sem1Exam)) + '</td><td>' + g(s.sem1) + '</td>' +
       '</tr>'
     ).join('');
+    tfoot = '<tr class="rc-sum"><td class="subject">المجموع</td>' +
+      '<td>' + g(T.min) + '</td><td>' + g(T.max) + '</td>' +
+      '<td>' + g(T.w1) + '</td><td>' + g(T.e1) + '</td><td>' + g(T.t1) + '</td></tr>';
   } else {
     colgroup = '<colgroup><col class="c-sub"><col class="c-mm"><col class="c-mm">' +
       '<col class="c-g"><col class="c-g"><col class="c-g">' +
@@ -2945,11 +2974,16 @@ function reportCardHtml(card, term) {
       return '<tr' + (s.passed === false ? ' class="fail"' : '') + '>' +
         '<td class="subject">' + escapeHtml(s.name) + '</td>' +
         '<td>' + g(s.passMark) + '</td><td>' + g(s.maxTotal) + '</td>' +
-        '<td>' + g(s.sem1Work) + '</td><td>' + g(s.sem1Exam) + '</td><td>' + g(s.sem1) + '</td>' +
-        '<td>' + g(s.sem2Work) + '</td><td>' + g(s.sem2Exam) + '</td><td>' + g(s.sem2) + '</td>' +
-        '<td>' + g(s.mark) + '</td><td>' + verdict + '</td>' +
+        '<td>' + g(workOf(s.sem1, s.sem1Work)) + '</td><td>' + g(examOf(s.sem1, s.sem1Exam)) + '</td><td>' + g(s.sem1) + '</td>' +
+        '<td>' + g(workOf(s.sem2, s.sem2Work)) + '</td><td>' + g(examOf(s.sem2, s.sem2Exam)) + '</td><td>' + g(s.sem2) + '</td>' +
+        '<td>' + outOf(s.maxTotal, s.mark) + '</td><td>' + verdict + '</td>' +
       '</tr>';
     }).join('');
+    tfoot = '<tr class="rc-sum"><td class="subject">المجموع</td>' +
+      '<td>' + g(T.min) + '</td><td>' + g(T.max) + '</td>' +
+      '<td>' + g(T.w1) + '</td><td>' + g(T.e1) + '</td><td>' + g(T.t1) + '</td>' +
+      '<td>' + g(T.w2) + '</td><td>' + g(T.e2) + '</td><td>' + g(T.t2) + '</td>' +
+      '<td>' + outOf(T.max, T.avg) + '</td><td></td></tr>';
   }
 
   // ── النتيجة النهائية ──
@@ -2967,11 +3001,46 @@ function reportCardHtml(card, term) {
     '</div>';
   }
 
-  // ── التذييل: مدير المدرسة + الختم + التاريخ ──
+  // ── سطر إضافي: ترتيب الطالب + ملخّص الدوام والسلوك (للسنة الكاملة فقط) ──
+  let extraRow = '';
+  if (!isS1) {
+    let rankTxt = '—';
+    if (card.finalPercent != null) {
+      // ترتيب تنافسي: ١ + عدد الطلاب الأعلى معدّلاً (المتساوون يتشاركون الرتبة)
+      const higher = (info.students || [])
+        .filter(c => c.finalPercent != null && c.finalPercent > card.finalPercent).length;
+      rankTxt = ordinalAr(higher + 1);
+    }
+    const att     = card.attendancePercent == null ? '—' : fmtNum(card.attendancePercent) + '٪';
+    const conduct = card.conductMark == null ? '—' : fmtNum(card.conductMark);
+    extraRow = '<div class="rc-extra">' +
+      '<div>الترتيب في الصف: <b>' + rankTxt + '</b></div>' +
+      '<div>الدوام: <b>' + att + '</b> &nbsp;·&nbsp; السلوك: <b>' + conduct + '</b></div>' +
+    '</div>';
+  }
+
+  // ── رمز التحقّق QR (يُولَّد محليّاً بلا إنترنت) ──
+  let qrHtml = '';
+  try {
+    if (typeof window !== 'undefined' && typeof window.qrcode === 'function') {
+      const verify = ['NSAMS', S.school?.id || '', card.student?.id || '',
+                      info.academicYear || '',
+                      card.finalPercent == null ? '' : fmtNum(card.finalPercent)].join('|');
+      const q = window.qrcode(0, 'M');
+      q.addData(verify);
+      q.make();
+      qrHtml = '<div class="rc-qr">' +
+        q.createSvgTag({ cellSize: 2, margin: 0, scalable: true }) +
+        '<div class="rc-qr-cap">للتحقّق</div></div>';
+    }
+  } catch (_) { /* بلا رمز إن تعذّر التوليد */ }
+
+  // ── التذييل: مدير المدرسة + الختم + QR + التاريخ ──
   const principal = escapeHtml(S.user?.user?.fullName || '');
   const foot = '<div class="rc-foot">' +
     '<div class="rc-sign"><div class="r">مدير المدرسة</div><div class="n">' + principal + '</div></div>' +
     '<div class="rc-stamp">ختم المدرسة</div>' +
+    qrHtml +
     '<div class="rc-sign"><div class="r">تاريخ الإصدار</div><div class="n">' +
       new Date().toLocaleDateString('ar-SY') + '</div></div>' +
   '</div>';
@@ -2979,26 +3048,36 @@ function reportCardHtml(card, term) {
   const subtitle = (isS1 ? 'شهادة الفصل الأول — ' : '') + 'العام الدراسي ' + escapeHtml(info.academicYear || '');
 
   return '<section class="card-page">' +
-    '<div class="rc-head">' + '%%LOGO%%' +
-      '<div class="rc-titles">' +
-        '<div class="rc-country">الجمهورية العربية السورية</div>' +
-        '<div class="rc-ministry">وزارة التربية والتعليم</div>' +
-        '<h1>الجلاء المدرسي</h1>' +
-        '<div class="rc-year">' + subtitle + '</div>' +
+    '<img class="rc-wm" src="%%WM%%" alt="">' +
+    '<div class="rc-body">' +
+      '<div class="rc-head">' + '%%LOGO%%' +
+        '<div class="rc-titles">' +
+          '<div class="rc-country">الجمهورية العربية السورية</div>' +
+          '<div class="rc-ministry">وزارة التربية والتعليم</div>' +
+          '<h1>الجلاء المدرسي</h1>' +
+          '<div class="rc-year">' + subtitle + '</div>' +
+        '</div>' +
+        '<div class="rc-logo-spacer"></div>' +
       '</div>' +
-      '<div class="rc-logo-spacer"></div>' +
+      infoGrid +
+      '<table class="rc-table">' + colgroup + '<thead>' + thead + '</thead>' +
+        '<tbody>' + rows + '</tbody><tfoot>' + tfoot + '</tfoot></table>' +
+      extraRow +
+      finalRow +
+      foot +
     '</div>' +
-    infoGrid +
-    '<table class="rc-table">' + colgroup + '<thead>' + thead + '</thead><tbody>' + rows + '</tbody></table>' +
-    finalRow +
-    foot +
   '</section>';
 }
 
 async function printReportDoc(win, cards, term = 'year') {
   const logo = await eagleDataUri();
   const logoHtml = logo ? '<img class="logo" src="' + logo + '" alt="">' : '<div class="logo"></div>';
-  const body = cards.map(c => reportCardHtml(c, term).replace('%%LOGO%%', logoHtml)).join('');
+  const body = cards.map(c => {
+    let html = reportCardHtml(c, term).replace('%%LOGO%%', logoHtml);
+    // العلامة المائية: استبدل رمزها بالشعار، أو احذفها إن لم يتوفّر الشعار
+    html = logo ? html.replace(/%%WM%%/g, logo) : html.replace(/<img class="rc-wm"[^>]*>/g, '');
+    return html;
+  }).join('');
 
   win.document.write(
     '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">' +
@@ -3008,8 +3087,11 @@ async function printReportDoc(win, cards, term = 'year') {
     // print-color-adjust:exact يمنع تحوّل الرؤوس الخضراء إلى رمادي عند الطباعة
     '*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}' +
     "body{font-family:'Cairo',Arial,sans-serif;color:#0f172a;margin:0}" +
-    '.card-page{padding:10mm 8mm;page-break-after:always}' +
+    '.card-page{position:relative;padding:10mm 8mm;page-break-after:always;overflow:hidden}' +
     '.card-page:last-child{page-break-after:auto}' +
+    // العلامة المائية: شعار النسر باهتاً خلف المحتوى
+    '.rc-wm{position:absolute;top:50%;left:50%;width:120mm;height:120mm;transform:translate(-50%,-50%);opacity:.05;object-fit:contain;pointer-events:none;z-index:0}' +
+    '.rc-body{position:relative;z-index:1}' +
     '.rc-head{display:flex;align-items:center;gap:12px;border-bottom:3px solid #0f8f7e;padding-bottom:8px;margin-bottom:10px}' +
     '.rc-head .logo{width:64px;height:64px;object-fit:contain;flex-shrink:0}' +
     '.rc-logo-spacer{width:64px;flex-shrink:0}' +
@@ -3040,6 +3122,9 @@ async function printReportDoc(win, cards, term = 'year') {
     '.rc-table td.subject{text-align:right;font-weight:600}' +
     '.rc-table tbody tr:nth-child(even) td{background:#f8fafc}' +
     '.rc-table tr.fail td{color:#dc2626;font-weight:700}' +
+    '.rc-table tfoot tr.rc-sum td{background:#e8f5f2;font-weight:800;color:#0b6d60}' +
+    '.rc-extra{display:flex;justify-content:space-between;gap:12px;margin-top:8px;font-size:11px;color:#334155}' +
+    '.rc-extra b{color:#0b6d60}' +
     '.rc-final-row{display:flex;gap:10px;margin-top:10px}' +
     '.rc-final-box{flex:1;border:1.5px solid #0f8f7e;border-radius:7px;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;font-size:12px}' +
     '.rc-final-box span{font-weight:700;color:#0b6d60}' +
@@ -3049,8 +3134,11 @@ async function printReportDoc(win, cards, term = 'year') {
     '.rc-sign .r{color:#64748b;margin-bottom:4px;white-space:nowrap}' +
     '.rc-sign .n{font-weight:700;border-top:1px dotted #64748b;padding-top:5px;min-width:140px}' +
     '.rc-stamp{width:96px;height:96px;border:1.5px dashed #cbd5e1;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:11px}' +
+    '.rc-qr{text-align:center;flex-shrink:0}' +
+    '.rc-qr svg{width:74px;height:74px;display:block}' +
+    '.rc-qr-cap{font-size:9px;color:#64748b;margin-top:2px}' +
     // أبقِ هذه الكتل في نفس الصفحة (المدير/الختم مع الشهادة)
-    '.rc-table,.rc-final-row,.rc-foot{page-break-inside:avoid}' +
+    '.rc-table,.rc-final-row,.rc-foot,.rc-extra{page-break-inside:avoid}' +
     '@page{size:A4;margin:10mm}' +
     '</style></head><body>' +
     body +
