@@ -263,6 +263,7 @@ function showDashboard(email) {
     populateAuditSchoolFilter();
     loadHolidays();
     loadLookups();
+    loadSubjectCatalog();
   });
 }
 
@@ -1119,6 +1120,163 @@ function closeCredModal() { hide(credModal); }
 credModalClose.addEventListener('click', closeCredModal);
 credModalOk.addEventListener('click',    closeCredModal);
 credModal.addEventListener('click', e => { if (e.target === credModal) closeCredModal(); });
+
+// ══════════════════════════════════════════════
+//  فهرس المواد (subject_catalog) — global, ministry-managed
+// ══════════════════════════════════════════════
+const addSubjectBtn     = document.getElementById('add-subject-btn');
+const subjectsCount     = document.getElementById('subjects-count');
+const subjectsLoading   = document.getElementById('subjects-loading');
+const subjectsTableWrap = document.getElementById('subjects-table-wrap');
+const subjectsEmpty     = document.getElementById('subjects-empty');
+const subjectsTbody     = document.getElementById('subjects-tbody');
+const scModal           = document.getElementById('subject-cat-modal');
+const scModalTitle      = document.getElementById('subject-cat-modal-title');
+const scModalError      = document.getElementById('subject-cat-modal-error');
+const scModalClose      = document.getElementById('subject-cat-modal-close');
+const scModalCancel     = document.getElementById('subject-cat-modal-cancel');
+const scModalSave       = document.getElementById('subject-cat-modal-save');
+const scName            = document.getElementById('sc-name');
+const scArabic          = document.getElementById('sc-arabic');
+const scMath            = document.getElementById('sc-math');
+const scSort            = document.getElementById('sc-sort');
+const scActive          = document.getElementById('sc-active');
+const delScModal        = document.getElementById('delete-subject-cat-modal');
+const delScName         = document.getElementById('del-subject-cat-name');
+const delScError        = document.getElementById('del-subject-cat-error');
+const delScClose        = document.getElementById('del-subject-cat-close');
+const delScCancel       = document.getElementById('del-subject-cat-cancel');
+const delScConfirm      = document.getElementById('del-subject-cat-confirm');
+
+CustomSelect.enhance('sc-active');
+
+let allCatalogSubjects = [];
+let editingCatalogId = null;
+let pendingDeleteCatalogId = null;
+
+async function loadSubjectCatalog() {
+  hide(subjectsTableWrap); hide(subjectsEmpty);
+  show(subjectsLoading);
+  try {
+    const { data, error } = await supabase.from('subject_catalog')
+      .select('id, name, is_core_arabic, is_core_math, sort_order, active')
+      .order('sort_order').order('name');
+    if (error) throw error;
+    allCatalogSubjects = data ?? [];
+  } catch (e) {
+    console.error('[admin] loadSubjectCatalog', e);
+    allCatalogSubjects = [];
+  }
+  hide(subjectsLoading);
+  subjectsCount.textContent = allCatalogSubjects.length;
+  if (!allCatalogSubjects.length) { show(subjectsEmpty); return; }
+
+  subjectsTbody.innerHTML = allCatalogSubjects.map((r, i) => {
+    const tags = [r.is_core_arabic ? 'عربي' : '', r.is_core_math ? 'رياضيات' : ''].filter(Boolean).join('، ') || '—';
+    return `<tr>
+      <td class="muted">${i + 1}</td>
+      <td>${esc(r.name)}${r.active ? '' : ' <span style="color:var(--text-dim)">(معطّلة)</span>'}</td>
+      <td class="muted">${esc(tags)}</td>
+      <td class="muted">${r.sort_order ?? 0}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" data-edit-sc="${esc(r.id)}"><svg width="13" height="13"><use href="#icon-edit"/></svg> تعديل</button>
+        <button class="btn btn-danger btn-sm" data-del-sc="${esc(r.id)}" data-del-name="${esc(r.name)}">حذف</button>
+      </td>
+    </tr>`;
+  }).join('');
+  show(subjectsTableWrap);
+  subjectsTbody.querySelectorAll('[data-edit-sc]').forEach(b => b.addEventListener('click', () => openEditCatalog(b.dataset.editSc)));
+  subjectsTbody.querySelectorAll('[data-del-sc]').forEach(b => b.addEventListener('click', () => openDeleteCatalog(b.dataset.delSc, b.dataset.delName)));
+}
+
+function openAddCatalog() {
+  editingCatalogId = null;
+  scModalTitle.textContent = 'إضافة مادة';
+  scName.value = '';
+  scArabic.checked = false;
+  scMath.checked = false;
+  scSort.value = allCatalogSubjects.length ? (Math.max(...allCatalogSubjects.map(r => r.sort_order || 0)) + 1) : 0;
+  scActive.value = 'true'; CustomSelect.refresh(scActive);
+  clearError(scModalError);
+  show(scModal);
+  scName.focus();
+}
+
+function openEditCatalog(id) {
+  const r = allCatalogSubjects.find(x => x.id === id);
+  if (!r) return;
+  editingCatalogId = id;
+  scModalTitle.textContent = 'تعديل مادة';
+  scName.value = r.name;
+  scArabic.checked = !!r.is_core_arabic;
+  scMath.checked = !!r.is_core_math;
+  scSort.value = r.sort_order ?? 0;
+  scActive.value = r.active ? 'true' : 'false'; CustomSelect.refresh(scActive);
+  clearError(scModalError);
+  show(scModal);
+  scName.focus();
+}
+
+function closeScModal() { hide(scModal); }
+scModalClose.addEventListener('click', closeScModal);
+scModalCancel.addEventListener('click', closeScModal);
+scModal.addEventListener('click', e => { if (e.target === scModal) closeScModal(); });
+addSubjectBtn.addEventListener('click', openAddCatalog);
+
+scModalSave.addEventListener('click', async () => {
+  const name = scName.value.trim();
+  if (!name) { showError(scModalError, 'أدخل اسم المادة.'); return; }
+  const row = {
+    name,
+    is_core_arabic: scArabic.checked,
+    is_core_math:   scMath.checked,
+    sort_order:     Number(scSort.value) || 0,
+    active:         scActive.value === 'true',
+  };
+  scModalSave.disabled = true;
+  try {
+    let error;
+    if (editingCatalogId) {
+      ({ error } = await supabase.from('subject_catalog').update(row).eq('id', editingCatalogId));
+    } else {
+      ({ error } = await supabase.from('subject_catalog').insert(row));
+    }
+    if (error) throw error;
+    closeScModal();
+    await loadSubjectCatalog();
+  } catch (e) {
+    const dup = /duplicate|unique|already/i.test(e.message);
+    showError(scModalError, dup ? 'هذه المادة موجودة مسبقاً.' : e.message);
+  } finally {
+    scModalSave.disabled = false;
+  }
+});
+
+function openDeleteCatalog(id, name) {
+  pendingDeleteCatalogId = id;
+  delScName.textContent = name;
+  clearError(delScError);
+  show(delScModal);
+}
+function closeDelScModal() { hide(delScModal); pendingDeleteCatalogId = null; }
+delScClose.addEventListener('click', closeDelScModal);
+delScCancel.addEventListener('click', closeDelScModal);
+delScModal.addEventListener('click', e => { if (e.target === delScModal) closeDelScModal(); });
+
+delScConfirm.addEventListener('click', async () => {
+  if (!pendingDeleteCatalogId) return;
+  delScConfirm.disabled = true;
+  try {
+    const { error } = await supabase.from('subject_catalog').delete().eq('id', pendingDeleteCatalogId);
+    if (error) throw error;
+    closeDelScModal();
+    await loadSubjectCatalog();
+  } catch (e) {
+    showError(delScError, e.message);
+  } finally {
+    delScConfirm.disabled = false;
+  }
+});
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 checkSession();

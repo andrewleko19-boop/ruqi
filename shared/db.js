@@ -2037,6 +2037,76 @@ async function setSubjectComponents(subjectId, components) {
   return data ?? [];
 }
 
+// ─── Global subject catalog (managed by the supervisor/ministry in admin) ─────
+// A central list of subject names. School admins pick from it per grade; the
+// per-grade `subjects` rows (with their components/max) are created from it.
+// RLS: all authenticated read (active); only ministry_user may write.
+async function getSubjectCatalog() {
+  const { data, error } = await db
+    .from('subject_catalog')
+    .select('id, name, is_core_arabic, is_core_math, sort_order, active')
+    .eq('active', true)
+    .order('sort_order', { ascending: true, nullsFirst: false })
+    .order('name',       { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function createCatalogSubject({ name, isCoreArabic = false, isCoreMath = false, sortOrder = null }) {
+  const { data, error } = await db
+    .from('subject_catalog')
+    .insert({ name: name.trim(), is_core_arabic: isCoreArabic, is_core_math: isCoreMath, sort_order: sortOrder })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data.id;
+}
+
+async function updateCatalogSubject(id, patch) {
+  const row = {};
+  if (patch.name         !== undefined) row.name           = String(patch.name).trim();
+  if (patch.isCoreArabic !== undefined) row.is_core_arabic = patch.isCoreArabic;
+  if (patch.isCoreMath   !== undefined) row.is_core_math   = patch.isCoreMath;
+  if (patch.sortOrder    !== undefined) row.sort_order     = patch.sortOrder;
+  if (patch.active       !== undefined) row.active         = patch.active;
+  const { error } = await db.from('subject_catalog').update(row).eq('id', id);
+  if (error) throw error;
+  return true;
+}
+
+async function deleteCatalogSubject(id) {
+  const { error } = await db.from('subject_catalog').delete().eq('id', id);
+  if (error) throw error;
+  return true;
+}
+
+// School admin: create a grade's subjects from chosen catalog entries. Skips
+// names already present in that grade; seeds default components (editable per
+// grade afterwards). Returns how many were created.
+async function applyCatalogSubjectsToGrade(schoolId, grade, catalogIds) {
+  const ids = new Set(catalogIds ?? []);
+  const [catalog, existing] = await Promise.all([
+    getSubjectCatalog(),
+    getSchoolSubjects(schoolId, grade),
+  ]);
+  const have   = new Set(existing.map(s => (s.name || '').trim()));
+  const chosen = catalog.filter(c => ids.has(c.id) && !have.has((c.name || '').trim()));
+  let created = 0;
+  for (const c of chosen) {
+    const subjectId = await createSubject({
+      schoolId, grade, name: c.name,
+      isCoreArabic: c.is_core_arabic, isCoreMath: c.is_core_math,
+    });
+    await setSubjectComponents(subjectId, [
+      { name: 'مذاكرة',        maxMark: 0 },
+      { name: 'شفهي / وظائف',  maxMark: 0 },
+      { name: 'امتحان فصلي',   maxMark: 100 },
+    ]);
+    created++;
+  }
+  return created;
+}
+
 // ─── Teacher: subjects gradable in a class ───────────────────────────────────
 // Returns ALL active subjects defined for the class's grade, each with its
 // components — the teacher can VIEW any subject's marks. Editing is limited to
@@ -3180,6 +3250,11 @@ window.NSAMS_DB = {
   deleteSubject,
   getSubjectComponents,
   setSubjectComponents,
+  getSubjectCatalog,
+  createCatalogSubject,
+  updateCatalogSubject,
+  deleteCatalogSubject,
+  applyCatalogSubjectsToGrade,
   getClassGradeSubjects,
   getClassGrades,
   saveStudentGrades,

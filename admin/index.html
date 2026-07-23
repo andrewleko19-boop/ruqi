@@ -98,6 +98,7 @@
         <button class="tab-btn" data-tab="audit">سجل التدقيق</button>
         <button class="tab-btn" data-tab="holidays">تقويم العطل</button>
         <button class="tab-btn" data-tab="lookups">القوائم المرجعية</button>
+        <button class="tab-btn" data-tab="subjects">المواد</button>
       </div>
 
       <!-- ══════════════════════════════════════════════
@@ -291,6 +292,35 @@
           </div>
           <div id="lookups-empty" class="table-empty hidden">لا توجد عناصر في هذه القائمة.</div>
           <div id="lookups-hint" class="table-empty hidden">اختر مديرية لعرض مناطقها التعليمية وإدارتها.</div>
+        </div>
+      </div>
+
+      <div id="tab-subjects" class="tab-panel">
+        <div class="section-card">
+          <div class="section-header">
+            <h2>فهرس المواد (<span id="subjects-count">—</span>)</h2>
+            <div class="section-header-actions">
+              <button id="add-subject-btn" class="btn btn-primary btn-sm">
+                <svg width="14" height="14"><use href="#icon-plus"/></svg>
+                إضافة مادة
+              </button>
+            </div>
+          </div>
+          <p class="table-empty" style="text-align:right;color:var(--text-dim);padding:0 0 10px">
+            قائمة أسماء المواد على مستوى النظام. يختار منها مديرو المدارس لكل صف.
+          </p>
+          <div id="subjects-loading" class="table-loading hidden">
+            <div class="spinner"></div><span>جارٍ التحميل…</span>
+          </div>
+          <div id="subjects-table-wrap" class="table-wrapper hidden">
+            <table>
+              <thead>
+                <tr><th>#</th><th>المادة</th><th>أساسية</th><th>الترتيب</th><th></th></tr>
+              </thead>
+              <tbody id="subjects-tbody"></tbody>
+            </table>
+          </div>
+          <div id="subjects-empty" class="table-empty hidden">لا توجد مواد بعد.</div>
         </div>
       </div>
 
@@ -577,6 +607,64 @@
       <div class="modal-footer">
         <button class="btn btn-ghost" id="lookup-modal-cancel">إلغاء</button>
         <button class="btn btn-primary" id="lookup-modal-save">حفظ</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="subject-cat-modal" class="modal-overlay hidden">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header">
+        <span class="modal-title" id="subject-cat-modal-title">إضافة مادة</span>
+        <button class="btn btn-icon btn-sm" id="subject-cat-modal-close">
+          <svg width="16" height="16"><use href="#icon-close"/></svg>
+        </button>
+      </div>
+      <div id="subject-cat-modal-error" class="error-msg hidden"></div>
+      <div class="form-group">
+        <label>اسم المادة *</label>
+        <input type="text" id="sc-name" placeholder="مثال: اللغة العربية" />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label><input type="checkbox" id="sc-arabic" /> مادة عربية أساسية</label>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox" id="sc-math" /> رياضيات أساسية</label>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>الترتيب</label>
+          <input type="number" id="sc-sort" min="0" placeholder="0" />
+        </div>
+        <div class="form-group">
+          <label>الحالة</label>
+          <select id="sc-active">
+            <option value="true">نشط</option>
+            <option value="false">معطّل</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="subject-cat-modal-cancel">إلغاء</button>
+        <button class="btn btn-primary" id="subject-cat-modal-save">حفظ</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="delete-subject-cat-modal" class="modal-overlay hidden">
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header">
+        <span class="modal-title">حذف مادة</span>
+        <button class="btn btn-icon btn-sm" id="del-subject-cat-close">
+          <svg width="16" height="16"><use href="#icon-close"/></svg>
+        </button>
+      </div>
+      <div id="del-subject-cat-error" class="error-msg hidden"></div>
+      <p>سيُحذف <b id="del-subject-cat-name"></b> من فهرس المواد. لن يؤثّر ذلك على المواد المُنشأة في المدارس.</p>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="del-subject-cat-cancel">إلغاء</button>
+        <button class="btn btn-danger" id="del-subject-cat-confirm">حذف</button>
       </div>
     </div>
   </div>

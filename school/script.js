@@ -2015,6 +2015,82 @@ async function loadSubjects() {
   }
 }
 
+// ── أضف من قائمة المواد المركزية (subject_catalog) ────────────────────────────
+const modalCatalog      = el('modal-catalog');
+const btnAddFromCatalog = el('btn-add-from-catalog');
+const btnCloseCatalog   = el('btn-close-catalog');
+const catalogGradeLabel = el('catalog-grade-label');
+const catalogLoading    = el('catalog-loading');
+const catalogListEl     = el('catalog-list');
+const catalogEmpty      = el('catalog-empty');
+const catalogError      = el('catalog-error');
+const btnApplyCatalog   = el('btn-apply-catalog');
+const catalogApplyLabel = el('catalog-apply-label');
+const catalogSpinner    = el('catalog-spinner');
+
+function closeCatalogModal() { hide(modalCatalog); }
+
+async function openCatalogModal() {
+  if (!S.school?.id) return;
+  catalogGradeLabel.textContent = gradeNameLabel(_subjGrade);
+  catalogError.hidden = true;
+  catalogEmpty.hidden = true;
+  catalogListEl.innerHTML = '';
+  show(catalogLoading);
+  show(modalCatalog);
+  try {
+    const [catalog, existing] = await Promise.all([
+      NDB.getSubjectCatalog(),
+      NDB.getSchoolSubjects(S.school.id, _subjGrade),
+    ]);
+    const have  = new Set(existing.map(s => (s.name || '').trim()));
+    const items = catalog.filter(c => !have.has((c.name || '').trim()));
+    hide(catalogLoading);
+    if (!items.length) { catalogEmpty.hidden = false; return; }
+    catalogListEl.innerHTML = items.map(c => {
+      const arabic = c.is_core_arabic ? ' <small style="color:var(--clr-muted)">(عربي)</small>' : '';
+      const math   = c.is_core_math   ? ' <small style="color:var(--clr-muted)">(رياضيات)</small>' : '';
+      return `<li style="padding:6px 2px">
+        <label class="subj-check" style="margin:0">
+          <input type="checkbox" class="catalog-cb" value="${escapeHtml(c.id)}" />
+          <span>${escapeHtml(c.name)}${arabic}${math}</span>
+        </label>
+      </li>`;
+    }).join('');
+  } catch (err) {
+    console.error('[NSAMS] openCatalogModal', err);
+    hide(catalogLoading);
+    catalogError.textContent = gradesErr(err, 'تعذّر تحميل قائمة المواد');
+    catalogError.hidden = false;
+  }
+}
+
+if (btnAddFromCatalog) btnAddFromCatalog.addEventListener('click', openCatalogModal);
+if (btnCloseCatalog)   btnCloseCatalog.addEventListener('click', closeCatalogModal);
+if (modalCatalog)      modalCatalog.addEventListener('click', e => { if (e.target === modalCatalog) closeCatalogModal(); });
+
+if (btnApplyCatalog) btnApplyCatalog.addEventListener('click', async () => {
+  const ids = [...catalogListEl.querySelectorAll('.catalog-cb:checked')].map(cb => cb.value);
+  if (!ids.length) { catalogError.textContent = 'اختر مادة واحدة على الأقل.'; catalogError.hidden = false; return; }
+  catalogError.hidden = true;
+  btnApplyCatalog.disabled = true;
+  show(catalogSpinner); catalogApplyLabel.textContent = 'جارٍ الإضافة…';
+  try {
+    const n = await NDB.applyCatalogSubjectsToGrade(S.school.id, _subjGrade, ids);
+    closeCatalogModal();
+    toast(`أُضيفت ${n} مادة إلى ${gradeNameLabel(_subjGrade)}`, 'success');
+    await loadSubjects();
+    refreshAssignSubjectsPicker();
+  } catch (err) {
+    console.error('[NSAMS] applyCatalog', err);
+    catalogError.textContent = gradesErr(err, 'تعذّر إضافة المواد');
+    catalogError.hidden = false;
+  } finally {
+    btnApplyCatalog.disabled = false;
+    hide(catalogSpinner); catalogApplyLabel.textContent = 'إضافة المختارة';
+  }
+});
+
 // Keep the teacher-assignment subjects picker (mng-subj-pick) in sync after a
 // subject is created/edited/deleted for the currently selected class's grade.
 function refreshAssignSubjectsPicker() {

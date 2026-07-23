@@ -2286,6 +2286,37 @@ create policy lookup_ministry_write on public.lookup_lists
 grant select, insert, update, delete on public.lookup_lists to authenticated;
 
 -- ────────────────────────────────────────────────────────────────────────────
+-- 14.2b  فهرس المواد المركزي (يُدار من لوحة المشرف / الوزارة)
+--   قائمة أسماء المواد على مستوى النظام. مدير المدرسة يختار منها لكل صف، فتُنشأ
+--   صفوف public.subjects الخاصة بذلك الصف (بمكوّناتها/درجاتها). نفس نموذج صلاحيات
+--   lookup_lists: قراءة لكل مصادَق، وكتابة لمستخدم الوزارة فقط.
+-- ────────────────────────────────────────────────────────────────────────────
+create table if not exists public.subject_catalog (
+  id             uuid        primary key default gen_random_uuid(),
+  name           text        not null unique,
+  is_core_arabic boolean     not null default false,   -- مادة عربية أساسية (عتبة نجاح ٥٠)
+  is_core_math   boolean     not null default false,   -- مادة رياضيات أساسية
+  sort_order     int         not null default 0,
+  active         boolean     not null default true,
+  created_at     timestamptz not null default now()
+);
+alter table public.subject_catalog enable row level security;
+
+drop policy if exists subject_catalog_select on public.subject_catalog;
+drop policy if exists subject_catalog_write  on public.subject_catalog;
+
+create policy subject_catalog_select on public.subject_catalog
+  for select to authenticated
+  using (active = true);
+
+create policy subject_catalog_write on public.subject_catalog
+  for all to authenticated
+  using      (exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'ministry_user'))
+  with check (exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'ministry_user'));
+
+grant select, insert, update, delete on public.subject_catalog to authenticated;
+
+-- ────────────────────────────────────────────────────────────────────────────
 -- 14.3  Seed القوائم النظامية (مستخرجة من ورقة «قوائم» في ملف البيان الرسمي)
 --       directorate_id = null → قائمة نظامية مشتركة لكل المديريات
 -- ────────────────────────────────────────────────────────────────────────────
