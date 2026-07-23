@@ -2880,95 +2880,178 @@ function classDisplay() {
 
 function reportCardHtml(card, term) {
   const isS1 = term === 's1';
+  const st   = card.student || {};
+  const info = _repData || {};
+  const cls  = info.class || {};
+  const g    = (v) => fmtNum(v);                 // رقم أو —
+  const vh   = (t) => '<th class="vh"><span>' + t + '</span></th>';
 
-  let thead, rows;
+  // ── صناديق معلومات الطالب ──
+  const box = (k, v, wide) =>
+    '<div class="rc-cell' + (wide ? ' wide' : '') + '">' +
+      '<div class="rc-k">' + k + '</div>' +
+      '<div class="rc-v">' + escapeHtml(v == null || v === '' ? '' : String(v)) + '</div>' +
+    '</div>';
+  const infoGrid =
+    '<div class="rc-info">' +
+      box('المديرية', info.directorate) +
+      box('المدرسة', S.school?.name) +
+      box('الصف', gradeNameLabel(cls.grade)) +
+      box('الشعبة', cls.section) +
+      box('اسم الطالب', st.full_name, true) +
+      box('اسم الأم', st.mother_name) +
+      box('الرقم الوطني', st.national_id) +
+      box('تاريخ الميلاد', st.birth_date) +
+      box('مكان الميلاد', st.birth_place) +
+      box('رقم القيد', st.card_number) +
+      box('العام الدراسي', info.academicYear) +
+    '</div>';
+
+  // ── جدول الدرجات ──
+  let colgroup, thead, rows;
   if (isS1) {
-    thead = '<tr><th>المادة</th><th>علامة الفصل الأول</th></tr>';
+    colgroup = '<colgroup><col class="c-sub"><col class="c-mm"><col class="c-mm">' +
+      '<col class="c-g"><col class="c-g"><col class="c-g"></colgroup>';
+    thead = '<tr><th class="h-sub">المادة</th>' +
+      vh('الدرجة الدنيا') + vh('الدرجة العظمى') +
+      vh('درجة الأعمال') + vh('درجة الامتحان') + vh('المحصلة') + '</tr>';
     rows = card.subjects.map(s =>
-      '<tr>' +
-        '<td>' + escapeHtml(s.name) + '</td>' +
-        '<td>' + fmtNum(s.sem1) + ' / ' + escapeHtml(String(s.maxTotal)) + '</td>' +
+      '<tr' + (s.passed === false ? ' class="fail"' : '') + '>' +
+        '<td class="subject">' + escapeHtml(s.name) + '</td>' +
+        '<td>' + g(s.passMark) + '</td><td>' + g(s.maxTotal) + '</td>' +
+        '<td>' + g(s.sem1Work) + '</td><td>' + g(s.sem1Exam) + '</td><td>' + g(s.sem1) + '</td>' +
       '</tr>'
     ).join('');
   } else {
-    thead = '<tr><th>المادة</th><th>الفصل الأول</th><th>الفصل الثاني</th><th>المعدّل</th><th>النتيجة</th></tr>';
+    colgroup = '<colgroup><col class="c-sub"><col class="c-mm"><col class="c-mm">' +
+      '<col class="c-g"><col class="c-g"><col class="c-g">' +
+      '<col class="c-g"><col class="c-g"><col class="c-g">' +
+      '<col class="c-avg"><col class="c-res"></colgroup>';
+    thead = '<tr>' +
+        '<th class="h-sub" rowspan="2">المادة</th>' +
+        '<th class="vh" rowspan="2"><span>الدرجة الدنيا</span></th>' +
+        '<th class="vh" rowspan="2"><span>الدرجة العظمى</span></th>' +
+        '<th colspan="3">الفصل الأول</th>' +
+        '<th colspan="3">الفصل الثاني</th>' +
+        '<th class="vh" rowspan="2"><span>المعدّل</span></th>' +
+        '<th class="h-res" rowspan="2">النتيجة</th>' +
+      '</tr>' +
+      '<tr class="sub">' +
+        vh('الأعمال') + vh('الامتحان') + vh('المحصلة') +
+        vh('الأعمال') + vh('الامتحان') + vh('المحصلة') +
+      '</tr>';
     rows = card.subjects.map(s => {
       const verdict = s.passed == null ? '—' : (s.passed ? 'ناجح' : 'راسب');
-      const cls = s.passed === false ? ' style="color:#DC2626;font-weight:700"' : '';
-      return '<tr>' +
-        '<td>' + escapeHtml(s.name) + '</td>' +
-        '<td>' + fmtNum(s.sem1) + '</td>' +
-        '<td>' + fmtNum(s.sem2) + '</td>' +
-        '<td>' + fmtNum(s.mark) + ' / ' + escapeHtml(String(s.maxTotal)) + '</td>' +
-        '<td' + cls + '>' + verdict + '</td>' +
+      return '<tr' + (s.passed === false ? ' class="fail"' : '') + '>' +
+        '<td class="subject">' + escapeHtml(s.name) + '</td>' +
+        '<td>' + g(s.passMark) + '</td><td>' + g(s.maxTotal) + '</td>' +
+        '<td>' + g(s.sem1Work) + '</td><td>' + g(s.sem1Exam) + '</td><td>' + g(s.sem1) + '</td>' +
+        '<td>' + g(s.sem2Work) + '</td><td>' + g(s.sem2Exam) + '</td><td>' + g(s.sem2) + '</td>' +
+        '<td>' + g(s.mark) + '</td><td>' + verdict + '</td>' +
       '</tr>';
     }).join('');
   }
 
-  const title = isS1 ? 'شهادة الفصل الأول' : 'شهادة نهاية العام';
-
-  let footer;
+  // ── النتيجة النهائية ──
+  const pct = card.finalPercent == null ? '—' : fmtNum(card.finalPercent) + '٪';
+  let finalRow;
   if (isS1) {
-    footer = 'معدّل الفصل الأول: <strong>' +
-      (card.finalPercent == null ? '—' : fmtNum(card.finalPercent) + '٪') + '</strong>';
+    finalRow = '<div class="rc-final-row">' +
+      '<div class="rc-final-box"><span>معدّل الفصل الأول</span><b>' + pct + '</b></div></div>';
   } else {
     const b = resultBadge(card);
-    const resultColor = b.cls === 'pass' ? '#059669' : (b.cls === 'fail' ? '#DC2626' : '#64748B');
-    const band = _repData?.band;
-    let extra = '';
-    if (band === 'B' || band === 'C') {
-      extra += ' &nbsp;·&nbsp; الدوام: <strong>' +
-        (card.attendancePercent == null ? '—' : fmtNum(card.attendancePercent) + '٪') + '</strong>';
-    }
-    if (band === 'C') {
-      extra += ' &nbsp;·&nbsp; السلوك: <strong>' +
-        (card.conductMark == null ? '—' : fmtNum(card.conductMark)) + '</strong>';
-    }
-    footer = 'النسبة النهائية: <strong>' + (card.finalPercent == null ? '—' : fmtNum(card.finalPercent) + '٪') + '</strong>' +
-      extra +
-      ' &nbsp;·&nbsp; النتيجة: <strong style="color:' + resultColor + '">' + b.text + '</strong>';
+    const col = b.cls === 'pass' ? '#059669' : (b.cls === 'fail' ? '#dc2626' : '#64748b');
+    finalRow = '<div class="rc-final-row">' +
+      '<div class="rc-final-box"><span>النسبة النهائية</span><b>' + pct + '</b></div>' +
+      '<div class="rc-final-box"><span>النتيجة النهائية</span><b style="color:' + col + '">' + b.text + '</b></div>' +
+    '</div>';
   }
+
+  // ── التذييل: مدير المدرسة + الختم + التاريخ ──
+  const principal = escapeHtml(S.user?.user?.fullName || '');
+  const foot = '<div class="rc-foot">' +
+    '<div class="rc-sign"><div class="r">مدير المدرسة</div><div class="n">' + principal + '</div></div>' +
+    '<div class="rc-stamp">ختم المدرسة</div>' +
+    '<div class="rc-sign"><div class="r">تاريخ الإصدار</div><div class="n">' +
+      new Date().toLocaleDateString('ar-SY') + '</div></div>' +
+  '</div>';
+
+  const subtitle = (isS1 ? 'شهادة الفصل الأول — ' : '') + 'العام الدراسي ' + escapeHtml(info.academicYear || '');
 
   return '<section class="card-page">' +
     '<div class="rc-head">' + '%%LOGO%%' +
-      '<h1>' + escapeHtml(S.school?.name || '') + '</h1>' +
-      '<div class="sub">' + title + ' — العام الدراسي ' + escapeHtml(_repData.academicYear) + '</div>' +
+      '<div class="rc-titles">' +
+        '<div class="rc-country">الجمهورية العربية السورية</div>' +
+        '<div class="rc-ministry">وزارة التربية والتعليم</div>' +
+        '<h1>الجلاء المدرسي</h1>' +
+        '<div class="rc-year">' + subtitle + '</div>' +
+      '</div>' +
+      '<div class="rc-logo-spacer"></div>' +
     '</div>' +
-    '<div class="rc-meta">' +
-      '<div><strong>الطالب:</strong> ' + escapeHtml(card.student.full_name) + '</div>' +
-      '<div><strong>الصف:</strong> ' + escapeHtml(classDisplay()) + '</div>' +
-    '</div>' +
-    '<table><thead>' + thead + '</thead>' +
-    '<tbody>' + rows + '</tbody></table>' +
-    '<div class="rc-final">' + footer + '</div>' +
-    '</section>';
+    infoGrid +
+    '<table class="rc-table">' + colgroup + '<thead>' + thead + '</thead><tbody>' + rows + '</tbody></table>' +
+    finalRow +
+    foot +
+  '</section>';
 }
 
 async function printReportDoc(win, cards, term = 'year') {
   const logo = await eagleDataUri();
-  const logoHtml = logo ? '<img class="logo" src="' + logo + '" alt="">' : '';
+  const logoHtml = logo ? '<img class="logo" src="' + logo + '" alt="">' : '<div class="logo"></div>';
   const body = cards.map(c => reportCardHtml(c, term).replace('%%LOGO%%', logoHtml)).join('');
 
   win.document.write(
     '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">' +
-    '<title>شهادة درجات</title>' +
-    '<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">' +
+    '<title>الجلاء المدرسي</title>' +
+    '<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">' +
     '<style>' +
-    "body{font-family:'Cairo',Arial,sans-serif;color:#0f172a;padding:24px;margin:0}" +
-    '.card-page{page-break-after:always}' +
+    // print-color-adjust:exact يمنع تحوّل الرؤوس الخضراء إلى رمادي عند الطباعة
+    '*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}' +
+    "body{font-family:'Cairo',Arial,sans-serif;color:#0f172a;margin:0}" +
+    '.card-page{padding:10mm 8mm;page-break-after:always}' +
     '.card-page:last-child{page-break-after:auto}' +
-    '.rc-head{text-align:center;margin-bottom:8px}' +
-    '.logo{width:84px;height:84px;object-fit:contain;display:block;margin:0 auto 8px}' +
-    'h1{font-size:19px;margin:0 0 2px;color:#06b6d4}' +
-    '.sub{color:#475569;font-size:13px;margin:2px 0}' +
-    '.rc-meta{display:flex;justify-content:space-between;font-size:13px;margin:14px 0 8px;gap:12px}' +
-    'table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}' +
-    'th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:center}' +
-    'th{background:#06b6d4;color:#fff}' +
-    'td:first-child{text-align:right}' +
-    'tr:nth-child(even) td{background:#f8fafc}' +
-    '.rc-final{margin-top:14px;font-size:15px;text-align:center}' +
-    '@media print{@page{margin:14mm}}' +
+    '.rc-head{display:flex;align-items:center;gap:12px;border-bottom:3px solid #0f8f7e;padding-bottom:8px;margin-bottom:10px}' +
+    '.rc-head .logo{width:64px;height:64px;object-fit:contain;flex-shrink:0}' +
+    '.rc-logo-spacer{width:64px;flex-shrink:0}' +
+    '.rc-titles{flex:1;text-align:center}' +
+    '.rc-country{font-size:11px;color:#64748b;font-weight:600}' +
+    '.rc-ministry{font-size:12px;color:#64748b;font-weight:600}' +
+    '.rc-titles h1{font-size:22px;font-weight:900;color:#0f8f7e;margin:4px 0 2px}' +
+    '.rc-year{font-size:12px;color:#334155;font-weight:700}' +
+    '.rc-info{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:10px}' +
+    '.rc-cell{border:1px solid #cbd5e1;border-radius:5px;overflow:hidden}' +
+    '.rc-cell.wide{grid-column:span 2}' +
+    '.rc-cell .rc-k{background:#e8f5f2;color:#0b6d60;font-size:9px;font-weight:700;padding:2px 7px}' +
+    '.rc-cell .rc-v{padding:4px 7px;font-size:11px;font-weight:600;min-height:1.4em}' +
+    '.rc-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11px}' +
+    '.rc-table th{border:1px solid #cbd5e1;padding:2px;text-align:center}' +
+    '.rc-table td{border:1px solid #cbd5e1;padding:2px;text-align:center;overflow:hidden}' +
+    '.rc-table thead th{background:#0f8f7e;color:#fff;font-weight:700}' +
+    '.rc-table thead tr.sub th{background:#0b6d60}' +
+    // رؤوس الأعمدة الرقمية مكتوبة عموديّاً (بالجانب) كما في القالب الرسمي
+    '.rc-table th.vh{height:86px;padding:2px 0;vertical-align:middle}' +
+    '.rc-table th.vh span{display:inline-block;transform:rotate(-90deg);white-space:nowrap;font-size:10px;font-weight:700}' +
+    '.rc-table th.h-sub,.rc-table th.h-res{font-size:11px}' +
+    '.rc-table col.c-sub{width:16%}' +
+    '.rc-table col.c-mm{width:6%}' +
+    '.rc-table col.c-g{width:7%}' +
+    '.rc-table col.c-avg{width:8%}' +
+    '.rc-table col.c-res{width:11%}' +
+    '.rc-table td.subject{text-align:right;font-weight:600}' +
+    '.rc-table tbody tr:nth-child(even) td{background:#f8fafc}' +
+    '.rc-table tr.fail td{color:#dc2626;font-weight:700}' +
+    '.rc-final-row{display:flex;gap:10px;margin-top:10px}' +
+    '.rc-final-box{flex:1;border:1.5px solid #0f8f7e;border-radius:7px;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;font-size:12px}' +
+    '.rc-final-box span{font-weight:700;color:#0b6d60}' +
+    '.rc-final-box b{font-size:15px}' +
+    '.rc-foot{display:flex;justify-content:space-between;align-items:flex-end;margin-top:16px}' +
+    '.rc-sign{text-align:center;font-size:12px}' +
+    '.rc-sign .r{color:#64748b;margin-bottom:4px;white-space:nowrap}' +
+    '.rc-sign .n{font-weight:700;border-top:1px dotted #64748b;padding-top:5px;min-width:140px}' +
+    '.rc-stamp{width:96px;height:96px;border:1.5px dashed #cbd5e1;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:11px}' +
+    // أبقِ هذه الكتل في نفس الصفحة (المدير/الختم مع الشهادة)
+    '.rc-table,.rc-final-row,.rc-foot{page-break-inside:avoid}' +
+    '@page{size:A4;margin:10mm}' +
     '</style></head><body>' +
     body +
     '<scr' + 'ipt>window.onload=function(){setTimeout(function(){window.print()},400)}</scr' + 'ipt>' +

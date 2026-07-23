@@ -2324,7 +2324,7 @@ async function getClassReportCards(classId, academicYear = getAcademicYear(), te
     getClassStudents(classId),
     getSchoolSubjects(cls.school_id, cls.grade),
     db.from('student_grades')
-      .select('student_id, subject_id, component_id, semester, mark')
+      .select('student_id, subject_id, component_id, semester, mark, component:subject_components(name)')
       .eq('class_id',      classId)
       .eq('academic_year', academicYear),
     db.from('daily_student_attendance')
@@ -2333,7 +2333,7 @@ async function getClassReportCards(classId, academicYear = getAcademicYear(), te
       .gte('date', `${academicYear.split('-')[0]}-09-01`),
     getClassConduct(classId).catch(() => ({})),
     getClassGrace(classId).catch(() => ({})),
-    db.from('schools').select('min_attendance_pct').eq('id', cls.school_id).single(),
+    db.from('schools').select('min_attendance_pct, directorate:directorates(name)').eq('id', cls.school_id).single(),
   ]);
   if (gradesRes.error) throw gradesRes.error;
   if (attRes.error) throw attRes.error;
@@ -2341,12 +2341,19 @@ async function getClassReportCards(classId, academicYear = getAcademicYear(), te
   const subjects = subjectsRaw.filter(s => s.is_active);
   const minAttendancePct = Number(schoolRes?.data?.min_attendance_pct ?? 75);
 
-  // grades[studentId][subjectId][semester] = Σ component marks
+  // grades[studentId][subjectId][semester] = { total, exam, work }
+  // total = Σ all component marks (the semester "المحصلة"); exam = Σ marks of
+  // exam-type components (name contains امتحان/اختبار); work = the rest
+  // (وظائف/شفهي/مذاكرة → "درجة الأعمال"). Matches the official الجلاء columns.
+  const isExamComponent = (name) => /امتحان|اختبار/.test(name || '');
   const grades = {};
   for (const r of gradesRes.data ?? []) {
-    const byStu  = grades[r.student_id]  ||= {};
-    const bySub  = byStu[r.subject_id]   ||= {};
-    bySub[r.semester] = (bySub[r.semester] || 0) + Number(r.mark || 0);
+    const byStu = grades[r.student_id] ||= {};
+    const bySub = byStu[r.subject_id]  ||= {};
+    const cell  = bySub[r.semester]    ||= { total: 0, exam: 0, work: 0 };
+    const m = Number(r.mark || 0);
+    cell.total += m;
+    if (isExamComponent(r.component?.name)) cell.exam += m; else cell.work += m;
   }
 
   // attendance[studentId] = { attended, total }  (present+late vs all recorded)
@@ -2364,8 +2371,10 @@ async function getClassReportCards(classId, academicYear = getAcademicYear(), te
     const stuGrace   = grace[stu.id]  || { bySubject: {}, total: 0 };
     const subjResults = subjects.map(sub => {
       const sem  = stuGrades[sub.id] || {};
-      const s1   = sem[1] ?? null;
-      const s2   = sem[2] ?? null;
+      const c1   = sem[1] || null;   // { total, exam, work } | null
+      const c2   = sem[2] || null;
+      const s1   = c1 ? c1.total : null;
+      const s2   = c2 ? c2.total : null;
       const maxTotal  = Number(sub.max_total) || 100;
 
       // The displayed mark depends on the certificate term:
@@ -2393,6 +2402,10 @@ async function getClassReportCards(classId, academicYear = getAcademicYear(), te
         passMark:     Number(sub.pass_mark),
         sem1:         s1,
         sem2:         s2,
+        sem1Work:     c1 ? c1.work : null,
+        sem1Exam:     c1 ? c1.exam : null,
+        sem2Work:     c2 ? c2.work : null,
+        sem2Exam:     c2 ? c2.exam : null,
         mark,
         percent,
         passed,
@@ -2437,7 +2450,11 @@ async function getClassReportCards(classId, academicYear = getAcademicYear(), te
     };
   });
 
-  return { class: cls, stage, band, term, academicYear, minAttendancePct, students: cards };
+  return {
+    class: cls, stage, band, term, academicYear, minAttendancePct,
+    directorate: schoolRes?.data?.directorate?.name ?? '',
+    students: cards,
+  };
 }
 
 async function getStudentReportCard(classId, studentId, academicYear = getAcademicYear(), term = 'year') {
