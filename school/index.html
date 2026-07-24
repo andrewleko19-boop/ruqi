@@ -1175,13 +1175,9 @@
         <ul id="subj-list" class="mng-list" role="list"></ul>
         <p id="subj-empty" class="mng-empty" hidden>لا توجد مواد لهذا الصف بعد.</p>
 
-        <button type="button" class="btn btn-outline btn-full" id="btn-add-from-catalog" style="margin-top:14px">
-          <svg class="icon icon-sm"><use href="#ic-book"/></svg>
-          أضف من قائمة المواد
-        </button>
-        <button type="button" class="btn btn-primary btn-full" id="btn-add-subject" style="margin-top:10px">
+        <button type="button" class="btn btn-primary btn-full" id="btn-add-from-catalog" style="margin-top:14px">
           <svg class="icon icon-sm"><use href="#ic-plus"/></svg>
-          إضافة مادة يدويّاً
+          أضف مواد من القائمة
         </button>
       </div>
     </section>
@@ -2609,19 +2605,33 @@
     <div class="sheet-hdr">
       <div class="sheet-title">
         <svg class="icon"><use href="#ic-book"/></svg>
-        <span>أضف من قائمة المواد — <span id="catalog-grade-label"></span></span>
+        <span>أضف مواد من القائمة المركزية</span>
       </div>
       <button class="icon-btn" id="btn-close-catalog" aria-label="إغلاق">
         <svg class="icon"><use href="#ic-x"/></svg>
       </button>
     </div>
     <div class="sheet-body">
-      <p class="mng-hint">اختر المواد التي تريد إضافتها لهذا الصف. تُنشأ بمكوّنات افتراضية يمكنك تعديلها بعدها. المواد الموجودة مسبقاً لا تظهر.</p>
+      <p class="mng-hint">اختر المواد ثم الصفوف التي تريد إضافتها إليها. تأتي بمكوّناتها ودرجة نجاحها جاهزةً. المواد الموجودة مسبقاً في صفٍّ لا تتكرّر.</p>
+
+      <div class="block-label" style="margin-top:6px">
+        <svg class="icon icon-sm"><use href="#ic-book"/></svg><span>المواد</span>
+      </div>
       <div id="catalog-loading" hidden style="padding:8px 0"><div class="dskel"></div><div class="dskel" style="width:60%"></div></div>
       <ul id="catalog-list" class="mng-list" role="list"></ul>
-      <p id="catalog-empty" class="mng-empty" hidden>لا توجد مواد جديدة لإضافتها (كلّها مضافة، أو الفهرس فارغ).</p>
-      <div id="catalog-error" class="msg msg-error" hidden></div>
-      <button type="button" class="btn btn-primary btn-full" id="btn-apply-catalog" style="margin-top:10px">
+      <p id="catalog-empty" class="mng-empty" hidden>لا توجد مواد في الفهرس المركزي (يضيفها المشرف).</p>
+
+      <div class="block-label" style="margin-top:14px">
+        <svg class="icon icon-sm"><use href="#ic-users"/></svg><span>الصفوف</span>
+      </div>
+      <label class="subj-check" style="margin:2px 0">
+        <input type="checkbox" id="catalog-grade-all" />
+        <span><strong>كل الصفوف</strong></span>
+      </label>
+      <div id="catalog-grades" style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:4px"></div>
+
+      <div id="catalog-error" class="msg msg-error" hidden style="margin-top:10px"></div>
+      <button type="button" class="btn btn-primary btn-full" id="btn-apply-catalog" style="margin-top:12px">
         <svg class="icon icon-sm"><use href="#ic-check"/></svg>
         <span id="catalog-apply-label">إضافة المختارة</span>
         <span class="spinner" id="catalog-spinner" hidden></span>

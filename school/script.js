@@ -2028,35 +2028,49 @@ const btnApplyCatalog   = el('btn-apply-catalog');
 const catalogApplyLabel = el('catalog-apply-label');
 const catalogSpinner    = el('catalog-spinner');
 
+const catalogGrades   = el('catalog-grades');
+const catalogGradeAll = el('catalog-grade-all');
+
 function closeCatalogModal() { hide(modalCatalog); }
 
 async function openCatalogModal() {
   if (!S.school?.id) return;
-  catalogGradeLabel.textContent = gradeNameLabel(_subjGrade);
   catalogError.hidden = true;
   catalogEmpty.hidden = true;
   catalogListEl.innerHTML = '';
+  catalogGrades.innerHTML = '';
+  catalogGradeAll.checked = false;
   show(catalogLoading);
   show(modalCatalog);
   try {
-    const [catalog, existing] = await Promise.all([
+    const [catalog, classes] = await Promise.all([
       NDB.getSubjectCatalog(),
-      NDB.getSchoolSubjects(S.school.id, _subjGrade),
+      NDB.getSchoolClasses(S.school.id).catch(() => []),
     ]);
-    const have  = new Set(existing.map(s => (s.name || '').trim()));
-    const items = catalog.filter(c => !have.has((c.name || '').trim()));
     hide(catalogLoading);
-    if (!items.length) { catalogEmpty.hidden = false; return; }
-    catalogListEl.innerHTML = items.map(c => {
-      const arabic = c.is_core_arabic ? ' <small style="color:var(--clr-muted)">(عربي)</small>' : '';
-      const math   = c.is_core_math   ? ' <small style="color:var(--clr-muted)">(رياضيات)</small>' : '';
-      return `<li style="padding:6px 2px">
-        <label class="subj-check" style="margin:0">
-          <input type="checkbox" class="catalog-cb" value="${escapeHtml(c.id)}" />
-          <span>${escapeHtml(c.name)}${arabic}${math}</span>
-        </label>
-      </li>`;
-    }).join('');
+    // المواد
+    if (!catalog.length) {
+      catalogEmpty.hidden = false;
+    } else {
+      catalogListEl.innerHTML = catalog.map(c => {
+        const arabic = c.is_core_arabic ? ' <small style="color:var(--clr-muted)">(عربي)</small>' : '';
+        const math   = c.is_core_math   ? ' <small style="color:var(--clr-muted)">(رياضيات)</small>' : '';
+        return `<li style="padding:6px 2px">
+          <label class="subj-check" style="margin:0">
+            <input type="checkbox" class="catalog-cb" value="${escapeHtml(c.id)}" />
+            <span>${escapeHtml(c.name)}${arabic}${math}</span>
+          </label>
+        </li>`;
+      }).join('');
+    }
+    // الصفوف — صفوف المدرسة الفعلية (fallback 1..12)
+    let grades = [...new Set((classes || []).map(c => Number(c.grade)).filter(g => g >= 1 && g <= 12))].sort((a, b) => a - b);
+    if (!grades.length) grades = Array.from({ length: 12 }, (_, i) => i + 1);
+    catalogGrades.innerHTML = grades.map(g =>
+      `<label class="subj-check" style="margin:0">
+         <input type="checkbox" class="catalog-grade-cb" value="${g}" />
+         <span>${escapeHtml(gradeNameLabel(g))}</span>
+       </label>`).join('');
   } catch (err) {
     console.error('[NSAMS] openCatalogModal', err);
     hide(catalogLoading);
@@ -2068,17 +2082,24 @@ async function openCatalogModal() {
 if (btnAddFromCatalog) btnAddFromCatalog.addEventListener('click', openCatalogModal);
 if (btnCloseCatalog)   btnCloseCatalog.addEventListener('click', closeCatalogModal);
 if (modalCatalog)      modalCatalog.addEventListener('click', e => { if (e.target === modalCatalog) closeCatalogModal(); });
+if (catalogGradeAll)   catalogGradeAll.addEventListener('change', () => {
+  catalogGrades.querySelectorAll('.catalog-grade-cb').forEach(cb => { cb.checked = catalogGradeAll.checked; });
+});
 
 if (btnApplyCatalog) btnApplyCatalog.addEventListener('click', async () => {
-  const ids = [...catalogListEl.querySelectorAll('.catalog-cb:checked')].map(cb => cb.value);
-  if (!ids.length) { catalogError.textContent = 'اختر مادة واحدة على الأقل.'; catalogError.hidden = false; return; }
+  const subjectIds = [...catalogListEl.querySelectorAll('.catalog-cb:checked')].map(cb => cb.value);
+  const grades = catalogGradeAll.checked
+    ? [...catalogGrades.querySelectorAll('.catalog-grade-cb')].map(cb => Number(cb.value))
+    : [...catalogGrades.querySelectorAll('.catalog-grade-cb:checked')].map(cb => Number(cb.value));
+  if (!subjectIds.length) { catalogError.textContent = 'اختر مادة واحدة على الأقل.'; catalogError.hidden = false; return; }
+  if (!grades.length)     { catalogError.textContent = 'اختر صفّاً واحداً على الأقل.'; catalogError.hidden = false; return; }
   catalogError.hidden = true;
   btnApplyCatalog.disabled = true;
   show(catalogSpinner); catalogApplyLabel.textContent = 'جارٍ الإضافة…';
   try {
-    const n = await NDB.applyCatalogSubjectsToGrade(S.school.id, _subjGrade, ids);
+    const n = await NDB.applyCatalogSubjectsToGrades(S.school.id, grades, subjectIds);
     closeCatalogModal();
-    toast(`أُضيفت ${n} مادة إلى ${gradeNameLabel(_subjGrade)}`, 'success');
+    toast(n ? `أُضيفت ${n} مادة` : 'كل المواد المختارة موجودة مسبقاً في الصفوف المحدّدة', n ? 'success' : 'info');
     await loadSubjects();
     refreshAssignSubjectsPicker();
   } catch (err) {
@@ -2108,15 +2129,11 @@ function buildSubjectRow(sub) {
       <div class="subj-meta">العظمى ${escapeHtml(String(sub.max_total))} · النجاح ${escapeHtml(String(sub.pass_mark))}٪</div>
     </div>
     <div class="subj-actions">
-      <button class="icon-btn-sm" data-act="edit" aria-label="تعديل">
-        <svg class="icon icon-sm"><use href="#ic-edit"/></svg>
-      </button>
       <button class="icon-btn-sm danger" data-act="del" aria-label="حذف">
         <svg class="icon icon-sm"><use href="#ic-trash"/></svg>
       </button>
     </div>
   `;
-  li.querySelector('[data-act="edit"]').addEventListener('click', () => openSubjectModal(sub));
   li.querySelector('[data-act="del"]').addEventListener('click', () => deleteSubjectRow(sub));
   return li;
 }
@@ -2136,7 +2153,6 @@ async function deleteSubjectRow(sub) {
 
 subjGradeSelect.addEventListener('change', loadSubjects);
 btnRefreshSubjects.addEventListener('click', loadSubjects);
-btnAddSubject.addEventListener('click', () => openSubjectModal(null));
 
 // ── Subject editor modal ──
 function addCompRow(name = '', max = '') {

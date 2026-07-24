@@ -2316,6 +2316,30 @@ create policy subject_catalog_write on public.subject_catalog
 
 grant select, insert, update, delete on public.subject_catalog to authenticated;
 
+-- مكوّنات المادة في الفهرس المركزي (يعرّفها المشرف مرّة، وتُنسخ لمواد الصفوف عند
+-- اختيار المدير). نفس صلاحيات subject_catalog.
+create table if not exists public.subject_catalog_components (
+  id         uuid        primary key default gen_random_uuid(),
+  catalog_id uuid        not null references public.subject_catalog(id) on delete cascade,
+  name       text        not null,
+  max_mark   int         not null default 0,
+  sort_order int         not null default 0
+);
+alter table public.subject_catalog_components enable row level security;
+
+drop policy if exists subject_catalog_comp_select on public.subject_catalog_components;
+drop policy if exists subject_catalog_comp_write  on public.subject_catalog_components;
+
+create policy subject_catalog_comp_select on public.subject_catalog_components
+  for select to authenticated using (true);
+
+create policy subject_catalog_comp_write on public.subject_catalog_components
+  for all to authenticated
+  using      (exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'ministry_user'))
+  with check (exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'ministry_user'));
+
+grant select, insert, update, delete on public.subject_catalog_components to authenticated;
+
 -- ────────────────────────────────────────────────────────────────────────────
 -- 14.3  Seed القوائم النظامية (مستخرجة من ورقة «قوائم» في ملف البيان الرسمي)
 --       directorate_id = null → قائمة نظامية مشتركة لكل المديريات

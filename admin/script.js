@@ -1150,9 +1150,42 @@ const delScConfirm      = document.getElementById('del-subject-cat-confirm');
 
 CustomSelect.enhance('sc-active');
 
+const scCompList = document.getElementById('sc-comp-list');
+const scAddComp  = document.getElementById('sc-add-comp');
+const scCompSum  = document.getElementById('sc-comp-sum');
+
 let allCatalogSubjects = [];
 let editingCatalogId = null;
 let pendingDeleteCatalogId = null;
+
+function scRecalcSum() {
+  let sum = 0;
+  scCompList.querySelectorAll('.sc-comp-max').forEach(inp => { sum += Number(inp.value) || 0; });
+  scCompSum.textContent = 'مجموع درجات المكوّنات: ' + sum;
+}
+
+function scAddCompRow(name = '', maxMark = '') {
+  const row = document.createElement('div');
+  row.className = 'form-row sc-comp-row';
+  row.style.cssText = 'gap:8px;align-items:center;margin-bottom:6px';
+  row.innerHTML =
+    '<input type="text" class="sc-comp-name" placeholder="اسم المكوّن (مثال: مذاكرة)" maxlength="40" style="flex:2" value="' + esc(name) + '" />' +
+    '<input type="number" class="sc-comp-max" min="0" placeholder="الدرجة" style="flex:1" value="' + esc(maxMark) + '" />' +
+    '<button type="button" class="btn btn-danger btn-sm sc-comp-del">حذف</button>';
+  row.querySelector('.sc-comp-del').addEventListener('click', () => { row.remove(); scRecalcSum(); });
+  row.querySelector('.sc-comp-max').addEventListener('input', scRecalcSum);
+  scCompList.appendChild(row);
+  scRecalcSum();
+}
+
+function scReadComps() {
+  return [...scCompList.querySelectorAll('.sc-comp-row')].map(r => ({
+    name:    r.querySelector('.sc-comp-name').value.trim(),
+    maxMark: Number(r.querySelector('.sc-comp-max').value) || 0,
+  })).filter(c => c.name);
+}
+
+scAddComp.addEventListener('click', () => scAddCompRow());
 
 async function loadSubjectCatalog() {
   hide(subjectsTableWrap); hide(subjectsEmpty);
@@ -1197,12 +1230,16 @@ function openAddCatalog() {
   scMath.checked = false;
   scSort.value = allCatalogSubjects.length ? (Math.max(...allCatalogSubjects.map(r => r.sort_order || 0)) + 1) : 0;
   scActive.value = 'true'; CustomSelect.refresh(scActive);
+  scCompList.innerHTML = '';
+  scAddCompRow('مذاكرة', '');
+  scAddCompRow('شفهي / وظائف', '');
+  scAddCompRow('امتحان فصلي', '');
   clearError(scModalError);
   show(scModal);
   scName.focus();
 }
 
-function openEditCatalog(id) {
+async function openEditCatalog(id) {
   const r = allCatalogSubjects.find(x => x.id === id);
   if (!r) return;
   editingCatalogId = id;
@@ -1212,9 +1249,20 @@ function openEditCatalog(id) {
   scMath.checked = !!r.is_core_math;
   scSort.value = r.sort_order ?? 0;
   scActive.value = r.active ? 'true' : 'false'; CustomSelect.refresh(scActive);
+  scCompList.innerHTML = '';
+  scRecalcSum();
   clearError(scModalError);
   show(scModal);
   scName.focus();
+  try {
+    const comps = await window.NSAMS_DB.getCatalogComponents(id);
+    scCompList.innerHTML = '';
+    if (comps.length) comps.forEach(c => scAddCompRow(c.name, c.max_mark));
+    else scAddCompRow('', '');
+  } catch (e) {
+    console.error('[admin] getCatalogComponents', e);
+    scAddCompRow('', '');
+  }
 }
 
 function closeScModal() { hide(scModal); }
@@ -1235,13 +1283,16 @@ scModalSave.addEventListener('click', async () => {
   };
   scModalSave.disabled = true;
   try {
-    let error;
+    let catalogId = editingCatalogId;
     if (editingCatalogId) {
-      ({ error } = await supabase.from('subject_catalog').update(row).eq('id', editingCatalogId));
+      const { error } = await supabase.from('subject_catalog').update(row).eq('id', editingCatalogId);
+      if (error) throw error;
     } else {
-      ({ error } = await supabase.from('subject_catalog').insert(row));
+      const { data, error } = await supabase.from('subject_catalog').insert(row).select('id').single();
+      if (error) throw error;
+      catalogId = data.id;
     }
-    if (error) throw error;
+    await window.NSAMS_DB.setCatalogComponents(catalogId, scReadComps());
     closeScModal();
     await loadSubjectCatalog();
   } catch (e) {

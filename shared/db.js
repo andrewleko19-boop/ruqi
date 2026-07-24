@@ -2080,29 +2080,73 @@ async function deleteCatalogSubject(id) {
   return true;
 }
 
-// School admin: create a grade's subjects from chosen catalog entries. Skips
-// names already present in that grade; seeds default components (editable per
-// grade afterwards). Returns how many were created.
-async function applyCatalogSubjectsToGrade(schoolId, grade, catalogIds) {
-  const ids = new Set(catalogIds ?? []);
-  const [catalog, existing] = await Promise.all([
-    getSubjectCatalog(),
-    getSchoolSubjects(schoolId, grade),
-  ]);
-  const have   = new Set(existing.map(s => (s.name || '').trim()));
-  const chosen = catalog.filter(c => ids.has(c.id) && !have.has((c.name || '').trim()));
+// Components of a catalog subject (defined by the supervisor). School subjects
+// created from the catalog copy these. Same shape as subject_components.
+async function getCatalogComponents(catalogId) {
+  const { data, error } = await db
+    .from('subject_catalog_components')
+    .select('id, catalog_id, name, max_mark, sort_order')
+    .eq('catalog_id', catalogId)
+    .order('sort_order', { ascending: true, nullsFirst: false })
+    .order('name',       { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function setCatalogComponents(catalogId, components) {
+  const { error: delErr } = await db
+    .from('subject_catalog_components').delete().eq('catalog_id', catalogId);
+  if (delErr) throw delErr;
+  const rows = (components ?? [])
+    .filter(c => c.name && c.name.trim())
+    .map((c, i) => ({ catalog_id: catalogId, name: c.name.trim(), max_mark: Number(c.maxMark) || 0, sort_order: i }));
+  if (rows.length === 0) return [];
+  const { data, error } = await db
+    .from('subject_catalog_components').insert(rows)
+    .select('id, catalog_id, name, max_mark, sort_order');
+  if (error) throw error;
+  return data ?? [];
+}
+
+// درجة النجاح (٪) وفق اللائحة الرسمية — تُشتق من الصف ونوع المادة، لا تُدخل يدويّاً:
+//   الصفوف ١–٤ → ٤١ ؛ الصفوف ٥ فأعلى → ٤٠، والعربي/الرياضيات الأساسية → ٥٠.
+function passMarkFor(grade, isCoreArabic, isCoreMath) {
+  const g = parseInt(grade, 10) || 0;
+  if (g >= 1 && g <= 4) return 41;
+  return (isCoreArabic || isCoreMath) ? 50 : 40;
+}
+
+// School admin: create the chosen catalog subjects in ALL the chosen grades at
+// once. Per grade, skips names already present; copies the catalog components
+// and derives the pass mark by rule. Returns how many subject rows were created.
+async function applyCatalogSubjectsToGrades(schoolId, grades, catalogIds) {
+  const gradeList = [...new Set((grades ?? []).map(g => Number(g)).filter(g => g >= 1 && g <= 12))];
+  const idSet     = new Set(catalogIds ?? []);
+  const catalog   = await getSubjectCatalog();
+  const chosen    = catalog.filter(c => idSet.has(c.id));
+  if (!chosen.length || !gradeList.length) return 0;
+
+  const compsByCatalog = {};
+  for (const c of chosen) compsByCatalog[c.id] = await getCatalogComponents(c.id);
+
   let created = 0;
-  for (const c of chosen) {
-    const subjectId = await createSubject({
-      schoolId, grade, name: c.name,
-      isCoreArabic: c.is_core_arabic, isCoreMath: c.is_core_math,
-    });
-    await setSubjectComponents(subjectId, [
-      { name: 'مذاكرة',        maxMark: 0 },
-      { name: 'شفهي / وظائف',  maxMark: 0 },
-      { name: 'امتحان فصلي',   maxMark: 100 },
-    ]);
-    created++;
+  for (const grade of gradeList) {
+    const existing = await getSchoolSubjects(schoolId, grade);
+    const have     = new Set(existing.map(s => (s.name || '').trim()));
+    for (const c of chosen) {
+      if (have.has((c.name || '').trim())) continue;
+      const comps    = compsByCatalog[c.id] || [];
+      const maxTotal = comps.reduce((a, x) => a + (Number(x.max_mark) || 0), 0) || 100;
+      const passMark = passMarkFor(grade, c.is_core_arabic, c.is_core_math);
+      const subjectId = await createSubject({
+        schoolId, grade, name: c.name, maxTotal, passMark,
+        isCoreArabic: c.is_core_arabic, isCoreMath: c.is_core_math,
+      });
+      if (comps.length) {
+        await setSubjectComponents(subjectId, comps.map(x => ({ name: x.name, maxMark: x.max_mark })));
+      }
+      created++;
+    }
   }
   return created;
 }
@@ -3254,7 +3298,10 @@ window.NSAMS_DB = {
   createCatalogSubject,
   updateCatalogSubject,
   deleteCatalogSubject,
-  applyCatalogSubjectsToGrade,
+  getCatalogComponents,
+  setCatalogComponents,
+  passMarkFor,
+  applyCatalogSubjectsToGrades,
   getClassGradeSubjects,
   getClassGrades,
   saveStudentGrades,
