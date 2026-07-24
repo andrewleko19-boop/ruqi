@@ -300,6 +300,7 @@
           <div class="section-header">
             <h2>فهرس المواد (<span id="subjects-count">—</span>)</h2>
             <div class="section-header-actions">
+              <button id="pass-rules-btn" class="btn btn-ghost btn-sm">قواعد النجاح</button>
               <button id="add-subject-btn" class="btn btn-primary btn-sm">
                 <svg width="14" height="14"><use href="#icon-plus"/></svg>
                 إضافة مادة
@@ -676,6 +677,33 @@
       <div class="modal-footer">
         <button class="btn btn-ghost" id="del-subject-cat-cancel">إلغاء</button>
         <button class="btn btn-danger" id="del-subject-cat-confirm">حذف</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="pass-rules-modal" class="modal-overlay hidden">
+    <div class="modal" style="max-width:560px">
+      <div class="modal-header">
+        <span class="modal-title">قواعد النجاح حسب مجموعة الصفوف</span>
+        <button class="btn btn-icon btn-sm" id="pass-rules-close">
+          <svg width="16" height="16"><use href="#icon-close"/></svg>
+        </button>
+      </div>
+      <div id="pass-rules-error" class="error-msg hidden"></div>
+      <p style="font-size:.82rem;color:var(--text-dim);margin:0 0 8px">
+        درجة النجاح تُطبَّق تلقائيّاً على المواد حسب صفّها. «العربي/الرياضيات» = المواد المعلَّمة أساسية.
+      </p>
+      <div style="display:flex;gap:8px;font-size:.72rem;color:var(--text-dim);font-weight:700;padding:0 2px 4px">
+        <span style="flex:1">من الصف</span><span style="flex:1">إلى الصف</span>
+        <span style="flex:1">درجة عادية</span><span style="flex:1">العربي/الرياضيات</span><span style="width:52px"></span>
+      </div>
+      <div id="pass-rules-list"></div>
+      <button type="button" class="btn btn-ghost btn-sm" id="pass-rules-add" style="margin-top:4px">
+        <svg width="13" height="13"><use href="#icon-plus"/></svg> إضافة قاعدة
+      </button>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="pass-rules-cancel">إلغاء</button>
+        <button class="btn btn-primary" id="pass-rules-save">حفظ</button>
       </div>
     </div>
   </div>

@@ -2116,6 +2116,48 @@ function passMarkFor(grade, isCoreArabic, isCoreMath) {
   return (isCoreArabic || isCoreMath) ? 50 : 40;
 }
 
+// قواعد النجاح القابلة للتعديل من لوحة المشرف — درجة دنيا لكل مجموعة صفوف.
+async function getGradePassRules() {
+  const { data, error } = await db
+    .from('grade_pass_rules')
+    .select('id, grade_from, grade_to, default_pass, core_pass, sort_order')
+    .order('sort_order', { ascending: true, nullsFirst: false })
+    .order('grade_from', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+// Overwrite all rules. rules: [{ gradeFrom, gradeTo, defaultPass, corePass }].
+async function setGradePassRules(rules) {
+  const { error: delErr } = await db
+    .from('grade_pass_rules').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  if (delErr) throw delErr;
+  const rows = (rules ?? [])
+    .filter(r => r.gradeFrom && r.gradeTo)
+    .map((r, i) => ({
+      grade_from:   Number(r.gradeFrom),
+      grade_to:     Number(r.gradeTo),
+      default_pass: Number(r.defaultPass) || 0,
+      core_pass:    Number(r.corePass)    || 0,
+      sort_order:   i,
+    }));
+  if (rows.length === 0) return [];
+  const { data, error } = await db
+    .from('grade_pass_rules').insert(rows)
+    .select('id, grade_from, grade_to, default_pass, core_pass, sort_order');
+  if (error) throw error;
+  return data ?? [];
+}
+
+// Resolve a subject's pass mark from the configured rules; falls back to the
+// hardcoded regulation rule when no rule matches / none configured yet.
+function resolvePassMark(rules, grade, isCoreArabic, isCoreMath) {
+  const g = parseInt(grade, 10) || 0;
+  const rule = (rules ?? []).find(r => g >= Number(r.grade_from) && g <= Number(r.grade_to));
+  if (!rule) return passMarkFor(grade, isCoreArabic, isCoreMath);
+  return (isCoreArabic || isCoreMath) ? Number(rule.core_pass) : Number(rule.default_pass);
+}
+
 // School admin: create the chosen catalog subjects in ALL the chosen grades at
 // once. Per grade, skips names already present; copies the catalog components
 // and derives the pass mark by rule. Returns how many subject rows were created.
@@ -2128,6 +2170,7 @@ async function applyCatalogSubjectsToGrades(schoolId, grades, catalogIds) {
 
   const compsByCatalog = {};
   for (const c of chosen) compsByCatalog[c.id] = await getCatalogComponents(c.id);
+  const passRules = await getGradePassRules().catch(() => []);
 
   let created = 0;
   for (const grade of gradeList) {
@@ -2137,7 +2180,7 @@ async function applyCatalogSubjectsToGrades(schoolId, grades, catalogIds) {
       if (have.has((c.name || '').trim())) continue;
       const comps    = compsByCatalog[c.id] || [];
       const maxTotal = comps.reduce((a, x) => a + (Number(x.max_mark) || 0), 0) || 100;
-      const passMark = passMarkFor(grade, c.is_core_arabic, c.is_core_math);
+      const passMark = resolvePassMark(passRules, grade, c.is_core_arabic, c.is_core_math);
       const subjectId = await createSubject({
         schoolId, grade, name: c.name, maxTotal, passMark,
         isCoreArabic: c.is_core_arabic, isCoreMath: c.is_core_math,
@@ -3301,6 +3344,9 @@ window.NSAMS_DB = {
   getCatalogComponents,
   setCatalogComponents,
   passMarkFor,
+  getGradePassRules,
+  setGradePassRules,
+  resolvePassMark,
   applyCatalogSubjectsToGrades,
   getClassGradeSubjects,
   getClassGrades,

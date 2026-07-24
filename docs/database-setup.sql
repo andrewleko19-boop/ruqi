@@ -2340,6 +2340,36 @@ create policy subject_catalog_comp_write on public.subject_catalog_components
 
 grant select, insert, update, delete on public.subject_catalog_components to authenticated;
 
+-- قواعد النجاح حسب مجموعة الصفوف (يديرها المشرف) — نفس الاسم بدرجات دنيا مختلفة
+-- لكل مجموعة. core_pass للعربي والرياضيات الأساسية، default_pass لبقية المواد.
+create table if not exists public.grade_pass_rules (
+  id           uuid        primary key default gen_random_uuid(),
+  grade_from   int         not null,
+  grade_to     int         not null,
+  default_pass int         not null default 40,
+  core_pass    int         not null default 50,
+  sort_order   int         not null default 0
+);
+alter table public.grade_pass_rules enable row level security;
+
+drop policy if exists grade_pass_rules_select on public.grade_pass_rules;
+drop policy if exists grade_pass_rules_write  on public.grade_pass_rules;
+
+create policy grade_pass_rules_select on public.grade_pass_rules
+  for select to authenticated using (true);
+
+create policy grade_pass_rules_write on public.grade_pass_rules
+  for all to authenticated
+  using      (exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'ministry_user'))
+  with check (exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'ministry_user'));
+
+grant select, insert, update, delete on public.grade_pass_rules to authenticated;
+
+-- البذور الافتراضية وفق النظام الداخلي (تُدرَج مرّة إن كان الجدول فارغاً)
+insert into public.grade_pass_rules (grade_from, grade_to, default_pass, core_pass, sort_order)
+select * from (values (1, 4, 41, 41, 0), (5, 12, 40, 50, 1)) as v(f, t, d, c, s)
+where not exists (select 1 from public.grade_pass_rules);
+
 -- ────────────────────────────────────────────────────────────────────────────
 -- 14.3  Seed القوائم النظامية (مستخرجة من ورقة «قوائم» في ملف البيان الرسمي)
 --       directorate_id = null → قائمة نظامية مشتركة لكل المديريات

@@ -1329,5 +1329,77 @@ delScConfirm.addEventListener('click', async () => {
   }
 });
 
+// ══════════════════════════════════════════════
+//  قواعد النجاح (grade_pass_rules)
+// ══════════════════════════════════════════════
+const passRulesBtn    = document.getElementById('pass-rules-btn');
+const passRulesModal  = document.getElementById('pass-rules-modal');
+const passRulesClose  = document.getElementById('pass-rules-close');
+const passRulesCancel = document.getElementById('pass-rules-cancel');
+const passRulesSave   = document.getElementById('pass-rules-save');
+const passRulesError  = document.getElementById('pass-rules-error');
+const passRulesList   = document.getElementById('pass-rules-list');
+const passRulesAdd    = document.getElementById('pass-rules-add');
+
+function passRuleRow(r = {}) {
+  const row = document.createElement('div');
+  row.className = 'pass-rule-row';
+  row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px';
+  row.innerHTML =
+    '<input type="number" class="pr-from" min="1" max="12" style="flex:1" value="' + esc(r.grade_from ?? '') + '" />' +
+    '<input type="number" class="pr-to" min="1" max="12" style="flex:1" value="' + esc(r.grade_to ?? '') + '" />' +
+    '<input type="number" class="pr-default" min="0" max="100" style="flex:1" value="' + esc(r.default_pass ?? '') + '" />' +
+    '<input type="number" class="pr-core" min="0" max="100" style="flex:1" value="' + esc(r.core_pass ?? '') + '" />' +
+    '<button type="button" class="btn btn-danger btn-sm pr-del" style="width:52px">حذف</button>';
+  row.querySelector('.pr-del').addEventListener('click', () => row.remove());
+  passRulesList.appendChild(row);
+}
+
+async function openPassRules() {
+  clearError(passRulesError);
+  passRulesList.innerHTML = '';
+  show(passRulesModal);
+  try {
+    const rules = await window.NSAMS_DB.getGradePassRules();
+    if (rules.length) {
+      rules.forEach(passRuleRow);
+    } else {
+      passRuleRow({ grade_from: 1, grade_to: 4,  default_pass: 41, core_pass: 41 });
+      passRuleRow({ grade_from: 5, grade_to: 12, default_pass: 40, core_pass: 50 });
+    }
+  } catch (e) {
+    console.error('[admin] getGradePassRules', e);
+    passRuleRow();
+  }
+}
+
+function closePassRules() { hide(passRulesModal); }
+passRulesBtn.addEventListener('click', openPassRules);
+passRulesClose.addEventListener('click', closePassRules);
+passRulesCancel.addEventListener('click', closePassRules);
+passRulesModal.addEventListener('click', e => { if (e.target === passRulesModal) closePassRules(); });
+passRulesAdd.addEventListener('click', () => passRuleRow());
+
+passRulesSave.addEventListener('click', async () => {
+  const rules = [...passRulesList.querySelectorAll('.pass-rule-row')].map(r => ({
+    gradeFrom:   Number(r.querySelector('.pr-from').value),
+    gradeTo:     Number(r.querySelector('.pr-to').value),
+    defaultPass: Number(r.querySelector('.pr-default').value),
+    corePass:    Number(r.querySelector('.pr-core').value),
+  })).filter(r => r.gradeFrom && r.gradeTo);
+  for (const r of rules) {
+    if (r.gradeFrom > r.gradeTo) { showError(passRulesError, 'نطاق صفوف غير صحيح (من > إلى).'); return; }
+  }
+  passRulesSave.disabled = true;
+  try {
+    await window.NSAMS_DB.setGradePassRules(rules);
+    closePassRules();
+  } catch (e) {
+    showError(passRulesError, e.message);
+  } finally {
+    passRulesSave.disabled = false;
+  }
+});
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 checkSession();
