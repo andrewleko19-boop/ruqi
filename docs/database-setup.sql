@@ -2560,6 +2560,81 @@ end; $$;
 revoke all on function public.decide_grace_proposal(uuid, text) from public, anon;
 grant execute on function public.decide_grace_proposal(uuid, text) to authenticated;
 
+-- ════════════════════════════════════════════════════════════════════════════
+-- 16. التحقّق العلني من الجلاء (رمز QR على الشهادة المطبوعة)
+--   يفتح رمز QR الصفحة verify.html?t=<student>&y=<year> فتستدعي هذه الدالة.
+--   تُرجع ملخّصاً مطابقاً لما هو مطبوع على الورقة أصلاً (لا بيانات حسّاسة:
+--   لا هاتف ولا رقم وطني ولا علامات مفصّلة). معرّف الطالب UUID غير قابل للتخمين.
+--   تُفضّل الجلاء الصادر رسميّاً (result_sheets.status='issued')، وإلا فالنتيجة
+--   المسجّلة في student_year_results، وإلا «غير صادرة بعد».
+-- ════════════════════════════════════════════════════════════════════════════
+create or replace function public.verify_certificate(
+  p_student uuid,
+  p_year    text default null
+) returns table (
+  student_name      text,
+  school_name       text,
+  directorate_name  text,
+  class_label       text,
+  academic_year     text,
+  result            text,
+  final_percent     numeric,
+  issued            boolean
+)
+language plpgsql security definer set search_path = public stable as $$
+declare
+  v_year   text;
+  v_issued boolean := false;
+  v_result text;
+  v_pct    numeric;
+begin
+  if p_student is null then return; end if;
+
+  -- السنة: المطلوبة، وإلا آخر سنة لها نتيجة مسجّلة
+  v_year := nullif(trim(coalesce(p_year, '')), '');
+  if v_year is null then
+    select syr.academic_year into v_year
+      from public.student_year_results syr
+     where syr.student_id = p_student
+     order by syr.academic_year desc
+     limit 1;
+  end if;
+
+  -- هل يوجد جلاء صادر رسميّاً لصف الطالب في تلك السنة؟
+  select true into v_issued
+    from public.result_sheets rs
+    join public.students s on s.class_id = rs.class_id
+   where s.id = p_student
+     and rs.status = 'issued'
+     and (v_year is null or rs.academic_year = v_year)
+   limit 1;
+
+  select syr.result, syr.final_percent into v_result, v_pct
+    from public.student_year_results syr
+   where syr.student_id = p_student
+     and (v_year is null or syr.academic_year = v_year)
+   limit 1;
+
+  return query
+  select s.full_name,
+         sc.name,
+         d.name,
+         'الصف ' || c.grade::text || ' / ' || coalesce(c.section, ''),
+         v_year,
+         v_result,
+         v_pct,
+         coalesce(v_issued, false)
+    from public.students s
+    left join public.classes     c  on c.id  = s.class_id
+    left join public.schools     sc on sc.id = s.school_id
+    left join public.directorates d on d.id  = sc.directorate_id
+   where s.id = p_student
+   limit 1;
+end; $$;
+
+revoke all on function public.verify_certificate(uuid, text) from public;
+grant execute on function public.verify_certificate(uuid, text) to anon, authenticated;
+
 -- ────────────────────────────────────────────────────────────────────────────
 -- 14.3  Seed القوائم النظامية (مستخرجة من ورقة «قوائم» في ملف البيان الرسمي)
 --       directorate_id = null → قائمة نظامية مشتركة لكل المديريات

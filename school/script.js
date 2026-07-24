@@ -3124,12 +3124,13 @@ function reportCardHtml(card, term) {
   }
 
   // ── رمز التحقّق QR (يُولَّد محليّاً بلا إنترنت) ──
+  // يحمل رابط صفحة التحقّق العامّة: مسحه يفتح ملخّص الشهادة من قاعدة البيانات.
   let qrHtml = '';
   try {
     if (typeof window !== 'undefined' && typeof window.qrcode === 'function') {
-      const verify = ['NSAMS', S.school?.id || '', card.student?.id || '',
-                      info.academicYear || '',
-                      card.finalPercent == null ? '' : fmtNum(card.finalPercent)].join('|');
+      const base   = new URL('../verify.html', location.href).href;
+      const verify = base + '?t=' + encodeURIComponent(card.student?.id || '') +
+                            '&y=' + encodeURIComponent(info.academicYear || '');
       const q = window.qrcode(0, 'M');
       q.addData(verify);
       q.make();

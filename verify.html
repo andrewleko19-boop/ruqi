@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>التحقّق من الجلاء المدرسي — رُقِيّ</title>
+  <link rel="icon" href="./icons/favicon-32.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --green:      #0f8f7e;
+      --green-dark: #0b6d60;
+      --green-tint: #e8f5f2;
+      --ink:        #0f172a;
+      --muted:      #64748b;
+      --line:       #cbd5e1;
+      --pass:       #059669;
+      --fail:       #dc2626;
+    }
+    body {
+      font-family: 'Cairo', Arial, sans-serif; color: var(--ink);
+      background: #eef2f6; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .card {
+      background: #fff; width: 100%; max-width: 460px; border-radius: 14px;
+      box-shadow: 0 8px 28px rgba(15,23,42,.12); overflow: hidden;
+    }
+    .card-head {
+      background: var(--green); color: #fff; padding: 18px 20px; text-align: center;
+    }
+    .card-head img { width: 54px; height: 54px; object-fit: contain; margin-bottom: 6px; }
+    .card-head .country { font-size: .78rem; opacity: .9; }
+    .card-head h1 { font-size: 1.15rem; font-weight: 900; margin-top: 2px; }
+    .body { padding: 18px 20px 22px; }
+    .state { text-align: center; padding: 26px 8px; color: var(--muted); font-weight: 600; }
+    .spinner {
+      width: 30px; height: 30px; border: 3px solid var(--green-tint);
+      border-top-color: var(--green); border-radius: 50%;
+      margin: 0 auto 12px; animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .badge {
+      display: block; text-align: center; font-size: 1.5rem; font-weight: 900;
+      padding: 12px; border-radius: 10px; margin-bottom: 16px;
+    }
+    .badge.pass { background: #ecfdf5; color: var(--pass); border: 1.5px solid var(--pass); }
+    .badge.fail { background: #fef2f2; color: var(--fail); border: 1.5px solid var(--fail); }
+    .badge.none { background: #f8fafc; color: var(--muted); border: 1.5px solid var(--line); }
+    dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: .92rem; }
+    dt { color: var(--green-dark); font-weight: 700; }
+    dd { font-weight: 600; word-break: break-word; }
+    .note {
+      margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line);
+      font-size: .78rem; color: var(--muted); line-height: 1.7; text-align: center;
+    }
+    .err { color: var(--fail); font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="card-head">
+      <img src="./icons/eagle-mark.png" alt="" />
+      <div class="country">الجمهورية العربية السورية — وزارة التربية والتعليم</div>
+      <h1>التحقّق من الجلاء المدرسي</h1>
+    </div>
+    <div class="body">
+      <div id="loading" class="state"><div class="spinner"></div>جارٍ التحقّق…</div>
+      <div id="error" class="state err" hidden></div>
+      <div id="result" hidden>
+        <span id="verdict" class="badge"></span>
+        <dl id="fields"></dl>
+      </div>
+      <div class="note">
+        هذه الصفحة تعرض ملخّص النتيجة كما هو مسجَّل في النظام الوطني.
+        الوثيقة الرسمية هي الجلاء الممهور بختم المدرسة.
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="./verify.js"></script>
+</body>
+</html>

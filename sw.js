@@ -8,7 +8,7 @@
  *
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'nsams-v95';
+const CACHE = 'nsams-v96';
 
 const PRECACHE = [
   './',
@@ -17,6 +17,8 @@ const PRECACHE = [
   './shared/db.js',
   './shared/csel.js',
   './shared/qr.js',
+  './verify.html',
+  './verify.js',
   './school/index.html',
   './school/script.js',
   './school/style.css',

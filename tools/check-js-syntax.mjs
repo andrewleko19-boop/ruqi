@@ -36,11 +36,13 @@ const JS_FILES = [
   'teacher/script.js',
   'parent/script.js',
   'admin/script.js',
+  'verify.js',
 ];
 
 // HTML pages that might carry inline <script> blocks.
 const HTML_FILES = [
   'index.html',
+  'verify.html',
   'school/index.html',
   'directorate/index.html',
   'directorate/school.html',
