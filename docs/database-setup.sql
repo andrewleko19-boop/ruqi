@@ -2565,8 +2565,21 @@ grant execute on function public.decide_grace_proposal(uuid, text) to authentica
 --   يفتح رمز QR الصفحة verify.html?t=<student>&y=<year> فتستدعي هذه الدالة.
 --   تُرجع ملخّصاً مطابقاً لما هو مطبوع على الورقة أصلاً (لا بيانات حسّاسة:
 --   لا هاتف ولا رقم وطني ولا علامات مفصّلة). معرّف الطالب UUID غير قابل للتخمين.
---   تُفضّل الجلاء الصادر رسميّاً (result_sheets.status='issued')، وإلا فالنتيجة
---   المسجّلة في student_year_results، وإلا «غير صادرة بعد».
+--
+--   المصدر هو result_sheets.snapshot_data حيث status='issued' — أي اللقطة المجمَّدة
+--   للجلاء الصادر رسميّاً، وهي بالتعريف مطابقة لِما هو مطبوع على الورقة التي تحمل
+--   الرمز. البحث داخل اللقطة (لا عبر students.class_id الحالي) حتى يبقى التحقّق
+--   صحيحاً بعد الترفيع السنوي أو نقل الطالب.
+--
+--   ⚠️ اللقطة تُبنى من getClassStudents التي تستخدم select('*')، فكائن student
+--   داخلها يحوي national_id و father_name و birth_date وغيرها. لذلك تنتقي الدالّة
+--   حقل الاسم وحده ولا تُعيد الكائن مطلقاً.
+--
+--   إن لم يوجد جلاء صادر: تُرجع تعريف الطالب من الجداول الحيّة مع result = null
+--   و issued = false، فتعرض الصفحة «غير صادر رسميّاً بعد» بدل «لا توجد شهادة».
+--
+--   ملاحظة: ::text صريحة على كل عمود نصّي — الجداول الأساسية أُنشئت خارج هذا الملف،
+--   فلو كان أيٌّ منها varchar لفشلت الدالّة بخطأ 42804.
 -- ════════════════════════════════════════════════════════════════════════════
 create or replace function public.verify_certificate(
   p_student uuid,
@@ -2583,51 +2596,51 @@ create or replace function public.verify_certificate(
 )
 language plpgsql security definer set search_path = public stable as $$
 declare
-  v_year   text;
-  v_issued boolean := false;
-  v_result text;
-  v_pct    numeric;
+  v_year text;
 begin
   if p_student is null then return; end if;
 
-  -- السنة: المطلوبة، وإلا آخر سنة لها نتيجة مسجّلة
   v_year := nullif(trim(coalesce(p_year, '')), '');
-  if v_year is null then
-    select syr.academic_year into v_year
-      from public.student_year_results syr
-     where syr.student_id = p_student
-     order by syr.academic_year desc
-     limit 1;
-  end if;
 
-  -- هل يوجد جلاء صادر رسميّاً لصف الطالب في تلك السنة؟
-  select true into v_issued
-    from public.result_sheets rs
-    join public.students s on s.class_id = rs.class_id
-   where s.id = p_student
-     and rs.status = 'issued'
-     and (v_year is null or rs.academic_year = v_year)
-   limit 1;
-
-  select syr.result, syr.final_percent into v_result, v_pct
-    from public.student_year_results syr
-   where syr.student_id = p_student
-     and (v_year is null or syr.academic_year = v_year)
-   limit 1;
-
+  -- ── المسار الأساسي: اللقطة المجمَّدة لجلاء صادر رسميّاً ──
   return query
-  select s.full_name,
-         sc.name,
-         d.name,
-         'الصف ' || c.grade::text || ' / ' || coalesce(c.section, ''),
-         v_year,
-         v_result,
-         v_pct,
-         coalesce(v_issued, false)
+  select (elem->'student'->>'full_name')::text,
+         sc.name::text,
+         coalesce(rs.snapshot_data->>'directorate', d.name)::text,
+         ('الصف ' || coalesce(rs.snapshot_data->'class'->>'grade', '')
+                  || ' / ' || coalesce(rs.snapshot_data->'class'->>'section', ''))::text,
+         rs.academic_year::text,
+         (elem->>'result')::text,
+         nullif(elem->>'finalPercent', '')::numeric,
+         true
+    from public.result_sheets rs
+    cross join lateral jsonb_array_elements(
+           coalesce(rs.snapshot_data->'students', '[]'::jsonb)) elem
+    left join public.schools      sc on sc.id = rs.school_id
+    left join public.directorates d  on d.id  = sc.directorate_id
+   where rs.status = 'issued'
+     and elem->'student'->>'id' = p_student::text
+     and (v_year is null or rs.academic_year = v_year)
+   order by rs.academic_year desc
+   limit 1;
+
+  if found then return; end if;
+
+  -- ── الاحتياطي: الطالب موجود لكن لا جلاء صادر بعد ──
+  return query
+  select s.full_name::text,
+         sc.name::text,
+         d.name::text,
+         ('الصف ' || coalesce(c.grade::text, '')
+                  || ' / ' || coalesce(c.section::text, ''))::text,
+         coalesce(v_year, c.academic_year)::text,
+         null::text,
+         null::numeric,
+         false
     from public.students s
-    left join public.classes     c  on c.id  = s.class_id
-    left join public.schools     sc on sc.id = s.school_id
-    left join public.directorates d on d.id  = sc.directorate_id
+    left join public.classes      c  on c.id  = s.class_id
+    left join public.schools      sc on sc.id = s.school_id
+    left join public.directorates d  on d.id  = sc.directorate_id
    where s.id = p_student
    limit 1;
 end; $$;

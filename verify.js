@@ -16,11 +16,18 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 
 const $ = (id) => document.getElementById(id);
 
-function showError(msg) {
+// detail: رمز تقني اختياري (مثل 42P01) يُعرض بخطّ باهت — بدونه يكون التشخيص أعمى.
+function showError(msg, detail) {
   $('loading').hidden = true;
   $('result').hidden  = true;
   const e = $('error');
   e.textContent = msg;
+  if (detail) {
+    const small = document.createElement('div');
+    small.className = 'err-code';
+    small.textContent = detail;
+    e.append(small);
+  }
   e.hidden = false;
 }
 
@@ -54,11 +61,17 @@ function fmtPct(n) {
       p_student: studentId,
       p_year:    year || null,
     });
-    if (res.error) throw res.error;
+    // خطأ من الخادم (الدالّة ناقصة، صلاحية، …) — يحمل code فنميّزه عن انقطاع الشبكة.
+    if (res.error) {
+      console.error('[verify] server', res.error);
+      showError('تعذّر إتمام التحقّق. راجع إدارة النظام.',
+                res.error.code ? 'رمز الخطأ: ' + res.error.code : null);
+      return;
+    }
     data = Array.isArray(res.data) ? res.data[0] : res.data;
   } catch (err) {
-    console.error('[verify]', err);
-    showError('تعذّر الاتصال بالنظام. حاول لاحقاً.');
+    console.error('[verify] network', err);
+    showError('تعذّر الاتصال بالنظام. تحقّق من الإنترنت وحاول لاحقاً.');
     return;
   }
 
