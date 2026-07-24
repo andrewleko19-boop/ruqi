@@ -2388,31 +2388,65 @@ async function getClassGrace(classId) {
 }
 
 // Replace a student's grace for the year. items: [{ subjectId|null, marks }].
-// Rows with marks <= 0 are removed. Online-only (admin tool).
-async function setStudentGrace({ studentId, classId, schoolId, items, adminId }) {
+// Goes through the grant_grace RPC: it is the ONLY write path for student_grace
+// so the official caps (≤10 per subject, Arabic group ≤10 combined, ≤50 total)
+// are enforced on the server and the replacement is atomic. Online-only.
+async function setStudentGrace({ studentId, classId, items }) {
   const academicYear = getAcademicYear();
-  const { error: delErr } = await db
-    .from('student_grace')
-    .delete()
-    .eq('student_id',    studentId)
+  const payload = (items ?? [])
+    .filter(it => Number(it.marks) > 0)
+    .map(it => ({ subject_id: it.subjectId ?? null, marks: Number(it.marks) }));
+  const { error } = await db.rpc('grant_grace', {
+    p_student:       studentId,
+    p_class:         classId,
+    p_academic_year: academicYear,
+    p_items:         payload,
+  });
+  if (error) throw error;
+  return true;
+}
+
+// ─── Grace proposals (اقتراحات المعلّمين) ─────────────────────────────────────
+// A subject teacher proposes grace for their own subject; the school admin
+// approves (which folds it into student_grace via grant_grace) or rejects.
+async function getGraceProposals(classId, status = null) {
+  const academicYear = getAcademicYear();
+  let q = db
+    .from('grace_proposals')
+    .select('id, student_id, class_id, subject_id, marks, reason, status, proposed_by, created_at')
     .eq('class_id',      classId)
     .eq('academic_year', academicYear);
-  if (delErr) throw delErr;
+  if (status) q = q.eq('status', status);
+  const { data, error } = await q.order('created_at', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
 
-  const rows = (items ?? [])
-    .filter(it => Number(it.marks) > 0)
-    .map(it => ({
-      student_id:    studentId,
-      class_id:      classId,
-      school_id:     schoolId,
-      academic_year: academicYear,
-      subject_id:    it.subjectId ?? null,
-      marks:         Number(it.marks),
-      granted_by:    adminId,
-      granted_at:    new Date().toISOString(),
-    }));
-  if (rows.length === 0) return true;
-  const { error } = await db.from('student_grace').insert(rows);
+async function proposeGrace({ studentId, classId, schoolId, subjectId, marks, reason }) {
+  const academicYear = getAcademicYear();
+  const { data: { session } } = await db.auth.getSession();
+  const { error } = await db.from('grace_proposals').insert({
+    student_id:    studentId,
+    class_id:      classId,
+    school_id:     schoolId,
+    academic_year: academicYear,
+    subject_id:    subjectId ?? null,
+    marks:         Number(marks) || 0,
+    reason:        (reason || '').trim() || null,
+    proposed_by:   session?.user?.id ?? null,
+    status:        'pending',
+  });
+  if (error) throw error;
+  return true;
+}
+
+// decision: 'approved' | 'rejected'. Approving applies the grace (caps re-checked
+// server-side) and notifies the parent.
+async function decideGraceProposal(proposalId, decision) {
+  const { error } = await db.rpc('decide_grace_proposal', {
+    p_id:       proposalId,
+    p_decision: decision,
+  });
   if (error) throw error;
   return true;
 }
@@ -2523,9 +2557,14 @@ async function getClassReportCards(classId, academicYear = getAcademicYear(), te
 
   const isS1 = term === 's1';
 
+  // Grace marks apply to bands B/C only (grades 5+). The regulation's grace
+  // article covers الصفين الخامس والسادس فما فوق — grades 1-4 are judged on
+  // their raw marks, so ignore any stray grace rows for band A.
+  const graceApplies = band !== 'A';
+
   const cards = students.map(stu => {
     const stuGrades  = grades[stu.id] || {};
-    const stuGrace   = grace[stu.id]  || { bySubject: {}, total: 0 };
+    const stuGrace   = (graceApplies ? grace[stu.id] : null) || { bySubject: {}, total: 0 };
     const subjResults = subjects.map(sub => {
       const sem  = stuGrades[sub.id] || {};
       const c1   = sem[1] || null;   // { total, exam, work } | null
@@ -2579,6 +2618,10 @@ async function getClassReportCards(classId, academicYear = getAcademicYear(), te
     const sumMax   = graded.reduce((a, s) => a + s.maxTotal, 0);
     const sumMark  = graded.reduce((a, s) => a + s.markWithGrace, 0) + (Number(stuGrace.total) || 0);
     const totalPercent = sumMax ? (sumMark / sumMax) * 100 : null;
+    // Grace-free total — the regulation excludes grace from ranking
+    // («لا تدخل درجات المساعدة المضافة على المواد أو المجموع في حساب ترتيب النجاح»).
+    const sumMarkNoGrace = graded.reduce((a, s) => a + s.mark, 0);
+    const totalPercentNoGrace = sumMax ? (sumMarkNoGrace / sumMax) * 100 : null;
     const arSubs   = graded.filter(s => s.isCoreArabic);
     const arMax    = arSubs.reduce((a, s) => a + s.maxTotal, 0);
     const arabicPercent = arMax ? (arSubs.reduce((a, s) => a + s.markWithGrace, 0) / arMax) * 100 : null;
@@ -2601,9 +2644,11 @@ async function getClassReportCards(classId, academicYear = getAcademicYear(), te
 
     return {
       student: stu, subjects: subjResults,
-      finalPercent: totalPercent, result, complete,
+      finalPercent: totalPercent, finalPercentNoGrace: totalPercentNoGrace,
+      result, complete,
       attendancePercent, conductMark,
       graceTotal: Number(stuGrace.total) || 0,
+      graceSubjects: subjResults.reduce((a, s) => a + (Number(s.grace) || 0), 0),
     };
   });
 
@@ -3357,6 +3402,9 @@ window.NSAMS_DB = {
   getPendingStudentConduct,
   getClassGrace,
   setStudentGrace,
+  getGraceProposals,
+  proposeGrace,
+  decideGraceProposal,
   getClassReportCards,
   getStudentReportCard,
   promotionBand,

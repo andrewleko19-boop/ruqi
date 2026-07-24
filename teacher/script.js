@@ -29,6 +29,8 @@ const {
   saveStudentGrades,
   getClassConduct,
   saveStudentConduct,
+  proposeGrace,
+  getGraceProposals,
   teacherCheckIn,
   teacherCheckOut,
   getMyStaffAttendanceToday,
@@ -1513,6 +1515,14 @@ function buildGradeRow(stu, num, sub, readOnly = false) {
     </div>`;
   }).join('');
 
+  // زر اقتراح درجات مساعدة — يظهر للمعلّم في مادته للصفوف ٥ فأعلى فقط
+  // (الصفوف ١–٤ لا تُطبَّق عليها المساعدة). الاقتراح يعتمده مدير المدرسة.
+  const canPropose = !readOnly && Number(G.class?.grade) >= 5;
+  const graceBtn = canPropose
+    ? `<button type="button" class="btn btn-ghost btn-sm grace-propose" data-sid="${escapeHtml(stu.id)}"
+         style="margin-top:6px">اقتراح درجات مساعدة</button>`
+    : '';
+
   li.innerHTML = `
     <div class="grade-row-head">
       <span class="student-num">${num}</span>
@@ -1520,11 +1530,41 @@ function buildGradeRow(stu, num, sub, readOnly = false) {
       <span class="grade-total" data-total-for="${escapeHtml(stu.id)}"></span>
     </div>
     <div class="grade-inputs" data-sid="${escapeHtml(stu.id)}">${inputs}</div>
+    ${graceBtn}
   `;
+
+  const gb = li.querySelector('.grace-propose');
+  if (gb) gb.addEventListener('click', () => openProposeGrace(stu, sub));
 
   // Initial total
   setTimeout(() => updateRowTotal(li, stu.id, sub), 0);
   return li;
+}
+
+// اقتراح درجات مساعدة لطالب في مادة المعلّم (لا يؤثّر على النتيجة حتى يعتمده المدير)
+async function openProposeGrace(stu, sub) {
+  const raw = prompt(`درجات المساعدة المقترحة لـ ${stu.full_name} في ${sub.name} (١–١٠):`, '');
+  if (raw == null) return;
+  const marks = Number(raw);
+  if (!Number.isFinite(marks) || marks <= 0 || marks > 10) {
+    toast('أدخل عدداً بين ١ و١٠', 'error');
+    return;
+  }
+  const reason = prompt('سبب الاقتراح (اختياري):', '') ?? '';
+  try {
+    await proposeGrace({
+      studentId: stu.id,
+      classId:   G.class.id,
+      schoolId:  G.class.schoolId ?? S.user?.schoolId ?? null,
+      subjectId: sub.id,
+      marks,
+      reason,
+    });
+    toast('أُرسل الاقتراح لمدير المدرسة', 'success');
+  } catch (err) {
+    console.error('[NSAMS] proposeGrace', err);
+    toast(err?.message || 'تعذّر إرسال الاقتراح', 'error');
+  }
 }
 
 function rowTotal(sid, sub) {

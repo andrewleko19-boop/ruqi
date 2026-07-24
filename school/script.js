@@ -2867,6 +2867,9 @@ el('btn-submit-result-sheet')?.addEventListener('click', async () => {
         studentId:    c.student?.id,
         name:         c.student?.full_name,
         finalPercent: c.finalPercent ?? null,
+        // المعدّل قبل المساعدة + مجموع المساعدة، لترى المديرية أساس النتيجة
+        finalPercentNoGrace: c.finalPercentNoGrace ?? null,
+        graceMarks:   (Number(c.graceSubjects) || 0) + (Number(c.graceTotal) || 0),
         result:       c.result ?? null,
         complete:     !!c.complete,
         conductMark:  c.conductMark ?? null,
@@ -3097,15 +3100,24 @@ function reportCardHtml(card, term) {
   let extraRow = '';
   if (!isS1) {
     let rankTxt = '—';
-    if (card.finalPercent != null) {
+    // الترتيب يُحسب على المعدّل قبل درجات المساعدة — «لا تدخل درجات المساعدة
+    // المضافة على المواد أو المجموع في حساب ترتيب النجاح».
+    const rankPct = (c) => (c.finalPercentNoGrace != null ? c.finalPercentNoGrace : c.finalPercent);
+    const myRankPct = rankPct(card);
+    if (myRankPct != null) {
       // ترتيب تنافسي: ١ + عدد الطلاب الأعلى معدّلاً (المتساوون يتشاركون الرتبة)
       const higher = (info.students || [])
-        .filter(c => c.finalPercent != null && c.finalPercent > card.finalPercent).length;
+        .filter(c => rankPct(c) != null && rankPct(c) > myRankPct).length;
       rankTxt = ordinalAr(higher + 1);
     }
     const att     = card.attendancePercent == null ? '—' : fmtNum(card.attendancePercent) + '٪';
     const conduct = card.conductMark == null ? '—' : fmtNum(card.conductMark);
+    // درجات المساعدة تُسجَّل على الجلاء (تُسجَّل في السجل العام ويُعلَم ولي الأمر)
+    const graceSum = (Number(card.graceSubjects) || 0) + (Number(card.graceTotal) || 0);
+    const graceLine = graceSum > 0
+      ? '<div>درجات المساعدة: <b>' + fmtNum(graceSum) + '</b></div>' : '';
     extraRow = '<div class="rc-extra">' +
+      graceLine +
       '<div>الترتيب في الصف: <b>' + rankTxt + '</b></div>' +
       '<div>الدوام: <b>' + att + '</b> &nbsp;·&nbsp; السلوك: <b>' + conduct + '</b></div>' +
     '</div>';
@@ -3295,6 +3307,55 @@ function openGraceModal(card) {
   refreshGraceSummary();
   show(modalGrace);
   document.body.style.overflow = 'hidden';
+  loadGraceProposals(card);
+}
+
+// ── صندوق اقتراحات المعلّمين لهذا الطالب ──
+const graceProposalsWrap = el('grace-proposals-wrap');
+const graceProposalsList = el('grace-proposals');
+
+async function loadGraceProposals(card) {
+  if (!graceProposalsWrap || !_repData?.class?.id) return;
+  graceProposalsWrap.hidden = true;
+  graceProposalsList.innerHTML = '';
+  try {
+    const all = await NDB.getGraceProposals(_repData.class.id, 'pending');
+    const mine = (all || []).filter(p => p.student_id === card.student.id);
+    if (!mine.length) return;
+    const nameOf = (sid) => {
+      const s = card.subjects.find(x => x.subjectId === sid);
+      return s ? s.name : 'المجموع';
+    };
+    graceProposalsList.innerHTML = mine.map(p =>
+      `<li class="comp-row" data-pid="${escapeHtml(p.id)}">
+         <span style="flex:1">${escapeHtml(nameOf(p.subject_id))}
+           <strong>+${escapeHtml(String(p.marks))}</strong>
+           ${p.reason ? `<small style="color:#94A3B8"> — ${escapeHtml(p.reason)}</small>` : ''}
+         </span>
+         <button type="button" class="btn btn-ghost btn-sm" data-gp="approved">اعتماد</button>
+         <button type="button" class="btn btn-ghost btn-sm" data-gp="rejected">رفض</button>
+       </li>`).join('');
+    graceProposalsWrap.hidden = false;
+    graceProposalsList.querySelectorAll('[data-gp]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const li = btn.closest('[data-pid]');
+        btn.disabled = true;
+        try {
+          await NDB.decideGraceProposal(li.dataset.pid, btn.dataset.gp);
+          toast(btn.dataset.gp === 'approved' ? 'اعتُمد الاقتراح' : 'رُفض الاقتراح', 'success');
+          closeGraceModal();
+          loadReports(_repData.class.id);
+        } catch (err) {
+          console.error('[NSAMS] decideGraceProposal', err);
+          graceErrorEl.textContent = err?.message || 'تعذّر تنفيذ القرار.';
+          show(graceErrorEl);
+          btn.disabled = false;
+        }
+      });
+    });
+  } catch (err) {
+    console.error('[NSAMS] loadGraceProposals', err);
+  }
 }
 
 function closeGraceModal() {
@@ -3325,19 +3386,18 @@ btnSaveGrace.addEventListener('click', async () => {
 
   btnSaveGrace.disabled = true;
   try {
+    // الصلاحية والسقوف تُفرض على الخادم داخل grant_grace (المسار الوحيد للكتابة).
     await NDB.setStudentGrace({
       studentId: _graceCard.student.id,
       classId:   _repData.class.id,
-      schoolId:  S.school.id,
       items,
-      adminId:   S.user?.user?.id ?? null,
     });
     closeGraceModal();
     toast('تم حفظ درجات المساعدة', 'success');
     loadReports(_repData.class.id);
   } catch (err) {
     console.error('[NSAMS] setStudentGrace', err);
-    graceErrorEl.textContent = 'تعذّر الحفظ.'; show(graceErrorEl);
+    graceErrorEl.textContent = err?.message || 'تعذّر الحفظ.'; show(graceErrorEl);
     btnSaveGrace.disabled = false;
   }
 });

@@ -2370,6 +2370,196 @@ insert into public.grade_pass_rules (grade_from, grade_to, default_pass, core_pa
 select * from (values (1, 4, 41, 41, 0), (5, 12, 40, 50, 1)) as v(f, t, d, c, s)
 where not exists (select 1 from public.grade_pass_rules);
 
+-- ════════════════════════════════════════════════════════════════════════════
+-- 15. درجات المساعدة — اقتراح المعلّم واعتماد المدير + فرض السقوف على الخادم
+--   القواعد (النظام الداخلي): ١٠ درجات كحدّ أقصى للمادة، وزمرتا العربية تُعدّان
+--   مادة واحدة (≤١٠ مجتمعتين)، و٥٠ درجة كحدّ أقصى في المواد جميعها.
+--   ⚠️ student_grace موجود في Supabase مسبقاً (لا CREATE TABLE في المستودع):
+--      student_id, class_id, school_id, academic_year, subject_id (null = المجموع),
+--      marks, granted_by, granted_at
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- 15.1  فهرس فريد يمنع تكرار صفوف المساعدة لنفس (الطالب/الصف/السنة/المادة)
+create unique index if not exists student_grace_uniq
+  on public.student_grace (
+    student_id, class_id, academic_year,
+    coalesce(subject_id, '00000000-0000-0000-0000-000000000000'::uuid)
+  );
+
+-- 15.2  اقتراحات المعلّمين
+create table if not exists public.grace_proposals (
+  id            uuid        primary key default gen_random_uuid(),
+  student_id    uuid        not null references public.students(id) on delete cascade,
+  class_id      uuid        not null references public.classes(id)  on delete cascade,
+  school_id     uuid        not null references public.schools(id)  on delete cascade,
+  academic_year text        not null,
+  subject_id    uuid,                       -- null = اقتراح على المجموع
+  marks         int         not null check (marks > 0 and marks <= 10),
+  reason        text,
+  proposed_by   uuid        references auth.users(id),
+  status        text        not null default 'pending'
+                check (status in ('pending','approved','rejected')),
+  decided_by    uuid        references auth.users(id),
+  decided_at    timestamptz,
+  created_at    timestamptz not null default now()
+);
+alter table public.grace_proposals enable row level security;
+create index if not exists grace_proposals_class_idx
+  on public.grace_proposals (class_id, academic_year, status);
+
+drop policy if exists grace_prop_teacher_rw on public.grace_proposals;
+drop policy if exists grace_prop_admin_rw   on public.grace_proposals;
+
+-- المعلّم: يقرأ/ينشئ اقتراحاته لصفوف يدرّسها فقط
+create policy grace_prop_teacher_rw on public.grace_proposals
+  for all to authenticated
+  using      (proposed_by = auth.uid() and public.teaches_class(class_id))
+  with check (proposed_by = auth.uid() and public.teaches_class(class_id));
+
+-- مدير المدرسة: يقرأ ويقرّر كل اقتراحات مدرسته
+create policy grace_prop_admin_rw on public.grace_proposals
+  for all to authenticated
+  using (
+    exists (select 1 from public.users u
+            where u.id = auth.uid() and u.role = 'school_admin'
+              and u.school_id = grace_proposals.school_id)
+  )
+  with check (
+    exists (select 1 from public.users u
+            where u.id = auth.uid() and u.role = 'school_admin'
+              and u.school_id = grace_proposals.school_id)
+  );
+
+grant select, insert, update on public.grace_proposals to authenticated;
+
+-- 15.3  grant_grace — المسار الوحيد للكتابة في student_grace (يفرض السقوف ذرّيّاً)
+create or replace function public.grant_grace(
+  p_student       uuid,
+  p_class         uuid,
+  p_academic_year text,
+  p_items         jsonb          -- [{subject_id: uuid|null, marks: int}]
+) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  v_school     uuid;
+  v_total      int := 0;
+  v_arabic     int := 0;
+  v_item       jsonb;
+  v_marks      int;
+  v_subject    uuid;
+begin
+  -- ١) المستدعي مدير مدرسة الصف
+  select c.school_id into v_school from public.classes c where c.id = p_class;
+  if v_school is null then raise exception 'صف غير موجود'; end if;
+  if not exists (
+    select 1 from public.users u
+    where u.id = auth.uid() and u.role = 'school_admin' and u.school_id = v_school
+  ) then
+    raise exception 'غير مصرّح: درجات المساعدة يمنحها مدير المدرسة';
+  end if;
+
+  -- ٢) فرض السقوف: ١٠ لكل مادة، زمرتا العربية ≤١٠ مجتمعتين، والإجمالي ≤٥٠
+  for v_item in select * from jsonb_array_elements(coalesce(p_items, '[]'::jsonb))
+  loop
+    v_marks   := coalesce((v_item->>'marks')::int, 0);
+    v_subject := nullif(v_item->>'subject_id', '')::uuid;
+    if v_marks <= 0 then continue; end if;
+    if v_marks > 10 then
+      raise exception 'الحد الأقصى ١٠ درجات لكل مادة';
+    end if;
+    v_total := v_total + v_marks;
+    if v_subject is not null and exists (
+      select 1 from public.subjects s where s.id = v_subject and s.is_core_arabic
+    ) then
+      v_arabic := v_arabic + v_marks;
+    end if;
+  end loop;
+  if v_arabic > 10 then
+    raise exception 'زمرتا اللغة العربية تُعدّان مادة واحدة: الحد ١٠ درجات';
+  end if;
+  if v_total > 50 then
+    raise exception 'الحد الأقصى ٥٠ درجة مساعدة في المواد جميعها';
+  end if;
+
+  -- ٣) استبدال ذرّي داخل المعاملة نفسها
+  delete from public.student_grace
+   where student_id = p_student and class_id = p_class and academic_year = p_academic_year;
+
+  insert into public.student_grace
+    (student_id, class_id, school_id, academic_year, subject_id, marks, granted_by, granted_at)
+  select p_student, p_class, v_school, p_academic_year,
+         nullif(it->>'subject_id', '')::uuid, (it->>'marks')::int, auth.uid(), now()
+    from jsonb_array_elements(coalesce(p_items, '[]'::jsonb)) it
+   where coalesce((it->>'marks')::int, 0) > 0;
+end; $$;
+
+revoke all on function public.grant_grace(uuid, uuid, text, jsonb) from public, anon;
+grant execute on function public.grant_grace(uuid, uuid, text, jsonb) to authenticated;
+
+-- امنع الكتابة المباشرة: كل المنح يمرّ عبر grant_grace
+revoke insert, update, delete on public.student_grace from authenticated;
+
+-- 15.4  decide_grace_proposal — اعتماد/رفض اقتراح معلّم (مدير المدرسة فقط)
+create or replace function public.decide_grace_proposal(
+  p_id       uuid,
+  p_decision text                -- approved | rejected
+) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  v_p       public.grace_proposals;
+  v_items   jsonb;
+  v_name    text;
+begin
+  if p_decision not in ('approved','rejected') then
+    raise exception 'قرار غير صالح';
+  end if;
+  select * into v_p from public.grace_proposals where id = p_id;
+  if v_p.id is null then raise exception 'الاقتراح غير موجود'; end if;
+  if not exists (
+    select 1 from public.users u
+    where u.id = auth.uid() and u.role = 'school_admin' and u.school_id = v_p.school_id
+  ) then
+    raise exception 'غير مصرّح';
+  end if;
+
+  if p_decision = 'approved' then
+    -- ادمج الاقتراح مع المساعدة الحالية: صفّ المادة المقترحة يُستبدل بقيمة
+    -- الاقتراح، وبقية الصفوف تبقى كما هي. ثم أعد فرض السقوف عبر grant_grace.
+    select coalesce(jsonb_agg(jsonb_build_object('subject_id', sub_id, 'marks', mk)), '[]'::jsonb)
+      into v_items
+    from (
+      select g.subject_id as sub_id, g.marks as mk
+        from public.student_grace g
+       where g.student_id    = v_p.student_id
+         and g.class_id      = v_p.class_id
+         and g.academic_year = v_p.academic_year
+         and g.subject_id is distinct from v_p.subject_id
+      union all
+      select v_p.subject_id, v_p.marks
+    ) merged(sub_id, mk);
+
+    perform public.grant_grace(v_p.student_id, v_p.class_id, v_p.academic_year, v_items);
+
+    -- أعلِم ولي الأمر (اللائحة: يُعلَم ولي الأمر بدرجات المساعدة)
+    select full_name into v_name from public.students where id = v_p.student_id;
+    perform public.notify_user(
+      pl.user_id, 'grace_granted',
+      'درجات مساعدة لـ ' || coalesce(v_name, 'ابنك/ابنتك'),
+      'مُنحت ' || v_p.marks || ' درجة مساعدة وفق النظام الداخلي',
+      'student_grace', v_p.student_id
+    )
+    from public.parent_links pl
+    where pl.student_id = v_p.student_id;
+  end if;
+
+  update public.grace_proposals
+     set status = p_decision, decided_by = auth.uid(), decided_at = now()
+   where id = p_id;
+end; $$;
+
+revoke all on function public.decide_grace_proposal(uuid, text) from public, anon;
+grant execute on function public.decide_grace_proposal(uuid, text) to authenticated;
+
 -- ────────────────────────────────────────────────────────────────────────────
 -- 14.3  Seed القوائم النظامية (مستخرجة من ورقة «قوائم» في ملف البيان الرسمي)
 --       directorate_id = null → قائمة نظامية مشتركة لكل المديريات
