@@ -1516,6 +1516,9 @@ select.csel-native {
   border-bottom: 1px solid var(--clr-border-lt, #E2E8F0);
 }
 .notif-item--unread { background: rgba(37,99,235,.05); }
+/* Notifications that open a specific screen when tapped. */
+.notif-item--action { cursor: pointer; }
+.notif-item--action:hover { background: rgba(37,99,235,.09); }
 .notif-item-title { font-size: .9rem; font-weight: 600; color: var(--clr-text-1); }
 .notif-item-body  { font-size: .82rem; color: var(--clr-text-2); margin-top: 2px; }
 .notif-item-time  { font-size: .75rem; color: var(--clr-text-3); margin-top: 4px; }

@@ -129,7 +129,6 @@ const classesEmpty   = $('classes-empty');
 
 // Attendance view
 const attClassName   = $('att-class-name');
-const attDate        = $('att-date');
 const btnBack        = $('btn-back');
 const sumPresent     = $('sum-present');
 const sumLate        = $('sum-late');
@@ -197,6 +196,43 @@ function svgHref(el, href) { el.setAttribute('href', href); }
 
 function show(el) { el.hidden = false; }
 function hide(el) { el.hidden = true; }
+
+// ── In-app confirm ────────────────────────────────────────────────────────────
+// Replaces native confirm(): the browser's dialog is chrome, not app UI — it
+// renders the hosting domain to the user and breaks the installed-app illusion.
+// Returns a promise that resolves true (continue) or false (cancel).
+const modalAsk     = document.getElementById('modal-ask');
+const askModalText = document.getElementById('ask-modal-text');
+const btnAskCancel = document.getElementById('btn-ask-cancel');
+const btnAskOk     = document.getElementById('btn-ask-ok');
+
+let _askResolve = null;
+
+function settleAsk(answer) {
+  if (!_askResolve) return;
+  const resolve = _askResolve;
+  _askResolve = null;
+  hide(modalAsk);
+  document.body.style.overflow = '';
+  resolve(answer);
+}
+
+function askConfirm(message, okLabel = 'متابعة') {
+  // A second call while one is open cancels the first rather than orphaning it.
+  settleAsk(false);
+  askModalText.textContent = message;
+  btnAskOk.textContent     = okLabel;
+  show(modalAsk);
+  document.body.style.overflow = 'hidden';
+  btnAskOk.focus();
+  return new Promise((resolve) => { _askResolve = resolve; });
+}
+
+btnAskCancel.addEventListener('click', () => settleAsk(false));
+btnAskOk.addEventListener('click',     () => settleAsk(true));
+modalAsk.addEventListener('click', (e) => {
+  if (e.target === modalAsk) settleAsk(false);
+});
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 const TOAST_ICONS = {
@@ -352,8 +388,8 @@ const modalConfirmLogout = document.getElementById('modal-confirm-logout');
 const btnLogoutCancel    = document.getElementById('btn-logout-cancel');
 const btnLogoutOk        = document.getElementById('btn-logout-ok');
 
-btnLogout.addEventListener('click', () => {
-  if (S.isDirty && !confirm('يوجد تغييرات غير محفوظة. هل تريد الخروج؟')) return;
+btnLogout.addEventListener('click', async () => {
+  if (S.isDirty && !(await askConfirm('يوجد تغييرات غير محفوظة. هل تريد الخروج؟', 'خروج'))) return;
   modalConfirmLogout.hidden = false;
 });
 btnLogoutCancel.addEventListener('click', () => { modalConfirmLogout.hidden = true; });
@@ -528,10 +564,10 @@ function attendanceClasses() {
 function gradeClasses() {
   return S.classes.filter(c => c.role === 'homeroom' || c.role === 'subject');
 }
-// Conduct (السلوك) is entered by the attendance teacher for grades 7+.
+// Conduct (السلوك) is entered by the attendance teacher — one mark out of 100,
+// no components. Available for every grade the teacher takes attendance for.
 function conductClasses() {
-  return S.classes.filter(c =>
-    (c.role === 'homeroom' || c.role === 'supervisor') && c.grade >= 7);
+  return S.classes.filter(c => c.role === 'homeroom' || c.role === 'supervisor');
 }
 function classesForMode(mode) {
   if (mode === 'grades')  return gradeClasses();
@@ -623,7 +659,6 @@ async function openAttendanceView(cls) {
   S.isDirty     = false;
 
   attClassName.textContent = cls.displayName;
-  attDate.textContent      = formatDateAr(todayISO());
 
   showView('att');
 
@@ -1129,6 +1164,8 @@ const gradesSemesterSel = $('grades-semester');
 const gradesLegend      = $('grades-legend');
 const gradesReadonly    = $('grades-readonly');
 const gradesLoading     = $('grades-loading');
+const gradesFillWrap    = $('grades-fill-wrap');
+const btnFillFull       = $('btn-fill-full');
 const gradesList        = $('grades-list');
 const gradesEmpty       = $('grades-empty');
 const gradesEmptyText   = $('grades-empty-text');
@@ -1429,6 +1466,7 @@ async function openGradesView(cls) {
     console.error('[NSAMS-T] openGradesView', err);
     hide(gradesLoading);
     hide(gradesFooter);
+    gradesFillWrap.hidden = true;
     toast(gradesErr(err, 'تعذّر تحميل المواد'), 'error');
   }
 }
@@ -1442,6 +1480,7 @@ async function loadGradesForCurrent() {
 
   show(gradesLoading);
   hide(gradesList);
+  gradesFillWrap.hidden = true;   // re-decided by renderGradeRows once loaded
 
   try {
     const existing = await getClassGrades(G.class.id, sub.id, G.semester);
@@ -1489,13 +1528,42 @@ function renderGradeRows(sub, readOnly = false) {
   gradesList.innerHTML = '';
   if (!sub.components || sub.components.length === 0) {
     hide(gradesList);
+    gradesFillWrap.hidden = true;
     return;
   }
   G.students.forEach((stu, i) => {
     gradesList.appendChild(buildGradeRow(stu, i + 1, sub, readOnly));
   });
   show(gradesList);
+  // Bulk full-marks shortcut: only for subjects the admin flagged, and never in
+  // the read-only view of another teacher's subject.
+  gradesFillWrap.hidden = readOnly || !sub.allow_full_marks || G.students.length === 0;
 }
+
+// Fill every student's every component with its maximum. Values stay editable —
+// the teacher adjusts the exceptions, then saves as usual.
+function fillAllFullMarks() {
+  const sub = currentSubject();
+  if (!sub || !sub.allow_full_marks || !canEditCurrent()) return;
+
+  for (const row of gradesList.querySelectorAll('.grade-row')) {
+    const wrap = row.querySelector('.grade-inputs');
+    if (!wrap) continue;
+    const sid = wrap.dataset.sid;
+    for (const input of wrap.querySelectorAll('.grade-input')) {
+      const max = Number(input.max);
+      if (!Number.isFinite(max)) continue;
+      input.value = String(max);
+      input.classList.remove('invalid');
+      (G.marks[sid] ||= {})[input.dataset.cid] = max;
+    }
+    updateRowTotal(row, sid, sub);
+  }
+  G.dirty = true;
+  toast('وُضعت العلامة الكاملة للجميع — يمكنك تعديل أي طالب قبل الحفظ', 'success');
+}
+
+btnFillFull.addEventListener('click', fillAllFullMarks);
 
 function buildGradeRow(stu, num, sub, readOnly = false) {
   const li = document.createElement('li');
@@ -1541,16 +1609,80 @@ function buildGradeRow(stu, num, sub, readOnly = false) {
   return li;
 }
 
-// اقتراح درجات مساعدة لطالب في مادة المعلّم (لا يؤثّر على النتيجة حتى يعتمده المدير)
-async function openProposeGrace(stu, sub) {
-  const raw = prompt(`درجات المساعدة المقترحة لـ ${stu.full_name} في ${sub.name} (١–١٠):`, '');
-  if (raw == null) return;
-  const marks = Number(raw);
-  if (!Number.isFinite(marks) || marks <= 0 || marks > 10) {
-    toast('أدخل عدداً بين ١ و١٠', 'error');
+// ── اقتراح درجات مساعدة ───────────────────────────────────────────────────────
+// لطالب في مادة المعلّم (لا يؤثّر على النتيجة حتى يعتمده مدير المدرسة).
+// نافذة واحدة داخل التطبيق تجمع الدرجة والسبب — كانت prompt() مرّتين متتاليتين.
+const modalGrace       = $('modal-grace');
+const graceModalSub    = $('grace-modal-sub');
+const graceMarksIn     = $('grace-marks');
+const graceReasonIn    = $('grace-reason');
+const graceModalError  = $('grace-modal-error');
+const btnGraceCancel   = $('btn-grace-cancel');
+const btnGraceSend     = $('btn-grace-send');
+const graceSendLabel   = $('grace-send-label');
+const graceSendSpinner = $('grace-send-spinner');
+
+// The student/subject the open sheet is about; null when closed.
+let _graceCtx = null;
+
+function openProposeGrace(stu, sub) {
+  _graceCtx = { stu, sub };
+  graceModalSub.textContent = `${stu.full_name} — ${sub.name}`;
+  // Blank both fields on every open: the sheet is reused, so a value left from
+  // the previous student would otherwise be pre-filled here.
+  graceMarksIn.value  = '';
+  graceReasonIn.value = '';
+  hide(graceModalError);
+  setGraceBusy(false);
+  show(modalGrace);
+  modalGrace.querySelector('.confirm-modal-sheet').scrollTop = 0;
+  document.body.style.overflow = 'hidden';
+  graceMarksIn.focus();
+}
+
+function closeProposeGrace() {
+  hide(modalGrace);
+  document.body.style.overflow = '';
+  _graceCtx = null;
+}
+
+function setGraceBusy(busy) {
+  btnGraceSend.disabled     = busy;
+  btnGraceCancel.disabled   = busy;
+  graceSendLabel.hidden     = busy;
+  graceSendSpinner.hidden   = !busy;
+}
+
+function graceError(msg) {
+  graceModalError.textContent = msg;
+  show(graceModalError);
+}
+
+btnGraceCancel.addEventListener('click', closeProposeGrace);
+modalGrace.addEventListener('click', (e) => {
+  if (e.target === modalGrace && !btnGraceSend.disabled) closeProposeGrace();
+});
+
+// Escape closes whichever in-app dialog is open (topmost first).
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!modalGrace.hidden) { if (!btnGraceSend.disabled) closeProposeGrace(); return; }
+  if (!modalAsk.hidden)   { settleAsk(false); return; }
+});
+
+btnGraceSend.addEventListener('click', async () => {
+  if (!_graceCtx) return;
+  const { stu, sub } = _graceCtx;
+
+  const marks = Number(graceMarksIn.value.trim());
+  if (!Number.isInteger(marks) || marks < 1 || marks > 10) {
+    graceError('أدخل عدداً صحيحاً بين ١ و١٠');
+    graceMarksIn.focus();
     return;
   }
-  const reason = prompt('سبب الاقتراح (اختياري):', '') ?? '';
+
+  hide(graceModalError);
+  setGraceBusy(true);
   try {
     await proposeGrace({
       studentId: stu.id,
@@ -1558,14 +1690,16 @@ async function openProposeGrace(stu, sub) {
       schoolId:  G.class.schoolId ?? S.user?.schoolId ?? null,
       subjectId: sub.id,
       marks,
-      reason,
+      reason:    graceReasonIn.value.trim(),
     });
+    closeProposeGrace();
     toast('أُرسل الاقتراح لمدير المدرسة', 'success');
   } catch (err) {
     console.error('[NSAMS] proposeGrace', err);
-    toast(err?.message || 'تعذّر إرسال الاقتراح', 'error');
+    setGraceBusy(false);
+    graceError(err?.message || 'تعذّر إرسال الاقتراح');
   }
-}
+});
 
 function rowTotal(sid, sub) {
   let sum = 0, any = false;
@@ -1615,7 +1749,7 @@ gradesList.addEventListener('input', (e) => {
 
 // Subject / semester switching (warn on unsaved edits).
 async function switchGradeContext() {
-  if (G.dirty && !confirm('يوجد درجات غير محفوظة. هل تريد المتابعة وتجاهلها؟')) {
+  if (G.dirty && !(await askConfirm('يوجد درجات غير محفوظة. هل تريد المتابعة وتجاهلها؟', 'تجاهل ومتابعة'))) {
     // revert the select to the loaded context
     gradesSemesterSel.value = String(G.semester);
     CustomSelect.refresh(gradesSemesterSel);
@@ -1686,8 +1820,8 @@ btnSaveGrades.addEventListener('click', async () => {
   }
 });
 
-btnGradesBack.addEventListener('click', () => {
-  if (G.dirty && !confirm('يوجد درجات غير محفوظة. هل تريد الخروج وتجاهلها؟')) return;
+btnGradesBack.addEventListener('click', async () => {
+  if (G.dirty && !(await askConfirm('يوجد درجات غير محفوظة. هل تريد الخروج وتجاهلها؟', 'خروج وتجاهل'))) return;
   G.class = null; G.students = []; G.subjects = []; G.marks = {}; G.dirty = false;
   showView('home');
 });
@@ -1785,8 +1919,8 @@ btnSaveConduct.addEventListener('click', async () => {
   }
 });
 
-btnConductBack.addEventListener('click', () => {
-  if (C.dirty && !confirm('يوجد درجات سلوك غير محفوظة. هل تريد الخروج وتجاهلها؟')) return;
+btnConductBack.addEventListener('click', async () => {
+  if (C.dirty && !(await askConfirm('يوجد درجات سلوك غير محفوظة. هل تريد الخروج وتجاهلها؟', 'خروج وتجاهل'))) return;
   C.class = null; C.students = []; C.marks = {}; C.dirty = false;
   showView('home');
 });
@@ -1815,9 +1949,10 @@ async function loadNotifListT() {
       const m = Math.floor(diff / 60000);
       const ago = m < 1 ? 'الآن' : m < 60 ? `منذ ${m} دقيقة` : m < 1440 ? `منذ ${Math.floor(m/60)} ساعة` : `منذ ${Math.floor(m/1440)} يوم`;
       const unread = !n.read_at ? ' notif-item--unread' : '';
+      // Titles/bodies are server-composed from user-entered names — escape them.
       return `<li class="notif-item${unread}">
-        <div class="notif-item-title">${n.title}</div>
-        ${n.body ? `<div class="notif-item-body">${n.body}</div>` : ''}
+        <div class="notif-item-title">${escapeHtml(n.title)}</div>
+        ${n.body ? `<div class="notif-item-body">${escapeHtml(n.body)}</div>` : ''}
         <div class="notif-item-time">${ago}</div>
       </li>`;
     }).join('');

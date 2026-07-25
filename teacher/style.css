@@ -942,6 +942,42 @@ select.csel-native {
 .confirm-modal-sub   { font-size: .9rem; color: var(--clr-text-muted, #666); margin: 0 0 8px; }
 .confirm-modal-actions { display: flex; gap: 10px; margin-top: 4px; }
 .confirm-modal-actions .btn { flex: 1; }
+
+/* Form-carrying variant of the confirm sheet (grace proposal): fields read
+   right-to-left like the rest of the app, so the sheet is start-aligned and a
+   little wider, and it scrolls if the keyboard squeezes the viewport. */
+.confirm-modal-sheet--form {
+  text-align: start;
+  width: min(400px, 100%);
+  max-height: 85vh;
+  overflow-y: auto;
+  gap: 4px;
+}
+.confirm-modal-sheet--form .confirm-modal-title,
+.confirm-modal-sheet--form .confirm-modal-sub { text-align: start; }
+.form-group--flush { margin-bottom: 10px; }
+/* .form-input reserves inline-end padding for a decorative icon; these fields
+   have none, so reclaim the space. */
+.form-input--plain { padding-inline-end: 16px; font-family: inherit; resize: vertical; }
+.modal-error {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: var(--r-sm);
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #dc2626;
+  font-size: .85rem;
+  font-weight: 600;
+}
+.modal-error[hidden] { display: none; }
+
+/* Bulk full-marks shortcut above the grade rows (activity subjects). */
+.grades-fill-wrap {
+  padding: 0 var(--page-px, 16px) 10px;
+  display: flex;
+}
+.grades-fill-wrap[hidden] { display: none; }
+.grades-fill-wrap .btn { flex: 1; justify-content: center; }
 .btn-outline {
   background: transparent;
   border: 1.5px solid var(--clr-border);

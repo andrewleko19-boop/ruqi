@@ -217,7 +217,15 @@ Deno.serve(async (req) => {
     };
     // Parents live in auth.users only (not public.users), so the role lookup
     // above returns no row → fall back to the parent portal for absence pushes.
-    const path = PORTAL_BY_ROLE[recipient?.role ?? ""] ?? (notif.type === "student_absent" ? "parent/" : "");
+    let path = PORTAL_BY_ROLE[recipient?.role ?? ""] ?? (notif.type === "student_absent" ? "parent/" : "");
+
+    // Deep link: for notification types that map to one specific screen, carry
+    // the type + entity in the query so the portal can open that screen (and its
+    // dialog) on load instead of dropping the user on the default tab.
+    const DEEP_LINKED = new Set(["grace_proposed"]);
+    if (path && notif.entity_id && DEEP_LINKED.has(notif.type)) {
+      path += `?n=${encodeURIComponent(notif.type)}&e=${encodeURIComponent(notif.entity_id)}`;
+    }
 
     // Stable per-topic tag: re-sends about the same entity replace the old
     // notification and re-alert (with renotify in the SW) instead of stacking

@@ -957,6 +957,20 @@ async function initApp() {
   //  school data was ready; called directly here instead.)
   await loadClassSummaries();
   loadStaffDailyCounts();   // auto-fill admin/worker counts from the staff register
+
+  await consumeNotifDeepLink();
+}
+
+// A push notification opens the portal at ?n=<type>&e=<entity_id>. Route to the
+// matching screen, then strip the params so a reload doesn't reopen the dialog.
+async function consumeNotifDeepLink() {
+  const params = new URLSearchParams(location.search);
+  const type   = params.get('n');
+  const entity = params.get('e');
+  if (!type || !entity) return;
+
+  history.replaceState(null, '', location.pathname + location.hash);
+  await handleNotifTarget(type, entity);
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
@@ -1961,6 +1975,7 @@ const subjMaxIn      = el('subj-max');
 const subjPassIn     = el('subj-pass');
 const subjArabicIn   = el('subj-arabic');
 const subjMathIn     = el('subj-math');
+const subjFullMarksIn = el('subj-full-marks');
 const subjCompList   = el('subj-comp-list');
 const btnAddComp     = el('btn-add-comp');
 const subjCompSum    = el('subj-comp-sum');
@@ -2122,7 +2137,8 @@ function buildSubjectRow(sub) {
   const li = document.createElement('li');
   li.className = 'subj-row';
   const tag = (sub.is_core_arabic ? '<span class="subj-tag">عربي</span>' : '')
-            + (sub.is_core_math ? '<span class="subj-tag">رياضيات</span>' : '');
+            + (sub.is_core_math ? '<span class="subj-tag">رياضيات</span>' : '')
+            + (sub.allow_full_marks ? '<span class="subj-tag">نشاط</span>' : '');
   li.innerHTML = `
     <div class="subj-info">
       <div class="subj-name">${escapeHtml(sub.name)}${tag}</div>
@@ -2190,6 +2206,7 @@ async function openSubjectModal(sub) {
   subjPassIn.value   = sub?.pass_mark ?? 40;
   subjArabicIn.checked = !!sub?.is_core_arabic;
   subjMathIn.checked   = !!sub?.is_core_math;
+  subjFullMarksIn.checked = !!sub?.allow_full_marks;
   subjCompList.innerHTML = '';
 
   show(modalSubject);
@@ -2258,12 +2275,14 @@ btnSaveSubject.addEventListener('click', async () => {
       await NDB.updateSubject(subjectId, {
         name, maxTotal, passMark,
         isCoreArabic: subjArabicIn.checked, isCoreMath: subjMathIn.checked,
+        allowFullMarks: subjFullMarksIn.checked,
       });
     } else {
       subjectId = await NDB.createSubject({
         schoolId: S.school.id, grade: _subjGrade,
         name, maxTotal, passMark,
         isCoreArabic: subjArabicIn.checked, isCoreMath: subjMathIn.checked,
+        allowFullMarks: subjFullMarksIn.checked,
       });
     }
     await NDB.setSubjectComponents(subjectId, comps);
@@ -4702,15 +4721,69 @@ async function loadNotifList() {
     notifList.innerHTML = items.map(n => {
       const ago = formatTimeAgoAr(n.created_at);
       const unread = !n.read_at ? ' notif-item--unread' : '';
-      return `<li class="notif-item${unread}" data-id="${n.id}">
-        <div class="notif-item-title">${n.title}</div>
-        ${n.body ? `<div class="notif-item-body">${n.body}</div>` : ''}
+      // Titles/bodies are server-composed from user-entered names — escape them.
+      const actionable = notifHandlerFor(n.type) ? ' notif-item--action' : '';
+      return `<li class="notif-item${unread}${actionable}" data-id="${escapeHtml(n.id)}"
+                  data-type="${escapeHtml(n.type || '')}" data-entity="${escapeHtml(n.entity_id || '')}">
+        <div class="notif-item-title">${escapeHtml(n.title)}</div>
+        ${n.body ? `<div class="notif-item-body">${escapeHtml(n.body)}</div>` : ''}
         <div class="notif-item-time">${ago}</div>
       </li>`;
     }).join('');
   } catch (e) {
     console.warn('[NSAMS] loadNotifList', e);
   }
+}
+
+// ── Notification deep links ───────────────────────────────────────────────────
+// Types whose notification points at one specific screen. Clicking the item (or
+// arriving via ?n=<type>&e=<id> from a push notification) opens that screen and
+// the dialog the user actually needs — not just the portal's default tab.
+const NOTIF_TARGETS = {
+  grace_proposed: openGraceProposalTarget,
+};
+
+// hasOwn, not a plain lookup: a notification type of "constructor"/"toString"
+// would otherwise resolve to an inherited Object member and get called.
+function notifHandlerFor(type) {
+  return Object.hasOwn(NOTIF_TARGETS, type) ? NOTIF_TARGETS[type] : null;
+}
+
+// Open the certificates tab on the proposal's class and pop the student's grace
+// dialog, which lists the pending proposals with approve / reject buttons.
+async function openGraceProposalTarget(proposalId) {
+  const prop = await NDB.getGraceProposalById(proposalId);
+  if (!prop) { toast('لم يُعثر على الاقتراح — ربما حُذف', 'warning'); return; }
+  if (prop.status !== 'pending') { toast('هذا الاقتراح تمّ البتّ فيه سابقاً', 'info'); }
+
+  // Fill the class picker BEFORE switching: switchTab kicks off initReportsTab
+  // without awaiting it, so loading first (and flipping _reportsLoaded) keeps
+  // the two from racing to rebuild the same <select>.
+  if (!_reportsLoaded) await initReportsTab();
+  switchTab('reports');
+  // Grace applies to the full-year certificate only — a first-semester view has
+  // no grace tool at all, so force the term before loading.
+  repTermSelect.value = 'year';
+  CustomSelect.refresh(repTermSelect);
+  repClassSelect.value = prop.class_id;
+  CustomSelect.refresh(repClassSelect);
+  await loadReports(prop.class_id);
+
+  const card = (_repData?.students || []).find(c => c.student?.id === prop.student_id);
+  if (!card) { toast('الطالب غير موجود في نتائج هذا الصف', 'warning'); return; }
+  openGraceModal(card);
+}
+
+async function handleNotifTarget(type, entityId) {
+  const handler = notifHandlerFor(type);
+  if (!handler || !entityId) return false;
+  try {
+    await handler(entityId);
+  } catch (err) {
+    console.error('[NSAMS] handleNotifTarget', type, err);
+    toast('تعذّر فتح الإشعار', 'error');
+  }
+  return true;
 }
 
 function formatTimeAgoAr(isoStr) {
@@ -4736,6 +4809,21 @@ function closeNotifModal() {
 if (btnNotif)       btnNotif.addEventListener('click', openNotifModal);
 if (el('btn-notif-close')) el('btn-notif-close').addEventListener('click', closeNotifModal);
 if (modalNotif)     modalNotif.addEventListener('click', (e) => { if (e.target === modalNotif) closeNotifModal(); });
+
+// Clicking an actionable notification marks it read and jumps to its screen.
+if (el('notif-list')) el('notif-list').addEventListener('click', async (e) => {
+  const item = e.target.closest('.notif-item[data-type]');
+  if (!item) return;
+  const { type, entity, id } = item.dataset;
+  if (!notifHandlerFor(type) || !entity) return;
+
+  closeNotifModal();
+  if (item.classList.contains('notif-item--unread')) {
+    await NDB.markNotificationRead(id).catch(() => {});
+    updateNotifBadge(Math.max(0, _unreadCount - 1));
+  }
+  await handleNotifTarget(type, entity);
+});
 
 if (el('btn-notif-read-all')) el('btn-notif-read-all').addEventListener('click', async () => {
   await window.NSAMS_DB.markAllNotificationsRead().catch(() => {});

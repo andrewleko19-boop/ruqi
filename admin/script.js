@@ -1139,6 +1139,7 @@ const scModalSave       = document.getElementById('subject-cat-modal-save');
 const scName            = document.getElementById('sc-name');
 const scArabic          = document.getElementById('sc-arabic');
 const scMath            = document.getElementById('sc-math');
+const scFullMarks       = document.getElementById('sc-full-marks');
 const scSort            = document.getElementById('sc-sort');
 const scActive          = document.getElementById('sc-active');
 const delScModal        = document.getElementById('delete-subject-cat-modal');
@@ -1150,9 +1151,10 @@ const delScConfirm      = document.getElementById('del-subject-cat-confirm');
 
 CustomSelect.enhance('sc-active');
 
-const scCompList = document.getElementById('sc-comp-list');
-const scAddComp  = document.getElementById('sc-add-comp');
-const scCompSum  = document.getElementById('sc-comp-sum');
+const scCompList   = document.getElementById('sc-comp-list');
+const scAddComp    = document.getElementById('sc-add-comp');
+const scSingleComp = document.getElementById('sc-single-comp');
+const scCompSum    = document.getElementById('sc-comp-sum');
 
 let allCatalogSubjects = [];
 let editingCatalogId = null;
@@ -1187,12 +1189,19 @@ function scReadComps() {
 
 scAddComp.addEventListener('click', () => scAddCompRow());
 
+// Shortcut for subjects graded as a single mark out of 100 (e.g. السلوك): one
+// component carrying the whole mark, instead of مذاكرة / شفهي / امتحان فصلي.
+scSingleComp.addEventListener('click', () => {
+  scCompList.innerHTML = '';
+  scAddCompRow(scName.value.trim() || 'الدرجة', 100);
+});
+
 async function loadSubjectCatalog() {
   hide(subjectsTableWrap); hide(subjectsEmpty);
   show(subjectsLoading);
   try {
     const { data, error } = await supabase.from('subject_catalog')
-      .select('id, name, is_core_arabic, is_core_math, sort_order, active')
+      .select('id, name, is_core_arabic, is_core_math, allow_full_marks, sort_order, active')
       .order('sort_order').order('name');
     if (error) throw error;
     allCatalogSubjects = data ?? [];
@@ -1205,7 +1214,11 @@ async function loadSubjectCatalog() {
   if (!allCatalogSubjects.length) { show(subjectsEmpty); return; }
 
   subjectsTbody.innerHTML = allCatalogSubjects.map((r, i) => {
-    const tags = [r.is_core_arabic ? 'عربي' : '', r.is_core_math ? 'رياضيات' : ''].filter(Boolean).join('، ') || '—';
+    const tags = [
+      r.is_core_arabic   ? 'عربي'          : '',
+      r.is_core_math     ? 'رياضيات'       : '',
+      r.allow_full_marks ? 'علامة كاملة'   : '',
+    ].filter(Boolean).join('، ') || '—';
     return `<tr>
       <td class="muted">${i + 1}</td>
       <td>${esc(r.name)}${r.active ? '' : ' <span style="color:var(--text-dim)">(معطّلة)</span>'}</td>
@@ -1228,6 +1241,7 @@ function openAddCatalog() {
   scName.value = '';
   scArabic.checked = false;
   scMath.checked = false;
+  scFullMarks.checked = false;
   scSort.value = allCatalogSubjects.length ? (Math.max(...allCatalogSubjects.map(r => r.sort_order || 0)) + 1) : 0;
   scActive.value = 'true'; CustomSelect.refresh(scActive);
   scCompList.innerHTML = '';
@@ -1247,6 +1261,7 @@ async function openEditCatalog(id) {
   scName.value = r.name;
   scArabic.checked = !!r.is_core_arabic;
   scMath.checked = !!r.is_core_math;
+  scFullMarks.checked = !!r.allow_full_marks;
   scSort.value = r.sort_order ?? 0;
   scActive.value = r.active ? 'true' : 'false'; CustomSelect.refresh(scActive);
   scCompList.innerHTML = '';
@@ -1276,10 +1291,11 @@ scModalSave.addEventListener('click', async () => {
   if (!name) { showError(scModalError, 'أدخل اسم المادة.'); return; }
   const row = {
     name,
-    is_core_arabic: scArabic.checked,
-    is_core_math:   scMath.checked,
-    sort_order:     Number(scSort.value) || 0,
-    active:         scActive.value === 'true',
+    is_core_arabic:   scArabic.checked,
+    is_core_math:     scMath.checked,
+    allow_full_marks: scFullMarks.checked,
+    sort_order:       Number(scSort.value) || 0,
+    active:           scActive.value === 'true',
   };
   scModalSave.disabled = true;
   try {
