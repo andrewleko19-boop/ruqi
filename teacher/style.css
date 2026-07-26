@@ -320,8 +320,17 @@ ul { list-style: none; }
 }
 .btn-back svg { transform: scaleX(-1); }   /* flip arrow for RTL */
 .att-hdr-info { flex: 1; min-width: 0; }
-.att-hdr-name { font-size: 1rem; font-weight: 700; }
-.att-hdr-date { font-size: .75rem; opacity: .7; }
+/* The header height is fixed (the summary bar sticks to it at top:var(--header-h)),
+   so the class name must stay on ONE line: wrapping pushed the subtitle out of the
+   header and clipped it in half on narrow screens. */
+.att-hdr-name {
+  font-size: .95rem; font-weight: 700; line-height: 1.25;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.att-hdr-date {
+  font-size: .75rem; opacity: .85; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 /* Summary bar – sticky under header */
 .att-summary-bar {

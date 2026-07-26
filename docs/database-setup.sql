@@ -2620,6 +2620,7 @@ create trigger t_grace_proposal_new
   after insert on public.grace_proposals
   for each row execute function public.trg_grace_proposal_new();
 
+
 -- ════════════════════════════════════════════════════════════════════════════
 -- 16. التحقّق العلني من الجلاء (رمز QR على الشهادة المطبوعة)
 --   يفتح رمز QR الصفحة verify.html?t=<student>&y=<year> فتستدعي هذه الدالة.
@@ -3533,3 +3534,67 @@ end $$;
 -- helper and perform privileged cross-tenant writes, neither of which the
 -- caller can do directly). Lint 0029 is accepted as informational for them.
 -- See supabase/migrations/20260624000300_revert_security_invoker.sql.
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 17. درجة السلوك — صلاحيات وسياسات public.student_conduct
+--   ⚠️ student_conduct أُنشئ في Supabase خارج المستودع ولم تُمنح عليه أي صلاحية
+--      لدور authenticated، فكان كل طلب يفشل بـ 42501
+--      "permission denied for table student_conduct" على القراءة والكتابة معاً،
+--      وتسقط الدرجات في الطابور المحلي بلا نهاية.
+--   الأعمدة (من tools/add-sync-columns.sql وطبقة البيانات):
+--      student_id, class_id, school_id, academic_year, mark,
+--      recorded_by, recorded_at, updated_at, row_version, deleted_at
+-- ════════════════════════════════════════════════════════════════════════════
+
+grant select, insert, update on public.student_conduct to authenticated;
+
+alter table public.student_conduct enable row level security;
+
+-- 17.1  فهرس فريد يطابق onConflict المستخدم في الحفظ (student_id, academic_year)
+create unique index if not exists student_conduct_uniq
+  on public.student_conduct (student_id, academic_year);
+
+drop policy if exists conduct_teacher_write on public.student_conduct;
+drop policy if exists conduct_read          on public.student_conduct;
+drop policy if exists parent_read_linked_conduct on public.student_conduct;
+
+-- 17.2  المعلّم: سياسة FOR ALL واحدة تغطّي نصفَي الـ upsert (INSERT + UPDATE).
+--   سياستان منفصلتان كانتا سبب 403 التاريخية في daily_student_attendance عند
+--   إعادة الإرسال — لا نكرّر الخطأ هنا.
+create policy conduct_teacher_write on public.student_conduct
+  for all to authenticated
+  using (
+    public.current_user_role() = 'teacher'::public.user_role
+    and public.teaches_class(class_id)
+  )
+  with check (
+    public.current_user_role() = 'teacher'::public.user_role
+    and public.teaches_class(class_id)
+    and recorded_by = auth.uid()
+  );
+
+-- 17.3  القراءة: معلّم الصف | مدير المدرسة | المديرية | الوزارة.
+--   قراءة المدير لازمة: getClassReportCards تستدعي getClassConduct عند بناء
+--   الجلاء، وشرط الترفيع للصفوف ٧+ يتطلّب سلوكاً ≥ ٦٠.
+create policy conduct_read on public.student_conduct
+  for select to authenticated
+  using (
+    (public.current_user_role() = 'teacher'::public.user_role
+       and public.teaches_class(class_id))
+    or (public.current_user_role() = 'school_admin'::public.user_role
+       and school_id = public.current_user_school_id())
+    or (public.current_user_role() = 'directorate_user'::public.user_role
+       and public.school_in_my_directorate(school_id))
+    or public.current_user_role() = 'ministry_user'::public.user_role
+  );
+
+-- 17.4  ولي الأمر: سلوك أبنائه فقط (نفس نمط parent_read_linked_grades)
+create policy parent_read_linked_conduct on public.student_conduct
+  for select to authenticated
+  using (
+    public.current_user_is_parent() and exists (
+      select 1 from public.parent_links pl
+      where pl.user_id = auth.uid() and pl.student_id = student_conduct.student_id
+    )
+  );

@@ -216,7 +216,7 @@ body {
 
 .stat-card.accent-green { border-color: var(--green); background: linear-gradient(135deg, var(--surface) 60%, var(--green-bg)); }
 .stat-card.accent-red   { border-color: var(--red);   background: linear-gradient(135deg, var(--surface) 60%, var(--red-bg)); }
-.stat-card.accent-blue  { border-color: var(--accent); background: linear-gradient(135deg, var(--accent) 0%, #1a2744 100%); }
+.stat-card.accent-blue  { border-color: var(--accent); background: linear-gradient(135deg, var(--accent) 0%, #14306e 100%); }
 
 .stat-label {
   font-size: 12px;
@@ -234,7 +234,12 @@ body {
 
 .accent-green .stat-value { color: #16a34a; }
 .accent-red   .stat-value { color: #dc2626; }
-.accent-blue  .stat-value { color: #d6f5e3; }
+
+/* accent-blue is the only card with a DARK background, so it must override the
+   label and value colours that assume a white surface — --text-muted (#64748b)
+   on navy is effectively invisible. */
+.accent-blue .stat-label { color: rgba(255,255,255,.82); }
+.accent-blue .stat-value { color: #fff; }
 
 /* ── Section card ─────────────────────────────── */
 .section-card {

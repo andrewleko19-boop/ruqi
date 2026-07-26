@@ -1978,6 +1978,7 @@ const subjMathIn     = el('subj-math');
 const subjFullMarksIn = el('subj-full-marks');
 const subjCompList   = el('subj-comp-list');
 const btnAddComp     = el('btn-add-comp');
+const btnSubjSingle  = el('btn-subj-single');
 const subjCompSum    = el('subj-comp-sum');
 const subjError      = el('subj-error');
 const btnSaveSubject = el('btn-save-subject');
@@ -2237,6 +2238,16 @@ function closeSubjectModal() {
 btnCloseSubject.addEventListener('click', closeSubjectModal);
 modalSubject.addEventListener('click', (e) => { if (e.target === modalSubject) closeSubjectModal(); });
 btnAddComp.addEventListener('click', () => { addCompRow(); updateCompSum(); });
+
+// Shortcut for subjects graded as one mark rather than مذاكرة / شفهي / امتحان —
+// conduct-style subjects and activity subjects (PE, music, fine arts). Collapses
+// the component list to a single row carrying the subject's whole max mark.
+btnSubjSingle.addEventListener('click', () => {
+  subjCompList.innerHTML = '';
+  addCompRow(subjNameIn.value.trim() || 'الدرجة', Number(subjMaxIn.value) || 100);
+  updateCompSum();
+});
+
 subjMaxIn.addEventListener('input', updateCompSum);
 subjArabicIn.addEventListener('change', () => {
   // Convenience: Arabic parts pass at 50% by default.
