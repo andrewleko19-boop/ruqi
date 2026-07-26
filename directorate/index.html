@@ -257,17 +257,17 @@
           <div id="map"></div>
         </section>
 
-        <!-- لوحة التقارير المعلقة -->
+        <!-- قائمة الإجراءات الموحَّدة: بلاغات + طلبات + بيانات شهرية + جلاءات -->
         <section class="panel pending-panel">
           <div class="panel-header">
             <h2>
               <svg class="icon"><use href="#icon-alert"/></svg>
-              التقارير المعلقة
+              يحتاج إجراءك
             </h2>
             <span id="pending-count" class="badge badge--amber">0</span>
           </div>
           <div id="pending-list" class="pending-list">
-            <p class="empty-state">لا توجد تقارير معلقة.</p>
+            <p class="empty-state">لا يوجد ما ينتظر إجراءك.</p>
           </div>
         </section>
 
@@ -303,6 +303,20 @@
           </div>
         </div>
         <p id="trend-empty" class="empty-state" style="padding:14px 18px" hidden>لا توجد بيانات اتجاه — تأكد من تشغيل القسم 7 من database-setup.sql.</p>
+      </section>
+
+      <!-- ترتيب المدارس بنسبة الحضور (من بيانات الخريطة نفسها) -->
+      <section class="panel" id="ranking-panel">
+        <div class="panel-header">
+          <h2>
+            <svg class="icon"><use href="#icon-school"/></svg>
+            ترتيب المدارس بنسبة الحضور
+          </h2>
+          <span class="panel-hint">الأدنى أولاً — لمتابعة المتعثّر</span>
+        </div>
+        <div id="ranking-list" class="ranking-list">
+          <p class="empty-state">جارٍ التحميل…</p>
+        </div>
       </section>
 
       <!-- لوحة الالتزام اليومي -->
@@ -514,6 +528,15 @@
             جميع التقارير
           </h2>
           <div class="table-filters">
+            <input id="filter-search" class="input-sm" type="search" placeholder="ابحث في الوصف أو المدرسة…" />
+            <label class="date-range">
+              <span>من</span>
+              <input id="filter-from" class="input-sm" type="date" />
+            </label>
+            <label class="date-range">
+              <span>إلى</span>
+              <input id="filter-to" class="input-sm" type="date" />
+            </label>
             <select id="filter-status" class="select-sm">
               <option value="">جميع الحالات</option>
               <option value="open">مفتوح</option>
@@ -578,6 +601,10 @@
             إضافة مدرسة
           </button>
         </div>
+        <div class="dir-search-bar">
+          <input id="dir-schools-search" class="input-sm" type="search"
+                 placeholder="ابحث باسم المدرسة أو التصنيف أو المجمّع…" />
+        </div>
         <div id="dir-schools-loading" class="dir-table-loading hidden">
           <div class="spinner"></div><span>جارٍ التحميل…</span>
         </div>
@@ -607,6 +634,10 @@
             <svg width="14" height="14"><use href="#icon-plus"/></svg>
             إنشاء حساب مدير
           </button>
+        </div>
+        <div class="dir-search-bar">
+          <input id="dir-principals-search" class="input-sm" type="search"
+                 placeholder="ابحث باسم المدير أو المدرسة…" />
         </div>
         <div id="dir-principals-loading" class="dir-table-loading hidden">
           <div class="spinner"></div><span>جارٍ التحميل…</span>

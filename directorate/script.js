@@ -40,6 +40,11 @@ let mapFitted         = false;  // frame the directorate's own schools once
 let lastSchools       = [];     // cached for re-rendering after a refresh
 let lastStatusMap     = {};
 let allReports        = [];
+// Cached alongside allReports so the unified action queue can merge all four
+// sources; the panels themselves render straight from their loaders.
+let allRequests       = [];
+let allStatements     = [];
+let allResultSheets   = [];
 let knownReportIds    = null;   // null = first load, no flash
 let flashIds          = new Set();
 let complianceRows    = [];     // للتصدير CSV
@@ -271,6 +276,8 @@ function renderMap(schools, statusMap) {
     }
   }
 
+  renderSchoolRanking(schools, statusMap);
+
   // Frame the directorate's own schools instead of leaving the view on the
   // national default, which left most directorates staring at empty map.
   // Once only, so a 30s refresh never yanks the view back while panning.
@@ -283,6 +290,58 @@ function renderMap(schools, statusMap) {
   }
 }
 
+
+// ══════════════════════════════════════════════
+//  School ranking by attendance rate
+// ══════════════════════════════════════════════
+// Same data that colours the map (getSchoolsAttendanceStatus), shown as a
+// ranked comparison — the map answers "where", this answers "who is worst".
+// Ascending, because the point is chasing the schools that are struggling.
+function renderSchoolRanking(schools, statusMap) {
+  const container = document.getElementById('ranking-list');
+  if (!container) return;
+
+  if (!schools || schools.length === 0) {
+    container.innerHTML = '<p class="empty-state">لا توجد مدارس بعد.</p>';
+    return;
+  }
+
+  const rows = schools.map(s => {
+    const info = statusMap[s.id] || {};
+    return {
+      id:   s.id,
+      name: s.name,
+      rate: typeof info.attendanceRate === 'number' ? info.attendanceRate : null,
+    };
+  });
+
+  // Schools that never reported today sink to the bottom with an explicit
+  // "no data" tag — showing them as 0% would claim nobody attended, which is
+  // a different (and false) statement.
+  rows.sort((a, b) => {
+    if (a.rate === null && b.rate === null) return (a.name || '').localeCompare(b.name || '', 'ar');
+    if (a.rate === null) return 1;
+    if (b.rate === null) return -1;
+    return a.rate - b.rate;
+  });
+
+  container.innerHTML = rows.map((r, i) => {
+    const color = r.rate === null ? 'var(--text-muted)'
+                : r.rate < 75 ? 'var(--red)'
+                : r.rate < 90 ? 'var(--amber)'
+                : 'var(--green)';
+    const value = r.rate === null
+      ? '<span class="rank-nodata">لا بيانات</span>'
+      : `<span class="rank-val" style="color:${color}">${esc(String(r.rate))}٪</span>`;
+    return `
+      <div class="rank-row">
+        <span class="rank-idx">${i + 1}</span>
+        <a class="rank-name" href="school.html?id=${esc(r.id)}" title="${esc(r.name ?? '')}">${esc(r.name ?? '—')}</a>
+        <span class="rank-bar-bg"><span class="rank-bar-fill" style="width:${r.rate ?? 0}%;background:${color}"></span></span>
+        ${value}
+      </div>`;
+  }).join('');
+}
 
 // ══════════════════════════════════════════════
 //  Stats
@@ -548,11 +607,30 @@ function getFilteredReports() {
   const statusFilter   = document.getElementById('filter-status')?.value   || '';
   const typeFilter     = document.getElementById('filter-type')?.value     || '';
   const severityFilter = document.getElementById('filter-severity')?.value || '';
+  const search         = (document.getElementById('filter-search')?.value || '').trim().toLowerCase();
+  const fromStr        = document.getElementById('filter-from')?.value || '';
+  const toStr          = document.getElementById('filter-to')?.value   || '';
+
+  // Compare on the local calendar date, not raw timestamps: a report filed at
+  // 23:30 must still count as that day when the range ends on that day.
+  const from = fromStr || null;
+  const to   = toStr   || null;
 
   return allReports.filter(r => {
     if (statusFilter   && r.status          !== statusFilter)       return false;
     if (typeFilter     && r.type            !== typeFilter)         return false;
     if (severityFilter && String(r.severity ?? '') !== severityFilter) return false;
+
+    if (search) {
+      const haystack = `${r.description ?? ''} ${r.schoolName ?? ''}`.toLowerCase();
+      if (!haystack.includes(search)) return false;
+    }
+
+    if (from || to) {
+      const day = localDateISO(new Date(r.created_at));
+      if (from && day < from) return false;
+      if (to   && day > to)   return false;
+    }
     return true;
   });
 }
@@ -598,47 +676,150 @@ function renderReportsTable() {
   }).join('');
 }
 
+// ── Unified action queue ─────────────────────────────────────────────────────
+// Everything awaiting a decision — field reports, school requests, monthly
+// statements and result sheets — merged into one urgency-sorted list, so the
+// overview answers "what needs me right now?" without touching four sections.
+// Approvals count as late after this many hours without a decision. Reports
+// keep their own severity-based SLA (isOverdue).
+const APPROVAL_SLA_HOURS = 48;
+
+function hoursSince(ts) {
+  if (!ts) return 0;
+  return (Date.now() - new Date(ts).getTime()) / 3_600_000;
+}
+
+function buildActionQueue() {
+  const items = [];
+
+  for (const r of allReports) {
+    if (r.status !== 'open' && r.status !== 'acknowledged') continue;
+    items.push({
+      kind: 'report', id: r.id, at: r.created_at, overdue: isOverdue(r),
+      school: r.schoolName ?? '—', report: r,
+    });
+  }
+  for (const r of allRequests) {
+    if (r.status !== 'pending') continue;
+    items.push({
+      kind: 'request', id: r.id, at: r.created_at,
+      overdue: hoursSince(r.created_at) > APPROVAL_SLA_HOURS,
+      school: r.school?.name ?? '—',
+      title: REQ_TYPE_AR[r.type] ?? r.type,
+      selector: '.dir-req-review-btn',
+    });
+  }
+  for (const s of allStatements) {
+    if (s.status !== 'submitted') continue;
+    items.push({
+      kind: 'statement', id: s.id, at: s.submitted_at,
+      overdue: hoursSince(s.submitted_at) > APPROVAL_SLA_HOURS,
+      school: s.school?.name ?? '—',
+      title: `بيان ${MONTH_AR[s.month] ?? s.month} ${s.year}`,
+      selector: '.dir-stmt-review-btn',
+    });
+  }
+  for (const s of allResultSheets) {
+    if (s.status !== 'submitted' && s.status !== 'approved') continue;
+    const cls = s.class ? `الصف ${s.class.grade} / ${s.class.section ?? ''}`.trim() : '';
+    items.push({
+      kind: 'result_sheet', id: s.id, at: s.submitted_at,
+      overdue: hoursSince(s.submitted_at) > APPROVAL_SLA_HOURS,
+      school: s.school?.name ?? '—',
+      title: (s.status === 'approved' ? 'جلاء بانتظار الإصدار' : 'جلاء بانتظار الاعتماد')
+             + (cls ? ` — ${cls}` : ''),
+      selector: '.dir-rs-review-btn',
+    });
+  }
+
+  // Late first, then oldest first — the longer something has waited, the
+  // higher it climbs regardless of type.
+  items.sort((a, b) => (b.overdue - a.overdue) || (new Date(a.at || 0) - new Date(b.at || 0)));
+  return items;
+}
+
+const QUEUE_KIND_LABEL = {
+  report:       'بلاغ',
+  request:      'طلب مدرسة',
+  statement:    'بيان شهري',
+  result_sheet: 'جلاء',
+};
+
 function renderPendingList() {
-  const pending = allReports
-    .filter(r => r.status === 'open' || r.status === 'acknowledged')
-    .sort((a, b) => (b.severity ?? 0) - (a.severity ?? 0) || new Date(a.created_at) - new Date(b.created_at));
+  const items = buildActionQueue();
 
   const countEl = document.getElementById('pending-count');
-  countEl.textContent = pending.length;
-  countEl.className   = `badge ${pending.length > 0 ? 'badge--amber' : 'badge--green'}`;
+  countEl.textContent = items.length;
+  countEl.className   = `badge ${items.length > 0 ? 'badge--amber' : 'badge--green'}`;
 
   const container = document.getElementById('pending-list');
-  if (pending.length === 0) {
-    container.innerHTML = '<p class="empty-state">لا توجد تقارير معلقة.</p>';
+  if (items.length === 0) {
+    container.innerHTML = '<p class="empty-state">لا يوجد ما ينتظر إجراءك.</p>';
     return;
   }
 
-  container.innerHTML = pending.map(r => {
-    const overdue   = isOverdue(r);
-    const isNew     = flashIds.has(r.id);
-    const cardClass = ['pending-card', overdue ? 'row-overdue' : '', isNew ? 'row-flash' : ''].filter(Boolean).join(' ');
-    const overdueTag = overdue ? '<span class="overdue-tag">متأخر</span>' : '';
+  container.innerHTML = items.map(it => {
+    const overdueTag = it.overdue ? '<span class="overdue-tag">متأخر</span>' : '';
+    const kindTag    = `<span class="queue-kind queue-kind--${it.kind}">${esc(QUEUE_KIND_LABEL[it.kind])}</span>`;
+
+    if (it.kind === 'report') {
+      const r = it.report;
+      const isNew = flashIds.has(r.id);
+      const cls = ['pending-card', it.overdue ? 'row-overdue' : '', isNew ? 'row-flash' : ''].filter(Boolean).join(' ');
+      return `
+      <div class="${cls}" data-id="${esc(r.id)}">
+        <div class="queue-head">
+          <span class="pending-school">${esc(it.school)}</span>
+          ${kindTag}${sevBadge(r.severity)}${overdueTag}
+        </div>
+        <span class="type-badge type-${esc(r.type)}">${esc(formatType(r.type))}</span>
+        <div class="pending-desc">${esc(r.description ?? '—')}</div>
+        <div class="pending-time">${esc(formatDate(r.created_at))}</div>
+        <div class="pending-actions">
+          ${photoBtn(r)}
+          ${r.status === 'open'
+            ? `<button class="btn btn-warning btn-sm" data-action="acknowledged" data-id="${esc(r.id)}">تمت المراجعة</button>`
+            : ''}
+          <button class="btn btn-success btn-sm" data-action="resolved" data-id="${esc(r.id)}">حل</button>
+        </div>
+      </div>`;
+    }
 
     return `
-    <div class="${cardClass}" data-id="${esc(r.id)}">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <span class="pending-school">${esc(r.schoolName ?? '—')}</span>
-        ${sevBadge(r.severity)}
-        ${overdueTag}
+    <div class="pending-card${it.overdue ? ' row-overdue' : ''}">
+      <div class="queue-head">
+        <span class="pending-school">${esc(it.school)}</span>
+        ${kindTag}${overdueTag}
       </div>
-      <span class="type-badge type-${esc(r.type)}">${esc(formatType(r.type))}</span>
-      <div class="pending-desc">${esc(r.description ?? '—')}</div>
-      <div class="pending-time">${esc(formatDate(r.created_at))}</div>
+      <div class="pending-desc">${esc(it.title)}</div>
+      <div class="pending-time">${esc(formatDate(it.at))}</div>
       <div class="pending-actions">
-        ${photoBtn(r)}
-        ${r.status === 'open'
-          ? `<button class="btn btn-warning btn-sm" data-action="acknowledged" data-id="${esc(r.id)}">تمت المراجعة</button>`
-          : ''}
-        <button class="btn btn-success btn-sm" data-action="resolved" data-id="${esc(r.id)}">حل</button>
+        <button class="btn btn-primary btn-sm queue-goto"
+                data-selector="${esc(it.selector)}" data-target="${esc(it.id)}">مراجعة</button>
       </div>
     </div>`;
   }).join('');
 }
+
+// Jump from a queue item to the approvals section and open that row's existing
+// review modal. loadAll renders every section regardless of visibility, so the
+// matching button is already in the DOM — no separate modal logic needed here.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.queue-goto');
+  if (!btn) return;
+  const { selector, target } = btn.dataset;
+
+  _dirNavDepth++;
+  history.pushState({ tab: 'approvals', d: _dirNavDepth }, '', '#approvals');
+  _dirActivateTab('approvals');
+
+  const reviewBtn = document.querySelector(`${selector}[data-id="${CSS.escape(target)}"]`);
+  if (reviewBtn) {
+    reviewBtn.click();
+  } else {
+    showToast('تعذّر فتح العنصر', 'حدّث الصفحة ثم أعد المحاولة.', 'warning');
+  }
+});
 
 async function handleStatusUpdate(reportId, newStatus) {
   const btns = document.querySelectorAll(`[data-id="${reportId}"] button`);
@@ -685,6 +866,31 @@ function setupFilters() {
   document.getElementById('filter-status')?.addEventListener('change', renderReportsTable);
   document.getElementById('filter-type')?.addEventListener('change', renderReportsTable);
   document.getElementById('filter-severity')?.addEventListener('change', renderReportsTable);
+  document.getElementById('filter-search')?.addEventListener('input',  renderReportsTable);
+  document.getElementById('filter-from')?.addEventListener('change',   renderReportsTable);
+  document.getElementById('filter-to')?.addEventListener('change',     renderReportsTable);
+
+  // Schools / principals search — both filter the already-loaded arrays.
+  document.getElementById('dir-schools-search')?.addEventListener('input', (e) => {
+    renderDirSchoolRows(filterSchools(e.target.value));
+  });
+  document.getElementById('dir-principals-search')?.addEventListener('input', (e) => {
+    renderDirPrincipalRows(filterPrincipals(e.target.value));
+  });
+}
+
+function filterSchools(q) {
+  const s = (q || '').trim().toLowerCase();
+  if (!s) return _dirAllSchools;
+  return _dirAllSchools.filter(x =>
+    `${x.name ?? ''} ${x.classification ?? ''} ${x.complex_name ?? ''}`.toLowerCase().includes(s));
+}
+
+function filterPrincipals(q) {
+  const s = (q || '').trim().toLowerCase();
+  if (!s) return _dirAllPrincipals;
+  return _dirAllPrincipals.filter(u =>
+    `${u.full_name ?? ''} ${u.schools?.name ?? ''}`.toLowerCase().includes(s));
 }
 
 // ══════════════════════════════════════════════
@@ -1001,8 +1207,10 @@ document.getElementById('reload-periodic-btn')?.addEventListener('click', loadPe
 
 async function loadAll() {
   await Promise.allSettled([loadStats(), loadMapAndCompliance(), loadReports(), loadTrend(), loadRequests(), loadStatements(), loadResultSheets(), loadDropoutSummary(), loadPeriodicReports()]);
-  // After every list has settled — the loaders return early on an empty list,
-  // so counting here is the only place that sees the final rendered state.
+  // After every list has settled. loadReports renders the queue too, but it
+  // runs in parallel with the three approval loaders, so at that point their
+  // arrays may still be empty — this pass is the one that sees all four.
+  renderPendingList();
   refreshRailCounts();
 }
 
@@ -1328,6 +1536,7 @@ async function loadRequests() {
 
   try {
     const reqs = await getDirectorateRequests(currentUser.directorateId);
+    allRequests = reqs;   // set before the empty-list early return below
     if (loadEl) loadEl.hidden = true;
     const pending = reqs.filter(r => r.status === 'pending').length;
     if (countEl) {
@@ -1479,6 +1688,7 @@ async function loadStatements() {
 
   try {
     const stmts = await getDirectorateStatements();
+    allStatements = stmts;   // set before the empty-list early return below
     if (loadEl) loadEl.hidden = true;
     // المُرسَل أولاً، ثم الأحدث إرسالاً
     stmts.sort((a, b) => {
@@ -1645,6 +1855,7 @@ async function loadResultSheets() {
 
   try {
     const sheets = await getDirectorateResultSheets();
+    allResultSheets = sheets;   // set before the empty-list early return below
     if (loadEl) loadEl.hidden = true;
     // المُرسَل أولاً، ثم المعتمد (بانتظار الإصدار)، ثم الأحدث
     const rank = s => s.status === 'submitted' ? 0 : s.status === 'approved' ? 1 : 2;
@@ -1912,28 +2123,43 @@ async function loadDirSchools() {
 
   if (_dirAllSchools.length === 0) { emptyEl?.classList.remove('hidden'); return; }
 
-  const tbody = document.getElementById('dir-schools-tbody');
-  if (tbody) {
-    tbody.innerHTML = _dirAllSchools.map((s, i) => `
-      <tr>
-        <td class="muted">${i + 1}</td>
-        <td>${dirEsc(s.name)}</td>
-        <td>${dirEsc(s.classification ?? '—')}</td>
-        <td>${s.total_students ?? '—'}</td>
-        <td>${s.total_teachers ?? '—'}</td>
-        <td>
-          <button class="btn btn-ghost btn-sm" data-dir-edit-school="${dirEsc(s.id)}">
-            <svg width="13" height="13"><use href="#icon-edit"/></svg>
-            تعديل
-          </button>
-        </td>
-      </tr>`).join('');
-
-    tbody.querySelectorAll('[data-dir-edit-school]').forEach(btn => {
-      btn.addEventListener('click', () => openEditDirSchool(btn.dataset.dirEditSchool));
-    });
-  }
+  // Re-apply whatever the user had typed, so a background refresh doesn't
+  // silently widen the list back to every school.
+  const q = document.getElementById('dir-schools-search')?.value || '';
+  renderDirSchoolRows(filterSchools(q));
   tableEl?.classList.remove('hidden');
+}
+
+function renderDirSchoolRows(list) {
+  const tbody = document.getElementById('dir-schools-tbody');
+  if (!tbody) return;
+
+  const countEl = document.getElementById('dir-schools-count');
+  if (countEl) countEl.textContent = list.length;
+
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">لا توجد مدرسة مطابقة للبحث.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = list.map((s, i) => `
+    <tr>
+      <td class="muted">${i + 1}</td>
+      <td>${dirEsc(s.name)}</td>
+      <td>${dirEsc(s.classification ?? '—')}</td>
+      <td>${s.total_students ?? '—'}</td>
+      <td>${s.total_teachers ?? '—'}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" data-dir-edit-school="${dirEsc(s.id)}">
+          <svg width="13" height="13"><use href="#icon-edit"/></svg>
+          تعديل
+        </button>
+      </td>
+    </tr>`).join('');
+
+  tbody.querySelectorAll('[data-dir-edit-school]').forEach(btn => {
+    btn.addEventListener('click', () => openEditDirSchool(btn.dataset.dirEditSchool));
+  });
 }
 
 function openAddDirSchool() {
@@ -2057,36 +2283,52 @@ async function loadDirPrincipals() {
 
   // فلترة من جانب العميل على مديريتهم
   _dirAllPrincipals = (data ?? []).filter(u => u.schools?.directorate_id === currentUser.directorateId);
-  if (countEl) countEl.textContent = _dirAllPrincipals.length;
 
-  if (_dirAllPrincipals.length === 0) { emptyEl?.classList.remove('hidden'); return; }
-
-  const tbody = document.getElementById('dir-principals-tbody');
-  if (tbody) {
-    tbody.innerHTML = _dirAllPrincipals.map((u, i) => {
-      const action = u.is_active === false
-        ? `<span class="badge-inactive">مُعطَّل</span>`
-        : `<button class="btn btn-danger btn-sm" data-dir-deactivate="${dirEsc(u.id)}" data-dir-deact-name="${dirEsc(u.full_name ?? '')}">تعطيل</button>`;
-      return `
-      <tr style="cursor:pointer" data-dir-view-cred="${dirEsc(u.id)}" data-dir-cred-name="${dirEsc(u.full_name ?? '')}">
-        <td class="muted">${i + 1}</td>
-        <td>${dirEsc(u.full_name ?? '—')}</td>
-        <td>${dirEsc(u.schools?.name ?? '—')}</td>
-        <td>${action}</td>
-      </tr>`;
-    }).join('');
-
-    tbody.querySelectorAll('[data-dir-deactivate]').forEach(btn => {
-      btn.addEventListener('click', e => {
-        e.stopPropagation();
-        openDirDeactivate(btn.dataset.dirDeactivate, btn.dataset.dirDeactName);
-      });
-    });
-    tbody.querySelectorAll('[data-dir-view-cred]').forEach(row => {
-      row.addEventListener('click', () => openDirCredModal(row.dataset.dirViewCred, row.dataset.dirCredName));
-    });
+  if (_dirAllPrincipals.length === 0) {
+    if (countEl) countEl.textContent = 0;
+    emptyEl?.classList.remove('hidden');
+    return;
   }
+
+  const q = document.getElementById('dir-principals-search')?.value || '';
+  renderDirPrincipalRows(filterPrincipals(q));
   tableEl?.classList.remove('hidden');
+}
+
+function renderDirPrincipalRows(list) {
+  const tbody = document.getElementById('dir-principals-tbody');
+  if (!tbody) return;
+
+  const countEl = document.getElementById('dir-principals-count');
+  if (countEl) countEl.textContent = list.length;
+
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">لا يوجد مدير مطابق للبحث.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = list.map((u, i) => {
+    const action = u.is_active === false
+      ? `<span class="badge-inactive">مُعطَّل</span>`
+      : `<button class="btn btn-danger btn-sm" data-dir-deactivate="${dirEsc(u.id)}" data-dir-deact-name="${dirEsc(u.full_name ?? '')}">تعطيل</button>`;
+    return `
+    <tr style="cursor:pointer" data-dir-view-cred="${dirEsc(u.id)}" data-dir-cred-name="${dirEsc(u.full_name ?? '')}">
+      <td class="muted">${i + 1}</td>
+      <td>${dirEsc(u.full_name ?? '—')}</td>
+      <td>${dirEsc(u.schools?.name ?? '—')}</td>
+      <td>${action}</td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('[data-dir-deactivate]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      openDirDeactivate(btn.dataset.dirDeactivate, btn.dataset.dirDeactName);
+    });
+  });
+  tbody.querySelectorAll('[data-dir-view-cred]').forEach(row => {
+    row.addEventListener('click', () => openDirCredModal(row.dataset.dirViewCred, row.dataset.dirCredName));
+  });
 }
 
 function openDirDeactivate(userId, name) {
