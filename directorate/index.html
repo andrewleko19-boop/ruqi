@@ -121,30 +121,44 @@
 
     <!-- شريط التنقل العلوي -->
     <header class="topnav">
-      <div class="topnav-brand">
-        <img src="../icons/eagle-mark.png" alt="شعار رُقِيّ" width="24" height="24" style="object-fit:contain;display:block" />
-        <span><span class="brand-lockup"><span class="brand-latin">Ruqí</span><span class="brand-sep">｜</span><span class="brand-ar">رُقِيّ</span></span> <em>المديرية</em></span>
+      <div class="org">
+        <div class="org-mark">
+          <img src="../icons/eagle-mark.png" alt="شعار رُقِيّ" width="20" height="20" style="object-fit:contain;display:block" />
+        </div>
+        <div>
+          <div class="org-name"><span class="brand-lockup"><span class="brand-latin">Ruqí</span><span class="brand-sep">｜</span><span class="brand-ar">رُقِيّ</span></span></div>
+          <div class="org-sub">غرفة عمليات المديرية</div>
+        </div>
       </div>
-      <div class="topnav-meta">
-        <span id="nav-date" class="nav-date"></span>
-        <span id="refresh-countdown" class="refresh-badge">
-          <svg class="icon icon-sm"><use href="#icon-clock"/></svg>
-          <span id="countdown-val">30</span>ث
-        </span>
-        <button id="manual-refresh-btn" class="btn btn-ghost btn-sm" title="تحديث الآن">
-          <svg class="icon icon-sm"><use href="#icon-refresh"/></svg>
-          تحديث
-        </button>
-        <span id="nav-user" class="nav-user"></span>
-        <button id="btn-notif" class="btn btn-ghost btn-sm" title="الإشعارات" style="position:relative;padding:6px 8px">
-          <svg class="icon icon-sm"><use href="#icon-bell"/></svg>
-          <span class="notif-badge" id="notif-badge" hidden></span>
-        </button>
-        <button id="logout-btn" class="btn btn-ghost btn-sm">
-          <svg class="icon icon-sm"><use href="#icon-logout"/></svg>
-          تسجيل الخروج
-        </button>
+
+      <div class="top-clock">
+        <span id="nav-date"></span>
+        <b id="refresh-countdown"><span id="countdown-val">30</span>ث للتحديث</b>
       </div>
+
+      <span class="live-pill"><span class="live-dot"></span> مباشر</span>
+
+      <div class="topnav-spacer"></div>
+
+      <button id="manual-refresh-btn" class="icon-btn" title="تحديث الآن" aria-label="تحديث الآن">
+        <svg class="icon"><use href="#icon-refresh"/></svg>
+      </button>
+      <button id="btn-notif" class="icon-btn" title="الإشعارات" aria-label="الإشعارات">
+        <svg class="icon"><use href="#icon-bell"/></svg>
+        <span class="notif-badge" id="notif-badge" hidden></span>
+      </button>
+
+      <div class="user-chip">
+        <div class="avatar" id="nav-avatar">م</div>
+        <div class="user-chip-txt">
+          <span id="nav-user" class="user-name"></span>
+          <span class="user-role">مستخدم مديرية</span>
+        </div>
+      </div>
+
+      <button id="logout-btn" class="icon-btn" title="تسجيل الخروج" aria-label="تسجيل الخروج">
+        <svg class="icon"><use href="#icon-logout"/></svg>
+      </button>
     </header>
 
     <!-- شريط التنقّل الجانبي (يتحوّل إلى شريط سفلي على الجوّال) -->
@@ -171,68 +185,56 @@
     <!-- ═════ نظرة عامة ═════ -->
     <div id="dir-tab-overview" class="dir-tab-panel is-active">
     <main class="main-content">
-      <!-- صف الإحصائيات -->
+      <!-- صف المؤشرات -->
       <section class="stats-row" id="stats-row">
-        <div class="stat-card" id="stat-teachers">
-          <div class="stat-icon stat-icon--blue">
-            <svg class="icon"><use href="#icon-users"/></svg>
+        <div class="kpi" id="stat-teachers">
+          <div class="kpi-top">
+            <span class="kpi-label">المعلمون الحاضرون</span>
+            <span class="kpi-icon kpi-icon--accent"><svg class="icon"><use href="#icon-users"/></svg></span>
           </div>
-          <div class="stat-body">
-            <span class="stat-label">المعلمون الحاضرون</span>
-            <span class="stat-value" id="stat-teachers-val">—</span>
-            <span class="stat-sub" id="stat-teachers-sub"></span>
-          </div>
+          <span class="kpi-value" id="stat-teachers-val">—</span>
+          <span class="kpi-delta" id="stat-teachers-sub"></span>
         </div>
-        <div class="stat-card" id="stat-admins">
-          <div class="stat-icon stat-icon--blue">
-            <svg class="icon"><use href="#icon-users"/></svg>
+        <div class="kpi" id="stat-admins">
+          <div class="kpi-top">
+            <span class="kpi-label">الإداريون الحاضرون</span>
+            <span class="kpi-icon kpi-icon--accent"><svg class="icon"><use href="#icon-users"/></svg></span>
           </div>
-          <div class="stat-body">
-            <span class="stat-label">الإداريون الحاضرون</span>
-            <span class="stat-value" id="stat-admins-val">—</span>
-            <span class="stat-sub"></span>
-          </div>
+          <span class="kpi-value" id="stat-admins-val">—</span>
+          <span class="kpi-delta"></span>
         </div>
-        <div class="stat-card" id="stat-workers">
-          <div class="stat-icon stat-icon--purple">
-            <svg class="icon"><use href="#icon-users"/></svg>
+        <div class="kpi" id="stat-workers">
+          <div class="kpi-top">
+            <span class="kpi-label">المستخدمون الحاضرون</span>
+            <span class="kpi-icon kpi-icon--brass"><svg class="icon"><use href="#icon-users"/></svg></span>
           </div>
-          <div class="stat-body">
-            <span class="stat-label">المستخدمون الحاضرون</span>
-            <span class="stat-value" id="stat-workers-val">—</span>
-            <span class="stat-sub"></span>
-          </div>
+          <span class="kpi-value" id="stat-workers-val">—</span>
+          <span class="kpi-delta"></span>
         </div>
-        <div class="stat-card" id="stat-students">
-          <div class="stat-icon stat-icon--green">
-            <svg class="icon"><use href="#icon-users"/></svg>
+        <div class="kpi" id="stat-students">
+          <div class="kpi-top">
+            <span class="kpi-label">الطلاب الحاضرون</span>
+            <span class="kpi-icon kpi-icon--good"><svg class="icon"><use href="#icon-users"/></svg></span>
           </div>
-          <div class="stat-body">
-            <span class="stat-label">الطلاب الحاضرون</span>
-            <span class="stat-value" id="stat-students-val">—</span>
-            <span class="stat-sub" id="stat-students-sub"></span>
-          </div>
+          <span class="kpi-value" id="stat-students-val">—</span>
+          <span class="kpi-delta" id="stat-students-sub"></span>
         </div>
-        <div class="stat-card" id="stat-schools">
-          <div class="stat-icon stat-icon--purple">
-            <svg class="icon"><use href="#icon-school"/></svg>
+        <div class="kpi" id="stat-schools">
+          <div class="kpi-top">
+            <span class="kpi-label">المدارس المُبلِّغة</span>
+            <span class="kpi-icon kpi-icon--brass"><svg class="icon"><use href="#icon-school"/></svg></span>
           </div>
-          <div class="stat-body">
-            <span class="stat-label">المدارس المُبلِّغة</span>
-            <span class="stat-value" id="stat-schools-val">—</span>
-            <span class="stat-sub" id="stat-schools-sub"></span>
-          </div>
+          <span class="kpi-value" id="stat-schools-val">—</span>
+          <span class="kpi-delta" id="stat-schools-sub"></span>
         </div>
-        <div class="stat-card" id="stat-reports">
-          <div class="stat-icon stat-icon--red">
-            <svg class="icon"><use href="#icon-alert"/></svg>
+        <div class="kpi" id="stat-reports">
+          <div class="kpi-top">
+            <span class="kpi-label">البلاغات النشطة</span>
+            <span class="kpi-icon kpi-icon--bad"><svg class="icon"><use href="#icon-alert"/></svg></span>
           </div>
-          <div class="stat-body">
-            <span class="stat-label">التقارير النشطة</span>
-            <span class="stat-value" id="stat-reports-val">0</span>
-            <span class="stat-sub" id="stat-reports-sub"></span>
-          </div>
-         </div>
+          <span class="kpi-value" id="stat-reports-val">0</span>
+          <span class="kpi-delta" id="stat-reports-sub"></span>
+        </div>
       </section>
 
       <!-- تخطيط عمودين: الخريطة + التقارير المعلقة -->
@@ -241,29 +243,32 @@
         <!-- لوحة الخريطة -->
         <section class="panel map-panel">
           <div class="panel-header">
-            <h2>
-              <svg class="icon"><use href="#icon-map"/></svg>
-              خريطة المدارس
-            </h2>
-          <div class="map-head-right">
-            <div class="map-legend">
-              <span class="legend-dot legend-dot--green"></span>طبيعي
-              <span class="legend-dot legend-dot--amber"></span>تغطية ناقصة
-              <span class="legend-dot legend-dot--red"></span>حضور منخفض / طارئ
-              <span class="legend-dot legend-dot--no-data"></span>لم تُسجّل
+            <div>
+              <span class="eyebrow">الخريطة الإقليمية</span>
+              <h2>حالة المدارس اليوم</h2>
+            </div>
+            <span class="panel-hint" id="map-school-count"></span>
+          </div>
+          <div class="map-wrap">
+            <div class="map-search">
+              <input id="map-search-input" class="input-sm" type="search" placeholder="ابحث عن مدرسة على الخريطة…" />
+            </div>
+            <div id="map"></div>
+            <div class="map-legend" id="map-legend">
+              <button type="button" class="legend-btn is-on" data-status="all">الكل</button>
+              <button type="button" class="legend-btn is-on legend-btn--green"   data-status="green"><span class="legend-dot legend-dot--green"></span>طبيعي</button>
+              <button type="button" class="legend-btn is-on legend-btn--amber"   data-status="amber"><span class="legend-dot legend-dot--amber"></span>تغطية ناقصة</button>
+              <button type="button" class="legend-btn is-on legend-btn--red"     data-status="red"><span class="legend-dot legend-dot--red"></span>منخفض / طارئ</button>
+              <button type="button" class="legend-btn is-on legend-btn--no-data" data-status="no_data"><span class="legend-dot legend-dot--no-data"></span>لم تُسجّل</button>
             </div>
           </div>
-          </div>
-          <div id="map"></div>
         </section>
 
         <!-- قائمة الإجراءات الموحَّدة: بلاغات + طلبات + بيانات شهرية + جلاءات -->
         <section class="panel pending-panel">
           <div class="panel-header">
-            <h2>
-              <svg class="icon"><use href="#icon-alert"/></svg>
-              يحتاج إجراءك
-            </h2>
+            <div><span class="eyebrow">قائمة موحّدة</span>
+            <h2>يحتاج إجراءك</h2></div>
             <span id="pending-count" class="badge badge--amber">0</span>
           </div>
           <div id="pending-list" class="pending-list">
@@ -281,11 +286,9 @@
       <!-- لوحة اتجاه الحضور -->
       <section class="panel" id="trend-panel">
         <div class="panel-header">
-          <h2>
-            <svg class="icon"><use href="#icon-clock"/></svg>
-            اتجاه الحضور
-            <span class="live-indicator"><span class="live-dot"></span>مباشر</span>
-          </h2>
+          <div><span class="eyebrow">اتجاه</span>
+            <h2>اتجاه الحضور
+            <span class="live-indicator"><span class="live-dot"></span>مباشر</span></h2></div>
           <div class="table-filters" id="trend-period">
             <button class="btn btn-ghost btn-sm trend-period-btn" data-days="7">٧ أيام</button>
             <button class="btn btn-ghost btn-sm trend-period-btn is-active" data-days="14">١٤ يوماً</button>
@@ -308,10 +311,8 @@
       <!-- ترتيب المدارس بنسبة الحضور (من بيانات الخريطة نفسها) -->
       <section class="panel" id="ranking-panel">
         <div class="panel-header">
-          <h2>
-            <svg class="icon"><use href="#icon-school"/></svg>
-            ترتيب المدارس بنسبة الحضور
-          </h2>
+          <div><span class="eyebrow">مقارنة عبر المدارس</span>
+            <h2>ترتيب المدارس بنسبة الحضور</h2></div>
           <span class="panel-hint">الأدنى أولاً — لمتابعة المتعثّر</span>
         </div>
         <div id="ranking-list" class="ranking-list">
@@ -322,11 +323,9 @@
       <!-- لوحة الالتزام اليومي -->
       <section class="panel" id="compliance-panel">
         <div class="panel-header">
-          <h2>
-            <svg class="icon"><use href="#icon-check"/></svg>
-            تقرير الالتزام اليومي
-            <span class="live-indicator"><span class="live-dot"></span>مباشر</span>
-          </h2>
+          <div><span class="eyebrow">الالتزام</span>
+            <h2>تقرير الالتزام اليومي
+            <span class="live-indicator"><span class="live-dot"></span>مباشر</span></h2></div>
           <div class="table-filters">
             <button id="remind-all-btn" class="btn btn-warning btn-sm">تذكير جميع المتأخرة</button>
             <button id="export-compliance-btn" class="btn btn-ghost btn-sm">تصدير CSV</button>
@@ -361,10 +360,8 @@
       <!-- إنذار التسرب المبكر -->
       <section class="panel" id="dropout-panel">
         <div class="panel-header">
-          <h2>
-            <svg class="icon"><use href="#icon-alert"/></svg>
-            إنذار التسرب المبكر
-          </h2>
+          <div><span class="eyebrow">إنذار مبكر</span>
+            <h2>إنذار التسرب المبكر</h2></div>
           <button id="reload-dropout-btn" class="btn btn-ghost btn-sm">
             <svg class="icon icon-sm"><use href="#icon-refresh"/></svg>
             تحديث
@@ -393,10 +390,8 @@
       <!-- التقارير الشهرية -->
       <section class="panel" id="periodic-reports-panel">
         <div class="panel-header">
-          <h2>
-            <svg class="icon"><use href="#icon-eye"/></svg>
-            التقارير الشهرية
-          </h2>
+          <div><span class="eyebrow">تقارير مولَّدة</span>
+            <h2>التقارير الشهرية</h2></div>
           <button id="reload-periodic-btn" class="btn btn-ghost btn-sm">
             <svg class="icon icon-sm"><use href="#icon-refresh"/></svg>
             تحديث
@@ -433,10 +428,8 @@
       <!-- الجلاءات (اعتماد النتائج النهائية) -->
       <section class="panel" id="result-sheets-card">
         <div class="panel-header">
-          <h2>
-            <svg class="icon"><use href="#icon-clipboard"/></svg>
-            الجلاءات
-          </h2>
+          <div><span class="eyebrow">اعتمادات</span>
+            <h2>الجلاءات</h2></div>
           <span class="badge badge--amber" id="dir-rs-count" hidden></span>
         </div>
         <div id="dir-rs-loading" class="dir-req-loading">
@@ -461,10 +454,8 @@
       <!-- البيانات الشهرية -->
       <section class="panel" id="statements-card">
         <div class="panel-header">
-          <h2>
-            <svg class="icon"><use href="#icon-clipboard"/></svg>
-            البيانات الشهرية
-          </h2>
+          <div><span class="eyebrow">اعتمادات</span>
+            <h2>البيانات الشهرية</h2></div>
           <span class="badge badge--amber" id="dir-stmt-count" hidden></span>
         </div>
         <div id="dir-stmt-loading" class="dir-req-loading">
@@ -489,10 +480,8 @@
       <!-- طلبات المدارس -->
       <section class="panel" id="requests-card">
         <div class="panel-header">
-          <h2>
-            <svg class="icon"><use href="#icon-bell"/></svg>
-            طلبات المدارس
-          </h2>
+          <div><span class="eyebrow">اعتمادات</span>
+            <h2>طلبات المدارس</h2></div>
           <span class="badge badge--amber" id="dir-req-count" hidden></span>
         </div>
         <div id="dir-req-loading" class="dir-req-loading">
@@ -523,10 +512,8 @@
       <!-- جدول التقارير الكامل -->
       <section class="panel">
         <div class="panel-header">
-          <h2>
-            <svg class="icon"><use href="#icon-eye"/></svg>
-            جميع التقارير
-          </h2>
+          <div><span class="eyebrow">السجل الكامل</span>
+            <h2>جميع التقارير</h2></div>
           <div class="table-filters">
             <input id="filter-search" class="input-sm" type="search" placeholder="ابحث في الوصف أو المدرسة…" />
             <label class="date-range">
