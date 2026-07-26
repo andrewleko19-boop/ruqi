@@ -2358,6 +2358,39 @@ alter table public.subject_catalog
 alter table public.subjects
   add column if not exists allow_full_marks boolean not null default false;
 
+-- 14.2d  مزامنة العلامة الكاملة رجعياً إلى مواد الصفوف الموجودة أصلاً
+--   الفهرس قالب فقط: applyCatalogSubjectsToGrades ينسخ منه لحظة الإنشاء حصراً،
+--   فتفعيل الخيار على مادة فهرس بعد أن أُنشئت مادتها في مدرسة ما لا يصل إليها
+--   بلا هذه الدالة. المطابقة بالاسم المُقلَّم (لا عمود catalog_id على subjects)
+--   — نفس نمط فحص التكرار في applyCatalogSubjectsToGrades. security definer
+--   لأن ministry_user ليس له بالضرورة منح كتابة عابر للمدارس على subjects،
+--   خلافاً لجداول أخرى موثّق فيها "ministry: all <table>" في NSAMS_DB_REFERENCE.
+--   تُحدَّث allow_full_marks فقط — لا مكوّنات ولا max_total ولا pass_mark، حتى
+--   لا تُفسَد تخصيصات مدرسة بعينها.
+create or replace function public.sync_full_marks_from_catalog()
+returns int language plpgsql security definer set search_path = public as $$
+declare
+  v_count int;
+begin
+  if not exists (
+    select 1 from public.users u where u.id = auth.uid() and u.role = 'ministry_user'
+  ) then
+    raise exception 'غير مصرّح';
+  end if;
+
+  update public.subjects s
+     set allow_full_marks = c.allow_full_marks
+    from public.subject_catalog c
+   where trim(s.name) = trim(c.name)
+     and s.allow_full_marks is distinct from c.allow_full_marks;
+
+  get diagnostics v_count = row_count;
+  return v_count;
+end; $$;
+
+revoke all on function public.sync_full_marks_from_catalog() from public, anon;
+grant execute on function public.sync_full_marks_from_catalog() to authenticated;
+
 -- قواعد النجاح حسب مجموعة الصفوف (يديرها المشرف) — نفس الاسم بدرجات دنيا مختلفة
 -- لكل مجموعة. core_pass للعربي والرياضيات الأساسية، default_pass لبقية المواد.
 create table if not exists public.grade_pass_rules (

@@ -301,6 +301,10 @@
             <h2>فهرس المواد (<span id="subjects-count">—</span>)</h2>
             <div class="section-header-actions">
               <button id="pass-rules-btn" class="btn btn-ghost btn-sm">قواعد النجاح</button>
+              <button id="sync-full-marks-btn" class="btn btn-ghost btn-sm"
+                      title="مواد أُنشئت في مدرسة ما قبل تفعيل «علامة كاملة» على الفهرس لا تتحدّث تلقائياً — استخدم هذا لتعويضها">
+                مزامنة العلامة الكاملة مع المدارس
+              </button>
               <button id="add-subject-btn" class="btn btn-primary btn-sm">
                 <svg width="14" height="14"><use href="#icon-plus"/></svg>
                 إضافة مادة
@@ -310,6 +314,7 @@
           <p class="table-empty" style="text-align:right;color:var(--text-dim);padding:0 0 10px">
             قائمة أسماء المواد على مستوى النظام. يختار منها مديرو المدارس لكل صف.
           </p>
+          <p id="sync-full-marks-msg" class="success-msg hidden" style="margin-bottom:10px"></p>
           <div id="subjects-loading" class="table-loading hidden">
             <div class="spinner"></div><span>جارٍ التحميل…</span>
           </div>

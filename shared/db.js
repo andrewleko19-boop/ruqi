@@ -2118,6 +2118,16 @@ async function deleteCatalogSubject(id) {
   return true;
 }
 
+// Retroactively push allow_full_marks from the catalog onto already-created
+// per-grade `subjects` rows (matched by trimmed name). The catalog is only
+// copied at creation time (applyCatalogSubjectsToGrades), so editing it later
+// otherwise never reaches subjects that already exist. Returns rows updated.
+async function syncFullMarksFromCatalog() {
+  const { data, error } = await db.rpc('sync_full_marks_from_catalog');
+  if (error) throw error;
+  return Number(data) || 0;
+}
+
 // Components of a catalog subject (defined by the supervisor). School subjects
 // created from the catalog copy these. Same shape as subject_components.
 async function getCatalogComponents(catalogId) {
@@ -3446,6 +3456,7 @@ window.NSAMS_DB = {
   createCatalogSubject,
   updateCatalogSubject,
   deleteCatalogSubject,
+  syncFullMarksFromCatalog,
   getCatalogComponents,
   setCatalogComponents,
   passMarkFor,
