@@ -2697,12 +2697,17 @@ begin
   v_year := nullif(trim(coalesce(p_year, '')), '');
 
   -- ── المسار الأساسي: اللقطة المجمَّدة لجلاء صادر رسميّاً ──
+  --   ⚠️ شكل عنصر الطالب داخل snapshot_data.students مسطّح — بناه submitResultSheet
+  --   في school/script.js كـ {studentId, name, finalPercent, result, ...}، وليس
+  --   بكائن متداخل {student:{id,full_name}}. كذلك classLabel مفتاح جاهز مسبقاً
+  --   ("الصف 5 / أولى")، لا كائن class{grade,section}. القراءة بالمسار المتداخل
+  --   الخاطئ كانت تُرجع NULL دائماً، فتفشل المطابقة ويظهر التحقّق دوماً
+  --   «غير صادرة بعد» حتى للجلاءات الصادرة فعلياً.
   return query
-  select (elem->'student'->>'full_name')::text,
+  select (elem->>'name')::text,
          sc.name::text,
          coalesce(rs.snapshot_data->>'directorate', d.name)::text,
-         ('الصف ' || coalesce(rs.snapshot_data->'class'->>'grade', '')
-                  || ' / ' || coalesce(rs.snapshot_data->'class'->>'section', ''))::text,
+         coalesce(rs.snapshot_data->>'classLabel', '')::text,
          rs.academic_year::text,
          (elem->>'result')::text,
          nullif(elem->>'finalPercent', '')::numeric,
@@ -2713,7 +2718,7 @@ begin
     left join public.schools      sc on sc.id = rs.school_id
     left join public.directorates d  on d.id  = sc.directorate_id
    where rs.status = 'issued'
-     and elem->'student'->>'id' = p_student::text
+     and elem->>'studentId' = p_student::text
      and (v_year is null or rs.academic_year = v_year)
    order by rs.academic_year desc
    limit 1;
