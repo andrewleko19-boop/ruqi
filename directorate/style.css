@@ -463,7 +463,9 @@ input::placeholder { color: var(--text-muted); }
 .pending-card {
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-left: 3px solid var(--amber);
+  /* logical, not border-left: the accent stripe belongs on the reading start
+     side, which is the right in this RTL app */
+  border-inline-start: 3px solid var(--amber);
   border-radius: var(--radius-sm);
   padding: 0.75rem 0.9rem;
   display: flex;
@@ -472,6 +474,108 @@ input::placeholder { color: var(--text-muted); }
   transition: border-color var(--transition);
 }
 .pending-card:hover { border-color: var(--amber); background: var(--bg-hover); }
+
+/* ── Unified action queue ── */
+.queue-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.queue-kind {
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.queue-kind--report       { background: var(--red-dim);    color: var(--red);    }
+.queue-kind--request      { background: var(--amber-dim);  color: var(--amber);  }
+.queue-kind--statement    { background: var(--brass-tint); color: var(--brass);  }
+.queue-kind--result_sheet { background: var(--accent-tint); color: var(--accent); }
+
+/* ── School ranking by attendance ── */
+.ranking-list { padding: 0.6rem 1.1rem 1rem; display: flex; flex-direction: column; }
+.rank-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--border-light);
+}
+.rank-row:last-child { border-bottom: none; }
+.rank-idx {
+  width: 1.6rem;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.rank-name {
+  width: 11rem;
+  flex-shrink: 0;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rank-name:hover { color: var(--accent); text-decoration: underline; }
+.rank-bar-bg {
+  flex: 1;
+  min-width: 3rem;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border-light);
+  overflow: hidden;
+}
+.rank-bar-fill { display: block; height: 100%; border-radius: 999px; }
+.rank-val {
+  width: 3.2rem;
+  flex-shrink: 0;
+  text-align: end;
+  font-size: 0.83rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.rank-nodata {
+  width: 3.2rem;
+  flex-shrink: 0;
+  text-align: end;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.panel-hint { font-size: 0.75rem; color: var(--text-muted); }
+
+/* ── Search / date-range inputs in filter bars ── */
+.input-sm {
+  width: auto;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+}
+.input-sm:focus { border-color: var(--accent); outline: none; }
+#filter-search { min-width: 14rem; }
+.date-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.dir-search-bar { padding: 0 1.1rem 0.8rem; }
+.dir-search-bar .input-sm { width: 100%; max-width: 26rem; }
+
+@media (max-width: 700px) {
+  #filter-search { min-width: 0; width: 100%; }
+  .dir-search-bar .input-sm { max-width: none; }
+}
+
+@media (max-width: 700px) {
+  .rank-name { width: 6.5rem; }
+}
 
 .pending-school { font-weight: 700; font-size: 0.88rem; color: var(--text-primary); }
 .pending-type {
