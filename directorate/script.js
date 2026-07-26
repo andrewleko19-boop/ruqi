@@ -155,10 +155,13 @@ function showLoginError(msg) {
 function showApp(session) {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
-  document.getElementById('nav-user').textContent =
-    session.user?.fullName || session.user?.email || '';
+  const displayName = session.user?.fullName || session.user?.email || '';
+  document.getElementById('nav-user').textContent = displayName;
+  const avatar = document.getElementById('nav-avatar');
+  if (avatar && displayName) avatar.textContent = displayName.trim().charAt(0);
 
   initMap();
+  setupMapControls();
   setupLogout();
   setupFilters();
   setupManualRefresh();
@@ -274,7 +277,14 @@ function renderMap(schools, statusMap) {
         .bindPopup(popup)
         .addTo(map);
     }
+    // Metadata the legend/search filter reads to dim non-matching pins.
+    markersLayer[school.id]._nsamsStatus = color;
+    markersLayer[school.id]._nsamsName   = school.name || '';
   }
+
+  const countEl = document.getElementById('map-school-count');
+  if (countEl) countEl.textContent = `${schools.length} مدرسة`;
+  applyMapFilter();
 
   renderSchoolRanking(schools, statusMap);
 
@@ -290,6 +300,49 @@ function renderMap(schools, statusMap) {
   }
 }
 
+
+// ══════════════════════════════════════════════
+//  Map filtering — legend toggles + name search
+// ══════════════════════════════════════════════
+// Non-matching pins are dimmed rather than removed, so the geography stays
+// readable while the matches stand out — same treatment as the design mockup.
+function applyMapFilter() {
+  const q = (document.getElementById('map-search-input')?.value || '').trim();
+  const onStatuses = new Set(
+    [...document.querySelectorAll('#map-legend .legend-btn.is-on[data-status]')]
+      .map(b => b.dataset.status).filter(sv => sv !== 'all')
+  );
+
+  for (const marker of Object.values(markersLayer)) {
+    const statusOk = onStatuses.size === 0 || onStatuses.has(marker._nsamsStatus);
+    const nameOk   = !q || (marker._nsamsName || '').includes(q);
+    const show     = statusOk && nameOk;
+    marker.setOpacity(show ? 1 : 0.18);
+    const el = marker.getElement();
+    if (el) el.style.zIndex = show ? '' : '-1';
+  }
+}
+
+function setupMapControls() {
+  document.getElementById('map-search-input')?.addEventListener('input', applyMapFilter);
+
+  const legend = document.getElementById('map-legend');
+  legend?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.legend-btn');
+    if (!btn) return;
+    if (btn.dataset.status === 'all') {
+      legend.querySelectorAll('.legend-btn').forEach(b => b.classList.add('is-on'));
+    } else {
+      btn.classList.toggle('is-on');
+      legend.querySelector('.legend-btn[data-status="all"]')?.classList.remove('is-on');
+      // Nothing selected = everything selected; a fully-empty map helps no one.
+      if (!legend.querySelector('.legend-btn.is-on[data-status]:not([data-status="all"])')) {
+        legend.querySelectorAll('.legend-btn').forEach(b => b.classList.add('is-on'));
+      }
+    }
+    applyMapFilter();
+  });
+}
 
 // ══════════════════════════════════════════════
 //  School ranking by attendance rate
@@ -744,6 +797,12 @@ const QUEUE_KIND_LABEL = {
   statement:    'بيان شهري',
   result_sheet: 'جلاء',
 };
+const QUEUE_KIND_ICON = {
+  report:       'icon-alert',
+  request:      'icon-clipboard',
+  statement:    'icon-clock',
+  result_sheet: 'icon-check',
+};
 
 function renderPendingList() {
   const items = buildActionQueue();
@@ -761,6 +820,7 @@ function renderPendingList() {
   container.innerHTML = items.map(it => {
     const overdueTag = it.overdue ? '<span class="overdue-tag">متأخر</span>' : '';
     const kindTag    = `<span class="queue-kind queue-kind--${it.kind}">${esc(QUEUE_KIND_LABEL[it.kind])}</span>`;
+    const kindIcon   = `<span class="queue-ic queue-ic--${it.kind}"><svg class="icon"><use href="#${QUEUE_KIND_ICON[it.kind]}"/></svg></span>`;
 
     if (it.kind === 'report') {
       const r = it.report;
@@ -768,34 +828,39 @@ function renderPendingList() {
       const cls = ['pending-card', it.overdue ? 'row-overdue' : '', isNew ? 'row-flash' : ''].filter(Boolean).join(' ');
       return `
       <div class="${cls}" data-id="${esc(r.id)}">
-        <div class="queue-head">
-          <span class="pending-school">${esc(it.school)}</span>
-          ${kindTag}${sevBadge(r.severity)}${overdueTag}
-        </div>
-        <span class="type-badge type-${esc(r.type)}">${esc(formatType(r.type))}</span>
-        <div class="pending-desc">${esc(r.description ?? '—')}</div>
-        <div class="pending-time">${esc(formatDate(r.created_at))}</div>
-        <div class="pending-actions">
-          ${photoBtn(r)}
-          ${r.status === 'open'
-            ? `<button class="btn btn-warning btn-sm" data-action="acknowledged" data-id="${esc(r.id)}">تمت المراجعة</button>`
-            : ''}
-          <button class="btn btn-success btn-sm" data-action="resolved" data-id="${esc(r.id)}">حل</button>
+        ${kindIcon}
+        <div class="queue-main">
+          <div class="queue-head">
+            <span class="pending-school">${esc(it.school)}</span>
+            ${kindTag}${sevBadge(r.severity)}${overdueTag}
+          </div>
+          <div class="pending-desc">${esc(r.description ?? '—')}</div>
+          <div class="pending-time">${esc(formatType(r.type))} · ${esc(formatDate(r.created_at))}</div>
+          <div class="pending-actions">
+            ${photoBtn(r)}
+            ${r.status === 'open'
+              ? `<button class="btn btn-warning btn-sm" data-action="acknowledged" data-id="${esc(r.id)}">تمت المراجعة</button>`
+              : ''}
+            <button class="btn btn-success btn-sm" data-action="resolved" data-id="${esc(r.id)}">حل</button>
+          </div>
         </div>
       </div>`;
     }
 
     return `
     <div class="pending-card${it.overdue ? ' row-overdue' : ''}">
-      <div class="queue-head">
-        <span class="pending-school">${esc(it.school)}</span>
-        ${kindTag}${overdueTag}
-      </div>
-      <div class="pending-desc">${esc(it.title)}</div>
-      <div class="pending-time">${esc(formatDate(it.at))}</div>
-      <div class="pending-actions">
-        <button class="btn btn-primary btn-sm queue-goto"
-                data-selector="${esc(it.selector)}" data-target="${esc(it.id)}">مراجعة</button>
+      ${kindIcon}
+      <div class="queue-main">
+        <div class="queue-head">
+          <span class="pending-school">${esc(it.school)}</span>
+          ${kindTag}${overdueTag}
+        </div>
+        <div class="pending-desc">${esc(it.title)}</div>
+        <div class="pending-time">${esc(formatDate(it.at))}</div>
+        <div class="pending-actions">
+          <button class="btn btn-primary btn-sm queue-goto"
+                  data-selector="${esc(it.selector)}" data-target="${esc(it.id)}">مراجعة</button>
+        </div>
       </div>
     </div>`;
   }).join('');

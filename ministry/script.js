@@ -434,9 +434,9 @@ function renderTable(rows) {
               <div class="rate-bar-fill ${barClass}" style="width:${barWidth}%"></div>
             </div>
             <span class="rate-text" style="color:${
-              barClass === 'green'  ? '#4ade80' :
-              barClass === 'yellow' ? '#fde047' :
-              barClass === 'red'    ? '#f87171' : '#64748b'
+              barClass === 'green'  ? '#1f8a57' :
+              barClass === 'yellow' ? '#c98a1f' :
+              barClass === 'red'    ? '#c0392b' : '#7c8090'
             }">
               ${rateStr !== null ? rateStr + '%' : '—'}
             </span>
@@ -467,14 +467,20 @@ function renderTable(rows) {
   tableWrapper.classList.remove('hidden');
 }
 
-// ── Charts (Chart.js — dark/RTL) ──────────────────────────────────────────────
+// ── Charts (Chart.js — light/RTL) ─────────────────────────────────────────────
+// Grid/tick/tooltip read the page tokens; the old values were a dark-canvas
+// palette that sat nearly invisible on the light cards.
 const CHART_FONT = "'Segoe UI', system-ui, sans-serif";
+function cssVar(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
 const CH = {
-  grid:      'rgba(30, 48, 88, 0.55)',
-  tick:      '#94a3b8',
-  tooltipBg: '#111d36',
-  line:      '#60a5fa',
-  lineFill:  'rgba(26, 86, 219, 0.18)',
+  grid:      cssVar('--line-soft', '#e7e2d3'),
+  tick:      cssVar('--text-muted', '#4b5568'),
+  tooltipBg: cssVar('--ink', '#16223c'),
+  line:      cssVar('--accent', '#0e6e6b'),
+  lineFill:  'rgba(14, 110, 107, 0.16)',
 };
 
 function chartBaseOptions() {
@@ -593,10 +599,10 @@ function renderGovRankChart(rows) {
   const labels = ranked.map(s => s.gov);
   const data   = ranked.map(s => s.rate);
   const colors = ranked.map(s => {
-    if (s.rate === null) return '#64748b';
-    if (s.rate >= 90)    return '#4ade80';
-    if (s.rate >= 75)    return '#fde047';
-    return '#f87171';
+    if (s.rate === null) return '#7c8090';
+    if (s.rate >= 90)    return '#1f8a57';
+    if (s.rate >= 75)    return '#c98a1f';
+    return '#c0392b';
   });
 
   const existing = charts.rank;
