@@ -3,39 +3,55 @@
 /* ══════════════════════════════════════════════
    Design tokens – same system as school app
 ══════════════════════════════════════════════ */
+/* Palette: warm paper ground, navy ink, teal for interaction, brass for the
+   official/records accent. The semantic trio (green/amber/red) is deliberately
+   kept off the interaction hue so a school's status never reads as a control.
+   Legacy names (--blue, --green-dim, …) are kept as aliases so the many rules
+   and inline styles written against them keep working. */
 :root {
-  --bg-base:      #f0f4fa;
-  --bg-surface:   #f0f4fa;
-  --bg-card:      #ffffff;
-  --bg-hover:     #f0fafb;
-  --border:       #cbd5e1;
-  --border-light: #e2e8f0;
+  --paper:        #f5f2ea;
+  --paper-2:      #ffffff;
+  --line:         #d9d3c0;
+  --line-soft:    #e7e2d3;
 
-  --blue:         #2563eb;
-  --blue-dim:     #eff6ff;
-  --blue-dark:    #1a2744;
-  --green:        #22c55e;
-  --green-dim:    #dcfce7;
-  --amber:        #f59e0b;
-  --amber-dim:    #fef3c7;
-  --red:          #ef4444;
-  --red-dim:      #fee2e2;
-  --purple:       #a855f7;
-  --purple-dim:   #f3e8ff;
+  --accent:       #0e6e6b;
+  --accent-tint:  #e2efee;
+  --brass:        #a6752b;
+  --brass-tint:   #f3e6d1;
 
-  --text-primary:   #0f172a;
-  --text-secondary: #475569;
-  --text-muted:     #64748b;
+  --bg-base:      var(--paper);
+  --bg-surface:   var(--paper);
+  --bg-card:      var(--paper-2);
+  --bg-hover:     #efece2;
+  --border:       var(--line);
+  --border-light: var(--line-soft);
 
-  --radius-sm: 6px;
-  --radius:    10px;
-  --radius-lg: 16px;
+  --blue:         var(--accent);
+  --blue-dim:     var(--accent-tint);
+  --blue-dark:    #16223c;
+  --green:        #1f8a57;
+  --green-dim:    #e2f3e9;
+  --amber:        #c98a1f;
+  --amber-dim:    #faf0dd;
+  --red:          #c0392b;
+  --red-dim:      #fbe6e3;
+  --purple:       #7c5cbf;
+  --purple-dim:   #ece6f8;
 
-  --shadow: 0 4px 24px rgba(0,0,0,0.10);
+  --text-primary:   #16223c;
+  --text-secondary: #4b5568;
+  --text-muted:     #7c8090;
+
+  --radius-sm: 4px;
+  --radius:    8px;
+  --radius-lg: 12px;
+
+  --shadow: 0 1px 2px rgba(22,34,60,.06), 0 8px 24px -12px rgba(22,34,60,.18);
   --transition: 0.18s ease;
 
   --topnav-h: 60px;
-  --map-h: 400px;
+  --rail-w:   216px;
+  --map-h: 440px;
 }
 
 /* ══════ Reset ══════ */
@@ -387,59 +403,13 @@ input::placeholder { color: var(--text-muted); }
   background: var(--bg-base);
 }
 
-/* ── Technical observatory (3D globe) ─────────────────────────────────────── */
-#globe-viz {
-  height: var(--map-h);
-  width: 100%;
-  position: relative;
-  overflow: hidden;
-  background:
-    radial-gradient(ellipse 120% 90% at 50% 38%, #eff6ff 0%, #f0f4fa 55%, #ffffff 100%);
-}
-#globe-viz[hidden] { display: none; }
-#globe-viz canvas { display: block; cursor: grab; }
-#globe-viz canvas:active { cursor: grabbing; }
-
 .map-head-right {
   display: flex;
   align-items: center;
   gap: 0.9rem;
   flex-wrap: wrap;
 }
-.view-toggle {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
-  padding: 5px 12px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background var(--transition), border-color var(--transition), box-shadow var(--transition);
-}
-.view-toggle:hover {
-  background: var(--blue-dim);
-  border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235,0.12);
-}
 
-/* globe.gl HTML tooltip — match the dark popup theme */
-.scene-tooltip { pointer-events: none; }
-.globe-tip {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow);
-  padding: 0.55rem 0.7rem;
-  font-size: 0.82rem;
-  min-width: 150px;
-  text-align: right;
-  direction: rtl;
-}
-.globe-tip-name { font-weight: 700; color: var(--blue); margin-bottom: 0.3rem; }
-.globe-tip-row  { display: flex; justify-content: space-between; gap: 1rem; color: var(--text-secondary); }
-.globe-tip-row b { color: var(--text-primary); font-weight: 600; }
 
 /* Override Leaflet popup for dark theme */
 .leaflet-popup-content-wrapper {
@@ -950,36 +920,118 @@ tr.row-flash {
   text-align: center;
 }
 
-/* ── شريط تبويبات المديرية ──────────────────── */
-.dir-tab-bar {
-  display: flex;
-  gap: 4px;
-  padding: 0 20px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-surface);
-  position: sticky;
+/* ── شريط أقسام المديرية (جانبي على سطح المكتب، سفلي على الجوّال) ── */
+.dir-rail {
+  position: fixed;
   top: var(--topnav-h);
+  inset-inline-start: 0;
+  bottom: 0;
+  width: var(--rail-w);
+  background: var(--bg-card);
+  border-inline-end: 1px solid var(--border);
+  padding: 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   z-index: 90;
+  overflow-y: auto;
 }
 .dir-tab-btn {
-  padding: 12px 18px;
-  font-size: 0.88rem;
-  font-weight: 500;
-  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
   background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: color var(--transition), border-color var(--transition);
+  text-align: start;
   white-space: nowrap;
+  transition: background var(--transition), color var(--transition);
 }
-.dir-tab-btn:hover { color: var(--text-primary); }
+.dir-tab-btn .icon { width: 18px; height: 18px; flex-shrink: 0; }
+.dir-tab-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 .dir-tab-btn.is-active {
-  color: var(--blue);
-  border-bottom-color: var(--blue);
+  background: var(--accent-tint);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
 }
+.dir-rail-count {
+  margin-inline-start: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+.dir-rail-count[hidden] { display: none; }
+
+/* The rail is fixed, so the content column is inset by its width. */
+#app > .dir-tab-panel { padding-inline-start: var(--rail-w); }
+
 .dir-tab-panel { display: none; }
 .dir-tab-panel.is-active { display: block; }
+
+/* ── مبدّل المدارس/المدراء ── */
+.dir-seg {
+  display: inline-flex;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px;
+}
+.dir-seg-btn {
+  padding: 6px 18px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+.dir-seg-btn.is-active { background: var(--text-primary); color: var(--bg-card); }
+
+/* Tablet: rail keeps icons only. */
+@media (max-width: 980px) {
+  :root { --rail-w: 62px; }
+  .dir-rail-label { display: none; }
+  .dir-tab-btn { justify-content: center; }
+  .dir-rail-count { margin-inline-start: 0; position: absolute; transform: translate(14px, -12px); }
+  .dir-tab-btn { position: relative; }
+}
+
+/* Phone: rail folds into a bottom bar so the content gets the full width. */
+@media (max-width: 700px) {
+  :root { --rail-w: 0px; }
+  .dir-rail {
+    top: auto;
+    inset-inline: 0;
+    bottom: 0;
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    justify-content: space-around;
+    align-items: center;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+    border-inline-end: none;
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -6px 20px -12px rgba(22,34,60,.35);
+    overflow: visible;
+  }
+  .dir-tab-btn { padding: 8px 10px; }
+  /* Leave room for the bottom bar so the last row is never covered. */
+  #app > .dir-tab-panel { padding-bottom: 76px; }
+}
 
 /* ── جدول بيانات لتبويبات المدارس/المدراء ── */
 .dir-section-card {
@@ -1333,19 +1385,6 @@ select.csel-native {
 .brand-latin  { font-family:'DM Sans',sans-serif; font-weight:600; letter-spacing:-.01em; }
 .brand-sep    { opacity:.45; margin:0 .35em; font-weight:300; }
 .brand-ar     { font-family:'Tajawal',sans-serif; font-weight:700; }
-
-/* ─── Tab back button ─────────────────────────────────────────────────────── */
-.tab-back-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  width: 32px; height: 32px;
-  border: none; background: var(--bg-hover, #f0fafb);
-  border-radius: 8px; cursor: pointer;
-  color: var(--blue, #2563eb); transition: background .15s;
-  margin-inline-end: 6px;
-}
-.tab-back-btn:hover { background: var(--blue-dim, #eff6ff); }
-.tab-back-btn svg { transform: scaleX(-1); }
 
 /* ─── Logout Confirm Modal ─────────────────────────────────────────────────── */
 .confirm-modal-overlay {
