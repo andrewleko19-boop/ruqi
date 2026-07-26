@@ -1311,6 +1311,11 @@ scModalSave.addEventListener('click', async () => {
     await window.NSAMS_DB.setCatalogComponents(catalogId, scReadComps());
     closeScModal();
     await loadSubjectCatalog();
+    // Push allow_full_marks onto any subjects already created from this
+    // catalog entry in schools, before this save — best-effort, a failure
+    // here must not make the catalog save itself look like it failed.
+    window.NSAMS_DB.syncFullMarksFromCatalog().catch((e) =>
+      console.warn('[admin] auto syncFullMarksFromCatalog', e));
   } catch (e) {
     const dup = /duplicate|unique|already/i.test(e.message);
     showError(scModalError, dup ? 'هذه المادة موجودة مسبقاً.' : e.message);
@@ -1348,6 +1353,35 @@ delScConfirm.addEventListener('click', async () => {
 // ══════════════════════════════════════════════
 //  قواعد النجاح (grade_pass_rules)
 // ══════════════════════════════════════════════
+const syncFullMarksBtn = document.getElementById('sync-full-marks-btn');
+const syncFullMarksMsg = document.getElementById('sync-full-marks-msg');
+
+// Backfill: pushes allow_full_marks from the catalog onto subjects rows that
+// were already created in some school before the catalog flag was turned on —
+// those never pick it up on their own (see syncFullMarksFromCatalog in db.js).
+async function runSyncFullMarks() {
+  syncFullMarksBtn.disabled = true;
+  hide(syncFullMarksMsg);
+  try {
+    const n = await window.NSAMS_DB.syncFullMarksFromCatalog();
+    syncFullMarksMsg.textContent = n > 0
+      ? `تمّت مزامنة ${n} مادة في المدارس.`
+      : 'كل المواد متزامنة أصلاً — لا شيء يحتاج تحديثاً.';
+    syncFullMarksMsg.classList.add('success-msg');
+    syncFullMarksMsg.classList.remove('error-msg');
+    show(syncFullMarksMsg);
+  } catch (e) {
+    console.error('[admin] syncFullMarksFromCatalog', e);
+    syncFullMarksMsg.textContent = 'تعذّرت المزامنة: ' + e.message;
+    syncFullMarksMsg.classList.add('error-msg');
+    syncFullMarksMsg.classList.remove('success-msg');
+    show(syncFullMarksMsg);
+  } finally {
+    syncFullMarksBtn.disabled = false;
+  }
+}
+syncFullMarksBtn.addEventListener('click', runSyncFullMarks);
+
 const passRulesBtn    = document.getElementById('pass-rules-btn');
 const passRulesModal  = document.getElementById('pass-rules-modal');
 const passRulesClose  = document.getElementById('pass-rules-close');

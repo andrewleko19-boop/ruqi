@@ -111,6 +111,15 @@ body {
   font-size: 13px;
 }
 
+.success-msg {
+  background: var(--green-bg);
+  border: 1px solid var(--green);
+  color: #14532d;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+
 /* ── Buttons ──────────────────────────────────── */
 .btn {
   display: inline-flex;
