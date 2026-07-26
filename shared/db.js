@@ -1947,7 +1947,7 @@ async function rejectClassSubmission(submissionId, confirmedBy, notes) {
 async function getSchoolSubjects(schoolId, grade = null) {
   let q = db
     .from('subjects')
-    .select('id, school_id, grade, name, max_total, pass_mark, is_core_arabic, is_core_math, sort_order, is_active')
+    .select('id, school_id, grade, name, max_total, pass_mark, is_core_arabic, is_core_math, allow_full_marks, sort_order, is_active')
     .eq('school_id', schoolId);
   if (grade != null) q = q.eq('grade', grade);
   const { data, error } = await q
@@ -1958,19 +1958,20 @@ async function getSchoolSubjects(schoolId, grade = null) {
   return data ?? [];
 }
 
-async function createSubject({ schoolId, grade, name, maxTotal = 100, passMark = 40, isCoreArabic = false, isCoreMath = false, sortOrder = null }) {
+async function createSubject({ schoolId, grade, name, maxTotal = 100, passMark = 40, isCoreArabic = false, isCoreMath = false, allowFullMarks = false, sortOrder = null }) {
   const { data, error } = await db
     .from('subjects')
     .insert({
-      school_id:      schoolId,
+      school_id:        schoolId,
       grade,
       name,
-      max_total:      maxTotal,
-      pass_mark:      passMark,
-      is_core_arabic: isCoreArabic,
-      is_core_math:   isCoreMath,
-      sort_order:     sortOrder,
-      is_active:      true,
+      max_total:        maxTotal,
+      pass_mark:        passMark,
+      is_core_arabic:   isCoreArabic,
+      is_core_math:     isCoreMath,
+      allow_full_marks: allowFullMarks,
+      sort_order:       sortOrder,
+      is_active:        true,
     })
     .select('id')
     .single();
@@ -1985,6 +1986,7 @@ async function updateSubject(id, patch) {
   if (patch.passMark     !== undefined) row.pass_mark       = patch.passMark;
   if (patch.isCoreArabic !== undefined) row.is_core_arabic  = patch.isCoreArabic;
   if (patch.isCoreMath   !== undefined) row.is_core_math    = patch.isCoreMath;
+  if (patch.allowFullMarks !== undefined) row.allow_full_marks = patch.allowFullMarks;
   if (patch.sortOrder    !== undefined) row.sort_order      = patch.sortOrder;
   if (patch.isActive     !== undefined) row.is_active       = patch.isActive;
   const { error } = await db.from('subjects').update(row).eq('id', id);
@@ -2044,7 +2046,7 @@ async function setSubjectComponents(subjectId, components) {
 async function getSubjectCatalog() {
   const { data, error } = await db
     .from('subject_catalog')
-    .select('id, name, is_core_arabic, is_core_math, sort_order, active')
+    .select('id, name, is_core_arabic, is_core_math, allow_full_marks, sort_order, active')
     .eq('active', true)
     .order('sort_order', { ascending: true, nullsFirst: false })
     .order('name',       { ascending: true });
@@ -2052,10 +2054,13 @@ async function getSubjectCatalog() {
   return data ?? [];
 }
 
-async function createCatalogSubject({ name, isCoreArabic = false, isCoreMath = false, sortOrder = null }) {
+async function createCatalogSubject({ name, isCoreArabic = false, isCoreMath = false, allowFullMarks = false, sortOrder = null }) {
   const { data, error } = await db
     .from('subject_catalog')
-    .insert({ name: name.trim(), is_core_arabic: isCoreArabic, is_core_math: isCoreMath, sort_order: sortOrder })
+    .insert({
+      name: name.trim(), is_core_arabic: isCoreArabic, is_core_math: isCoreMath,
+      allow_full_marks: allowFullMarks, sort_order: sortOrder,
+    })
     .select('id')
     .single();
   if (error) throw error;
@@ -2067,6 +2072,7 @@ async function updateCatalogSubject(id, patch) {
   if (patch.name         !== undefined) row.name           = String(patch.name).trim();
   if (patch.isCoreArabic !== undefined) row.is_core_arabic = patch.isCoreArabic;
   if (patch.isCoreMath   !== undefined) row.is_core_math   = patch.isCoreMath;
+  if (patch.allowFullMarks !== undefined) row.allow_full_marks = patch.allowFullMarks;
   if (patch.sortOrder    !== undefined) row.sort_order     = patch.sortOrder;
   if (patch.active       !== undefined) row.active         = patch.active;
   const { error } = await db.from('subject_catalog').update(row).eq('id', id);
@@ -2184,6 +2190,7 @@ async function applyCatalogSubjectsToGrades(schoolId, grades, catalogIds) {
       const subjectId = await createSubject({
         schoolId, grade, name: c.name, maxTotal, passMark,
         isCoreArabic: c.is_core_arabic, isCoreMath: c.is_core_math,
+        allowFullMarks: c.allow_full_marks,
       });
       if (comps.length) {
         await setSubjectComponents(subjectId, comps.map(x => ({ name: x.name, maxMark: x.max_mark })));
@@ -2300,7 +2307,7 @@ async function saveStudentGrades({ records, classId, schoolId, subjectId, semest
   }
 }
 
-// ─── Conduct (درجة السلوك) — required for grades 7+ promotion ─────────────────
+// ─── Conduct (درجة السلوك) — gates promotion from grade 7 up ──────────────────
 // One mark (0..100) per student per academic year, entered by the class's
 // attendance teacher (homeroom/supervisor). Mirrors the grades offline queue.
 async function getClassConduct(classId) {
@@ -2420,6 +2427,18 @@ async function getGraceProposals(classId, status = null) {
   const { data, error } = await q.order('created_at', { ascending: false });
   if (error) throw error;
   return data ?? [];
+}
+
+// Resolve a single proposal by id — used by the school portal's notification
+// deep link to find which class/student screen to open.
+async function getGraceProposalById(id) {
+  const { data, error } = await db
+    .from('grace_proposals')
+    .select('id, student_id, class_id, school_id, subject_id, marks, status, academic_year')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return data ?? null;
 }
 
 async function proposeGrace({ studentId, classId, schoolId, subjectId, marks, reason }) {
@@ -2860,6 +2879,15 @@ async function getUnreadNotificationsCount() {
     .is('read_at', null);
   if (error) throw error;
   return count ?? 0;
+}
+
+async function markNotificationRead(id) {
+  const { error } = await db
+    .from('notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('id', id)
+    .is('read_at', null);
+  if (error) throw error;
 }
 
 async function markAllNotificationsRead() {
@@ -3403,6 +3431,7 @@ window.NSAMS_DB = {
   getClassGrace,
   setStudentGrace,
   getGraceProposals,
+  getGraceProposalById,
   proposeGrace,
   decideGraceProposal,
   getClassReportCards,
@@ -3415,6 +3444,7 @@ window.NSAMS_DB = {
   // Notifications & Web Push
   getNotifications,
   getUnreadNotificationsCount,
+  markNotificationRead,
   markAllNotificationsRead,
   subscribeNotifications,
   registerPushSubscription,

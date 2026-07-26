@@ -312,7 +312,11 @@
       </button>
       <div class="att-hdr-info">
         <div id="att-class-name" class="att-hdr-name">…</div>
-        <div id="att-date"       class="att-hdr-date">…</div>
+        <!-- Static subtitle, not the date: the day/date already lives once in the
+             global header under the teacher's name (#hdr-date). Repeating it here
+             crowded the row and collided with the back / log buttons on narrow
+             screens. Matches the grades and conduct views. -->
+        <div class="att-hdr-date">تسجيل الحضور</div>
       </div>
       <button id="btn-absence-log" class="btn-abslog" aria-label="سجل الغيابات">
         <svg class="icon icon-sm"><use href="#ic-clipboard"/></svg>
@@ -438,6 +442,15 @@
       <span>عرض للقراءة فقط — هذه المادة ليست من اختصاصك.</span>
     </div>
 
+    <!-- Activity subjects (PE / music / fine arts) are almost always full marks
+         for everyone; shown only when the subject allows it. -->
+    <div id="grades-fill-wrap" class="grades-fill-wrap" hidden>
+      <button type="button" class="btn btn-outline btn-sm" id="btn-fill-full">
+        <svg class="icon icon-xs"><use href="#ic-check-circle"/></svg>
+        وضع العلامة الكاملة للجميع
+      </button>
+    </div>
+
     <div id="grades-loading" style="padding:16px var(--page-px,16px)">
       <div class="stu-skeleton" style="height:48px;border-radius:12px;margin-bottom:10px"></div>
       <div class="stu-skeleton" style="height:48px;border-radius:12px;margin-bottom:10px"></div>
@@ -471,7 +484,7 @@
 
   </div><!-- /view-grades -->
 
-  <!-- ── Conduct View: enter السلوك (grades 7+) ────────────────────────────── -->
+  <!-- ── Conduct View: enter السلوك (one mark out of 100) ──────────────────── -->
   <div id="view-conduct" hidden>
     <header class="att-screen-header">
       <button id="btn-conduct-back" class="btn-back" aria-label="العودة">
@@ -650,6 +663,52 @@
     <div class="confirm-modal-actions">
       <button type="button" class="btn btn-outline" id="btn-logout-cancel">إلغاء</button>
       <button type="button" class="btn btn-danger" id="btn-logout-ok">خروج</button>
+    </div>
+  </div>
+</div>
+
+<!-- Grace-marks proposal modal — replaces the two native prompt() dialogs.
+     One sheet collects both the marks and the (optional) reason. -->
+<div id="modal-grace" class="confirm-modal-overlay" hidden role="dialog" aria-modal="true"
+     aria-labelledby="grace-modal-title">
+  <div class="confirm-modal-sheet confirm-modal-sheet--form">
+    <h2 class="confirm-modal-title" id="grace-modal-title">اقتراح درجات مساعدة</h2>
+    <p class="confirm-modal-sub" id="grace-modal-sub">…</p>
+
+    <div class="form-group form-group--flush">
+      <label class="form-label" for="grace-marks">الدرجة المقترحة (١–١٠)</label>
+      <input id="grace-marks" class="form-input form-input--plain" type="number"
+             inputmode="numeric" min="1" max="10" step="1" autocomplete="off" />
+    </div>
+
+    <div class="form-group form-group--flush">
+      <label class="form-label" for="grace-reason">سبب الاقتراح (اختياري)</label>
+      <textarea id="grace-reason" class="form-input form-input--plain" rows="3"
+                maxlength="200" autocomplete="off"></textarea>
+    </div>
+
+    <p id="grace-modal-error" class="modal-error" hidden></p>
+
+    <div class="confirm-modal-actions">
+      <button type="button" class="btn btn-outline" id="btn-grace-cancel">إلغاء</button>
+      <button type="button" class="btn btn-primary" id="btn-grace-send">
+        <span id="grace-send-label">إرسال الاقتراح</span>
+        <span class="spinner" id="grace-send-spinner" hidden></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Generic yes/no modal — replaces the native confirm() calls.
+     Distinct from #modal-confirm, which is the attendance-submission summary. -->
+<div id="modal-ask" class="confirm-modal-overlay" hidden role="dialog" aria-modal="true"
+     aria-labelledby="ask-modal-title">
+  <div class="confirm-modal-sheet">
+    <h2 class="confirm-modal-title" id="ask-modal-title">تأكيد</h2>
+    <p class="confirm-modal-sub" id="ask-modal-text">…</p>
+    <div class="confirm-modal-actions">
+      <button type="button" class="btn btn-outline" id="btn-ask-cancel">إلغاء</button>
+      <button type="button" class="btn btn-danger" id="btn-ask-ok">متابعة</button>
     </div>
   </div>
 </div>

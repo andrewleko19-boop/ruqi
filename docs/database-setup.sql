@@ -481,7 +481,8 @@ create table if not exists public.notifications (
   id           uuid primary key default gen_random_uuid(),
   -- auth.users (لا public.users): يشمل أولياء الأمور؛ متوافق رجعياً (public.users.id = auth.uid()).
   recipient_id uuid not null references auth.users(id) on delete cascade,
-  type         text not null,  -- report_new | report_status | duty_adjusted | attendance_reminder | student_absent
+  type         text not null,  -- report_new | report_status | duty_adjusted | attendance_reminder
+                               -- | student_absent | grace_proposed | grace_granted
   title        text not null,
   body         text,
   entity       text,
@@ -2340,6 +2341,23 @@ create policy subject_catalog_comp_write on public.subject_catalog_components
 
 grant select, insert, update, delete on public.subject_catalog_components to authenticated;
 
+-- ────────────────────────────────────────────────────────────────────────────
+-- 14.2c  مواد النشاط — السماح بوضع العلامة الكاملة لكل الطلاب دفعةً واحدة
+--   مواد مثل التربية الرياضية والموسيقية والفنون الجميلة يمنحها مدرّسها العلامة
+--   التامّة لأغلب الطلاب، فتعبئة كل خانة يدوياً عبء بلا فائدة. العَلَم يُضبط من
+--   لوحة المشرف على مادة الفهرس، ويُنسخ إلى مواد الصفوف عند اختيارها؛ وعندما
+--   يكون true تُظهر بوابة المعلّم زر «وضع العلامة الكاملة للجميع» الذي يملأ كل
+--   الخانات بحدّها الأقصى — والدرجات تبقى قابلة للتعديل فردياً قبل الحفظ.
+--   ملاحظة: مادة بمكوّن واحد max_mark = 100 هي تمثيل «درجة واحدة من ١٠٠»
+--   (مثل السلوك) — لا حاجة لعمود إضافي، فشاشة المعلّم تعرض ما تجده من مكوّنات.
+-- ────────────────────────────────────────────────────────────────────────────
+alter table public.subject_catalog
+  add column if not exists allow_full_marks boolean not null default false;
+
+-- public.subjects أُنشئ خارج المستودع؛ نضيف العمود بشكل idempotent فقط.
+alter table public.subjects
+  add column if not exists allow_full_marks boolean not null default false;
+
 -- قواعد النجاح حسب مجموعة الصفوف (يديرها المشرف) — نفس الاسم بدرجات دنيا مختلفة
 -- لكل مجموعة. core_pass للعربي والرياضيات الأساسية، default_pass لبقية المواد.
 create table if not exists public.grade_pass_rules (
@@ -2559,6 +2577,48 @@ end; $$;
 
 revoke all on function public.decide_grace_proposal(uuid, text) from public, anon;
 grant execute on function public.decide_grace_proposal(uuid, text) to authenticated;
+
+-- 15.5  Trigger — اقتراح معلّم جديد → مديرو المدرسة
+--   بدون هذا الإشعار يبقى الاقتراح مدفوناً داخل نافذة درجات المساعدة لطالب بعينه
+--   في تبويب الشهادات، فلا يعلم به المدير أصلاً. الإشعار يحمل entity_id للاقتراح
+--   لتفتح الواجهة النافذة المعنيّة مباشرةً عند النقر.
+--   security definer: المعلّم لا يملك صلاحية القراءة على public.users.
+create or replace function public.trg_grace_proposal_new()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_student text;
+  v_subject text;
+  v_teacher text;
+  v_class   text;
+begin
+  select s.full_name into v_student from public.students s where s.id = new.student_id;
+  select sub.name    into v_subject from public.subjects sub where sub.id = new.subject_id;
+  select u.full_name into v_teacher from public.users    u   where u.id  = new.proposed_by;
+  select coalesce(c.name, 'الصف ' || c.grade::text) into v_class
+    from public.classes c where c.id = new.class_id;
+
+  perform public.notify_user(
+    u.id,
+    'grace_proposed',
+    'اقتراح درجات مساعدة',
+    coalesce(v_teacher, 'معلّم') || ' يقترح ' || new.marks || ' درجة لـ '
+      || coalesce(v_student, 'طالب')
+      || ' في ' || coalesce(v_subject, 'المجموع')
+      || ' — ' || coalesce(v_class, ''),
+    'grace_proposals',
+    new.id
+  )
+  from public.users u
+  where u.role = 'school_admin'
+    and u.school_id = new.school_id;
+
+  return new;
+end; $$;
+
+drop trigger if exists t_grace_proposal_new on public.grace_proposals;
+create trigger t_grace_proposal_new
+  after insert on public.grace_proposals
+  for each row execute function public.trg_grace_proposal_new();
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- 16. التحقّق العلني من الجلاء (رمز QR على الشهادة المطبوعة)
