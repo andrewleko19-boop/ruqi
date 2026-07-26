@@ -8,7 +8,7 @@
  *
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'nsams-v99';
+const CACHE = 'nsams-v100';
 
 const PRECACHE = [
   './',
