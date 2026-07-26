@@ -19,9 +19,41 @@ export { db as supabase };
 export { SUPABASE_URL as supabaseUrl };
 
 if ('serviceWorker' in navigator) {
+  // An installed PWA reopened from the recents list resumes the existing page:
+  // there is no navigation, so the browser never runs its own Service Worker
+  // update check and a shipped fix can sit unseen indefinitely. Ask for the
+  // check explicitly — on start, and every time the app returns to the
+  // foreground (throttled, since visibilitychange fires often).
+  let _lastSwCheck = 0;
   navigator.serviceWorker
     .register(new URL('../sw.js', import.meta.url))
+    .then((reg) => {
+      const checkForUpdate = () => {
+        if (Date.now() - _lastSwCheck < 60_000) return;
+        _lastSwCheck = Date.now();
+        reg.update().catch(() => {});
+      };
+      checkForUpdate();
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') checkForUpdate();
+      });
+    })
     .catch(err => console.warn('[NSAMS] SW registration failed', err));
+
+  // sw.js calls skipWaiting() + clients.claim(), so a new worker takes over the
+  // live page. Reload once so the page runs the new HTML/JS instead of the old
+  // shell paired with the new worker.
+  const _hadController = !!navigator.serviceWorker.controller;
+  let   _swReloading   = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    // No previous controller = first install on this device; nothing is stale.
+    if (!_hadController || _swReloading) return;
+    // Never discard work in progress (a half-entered attendance sheet, unsaved
+    // marks). Portals expose this hook; the reload happens on the next visit.
+    if (typeof window.nsamsHasUnsavedWork === 'function' && window.nsamsHasUnsavedWork()) return;
+    _swReloading = true;
+    location.reload();
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -330,6 +330,16 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// Read by shared/db.js before it reloads the page for a Service Worker update:
+// a teacher mid-entry must not lose an attendance sheet or a column of marks.
+// G and C are declared later in the file; guard against the temporal dead zone
+// by only touching them once they exist.
+window.nsamsHasUnsavedWork = () => {
+  try {
+    return Boolean(S.isDirty || G?.dirty || C?.dirty);
+  } catch { return false; }
+};
+
 // ── Password toggle ───────────────────────────────────────────────────────────
 btnTogglePw.addEventListener('click', () => {
   const isPw = inPw.type === 'password';
