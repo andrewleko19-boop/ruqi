@@ -147,20 +147,30 @@
       </div>
     </header>
 
-    <!-- شريط التبويبات -->
-    <nav class="dir-tab-bar" role="tablist">
-      <button class="tab-back-btn" id="btn-back-nav" hidden title="رجوع" aria-label="رجوع">
-        <svg class="icon icon-sm"><use href="#icon-arrow-right"/></svg>
+    <!-- شريط التنقّل الجانبي (يتحوّل إلى شريط سفلي على الجوّال) -->
+    <nav class="dir-rail" role="tablist" aria-label="أقسام لوحة المديرية">
+      <button class="dir-tab-btn is-active" data-tab="overview" role="tab" aria-selected="true">
+        <svg class="icon"><use href="#icon-map"/></svg><span class="dir-rail-label">نظرة عامة</span>
       </button>
-      <button class="dir-tab-btn is-active" data-tab="overview" role="tab">النظرة العامة</button>
-      <button class="dir-tab-btn" data-tab="schools" role="tab">المدارس</button>
-      <button class="dir-tab-btn" data-tab="principals" role="tab">المدراء</button>
+      <button class="dir-tab-btn" data-tab="performance" role="tab" aria-selected="false">
+        <svg class="icon"><use href="#icon-clock"/></svg><span class="dir-rail-label">الأداء</span>
+      </button>
+      <button class="dir-tab-btn" data-tab="approvals" role="tab" aria-selected="false">
+        <svg class="icon"><use href="#icon-check"/></svg><span class="dir-rail-label">الاعتمادات</span>
+        <span class="dir-rail-count" id="rail-count-approvals" hidden>0</span>
+      </button>
+      <button class="dir-tab-btn" data-tab="reports" role="tab" aria-selected="false">
+        <svg class="icon"><use href="#icon-alert"/></svg><span class="dir-rail-label">البلاغات</span>
+        <span class="dir-rail-count" id="rail-count-reports" hidden>0</span>
+      </button>
+      <button class="dir-tab-btn" data-tab="schools" role="tab" aria-selected="false">
+        <svg class="icon"><use href="#icon-school"/></svg><span class="dir-rail-label">المدارس والطاقم</span>
+      </button>
     </nav>
 
-    <!-- تبويب النظرة العامة -->
+    <!-- ═════ نظرة عامة ═════ -->
     <div id="dir-tab-overview" class="dir-tab-panel is-active">
     <main class="main-content">
-
       <!-- صف الإحصائيات -->
       <section class="stats-row" id="stats-row">
         <div class="stat-card" id="stat-teachers">
@@ -236,8 +246,6 @@
               خريطة المدارس
             </h2>
           <div class="map-head-right">
-            <button id="view-toggle" class="view-toggle" type="button"
-                    aria-label="تبديل العرض">🌐 المرصد</button>
             <div class="map-legend">
               <span class="legend-dot legend-dot--green"></span>طبيعي
               <span class="legend-dot legend-dot--amber"></span>تغطية ناقصة
@@ -247,7 +255,6 @@
           </div>
           </div>
           <div id="map"></div>
-          <div id="globe-viz" hidden></div>
         </section>
 
         <!-- لوحة التقارير المعلقة -->
@@ -265,7 +272,12 @@
         </section>
 
       </div>
+    </main>
+    </div><!-- /dir-tab-overview -->
 
+    <!-- ═════ الأداء ═════ -->
+    <div id="dir-tab-performance" class="dir-tab-panel">
+    <div class="main-content">
       <!-- لوحة اتجاه الحضور -->
       <section class="panel" id="trend-panel">
         <div class="panel-header">
@@ -398,54 +410,39 @@
           لا توجد تقارير شهرية بعد — تُولَّد تلقائياً في أول كل شهر.
         </p>
       </section>
+    </div>
+    </div><!-- /dir-tab-performance -->
 
-      <!-- طلبات المدارس -->
-      <section class="panel" id="requests-card">
+    <!-- ═════ الاعتمادات ═════ -->
+    <div id="dir-tab-approvals" class="dir-tab-panel">
+    <div class="main-content">
+      <!-- الجلاءات (اعتماد النتائج النهائية) -->
+      <section class="panel" id="result-sheets-card">
         <div class="panel-header">
           <h2>
-            <svg class="icon"><use href="#icon-bell"/></svg>
-            طلبات المدارس
+            <svg class="icon"><use href="#icon-clipboard"/></svg>
+            الجلاءات
           </h2>
-          <span class="badge badge--amber" id="dir-req-count" hidden></span>
+          <span class="badge badge--amber" id="dir-rs-count" hidden></span>
         </div>
-        <div id="dir-req-loading" class="dir-req-loading">
+        <div id="dir-rs-loading" class="dir-req-loading">
           <div class="spinner"></div>
         </div>
-        <div class="table-wrapper" id="dir-req-table-wrap" hidden>
-          <table class="data-table" id="dir-req-table">
+        <div class="table-wrapper" id="dir-rs-table-wrap" hidden>
+          <table class="data-table" id="dir-rs-table">
             <thead>
               <tr>
                 <th>المدرسة</th>
-                <th>نوع الطلب</th>
-                <th>التاريخ</th>
+                <th>الصف / الفصل</th>
                 <th>الحالة</th>
                 <th>إجراء / ملاحظة</th>
               </tr>
             </thead>
-            <tbody id="dir-req-list"></tbody>
+            <tbody id="dir-rs-list"></tbody>
           </table>
         </div>
-        <p id="dir-req-empty" class="empty-state" hidden>لا توجد طلبات حتى الآن.</p>
+        <p id="dir-rs-empty" class="empty-state" hidden>لا توجد جلاءات حتى الآن.</p>
       </section>
-
-      <!-- مودال مراجعة الطلب -->
-      <div id="dir-review-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
-        <div class="modal-box">
-          <h3 id="dir-review-title">مراجعة الطلب</h3>
-          <div id="dir-review-body" class="dir-review-body"></div>
-          <div class="form-group" style="margin-top:12px">
-            <label for="dir-review-reason" style="font-size:.88rem;color:var(--text-secondary)">السبب / ملاحظة (اختياري)</label>
-            <textarea id="dir-review-reason" class="field-input" rows="2"
-              style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;font-size:.9rem;resize:vertical;margin-top:4px"></textarea>
-          </div>
-          <p id="dir-review-msg" class="dir-review-msg" hidden></p>
-          <div class="modal-actions">
-            <button class="btn btn-sm" id="dir-btn-approve" style="background:var(--green-dim);color:var(--green);border:1px solid var(--green)">موافقة ✓</button>
-            <button class="btn btn-sm" id="dir-btn-reject"  style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)">رفض ✗</button>
-            <button class="btn btn-ghost btn-sm" id="dir-btn-review-cancel">إلغاء</button>
-          </div>
-        </div>
-      </div>
 
       <!-- البيانات الشهرية -->
       <section class="panel" id="statements-card">
@@ -475,73 +472,40 @@
         <p id="dir-stmt-empty" class="empty-state" hidden>لا توجد بيانات شهرية حتى الآن.</p>
       </section>
 
-      <!-- مودال مراجعة البيان الشهري -->
-      <div id="dir-stmt-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
-        <div class="modal-box">
-          <h3 id="dir-stmt-title">مراجعة البيان الشهري</h3>
-          <div id="dir-stmt-body" class="dir-review-body"></div>
-          <div class="form-group" style="margin-top:12px">
-            <label for="dir-stmt-notes" style="font-size:.88rem;color:var(--text-secondary)">السبب / ملاحظة (اختياري)</label>
-            <textarea id="dir-stmt-notes" class="field-input" rows="2"
-              style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;font-size:.9rem;resize:vertical;margin-top:4px"></textarea>
-          </div>
-          <p id="dir-stmt-msg" class="dir-review-msg" hidden></p>
-          <div class="modal-actions">
-            <button class="btn btn-sm" id="dir-stmt-approve" style="background:var(--green-dim);color:var(--green);border:1px solid var(--green)">موافقة ✓</button>
-            <button class="btn btn-sm" id="dir-stmt-reject"  style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)">رفض ✗</button>
-            <button class="btn btn-ghost btn-sm" id="dir-stmt-cancel">إلغاء</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- الجلاءات (اعتماد النتائج النهائية) -->
-      <section class="panel" id="result-sheets-card">
+      <!-- طلبات المدارس -->
+      <section class="panel" id="requests-card">
         <div class="panel-header">
           <h2>
-            <svg class="icon"><use href="#icon-clipboard"/></svg>
-            الجلاءات
+            <svg class="icon"><use href="#icon-bell"/></svg>
+            طلبات المدارس
           </h2>
-          <span class="badge badge--amber" id="dir-rs-count" hidden></span>
+          <span class="badge badge--amber" id="dir-req-count" hidden></span>
         </div>
-        <div id="dir-rs-loading" class="dir-req-loading">
+        <div id="dir-req-loading" class="dir-req-loading">
           <div class="spinner"></div>
         </div>
-        <div class="table-wrapper" id="dir-rs-table-wrap" hidden>
-          <table class="data-table" id="dir-rs-table">
+        <div class="table-wrapper" id="dir-req-table-wrap" hidden>
+          <table class="data-table" id="dir-req-table">
             <thead>
               <tr>
                 <th>المدرسة</th>
-                <th>الصف / الفصل</th>
+                <th>نوع الطلب</th>
+                <th>التاريخ</th>
                 <th>الحالة</th>
                 <th>إجراء / ملاحظة</th>
               </tr>
             </thead>
-            <tbody id="dir-rs-list"></tbody>
+            <tbody id="dir-req-list"></tbody>
           </table>
         </div>
-        <p id="dir-rs-empty" class="empty-state" hidden>لا توجد جلاءات حتى الآن.</p>
+        <p id="dir-req-empty" class="empty-state" hidden>لا توجد طلبات حتى الآن.</p>
       </section>
+    </div>
+    </div><!-- /dir-tab-approvals -->
 
-      <!-- مودال مراجعة/إصدار الجلاء -->
-      <div id="dir-rs-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
-        <div class="modal-box">
-          <h3 id="dir-rs-title">مراجعة الجلاء</h3>
-          <div id="dir-rs-body" class="dir-review-body"></div>
-          <div class="form-group" style="margin-top:12px">
-            <label for="dir-rs-notes" style="font-size:.88rem;color:var(--text-secondary)">السبب / ملاحظة (اختياري)</label>
-            <textarea id="dir-rs-notes" class="field-input" rows="2"
-              style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;font-size:.9rem;resize:vertical;margin-top:4px"></textarea>
-          </div>
-          <p id="dir-rs-msg" class="dir-review-msg" hidden></p>
-          <div class="modal-actions">
-            <button class="btn btn-sm" id="dir-rs-approve" style="background:var(--green-dim);color:var(--green);border:1px solid var(--green)">موافقة ✓</button>
-            <button class="btn btn-sm" id="dir-rs-issue"   style="background:var(--green-dim);color:var(--green);border:1px solid var(--green)" hidden>إصدار نهائي ✓</button>
-            <button class="btn btn-sm" id="dir-rs-reject"  style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)">رفض ✗</button>
-            <button class="btn btn-ghost btn-sm" id="dir-rs-cancel">إلغاء</button>
-          </div>
-        </div>
-      </div>
-
+    <!-- ═════ البلاغات ═════ -->
+    <div id="dir-tab-reports" class="dir-tab-panel">
+    <div class="main-content">
       <!-- جدول التقارير الكامل -->
       <section class="panel">
         <div class="panel-header">
@@ -595,15 +559,18 @@
           </table>
         </div>
       </section>
+    </div>
+    </div><!-- /dir-tab-reports -->
 
-    </main>
-    </div><!-- /dir-tab-overview -->
-
-    <!-- ══════════════════════════════════════════
-         تبويب المدارس
-    ══════════════════════════════════════════ -->
+    <!-- ═════ المدارس والطاقم الإداري ═════ -->
     <div id="dir-tab-schools" class="dir-tab-panel">
-      <div class="dir-section-card">
+    <div class="main-content">
+      <div class="dir-seg" role="tablist" aria-label="عرض المدارس أو المدراء">
+        <button class="dir-seg-btn is-active" data-seg="schools" role="tab" aria-selected="true">المدارس</button>
+        <button class="dir-seg-btn" data-seg="principals" role="tab" aria-selected="false">المدراء</button>
+      </div>
+      <div id="dir-seg-schools">
+        <div class="dir-section-card">
         <div class="dir-section-header">
           <h2>المدارس (<span id="dir-schools-count">—</span>)</h2>
           <button id="dir-add-school-btn" class="btn btn-primary btn-sm">
@@ -631,13 +598,9 @@
         </div>
         <div id="dir-schools-empty" class="dir-table-empty hidden">لا توجد مدارس بعد.</div>
       </div>
-    </div><!-- /dir-tab-schools -->
-
-    <!-- ══════════════════════════════════════════
-         تبويب المدراء
-    ══════════════════════════════════════════ -->
-    <div id="dir-tab-principals" class="dir-tab-panel">
-      <div class="dir-section-card">
+      </div>
+      <div id="dir-seg-principals" hidden>
+        <div class="dir-section-card">
         <div class="dir-section-header">
           <h2>المدراء (<span id="dir-principals-count">—</span>)</h2>
           <button id="dir-add-principal-btn" class="btn btn-primary btn-sm">
@@ -663,9 +626,69 @@
         </div>
         <div id="dir-principals-empty" class="dir-table-empty hidden">لا يوجد مدراء بعد.</div>
       </div>
-    </div><!-- /dir-tab-principals -->
+      </div>
+    </div>
+    </div><!-- /dir-tab-schools -->
 
   </div><!-- /#app -->
+
+<!-- مودال مراجعة الطلب -->
+      <div id="dir-review-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+        <div class="modal-box">
+          <h3 id="dir-review-title">مراجعة الطلب</h3>
+          <div id="dir-review-body" class="dir-review-body"></div>
+          <div class="form-group" style="margin-top:12px">
+            <label for="dir-review-reason" style="font-size:.88rem;color:var(--text-secondary)">السبب / ملاحظة (اختياري)</label>
+            <textarea id="dir-review-reason" class="field-input" rows="2"
+              style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;font-size:.9rem;resize:vertical;margin-top:4px"></textarea>
+          </div>
+          <p id="dir-review-msg" class="dir-review-msg" hidden></p>
+          <div class="modal-actions">
+            <button class="btn btn-sm" id="dir-btn-approve" style="background:var(--green-dim);color:var(--green);border:1px solid var(--green)">موافقة ✓</button>
+            <button class="btn btn-sm" id="dir-btn-reject"  style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)">رفض ✗</button>
+            <button class="btn btn-ghost btn-sm" id="dir-btn-review-cancel">إلغاء</button>
+          </div>
+        </div>
+      </div>
+
+<!-- مودال مراجعة البيان الشهري -->
+      <div id="dir-stmt-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+        <div class="modal-box">
+          <h3 id="dir-stmt-title">مراجعة البيان الشهري</h3>
+          <div id="dir-stmt-body" class="dir-review-body"></div>
+          <div class="form-group" style="margin-top:12px">
+            <label for="dir-stmt-notes" style="font-size:.88rem;color:var(--text-secondary)">السبب / ملاحظة (اختياري)</label>
+            <textarea id="dir-stmt-notes" class="field-input" rows="2"
+              style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;font-size:.9rem;resize:vertical;margin-top:4px"></textarea>
+          </div>
+          <p id="dir-stmt-msg" class="dir-review-msg" hidden></p>
+          <div class="modal-actions">
+            <button class="btn btn-sm" id="dir-stmt-approve" style="background:var(--green-dim);color:var(--green);border:1px solid var(--green)">موافقة ✓</button>
+            <button class="btn btn-sm" id="dir-stmt-reject"  style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)">رفض ✗</button>
+            <button class="btn btn-ghost btn-sm" id="dir-stmt-cancel">إلغاء</button>
+          </div>
+        </div>
+      </div>
+
+<!-- مودال مراجعة/إصدار الجلاء -->
+      <div id="dir-rs-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+        <div class="modal-box">
+          <h3 id="dir-rs-title">مراجعة الجلاء</h3>
+          <div id="dir-rs-body" class="dir-review-body"></div>
+          <div class="form-group" style="margin-top:12px">
+            <label for="dir-rs-notes" style="font-size:.88rem;color:var(--text-secondary)">السبب / ملاحظة (اختياري)</label>
+            <textarea id="dir-rs-notes" class="field-input" rows="2"
+              style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;font-size:.9rem;resize:vertical;margin-top:4px"></textarea>
+          </div>
+          <p id="dir-rs-msg" class="dir-review-msg" hidden></p>
+          <div class="modal-actions">
+            <button class="btn btn-sm" id="dir-rs-approve" style="background:var(--green-dim);color:var(--green);border:1px solid var(--green)">موافقة ✓</button>
+            <button class="btn btn-sm" id="dir-rs-issue"   style="background:var(--green-dim);color:var(--green);border:1px solid var(--green)" hidden>إصدار نهائي ✓</button>
+            <button class="btn btn-sm" id="dir-rs-reject"  style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)">رفض ✗</button>
+            <button class="btn btn-ghost btn-sm" id="dir-rs-cancel">إلغاء</button>
+          </div>
+        </div>
+      </div>
 
   <!-- ══ مودال إضافة/تعديل مدرسة ══ -->
   <div id="dir-school-modal" class="modal-overlay hidden">
@@ -870,7 +893,6 @@
 </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/globe.gl@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="../shared/db.js"></script>  <script type="module" src="script.js"></script>

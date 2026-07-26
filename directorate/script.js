@@ -36,10 +36,8 @@ function todayLocalISO() {
 // ══════════════════════════════════════════════
 let map;
 let markersLayer      = {};
-let globe;                      // globe.gl instance (lazy-init on first toggle)
-let globeMode         = false;  // true = observatory view, false = Leaflet map
-let globePosed        = false;  // POV centred on the directorate only once
-let lastSchools       = [];     // cached for re-rendering either view
+let mapFitted         = false;  // frame the directorate's own schools once
+let lastSchools       = [];     // cached for re-rendering after a refresh
 let lastStatusMap     = {};
 let allReports        = [];
 let knownReportIds    = null;   // null = first load, no flash
@@ -156,7 +154,6 @@ function showApp(session) {
     session.user?.fullName || session.user?.email || '';
 
   initMap();
-  setupViewToggle();
   setupLogout();
   setupFilters();
   setupManualRefresh();
@@ -166,6 +163,7 @@ function showApp(session) {
   setupLightbox();
   setupTrendPeriod();
   setupDirTabs();
+  setupDirSeg();
   setupDirSchools();
   setupDirPrincipals();
 }
@@ -195,11 +193,6 @@ function setupLogout() {
 // ══════════════════════════════════════════════
 //  Map
 // ══════════════════════════════════════════════
-function setupViewToggle() {
-  const btn = document.getElementById('view-toggle');
-  btn?.addEventListener('click', () => setMapView(!globeMode));
-}
-
 function initMap() {
   if (map) return;
 
@@ -277,122 +270,19 @@ function renderMap(schools, statusMap) {
         .addTo(map);
     }
   }
-}
 
-// ══════════════════════════════════════════════
-//  Observatory — 3D globe (globe.gl / WebGL)
-// ══════════════════════════════════════════════
-// Brighter palette than the map pins so points stay legible on the dark globe.
-const GLOBE_PALETTE = {
-  green:   { hex: '#22c55e', rgb: '34,197,94'  },
-  amber:   { hex: '#f59e0b', rgb: '245,158,11' },
-  red:     { hex: '#ef4444', rgb: '239,68,68'  },
-  no_data: { hex: '#94a3b8', rgb: '148,163,184' },
-  gray:    { hex: '#4f5f80', rgb: '79,95,128'  },
-};
-
-function initGlobe() {
-  if (globe) return;
-  const el = document.getElementById('globe-viz');
-  if (!el || typeof Globe === 'undefined') return;
-
-  globe = Globe()(el)
-    .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
-    .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
-    .backgroundColor('rgba(0,0,0,0)')
-    .showAtmosphere(true)
-    .atmosphereColor('#4f8cff')
-    .atmosphereAltitude(0.2)
-    // Schools as glowing points
-    .pointLat('lat').pointLng('lng')
-    .pointColor('hex')
-    .pointAltitude(0.025)
-    .pointRadius(0.32)
-    .pointsMerge(false)
-    .pointLabel(d => `
-      <div class="globe-tip">
-        <div class="globe-tip-name">${esc(d.name)}</div>
-        <div class="globe-tip-row"><span>الحالة</span><b>${esc(d.statusLabel)}</b></div>
-        ${d.attTxt ? `<div class="globe-tip-row"><span>نسبة الحضور</span><b>${d.attTxt}</b></div>` : ''}
-      </div>`)
-    .onPointClick(d => { if (d?.id) window.location.href = `school.html?id=${encodeURIComponent(d.id)}`; })
-    // Pulsing rings that emanate from every school in its status colour
-    .ringLat('lat').ringLng('lng')
-    .ringMaxRadius(2.6)
-    .ringPropagationSpeed(1.8)
-    .ringRepeatPeriod(1300)
-    .ringColor(d => (t => `rgba(${d.rgb},${(1 - t).toFixed(3)})`));
-
-  const controls = globe.controls();
-  controls.autoRotate = true;
-  controls.autoRotateSpeed = 0.45;
-  controls.enableZoom = true;
-
-  sizeGlobe();
-  window.addEventListener('resize', sizeGlobe);
-}
-
-function sizeGlobe() {
-  const el = document.getElementById('globe-viz');
-  if (!globe || !el || el.hidden) return;
-  globe.width(el.clientWidth).height(el.clientHeight);
-}
-
-function renderGlobe(schools, statusMap) {
-  if (!globe) return;
-
-  const pts = (schools || [])
-    .filter(s => s.lat && s.lng)
-    .map(s => {
-      const info  = statusMap[s.id] || { color: 'no_data', reason: 'no_data', attendanceRate: null };
-      const pal   = GLOBE_PALETTE[info.color] || GLOBE_PALETTE.gray;
-      const hasAtt = info.reason === 'ok' || info.reason === 'low_coverage' || info.reason === 'low_attendance';
-      return {
-        id:   s.id,
-        name: s.name,
-        lat:  s.lat,
-        lng:  s.lng,
-        hex:  pal.hex,
-        rgb:  pal.rgb,
-        statusLabel: MAP_STATUS_LABELS[info.color] || info.color,
-        attTxt: hasAtt && info.attendanceRate !== null ? `${info.attendanceRate}%` : '',
-      };
-    });
-
-  globe.pointsData(pts).ringsData(pts);
-
-  // Centre the camera on the directorate's schools, once.
-  if (!globePosed && pts.length) {
-    const lat = pts.reduce((a, p) => a + p.lat, 0) / pts.length;
-    const lng = pts.reduce((a, p) => a + p.lng, 0) / pts.length;
-    globe.pointOfView({ lat, lng, altitude: 1.55 }, 1200);
-    globePosed = true;
+  // Frame the directorate's own schools instead of leaving the view on the
+  // national default, which left most directorates staring at empty map.
+  // Once only, so a 30s refresh never yanks the view back while panning.
+  if (!mapFitted) {
+    const pts = schools.filter(s => s.lat && s.lng).map(s => [s.lat, s.lng]);
+    if (pts.length) {
+      map.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 13 });
+      mapFitted = true;
+    }
   }
 }
 
-function setMapView(toGlobe) {
-  globeMode = toGlobe;
-  const mapEl    = document.getElementById('map');
-  const globeEl  = document.getElementById('globe-viz');
-  const toggle   = document.getElementById('view-toggle');
-  if (!mapEl || !globeEl) return;
-
-  if (toGlobe) {
-    mapEl.style.display = 'none';
-    globeEl.hidden = false;
-    if (toggle) toggle.textContent = '🗺 الخريطة';
-    initGlobe();
-    sizeGlobe();
-    renderGlobe(lastSchools, lastStatusMap);
-    globe?.resumeAnimation?.();
-  } else {
-    globeEl.hidden = true;
-    mapEl.style.display = '';
-    if (toggle) toggle.textContent = '🌐 المرصد';
-    globe?.pauseAnimation?.();
-    if (map) map.invalidateSize();   // Leaflet must recalc after being hidden
-  }
-}
 
 // ══════════════════════════════════════════════
 //  Stats
@@ -432,7 +322,6 @@ async function loadMapAndCompliance() {
     lastSchools   = schools;
     lastStatusMap = statusMap;
     renderMap(schools, statusMap);
-    if (globeMode) renderGlobe(schools, statusMap);
 
     // لوحة الالتزام — try/catch مستقل لئلا يُسقط فشل RPC الخريطةَ
     try {
@@ -623,6 +512,7 @@ async function loadReports() {
     allReports = fresh;
     renderReportsTable();
     renderPendingList();
+    refreshRailCounts();
   } catch (err) {
     console.error('[Reports] Failed:', err);
     showToast('خطأ في التقارير', 'تعذّر تحميل التقارير.', 'error');
@@ -911,14 +801,21 @@ function setupCSVExports() {
 }
 
 // ══════════════════════════════════════════════
-//  Trend charts (Chart.js — dark/RTL)
+//  Trend charts (Chart.js — light/RTL)
 // ══════════════════════════════════════════════
+// Grid/tick/tooltip colours are read from the page's own design tokens: the
+// previous values were a dark-canvas palette left over from an earlier theme,
+// so gridlines and tick labels sat almost invisible on the light card.
 const CHART_FONT = "'Segoe UI', system-ui, sans-serif";
+function cssVar(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
 const CH = {
-  grid:      'rgba(38, 48, 72, 0.55)',
-  tick:      '#8a9bbf',
-  tooltipBg: '#131929',
-  green: '#22c55e', blue: '#4f8cff', amber: '#f59e0b', red: '#ef4444', purple: '#a855f7',
+  grid:      cssVar('--line-soft', '#e7e2d3'),
+  tick:      cssVar('--text-muted', '#64748b'),
+  tooltipBg: cssVar('--text-primary', '#16223c'),
+  green: '#1f8a57', blue: '#0e6e6b', amber: '#c98a1f', red: '#c0392b', purple: '#8b5cf6',
 };
 
 function chartBaseOptions() {
@@ -1104,6 +1001,9 @@ document.getElementById('reload-periodic-btn')?.addEventListener('click', loadPe
 
 async function loadAll() {
   await Promise.allSettled([loadStats(), loadMapAndCompliance(), loadReports(), loadTrend(), loadRequests(), loadStatements(), loadResultSheets(), loadDropoutSummary(), loadPeriodicReports()]);
+  // After every list has settled — the loaders return early on an empty list,
+  // so counting here is the only place that sees the final rendered state.
+  refreshRailCounts();
 }
 
 // ══════════════════════════════════════════════
@@ -1900,16 +1800,60 @@ async function dirEdgeFetch(path, body) {
 //  Tab switching + history
 // ══════════════════════════════════════════════
 let _dirNavDepth = 0;
-const _dirBackBtn = document.getElementById('btn-back-nav');
 
 function _dirActivateTab(tabName) {
-  document.querySelectorAll('.dir-tab-btn').forEach(b => b.classList.remove('is-active'));
+  document.querySelectorAll('.dir-tab-btn').forEach(b => {
+    b.classList.remove('is-active');
+    b.setAttribute('aria-selected', 'false');
+  });
   document.querySelectorAll('.dir-tab-panel').forEach(p => p.classList.remove('is-active'));
   const btn = document.querySelector(`.dir-tab-btn[data-tab="${tabName}"]`);
-  if (btn) btn.classList.add('is-active');
+  if (btn) { btn.classList.add('is-active'); btn.setAttribute('aria-selected', 'true'); }
   document.getElementById(`dir-tab-${tabName}`)?.classList.add('is-active');
-  if (tabName === 'schools')    loadDirSchools();
-  if (tabName === 'principals') loadDirPrincipals();
+
+  // Schools and principals now share one section, so both lists load together.
+  if (tabName === 'schools') { loadDirSchools(); loadDirPrincipals(); }
+
+  // Leaflet measures 0×0 while its panel is display:none, so it must be told to
+  // re-measure whenever the overview becomes visible again.
+  if (tabName === 'overview' && map) setTimeout(() => map.invalidateSize(), 0);
+}
+
+// Segmented control inside the "schools" section (schools ⇄ principals).
+function setupDirSeg() {
+  document.querySelectorAll('.dir-seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.dir-seg-btn').forEach(b => {
+        b.classList.remove('is-active');
+        b.setAttribute('aria-selected', 'false');
+      });
+      btn.classList.add('is-active');
+      btn.setAttribute('aria-selected', 'true');
+      const showPrincipals = btn.dataset.seg === 'principals';
+      const s = document.getElementById('dir-seg-schools');
+      const p = document.getElementById('dir-seg-principals');
+      if (s) s.hidden = showPrincipals;
+      if (p) p.hidden = !showPrincipals;
+    });
+  });
+}
+
+// Pending-work counters on the rail, so the badge is visible from any section.
+function refreshRailCounts() {
+  const setCount = (id, n) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = String(n);
+    el.hidden = n <= 0;
+  };
+  setCount('rail-count-reports', allReports.filter(r => r.status === 'open').length);
+
+  // Each list renders a review button only for rows still awaiting a decision,
+  // so counting those buttons is the same "pending" set the panels show.
+  const pendingRs   = document.querySelectorAll('#dir-rs-list   .dir-rs-review-btn').length;
+  const pendingStmt = document.querySelectorAll('#dir-stmt-list .dir-stmt-review-btn').length;
+  const pendingReq  = document.querySelectorAll('#dir-req-list  .dir-req-review-btn').length;
+  setCount('rail-count-approvals', pendingRs + pendingStmt + pendingReq);
 }
 
 function setupDirTabs() {
@@ -1919,21 +1863,17 @@ function setupDirTabs() {
     btn.addEventListener('click', () => {
       _dirNavDepth++;
       history.pushState({ tab: btn.dataset.tab, d: _dirNavDepth }, '', '#' + btn.dataset.tab);
-      if (_dirBackBtn) _dirBackBtn.hidden = false;
       _dirActivateTab(btn.dataset.tab);
     });
   });
 
+  // History still drives section changes, so the device/browser back button
+  // walks back through sections — the old in-page back button was redundant.
   window.addEventListener('popstate', e => {
     _dirNavDepth = e.state?.d ?? 0;
-    if (_dirBackBtn) _dirBackBtn.hidden = (_dirNavDepth === 0);
     const tab = e.state?.tab;
     if (tab) _dirActivateTab(tab);
   });
-
-  if (_dirBackBtn) {
-    _dirBackBtn.addEventListener('click', () => history.back());
-  }
 }
 
 // ══════════════════════════════════════════════
