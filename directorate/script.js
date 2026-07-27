@@ -218,13 +218,13 @@ function initMap() {
 }
 
 function makeMarkerIcon(color) {
-  const palette = { green: '#22c55e', amber: '#f59e0b', red: '#7f1d1d', no_data: '#fca5a5', gray: '#4f5f80' };
+  const palette = { green: '#3fbd80', amber: '#e0a83f', red: '#e2685a', no_data: '#7d8296', gray: '#7d8296' };
   const fill = palette[color] || palette.gray;
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
       <path d="M14 0C6.268 0 0 6.268 0 14c0 9.917 14 22 14 22S28 23.917 28 14C28 6.268 21.732 0 14 0z"
-        fill="${fill}" stroke="#0b0f1a" stroke-width="1.5"/>
-      <circle cx="14" cy="14" r="6" fill="#0b0f1a" fill-opacity="0.45"/>
+        fill="${fill}" stroke="#11182b" stroke-width="1.5"/>
+      <circle cx="14" cy="14" r="6" fill="#11182b" fill-opacity="0.55"/>
     </svg>`;
   return L.divIcon({
     html: svg,
@@ -1083,11 +1083,24 @@ function cssVar(name, fallback) {
   return v || fallback;
 }
 const CH = {
-  grid:      cssVar('--line-soft', '#e7e2d3'),
-  tick:      cssVar('--text-muted', '#64748b'),
-  tooltipBg: cssVar('--text-primary', '#16223c'),
-  green: '#1f8a57', blue: '#0e6e6b', amber: '#c98a1f', red: '#c0392b', purple: '#8b5cf6',
+  grid:      cssVar('--line-soft', '#202a48'),
+  tick:      cssVar('--text-muted', '#75809c'),
+  tooltipBg: cssVar('--blue-dark', '#0b1120'),
+  green: cssVar('--good',   '#3fbd80'),
+  blue:  cssVar('--accent', '#35b3ac'),
+  amber: cssVar('--warn',   '#e0a83f'),
+  red:   cssVar('--bad',    '#e2685a'),
+  purple: cssVar('--purple', '#a78bfa'),
 };
+// Canvas fillStyle cannot parse color-mix(), so the area fill is derived here.
+CH.blueFill = hexToRgba(CH.blue, 0.18);
+
+function hexToRgba(hex, alpha) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex).trim());
+  if (!m) return `rgba(53,179,172,${alpha})`;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
 
 function chartBaseOptions() {
   return {
@@ -1103,7 +1116,7 @@ function chartBaseOptions() {
       tooltip: {
         rtl: true, textDirection: 'rtl',
         backgroundColor: CH.tooltipBg, borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1,
-        titleColor: '#e8edf7', bodyColor: '#8a9bbf', padding: 10,
+        titleColor: cssVar('--ink', '#eef1f8'), bodyColor: cssVar('--ink-soft', '#aab3c8'), padding: 10,
         titleFont: { family: CHART_FONT }, bodyFont: { family: CHART_FONT },
       },
     },
@@ -1149,7 +1162,7 @@ function rateLineConfig(labels, datasetsData) {
         label: 'نسبة الحضور',
         data: datasetsData[0],
         borderColor: CH.blue,
-        backgroundColor: 'rgba(79,140,255,0.12)',
+        backgroundColor: CH.blueFill,
         fill: true,
         tension: 0.35,
         spanGaps: false,
@@ -1254,7 +1267,7 @@ async function loadDropoutSummary() {
     tbody.innerHTML = rows.map(r => `
       <tr>
         <td>${esc(r.school_name)}</td>
-        <td style="color:${(r.at_risk_count || 0) > 0 ? 'var(--clr-danger,#EF4444)' : 'inherit'};font-weight:600">
+        <td style="color:${(r.at_risk_count || 0) > 0 ? 'var(--red)' : 'inherit'};font-weight:600">
           ${r.at_risk_count ?? 0}
         </td>
         <td>${r.flagged_count ?? 0}</td>
@@ -1521,18 +1534,18 @@ async function loadDirNotifList() {
   try {
     const items = await window.NSAMS_DB.getNotifications(30);
     if (!items.length) {
-      list.innerHTML = '<li style="padding:32px 16px;text-align:center;color:#94A3B8;font-size:.9rem">لا توجد إشعارات</li>';
+      list.innerHTML = '<li style="padding:32px 16px;text-align:center;color:var(--text-muted);font-size:.9rem">لا توجد إشعارات</li>';
       return;
     }
     list.innerHTML = items.map(n => {
       const diff = Date.now() - new Date(n.created_at).getTime();
       const m    = Math.floor(diff / 60000);
       const ago  = m < 1 ? 'الآن' : m < 60 ? `منذ ${m} دقيقة` : m < 1440 ? `منذ ${Math.floor(m/60)} ساعة` : `منذ ${Math.floor(m/1440)} يوم`;
-      const bg   = !n.read_at ? 'background:rgba(11,43,94,.06);' : '';
-      return `<li style="${bg}padding:12px 16px;border-bottom:1px solid #E2E8F0;direction:rtl">
+      const bg   = !n.read_at ? 'background:var(--accent-tint);' : '';
+      return `<li style="${bg}padding:12px 16px;border-bottom:1px solid var(--border-light);direction:rtl">
         <div style="font-weight:600;font-size:.9rem">${n.title}</div>
-        ${n.body ? `<div style="font-size:.82rem;color:#64748B;margin-top:2px">${n.body}</div>` : ''}
-        <div style="font-size:.75rem;color:#94A3B8;margin-top:4px">${ago}</div>
+        ${n.body ? `<div style="font-size:.82rem;color:var(--text-secondary);margin-top:2px">${n.body}</div>` : ''}
+        <div style="font-size:.75rem;color:var(--text-muted);margin-top:4px">${ago}</div>
       </li>`;
     }).join('');
   } catch (e) { console.warn('[NSAMS-D] loadDirNotifList', e); }

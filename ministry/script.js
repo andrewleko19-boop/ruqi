@@ -424,19 +424,19 @@ function renderTable(rows) {
         <td>${i + 1}</td>
         <td><strong>${esc(row.governorate)}</strong> <span class="drill-chevron">‹</span></td>
         <td>${fmt(row.reportingSchools)}</td>
-        <td style="color:#f87171">${silent > 0 ? fmt(silent) : '<span style="color:#4ade80">0</span>'}</td>
+        <td style="color:var(--bad)">${silent > 0 ? fmt(silent) : '<span style="color:var(--good)">0</span>'}</td>
         <td>${fmt(enrolled)}</td>
-        <td style="color:#4ade80">${fmt(attending)}</td>
-        <td style="color:#f87171">${fmt(row.absent)}</td>
+        <td style="color:var(--good)">${fmt(attending)}</td>
+        <td style="color:var(--bad)">${fmt(row.absent)}</td>
         <td>
           <div class="rate-cell">
             <div class="rate-bar-bg">
               <div class="rate-bar-fill ${barClass}" style="width:${barWidth}%"></div>
             </div>
             <span class="rate-text" style="color:${
-              barClass === 'green'  ? '#1f8a57' :
-              barClass === 'yellow' ? '#c98a1f' :
-              barClass === 'red'    ? '#c0392b' : '#7c8090'
+              barClass === 'green'  ? '#3fbd80' :
+              barClass === 'yellow' ? '#e0a83f' :
+              barClass === 'red'    ? '#e2685a' : '#7d8296'
             }">
               ${rateStr !== null ? rateStr + '%' : '—'}
             </span>
@@ -456,10 +456,10 @@ function renderTable(rows) {
       <td></td>
       <td>الإجمالي الوطني</td>
       <td>${fmt(tReporting)}</td>
-      <td style="color:#f87171">${totSilent > 0 ? fmt(totSilent) : '<span style="color:#4ade80">0</span>'}</td>
+      <td style="color:var(--bad)">${totSilent > 0 ? fmt(totSilent) : '<span style="color:var(--good)">0</span>'}</td>
       <td>${fmt(totEnrolled)}</td>
-      <td style="color:#4ade80">${fmt(totAttending)}</td>
-      <td style="color:#f87171">${fmt(tAbsent)}</td>
+      <td style="color:var(--good)">${fmt(totAttending)}</td>
+      <td style="color:var(--bad)">${fmt(tAbsent)}</td>
       <td>${nationalRate !== null ? nationalRate + '%' : '—'}</td>
       <td>${rateBadge(nationalRate)}</td>
     </tr>`;
@@ -476,11 +476,11 @@ function cssVar(name, fallback) {
   return v || fallback;
 }
 const CH = {
-  grid:      cssVar('--line-soft', '#e7e2d3'),
-  tick:      cssVar('--text-muted', '#4b5568'),
-  tooltipBg: cssVar('--ink', '#16223c'),
-  line:      cssVar('--accent', '#0e6e6b'),
-  lineFill:  'rgba(14, 110, 107, 0.16)',
+  grid:      cssVar('--line-soft', '#202a48'),
+  tick:      cssVar('--text-muted', '#aab3c8'),
+  tooltipBg: '#0b1120',
+  line:      cssVar('--accent', '#35b3ac'),
+  lineFill:  'rgba(53, 179, 172, 0.18)',
 };
 
 function chartBaseOptions() {
@@ -497,7 +497,7 @@ function chartBaseOptions() {
       tooltip: {
         rtl: true, textDirection: 'rtl',
         backgroundColor: CH.tooltipBg, borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1,
-        titleColor: '#e2e8f0', bodyColor: '#94a3b8', padding: 10,
+        titleColor: '#eef1f8', bodyColor: '#aab3c8', padding: 10,
         titleFont: { family: CHART_FONT }, bodyFont: { family: CHART_FONT },
       },
     },
@@ -599,10 +599,10 @@ function renderGovRankChart(rows) {
   const labels = ranked.map(s => s.gov);
   const data   = ranked.map(s => s.rate);
   const colors = ranked.map(s => {
-    if (s.rate === null) return '#7c8090';
-    if (s.rate >= 90)    return '#1f8a57';
-    if (s.rate >= 75)    return '#c98a1f';
-    return '#c0392b';
+    if (s.rate === null) return '#7d8296';
+    if (s.rate >= 90)    return '#3fbd80';
+    if (s.rate >= 75)    return '#e0a83f';
+    return '#e2685a';
   });
 
   const existing = charts.rank;
@@ -650,9 +650,9 @@ const rateCellHTML = (rateStr, barClass) => `
       <div class="rate-bar-fill ${barClass}" style="width:${rateStr ?? 0}%"></div>
     </div>
     <span class="rate-text" style="color:${
-      barClass === 'green'  ? '#4ade80' :
-      barClass === 'yellow' ? '#fde047' :
-      barClass === 'red'    ? '#f87171' : '#64748b'
+      barClass === 'green'  ? '#3fbd80' :
+      barClass === 'yellow' ? '#e0a83f' :
+      barClass === 'red'    ? '#e2685a' : '#7d8296'
     }">
       ${rateStr !== null ? rateStr + '%' : '—'}
     </span>
@@ -703,10 +703,10 @@ function renderDrill() {
           <td>${i + 1}</td>
           <td><strong>${esc(a.name)}</strong> <span class="drill-chevron">‹</span></td>
           <td>${fmt(a.reportingSchools.size)}</td>
-          <td style="color:#f87171">${silent > 0 ? fmt(silent) : '<span style="color:#4ade80">0</span>'}</td>
+          <td style="color:var(--bad)">${silent > 0 ? fmt(silent) : '<span style="color:var(--good)">0</span>'}</td>
           <td>${fmt(enrolled)}</td>
-          <td style="color:#4ade80">${fmt(attending)}</td>
-          <td style="color:#f87171">${fmt(a.absent)}</td>
+          <td style="color:var(--good)">${fmt(attending)}</td>
+          <td style="color:var(--bad)">${fmt(a.absent)}</td>
           <td>${rateCellHTML(rateStr, barClass)}</td>
           <td>${rateBadge(rateStr)}</td>
         </tr>`;
@@ -739,7 +739,7 @@ function renderDrill() {
     </tr>`;
 
   if (dirSchools.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#64748b;padding:18px">لا توجد مدارس في هذه المديرية.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:18px">لا توجد مدارس في هذه المديرية.</td></tr>';
     return;
   }
 
@@ -751,8 +751,8 @@ function renderDrill() {
         <td>${i + 1}</td>
         <td><strong>${esc(s.name)}</strong></td>
         <td>${s.silent ? '—' : fmt(s.enrolled)}</td>
-        <td style="color:#4ade80">${s.silent ? '—' : fmt(s.attending)}</td>
-        <td style="color:#f87171">${s.silent ? '—' : fmt(s.absent)}</td>
+        <td style="color:var(--good)">${s.silent ? '—' : fmt(s.attending)}</td>
+        <td style="color:var(--bad)">${s.silent ? '—' : fmt(s.absent)}</td>
         <td>${rateCellHTML(rateStr, barClass)}</td>
         <td>${s.silent ? '<span class="badge badge-none">لم تُسجّل</span>' : rateBadge(rateStr)}</td>
       </tr>`;
