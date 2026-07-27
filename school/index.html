@@ -1969,6 +1969,41 @@
             <label for="sr-subject">المادة التي يدرسها</label>
             <input id="sr-subject" class="field-input" type="text" maxlength="80" />
           </div>
+          <div id="sr-teach-extra" hidden>
+            <div class="field-group">
+              <label for="sr-teaching-rank">رتبة التدريس <span class="optional">(خانة النموذج)</span></label>
+              <select id="sr-teaching-rank" class="field-input">
+                <option value="">— تُستنتج تلقائياً —</option>
+                <option value="معلم">معلم</option>
+                <option value="مدرس">مدرس</option>
+                <option value="مدرس مساعد">مدرس مساعد</option>
+              </select>
+            </div>
+            <div class="twin-fields">
+              <div class="field-group">
+                <label for="sr-teaching-hours">عدد الساعات</label>
+                <input id="sr-teaching-hours" class="field-input" type="number" min="0" max="40" inputmode="numeric" />
+              </div>
+              <div class="field-group">
+                <label for="sr-assigned-grade">الصف</label>
+                <input id="sr-assigned-grade" class="field-input" type="text" maxlength="30" />
+              </div>
+            </div>
+            <div class="twin-fields">
+              <div class="field-group">
+                <label for="sr-assigned-section">الشعبة</label>
+                <input id="sr-assigned-section" class="field-input" type="text" maxlength="30" />
+              </div>
+              <div class="field-group">
+                <label for="sr-quota-subjects">مواد إكمال النصاب <span class="optional">(وعددها)</span></label>
+                <input id="sr-quota-subjects" class="field-input" type="text" maxlength="120" />
+              </div>
+            </div>
+            <div class="field-group">
+              <label for="sr-quota-school">المدرسة التي يكمل نصابه بها <span class="optional">(وعددها)</span></label>
+              <input id="sr-quota-school" class="field-input" type="text" maxlength="120" />
+            </div>
+          </div>
           <div class="field-group">
             <label for="sr-roster-type">الملاك</label>
             <select id="sr-roster-type" class="field-input">
@@ -2051,9 +2086,15 @@
                      inputmode="numeric" maxlength="4" placeholder="سنة" aria-label="السنة" />
             </div>
           </div>
-          <div class="field-group">
-            <label for="sr-phone">الهاتف</label>
-            <input id="sr-phone" class="field-input" type="tel" maxlength="20" />
+          <div class="twin-fields">
+            <div class="field-group">
+              <label for="sr-phone">الهاتف — الجوال</label>
+              <input id="sr-phone" class="field-input" type="tel" maxlength="20" />
+            </div>
+            <div class="field-group">
+              <label for="sr-landline">الهاتف — الأرضي <span class="optional">(اختياري)</span></label>
+              <input id="sr-landline" class="field-input" type="tel" maxlength="20" />
+            </div>
           </div>
 
           <p class="form-section-label">السكن والتوزيع</p>
@@ -2170,251 +2211,368 @@
   <!-- ══════════════════════════════════════════════════════════════════════════
        PAGE 8 — البيان الشهري
   ══════════════════════════════════════════════════════════════════════════ -->
-  <main class="page" id="view-statement" role="tabpanel" aria-labelledby="tab-statement" hidden>
+  <main class="page page-stmt" id="view-statement" role="tabpanel" aria-labelledby="tab-statement" hidden>
 
-    <!-- Generator card -->
-    <section class="card" id="stmt-gen-card">
-      <div class="card-hdr">
-        <svg class="icon"><use href="#ic-file-text"/></svg>
-        <h2 class="card-title">توليد البيان الشهري</h2>
+    <!-- شريط الفترة — لاصق لأنه يحكم كل الأقسام العشرة -->
+    <div class="stmt-period" id="stmt-period">
+      <select id="stmt-month-sel" class="stmt-fld" aria-label="شهر البيان">
+        <option value="1">كانون الثاني</option>
+        <option value="2">شباط</option>
+        <option value="3">آذار</option>
+        <option value="4">نيسان</option>
+        <option value="5">أيار</option>
+        <option value="6">حزيران</option>
+        <option value="7">تموز</option>
+        <option value="8">آب</option>
+        <option value="9">أيلول</option>
+        <option value="10">تشرين الأول</option>
+        <option value="11">تشرين الثاني</option>
+        <option value="12">كانون الأول</option>
+      </select>
+      <input id="stmt-year-in" type="number" class="stmt-fld stmt-n" min="2020" max="2099"
+             inputmode="numeric" aria-label="سنة البيان">
+      <span class="stmt-state" id="stmt-state"><span class="stmt-state-dot"></span><span id="stmt-state-txt">مسودة</span></span>
+      <div class="stmt-prog" role="img" aria-label="نسبة اكتمال البيان">
+        <div class="stmt-prog-fill" id="stmt-prog-fill"></div>
       </div>
-      <div class="card-body">
-        <div class="stmt-grid">
-          <div class="field-wrap">
-            <label class="field-label" for="stmt-month-sel">الشهر</label>
-            <select id="stmt-month-sel" class="field-in">
-              <option value="1">1 / يناير / كانون الثاني</option>
-              <option value="2">2 / فبراير / شباط</option>
-              <option value="3">3 / مارس / آذار</option>
-              <option value="4">4 / أبريل / نيسان</option>
-              <option value="5">5 / مايو / أيار</option>
-              <option value="6">6 / يونيو / حزيران</option>
-              <option value="7">7 / يوليو / تموز</option>
-              <option value="8">8 / أغسطس / آب</option>
-              <option value="9">9 / سبتمبر / أيلول</option>
-              <option value="10">10 / أكتوبر / تشرين الأول</option>
-              <option value="11">11 / نوفمبر / تشرين الثاني</option>
-              <option value="12">12 / ديسمبر / كانون الأول</option>
-            </select>
-          </div>
-          <div class="field-wrap">
-            <label class="field-label" for="stmt-year-in">السنة</label>
-            <input id="stmt-year-in" type="number" class="field-in" min="2020" max="2099" style="width:110px">
-          </div>
-        </div>
+      <span class="stmt-prog-num" id="stmt-prog-num">٠٪</span>
+      <button type="button" class="stmt-idx-btn" id="btn-stmt-index" aria-haspopup="dialog">
+        <svg class="icon icon-sm"><use href="#ic-list"/></svg> الفهرس
+      </button>
+    </div>
 
-        <details id="stmt-meta-details" style="margin-top:12px">
-          <summary style="cursor:pointer;font-weight:600;font-size:.9rem;padding:6px 0">
-            بيانات الترويسة والبناء
-          </summary>
-          <div class="stmt-grid" style="margin-top:10px">
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-edu-zone">المنطقة التعليمية</label>
-              <select id="stmt-edu-zone" class="field-in"><option value="">— اختر —</option></select>
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-village">القرية</label>
-              <input id="stmt-village" type="text" class="field-in">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-address">العنوان</label>
-              <input id="stmt-address" type="text" class="field-in">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-phone">الهاتف</label>
-              <input id="stmt-phone" type="text" class="field-in">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-shared-with">مشترك مع</label>
-              <input id="stmt-shared-with" type="text" class="field-in">
-            </div>
-          </div>
-          <p class="form-section-label" style="margin-top:12px">البناء المدرسي</p>
+    <!-- شريط الأقسام — تمرير أفقي، نقطة حالة لكل قسم -->
+    <div class="stmt-rail" id="stmt-rail" role="tablist" aria-label="أقسام البيان"></div>
+
+    <div id="stmt-error" class="msg msg-error" hidden></div>
+    <div id="stmt-status-banner" class="stmt-status-banner" hidden></div>
+
+    <!-- ═══ القسم ١ — الترويسة والتسليم ═══════════════════════════════════ -->
+    <section class="stmt-sec" data-sec="0" role="tabpanel" aria-label="الترويسة والتسليم">
+      <p class="stmt-lead">ترويسة الورقة الرسمية: الفترة وتاريخ التسليم واسم الموظف المستلم.</p>
+      <div class="card">
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم ١</span><h2 class="card-title">الترويسة والتسليم</h2></div>
+        <div class="card-body">
           <div class="stmt-grid">
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-b-floors">عدد الطوابق</label>
-              <input id="stmt-b-floors" type="number" class="field-in" min="0" style="width:80px">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-b-ownership">البناء حكومي/مستأجر</label>
-              <select id="stmt-b-ownership" class="field-in">
-                <option value="">—</option>
-                <option value="حكومي">حكومي</option>
-                <option value="مستأجر">مستأجر</option>
-              </select>
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-b-class-rooms">غرف صفية</label>
-              <input id="stmt-b-class-rooms" type="number" class="field-in" min="0" style="width:80px">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-b-admin-rooms">غرف إدارية</label>
-              <input id="stmt-b-admin-rooms" type="number" class="field-in" min="0" style="width:80px">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-b-unused">غير مستخدمة</label>
-              <input id="stmt-b-unused" type="number" class="field-in" min="0" style="width:80px">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-b-basement">قبو</label>
-              <input id="stmt-b-basement" type="number" class="field-in" min="0" style="width:80px">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-b-lab">مخبر</label>
-              <input id="stmt-b-lab" type="number" class="field-in" min="0" style="width:80px">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-b-computer">حاسوب</label>
-              <input id="stmt-b-computer" type="number" class="field-in" min="0" style="width:80px">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-b-library">مكتبة</label>
-              <input id="stmt-b-library" type="number" class="field-in" min="0" style="width:80px">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-b-secretary">أمانة سر</label>
-              <input id="stmt-b-secretary" type="number" class="field-in" min="0" style="width:80px">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-b-gym">قاعة رياضة</label>
-              <input id="stmt-b-gym" type="number" class="field-in" min="0" style="width:80px">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-b-storage">مستودع</label>
-              <input id="stmt-b-storage" type="number" class="field-in" min="0" style="width:80px">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-b-guidance">ارشاد</label>
-              <input id="stmt-b-guidance" type="number" class="field-in" min="0" style="width:80px">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-b-health">منهج صحي</label>
-              <input id="stmt-b-health" type="number" class="field-in" min="0" style="width:80px">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-b-workshop">مشغل يدوي</label>
-              <input id="stmt-b-workshop" type="number" class="field-in" min="0" style="width:80px">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-b-theater">مسرح</label>
-              <input id="stmt-b-theater" type="number" class="field-in" min="0" style="width:80px">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-b-yard">ساحة</label>
-              <input id="stmt-b-yard" type="number" class="field-in" min="0" style="width:80px">
-            </div>
-            <div class="field-wrap">
-              <label class="field-label" for="stmt-b-other">قاعات أخرى</label>
-              <input id="stmt-b-other" type="number" class="field-in" min="0" style="width:80px">
-            </div>
+            <div class="stmt-f"><label for="stmt-hdr-month">بيان عن شهر <span class="stmt-tag-auto">تلقائي</span></label>
+              <input id="stmt-hdr-month" class="stmt-fld" type="text" readonly></div>
+            <div class="stmt-f"><label for="stmt-hdr-year">عام <span class="stmt-tag-auto">تلقائي</span></label>
+              <input id="stmt-hdr-year" class="stmt-fld stmt-n" type="text" readonly></div>
+            <div class="stmt-f"><label for="stmt-deliver-d">تاريخ التسليم — يوم</label>
+              <input id="stmt-deliver-d" class="stmt-fld stmt-n" type="number" min="1" max="31" inputmode="numeric"></div>
+            <div class="stmt-f"><label for="stmt-deliver-m">شهر</label>
+              <input id="stmt-deliver-m" class="stmt-fld stmt-n" type="number" min="1" max="12" inputmode="numeric"></div>
+            <div class="stmt-f"><label for="stmt-deliver-y">سنة</label>
+              <input id="stmt-deliver-y" class="stmt-fld stmt-n" type="number" min="2020" max="2099" inputmode="numeric"></div>
+            <div class="stmt-f stmt-f-wide"><label for="stmt-receiver">اسم موظف البيانات المستلم في المديرية</label>
+              <input id="stmt-receiver" class="stmt-fld" type="text" maxlength="120" placeholder="يُكتب عند التسليم"></div>
           </div>
-        </details>
-
-        <div id="stmt-gen-error" class="msg msg-error" hidden></div>
-        <button type="button" class="btn btn-primary" id="btn-gen-statement" style="margin-top:14px">
-          <svg class="icon icon-sm"><use href="#ic-file-text"/></svg>
-          <span id="btn-gen-label">توليد المعاينة</span>
-          <span class="spinner" id="stmt-gen-spinner" hidden></span>
-        </button>
-      </div>
-    </section>
-
-    <!-- Preview card (hidden until generated) -->
-    <section class="card" id="stmt-preview-card" hidden>
-      <div class="card-hdr">
-        <svg class="icon"><use href="#ic-list"/></svg>
-        <h2 class="card-title">معاينة البيان</h2>
-        <small id="stmt-preview-title" style="color:var(--clr-text-2,#475569);margin-right:auto"></small>
-      </div>
-      <div class="card-body" style="overflow-x:auto">
-
-        <!-- School header info (read-only summary) -->
-        <div id="stmt-header-summary" class="stmt-header-grid" style="margin-bottom:12px;font-size:.85rem;color:#334155"></div>
-
-        <!-- Submission status banner -->
-        <div id="stmt-status-banner" class="stmt-status-banner" hidden></div>
-
-        <!-- Student count table -->
-        <p class="form-section-label">أعداد الطلاب</p>
-        <table class="stmt-table" id="stmt-students-table" dir="rtl">
-          <thead>
-            <tr>
-              <th rowspan="2">الصف</th>
-              <th rowspan="2">عدد الشعب</th>
-              <th colspan="2">انكليزي</th>
-              <th colspan="2">فرنسي</th>
-              <th colspan="2">روسي</th>
-            </tr>
-            <tr>
-              <th>ذكور</th><th>إناث</th>
-              <th>ذكور</th><th>إناث</th>
-              <th>ذكور</th><th>إناث</th>
-            </tr>
-          </thead>
-          <tbody id="stmt-students-body">
-            <!-- rows injected by JS, data-grade-key for mapping -->
-            <tr data-grade-key="استعدوا"><td>استعدوا</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="1"><td>الأول</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="2"><td>الثاني</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="3"><td>الثالث</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="4"><td>الرابع</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="5"><td>الخامس</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="6"><td>السادس</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="7"><td>السابع</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="8"><td>الثامن</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="9"><td>التاسع</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="م1"><td>المستوى الأول</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="م2"><td>المستوى الثاني</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="م3"><td>المستوى الثالث</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="م4"><td>المستوى الرابع</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="ث1أ"><td>الأول الثانوي (أدبي)</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="ث1ع"><td>الأول الثانوي (علمي)</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="ث2أ"><td>الثاني الثانوي (أدبي)</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="ث2ع"><td>الثاني الثانوي (علمي)</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="ث3أ"><td>الثالث الثانوي (أدبي)</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr data-grade-key="ث3ع"><td>الثالث الثانوي (علمي)</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td><td class="stmt-num" contenteditable="true">0</td></tr>
-            <tr id="stmt-unclassified-row" hidden><td style="color:#dc2626">غير مصنف</td><td class="stmt-num" id="stmt-unclassified-sections">0</td><td class="stmt-num" id="stmt-unclassified-male">0</td><td class="stmt-num" id="stmt-unclassified-female">0</td><td colspan="4" style="font-size:.78rem;color:#dc2626">⚠ يرجى توزيع هؤلاء يدوياً على الصفوف</td></tr>
-          </tbody>
-          <tfoot>
-            <tr>
-              <td><strong>المجموع</strong></td>
-              <td class="stmt-num" id="stmt-total-sections">0</td>
-              <td class="stmt-num" id="stmt-total-male">0</td>
-              <td class="stmt-num" id="stmt-total-female">0</td>
-              <td colspan="4"></td>
-            </tr>
-          </tfoot>
-        </table>
-
-        <!-- Admin staff summary -->
-        <p class="form-section-label" style="margin-top:16px">الجهاز الإداري</p>
-        <table class="stmt-table" id="stmt-admin-table" dir="rtl" style="max-width:480px">
-          <thead><tr><th>المنصب</th><th>العدد</th></tr></thead>
-          <tbody id="stmt-admin-body"></tbody>
-        </table>
-
-        <!-- Staff type totals -->
-        <div id="stmt-staff-totals" style="margin-top:10px;font-size:.87rem;color:#334155"></div>
-
-        <div id="stmt-preview-error" class="msg msg-error" hidden></div>
-        <div class="stmt-actions">
-          <button type="button" class="btn btn-secondary" id="btn-print-statement">
-            <svg class="icon icon-sm"><use href="#ic-printer"/></svg>
-            طباعة PDF
-          </button>
-          <button type="button" class="btn btn-secondary" id="btn-export-excel">
-            <svg class="icon icon-sm"><use href="#ic-list"/></svg>
-            <span id="btn-export-label">تصدير Excel</span>
-            <span class="spinner" id="stmt-export-spinner" hidden></span>
-          </button>
-          <button type="button" class="btn btn-primary" id="btn-submit-statement">
-            <svg class="icon icon-sm"><use href="#ic-send"/></svg>
-            <span id="btn-submit-label">إرسال للمديرية</span>
-            <span class="spinner" id="stmt-submit-spinner" hidden></span>
-          </button>
+          <p class="stmt-hint"><b>«موظف البيانات المستلم»</b> هو موظّف قسم البيانات في مديرية التربية الذي يستلم الورقة منك ويوقّع عليها — الخانة في النموذج الرسمي وتحتها «توقيعه». يُملأ لحظة التسليم ويبقى فارغاً إلى ذلك الحين.</p>
+          <p class="stmt-hint">التوقيع والخاتم يظهران على الورقة المطبوعة — لا يُلتقطان رقمياً.</p>
         </div>
       </div>
+      <div class="stmt-pager" data-pager="0"></div>
     </section>
+
+    <!-- ═══ القسم ٢ — هوية المدرسة ═══════════════════════════════════════ -->
+    <section class="stmt-sec" data-sec="1" role="tabpanel" aria-label="هوية المدرسة" hidden>
+      <p class="stmt-lead">حقائق ثابتة عن المدرسة — تُحفظ في قاعدة البيانات مرّة واحدة وتنطبق على كل الأشهر.</p>
+      <div class="card">
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم ٢</span><h2 class="card-title">هوية المدرسة</h2></div>
+        <div class="card-body">
+          <div class="stmt-banner stmt-banner-info">
+            <span>هذه البيانات كانت محفوظة على الجهاز فقط — صارت تُحفظ في النظام وتصل المديرية ضمن البيان.</span>
+          </div>
+          <div class="stmt-grid">
+            <div class="stmt-f stmt-f-ro"><label for="stmt-school-name">اسم المدرسة <span class="stmt-tag-auto">تلقائي</span></label>
+              <input id="stmt-school-name" class="stmt-fld" type="text" readonly></div>
+            <div class="stmt-f"><label for="stmt-former-name">اسم المدرسة سابقاً</label>
+              <input id="stmt-former-name" class="stmt-fld" type="text" maxlength="120" placeholder="إن تغيّر اسمها"></div>
+            <div class="stmt-f stmt-f-ro"><label for="stmt-cycle">الحلقة <span class="stmt-tag-auto">تلقائي</span></label>
+              <input id="stmt-cycle" class="stmt-fld" type="text" readonly></div>
+            <div class="stmt-f stmt-f-ro"><label for="stmt-statno">الرقم الاحصائي <span class="stmt-tag-auto">تلقائي</span></label>
+              <input id="stmt-statno" class="stmt-fld stmt-n" type="text" readonly></div>
+            <div class="stmt-f stmt-f-ro"><label for="stmt-rural">منهاج التعليم الريفي <span class="stmt-tag-auto">تلقائي</span></label>
+              <input id="stmt-rural" class="stmt-fld" type="text" readonly></div>
+            <div class="stmt-f"><label for="stmt-edu-zone">المنطقة التعليمية</label>
+              <select id="stmt-edu-zone" class="stmt-fld"><option value="">— اختر —</option></select></div>
+            <div class="stmt-f"><label for="stmt-village">اسم القرية</label>
+              <input id="stmt-village" class="stmt-fld" type="text" maxlength="80"></div>
+            <div class="stmt-f stmt-f-wide"><label for="stmt-address">عنوان المدرسة بالتفصيل</label>
+              <input id="stmt-address" class="stmt-fld" type="text" maxlength="160"></div>
+            <div class="stmt-f"><label for="stmt-phone">هاتف المدرسة</label>
+              <input id="stmt-phone" class="stmt-fld stmt-n" type="tel" maxlength="20"></div>
+            <div class="stmt-f"><label for="stmt-day-type">نوع الدوام</label>
+              <select id="stmt-day-type" class="stmt-fld">
+                <option value="">—</option><option value="كامل">كامل</option><option value="نصفي">نصفي</option>
+              </select></div>
+            <div class="stmt-f"><label for="stmt-shared-with">مشترك مع</label>
+              <input id="stmt-shared-with" class="stmt-fld" type="text" maxlength="120"></div>
+          </div>
+          <p class="stmt-hint">«اسم المدرسة سابقاً» يبقى فارغاً ما لم يتغيّر الاسم — تكتبه مرّة واحدة فتعرف المديرية أن مدرسة الاسم القديم في سجلاتها هي هذه.</p>
+          <p class="stmt-hint">«نوع الدوام» (كامل/نصفي) خانة مستقلّة عن الدوام الصباحي/المسائي — النموذج يسأل عن الأولى.</p>
+        </div>
+      </div>
+      <div class="stmt-pager" data-pager="1"></div>
+    </section>
+
+    <!-- ═══ القسم ٣ — البناء المدرسي ═════════════════════════════════════ -->
+    <section class="stmt-sec" data-sec="2" role="tabpanel" aria-label="البناء المدرسي" hidden>
+      <p class="stmt-lead">البناء يتغيّر مرّة في السنة على الأكثر — يُحفظ في النظام وتؤكّده بضغطة.</p>
+      <div class="card">
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم ٣</span><h2 class="card-title">البناء المدرسي</h2></div>
+        <div class="card-body">
+          <div class="stmt-banner stmt-banner-ok" id="stmt-building-banner" hidden>
+            <span id="stmt-building-banner-txt">محفوظ من قبل — عدّل ما تغيّر فقط.</span>
+            <button type="button" class="stmt-banner-btn" id="btn-stmt-building-same">لا تغيير</button>
+          </div>
+          <div class="stmt-grid">
+            <div class="stmt-f"><label for="stmt-b-floors">عدد الطوابق</label>
+              <input id="stmt-b-floors" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
+            <div class="stmt-f"><label for="stmt-b-ownership">البناء المدرسي</label>
+              <select id="stmt-b-ownership" class="stmt-fld">
+                <option value="">—</option><option value="حكومي">حكومي</option><option value="مستأجر">مستأجر</option>
+              </select></div>
+            <div class="stmt-f"><label for="stmt-b-class-rooms">غرف صفية مستخدمة</label>
+              <input id="stmt-b-class-rooms" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
+            <div class="stmt-f"><label for="stmt-b-admin-rooms">غرف إدارية</label>
+              <input id="stmt-b-admin-rooms" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
+            <div class="stmt-f"><label for="stmt-b-unused">غرف غير مستخدمة</label>
+              <input id="stmt-b-unused" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
+          </div>
+          <p class="stmt-eyebrow stmt-eyebrow-mt">المرافق</p>
+          <div class="stmt-rooms">
+            <div class="stmt-room"><label for="stmt-b-basement">قبو</label><input id="stmt-b-basement" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
+            <div class="stmt-room"><label for="stmt-b-lab">مخبر</label><input id="stmt-b-lab" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
+            <div class="stmt-room"><label for="stmt-b-computer">حاسوب</label><input id="stmt-b-computer" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
+            <div class="stmt-room"><label for="stmt-b-library">مكتبة</label><input id="stmt-b-library" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
+            <div class="stmt-room"><label for="stmt-b-secretary">أمانة سر</label><input id="stmt-b-secretary" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
+            <div class="stmt-room"><label for="stmt-b-gym">قاعة رياضة</label><input id="stmt-b-gym" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
+            <div class="stmt-room"><label for="stmt-b-storage">مستودع</label><input id="stmt-b-storage" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
+            <div class="stmt-room"><label for="stmt-b-guidance">ارشاد</label><input id="stmt-b-guidance" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
+            <div class="stmt-room"><label for="stmt-b-health">منهج صحي</label><input id="stmt-b-health" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
+            <div class="stmt-room"><label for="stmt-b-workshop">مشغل يدوي</label><input id="stmt-b-workshop" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
+            <div class="stmt-room"><label for="stmt-b-theater">مسرح</label><input id="stmt-b-theater" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
+            <div class="stmt-room"><label for="stmt-b-yard">ساحة</label><input id="stmt-b-yard" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
+            <div class="stmt-room"><label for="stmt-b-other">قاعات أخرى</label><input id="stmt-b-other" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
+          </div>
+          <p class="stmt-hint">مجموع الغرف <span class="stmt-tag-calc">محسوب</span> — <b id="stmt-b-total">٠</b>.</p>
+        </div>
+      </div>
+      <div class="stmt-pager" data-pager="2"></div>
+    </section>
+
+    <!-- ═══ القسم ٤ — الطلاب والشعب ══════════════════════════════════════ -->
+    <section class="stmt-sec" data-sec="3" role="tabpanel" aria-label="الطلاب والشعب" hidden>
+      <p class="stmt-lead">عدد الشعب وأعداد الطلاب حسب الصف والجنس ومسار اللغة الأجنبية.</p>
+      <div class="card">
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم ٤</span><h2 class="card-title">الطلاب والشعب</h2>
+          <span class="stmt-badge stmt-badge-info" id="stmt-stu-badge">—</span></div>
+        <div class="card-body">
+          <div class="stmt-banner stmt-banner-info">
+            <span>الشعب وأعداد الطلاب مُعبّآة من سجلّ الطلاب، وتوزيع اللغة من لغة الشعبة — عدّل ما يلزم.</span>
+          </div>
+          <div id="stmt-students-host"></div>
+          <div class="stmt-sum" id="stmt-stu-sum"></div>
+        </div>
+      </div>
+      <div class="stmt-pager" data-pager="3"></div>
+    </section>
+
+    <!-- ═══ القسم ٥ — الجهاز التدريسي ════════════════════════════════════ -->
+    <section class="stmt-sec" data-sec="4" role="tabpanel" aria-label="الجهاز التدريسي" hidden>
+      <p class="stmt-lead">تصنيف الكادر التدريسي كما تطلبه الورقة: معلمون، مدرّسون حسب الاختصاص، مدرّسون مساعدون.</p>
+      <div class="card">
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم ٥</span><h2 class="card-title">الجهاز التدريسي</h2></div>
+        <div class="card-body">
+          <div class="stmt-banner stmt-banner-warn" id="stmt-teach-warn" hidden>
+            <span id="stmt-teach-warn-txt"></span>
+            <button type="button" class="stmt-banner-btn" id="btn-stmt-classify">صنّفهم</button>
+          </div>
+          <p class="stmt-eyebrow">المعلمون <span class="stmt-tag-auto">تلقائي من سجل الكوادر</span></p>
+          <div class="stmt-rooms" id="stmt-teach-teachers"></div>
+          <div class="stmt-sbox"><span class="stmt-sbox-l">عدد المعلمين <span class="stmt-tag-calc">محسوب</span></span><b id="stmt-c-teachers">٠</b></div>
+
+          <p class="stmt-eyebrow stmt-eyebrow-mt">المدرّسون — حسب الاختصاص</p>
+          <div class="stmt-rooms" id="stmt-teach-masters"></div>
+          <div class="stmt-sbox"><span class="stmt-sbox-l">عدد المدرسين <span class="stmt-tag-calc">محسوب</span></span><b id="stmt-c-masters">٠</b></div>
+
+          <p class="stmt-eyebrow stmt-eyebrow-mt">المدرّسون المساعدون — حسب الاختصاص</p>
+          <div class="stmt-rooms" id="stmt-teach-assist"></div>
+          <div class="stmt-sbox"><span class="stmt-sbox-l">عدد المدرسين المساعدين <span class="stmt-tag-calc">محسوب</span></span><b id="stmt-c-assist">٠</b></div>
+
+          <div class="stmt-sbox stmt-sbox-hi" id="stmt-unclass-box" hidden>
+            <span class="stmt-sbox-l">عدد الجهاز التدريسي غير المصنف</span><b id="stmt-c-unclass">٠</b></div>
+          <p class="stmt-hint">التصنيف يُحسب مرّة من الشهادة والاختصاص ثم <b>يُحفظ</b> في سجل الكادر — لا يُعاد تخمينه كل شهر. ومَن لم يطابق لا يُسقَط ولا يُخمَّن: يذهب لخانة «غير المصنف» وهي خانة رسمية في النموذج نفسه.</p>
+        </div>
+      </div>
+      <div class="stmt-pager" data-pager="4"></div>
+    </section>
+
+    <!-- ═══ القسم ٦ — الجهاز الإداري ═════════════════════════════════════ -->
+    <section class="stmt-sec" data-sec="5" role="tabpanel" aria-label="الجهاز الإداري" hidden>
+      <p class="stmt-lead">عدد شاغلي كل وظيفة إدارية، رقماً وكتابةً كما في الورقة.</p>
+      <div class="card">
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم ٦</span><h2 class="card-title">الجهاز الإداري</h2>
+          <span class="stmt-badge stmt-badge-info" id="stmt-adm-badge">—</span></div>
+        <div class="card-body">
+          <div class="stmt-banner stmt-banner-warn" id="stmt-adm-warn" hidden><span id="stmt-adm-warn-txt"></span></div>
+          <div class="stmt-tw">
+            <table class="stmt-table">
+              <thead><tr><th>الوظيفة</th><th>العدد</th><th>كتابةً</th></tr></thead>
+              <tbody id="stmt-adm-body"></tbody>
+            </table>
+          </div>
+          <p class="stmt-hint">العدد تلقائي من سجل الكوادر — عدّله يدوياً إن اختلف، والكلمة تُحسب منه.</p>
+        </div>
+      </div>
+      <div class="stmt-pager" data-pager="5"></div>
+    </section>
+
+    <!-- ═══ القسم ٧ — قوائم الكوادر (السير الذاتية) ══════════════════════ -->
+    <section class="stmt-sec" data-sec="6" role="tabpanel" aria-label="قوائم الكوادر" hidden>
+      <p class="stmt-lead">السير الذاتية الثلاث بكل حقل في الأوراق الرسمية — هذا ما تصل به المديرية. الكتابة تبقى في سجل الكوادر: مكان واحد فقط.</p>
+      <div class="card">
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم ٧</span><h2 class="card-title">قوائم الكوادر — السير الذاتية</h2>
+          <span class="stmt-badge stmt-badge-warn" id="stmt-ros-badge">—</span></div>
+        <div class="card-body">
+          <div class="stmt-banner stmt-banner-info">
+            <span id="stmt-ros-count">—</span>
+            <button type="button" class="stmt-banner-btn" id="btn-stmt-open-registry">افتح سجل الكوادر</button>
+          </div>
+          <div class="stmt-seg" role="tablist" aria-label="فئة الكادر">
+            <button type="button" role="tab" aria-selected="true"  data-ros="admin">الإداري</button>
+            <button type="button" role="tab" aria-selected="false" data-ros="teaching">التدريسي</button>
+            <button type="button" role="tab" aria-selected="false" data-ros="support">مهنيون ومستخدمون وحراس</button>
+          </div>
+          <div class="stmt-rostool">
+            <input id="stmt-ros-q" class="stmt-fld" type="search" placeholder="ابحث بالاسم أو الرقم الوطني" aria-label="بحث في الكوادر">
+            <label class="stmt-swch"><input type="checkbox" id="stmt-ros-miss"><span>الناقص فقط</span></label>
+          </div>
+          <div class="stmt-cvlist" id="stmt-ros-list"></div>
+          <p class="stmt-hint">اضغط أي بطاقة لتفتح كل حقولها بترتيب الورقة الرسمية. الحقل المطلوب وهو فارغ يظهر <b class="stmt-miss-w">ناقص</b> ويُملأ من سجل الكوادر.</p>
+
+          <p class="stmt-eyebrow stmt-eyebrow-mt">إجازات هذا الشهر</p>
+          <div class="stmt-plist" id="stmt-leaves-list"></div>
+        </div>
+      </div>
+      <div class="stmt-pager" data-pager="6"></div>
+    </section>
+
+    <!-- ═══ القسم ٨ — التعديلات الطارئة ══════════════════════════════════ -->
+    <section class="stmt-sec" data-sec="7" role="tabpanel" aria-label="التعديلات الطارئة" hidden>
+      <p class="stmt-lead">ما استجدّ هذا الشهر: من باشر، من انفكّ، من نُقل، من تقاعد.</p>
+      <div class="card">
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم ٨</span><h2 class="card-title">التعديلات الطارئة</h2>
+          <span class="stmt-badge" id="stmt-chg-badge">—</span></div>
+        <div class="card-body">
+          <div class="stmt-banner" id="stmt-chg-banner"><span id="stmt-chg-banner-txt"></span></div>
+
+          <p class="stmt-eyebrow" id="stmt-chg-det-hd" hidden>تعديلات مقترحة — مكتشفة تلقائياً</p>
+          <div class="stmt-chglist" id="stmt-chg-detected"></div>
+
+          <p class="stmt-eyebrow stmt-eyebrow-mt" id="stmt-chg-conf-hd" hidden>تعديلات مؤكَّدة</p>
+          <div class="stmt-chglist" id="stmt-chg-confirmed"></div>
+
+          <div class="stmt-chg-actions">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-stmt-add-change">+ إضافة تعديل يدوي</button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-stmt-no-change">لا يوجد تعديل هذا الشهر</button>
+          </div>
+          <p class="stmt-hint">زرّ «لا يوجد تعديل» يكتب سطراً صريحاً في الورقة — كما ينصّ النموذج — فلا يبقى فراغاً غامضاً.</p>
+
+          <p class="stmt-eyebrow stmt-eyebrow-mt">إحصائية الشعب والطلاب <span class="stmt-tag-calc">محسوبة من القسم ٤</span></p>
+          <div class="stmt-tw"><table class="stmt-table" id="stmt-chg-stats"></table></div>
+        </div>
+      </div>
+      <div class="stmt-pager" data-pager="7"></div>
+    </section>
+
+    <!-- ═══ القسم ٩ — نتائج نهاية العام ══════════════════════════════════ -->
+    <section class="stmt-sec" data-sec="8" role="tabpanel" aria-label="نتائج نهاية العام" hidden>
+      <p class="stmt-lead">ورقة موسمية — تُملأ مرّة واحدة في نهاية العام الدراسي بعد صدور نتائج الفصل الثاني.</p>
+      <div class="card">
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم ٩</span><h2 class="card-title">نتائج نهاية العام</h2>
+          <span class="stmt-badge" id="stmt-ye-badge">—</span></div>
+        <div class="card-body">
+          <div class="stmt-banner stmt-banner-info" id="stmt-ye-gate">
+            <span id="stmt-ye-gate-txt"></span>
+            <button type="button" class="stmt-banner-btn" id="btn-stmt-ye-fill">املأ الآن</button>
+          </div>
+          <div id="stmt-ye-wrap" hidden>
+            <p class="stmt-eyebrow">أعداد التلاميذ والطلاب المتوقعة للعام الدراسي القادم</p>
+            <div class="stmt-tw"><table class="stmt-table" id="stmt-ye-next"></table></div>
+
+            <p class="stmt-eyebrow stmt-eyebrow-mt">احصاءات للامتحانات النهائية</p>
+            <div class="stmt-tw"><table class="stmt-table" id="stmt-ye-exam"></table></div>
+            <p class="stmt-hint">«المتقدّم» <span class="stmt-tag-calc">محسوب</span> = العدد الكلي − المتسرّب. و«الناجح + المكمل + الراسب» يجب أن يساوي المتقدّم.</p>
+          </div>
+        </div>
+      </div>
+      <div class="stmt-pager" data-pager="8"></div>
+    </section>
+
+    <!-- ═══ القسم ١٠ — المراجعة والإرسال ═════════════════════════════════ -->
+    <section class="stmt-sec" data-sec="9" role="tabpanel" aria-label="المراجعة والإرسال" hidden>
+      <p class="stmt-lead">ملخّص العاملين، ثم ما يمنع الإرسال وما يُنبّه فقط.</p>
+      <div class="card">
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم ١٠</span><h2 class="card-title">ملخّص العاملين</h2></div>
+        <div class="card-body">
+          <div class="stmt-sum" id="stmt-workforce"></div>
+          <p class="stmt-hint">«غير المصنّف» = الجهاز التدريسي الكامل − المصنّف حسب الاختصاصات. هو رقم المطابقة، وله خانة في الورقة الرسمية.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-hdr"><span class="stmt-eyebrow">قبل الإرسال</span><h2 class="card-title">قائمة التحقّق</h2></div>
+        <div class="card-body"><div class="stmt-chk" id="stmt-checklist"></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-hdr"><span class="stmt-eyebrow">رسمي</span><h2 class="card-title">ملاحظات النموذج</h2></div>
+        <div class="card-body">
+          <ol class="stmt-notes">
+            <li>يتم تسليم البيان الشهري عن الشهر الذي انتهى من ١ لغاية ١٠ من كل شهر ورقياً، وفي بداية كل فصل دراسي إلكترونياً.</li>
+            <li>يرجى ختم جميع الأوراق وحذف أسماء من حصل على إجازة خاصة بلا أجر مدة /٩٠/ يوماً وما يزيد (مع ذكر الحالات المشار إليها آنفاً في ورقة التعديلات الطارئة عند وقوعها).</li>
+            <li>هذا البيان رسمي ومعتمد من قبل مديرية التربية والتعليم ولا يُقبل أي بيان أو صيغة أخرى.</li>
+            <li>يتم تسليم نسختين أصليتين من البيان الشهري للمدارس الثانوية المشتركة مع مدارس مرحلة التعليم الأساسي (إدارة واحدة) لكل دائرة نسخة.</li>
+            <li>يتم تسليم ثلاث نسخ أصلية من البيان للمدارس المسؤولة عليها إلى دائرة (الخاص — الثانوي — الأساسي).</li>
+            <li>يتم تسليم جدول نتائج نهاية العام مرة واحدة في نهاية العام الدراسي فقط بعد صدور النتائج.</li>
+            <li>في حالة وجود دمج للشعب نكتب ٠ لأحد الشعب و١ بالشعبة الثانية.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-hdr"><span class="stmt-eyebrow">توقيع</span><h2 class="card-title">التواقيع</h2></div>
+        <div class="card-body">
+          <div class="stmt-grid">
+            <div class="stmt-f"><label for="stmt-sig-secretary">أمين سر المدرسة</label>
+              <input id="stmt-sig-secretary" class="stmt-fld" type="text" maxlength="120"></div>
+            <div class="stmt-f"><label for="stmt-sig-principal">مدير المدرسة</label>
+              <input id="stmt-sig-principal" class="stmt-fld" type="text" maxlength="120"></div>
+          </div>
+          <p class="stmt-hint">الخاتم والتوقيع يُوضعان على الورقة المطبوعة.</p>
+        </div>
+      </div>
+      <div class="stmt-pager" data-pager="9"></div>
+    </section>
+
+    <!-- شريط الإجراءات — ثابت أسفل الشاشة -->
+    <div class="stmt-actions-bar">
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-print-statement">
+        <svg class="icon icon-sm"><use href="#ic-printer"/></svg> طباعة
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-export-excel">
+        <svg class="icon icon-sm"><use href="#ic-list"/></svg>
+        <span id="btn-export-label">تصدير Excel</span>
+        <span class="spinner" id="stmt-export-spinner" hidden></span>
+      </button>
+      <button type="button" class="btn btn-primary btn-sm" id="btn-submit-statement">
+        <svg class="icon icon-sm"><use href="#ic-send"/></svg>
+        <span id="btn-submit-label">إرسال للمديرية</span>
+        <span class="spinner" id="stmt-submit-spinner" hidden></span>
+      </button>
+    </div>
 
   </main><!-- /page (statement) -->
 
@@ -3000,6 +3158,107 @@
 
 <!-- Generic yes/no modal — replaces the native confirm() calls throughout this
      portal. Distinct from #modal-confirm-logout, which has its own copy. -->
+<!-- ── ورقة الفهرس: كل أقسام البيان ونسب اكتمالها ────────────────────────── -->
+<div id="modal-stmt-index" class="overlay" hidden aria-modal="true" role="dialog" aria-label="فهرس أقسام البيان">
+  <div class="sheet sheet-sm">
+    <div class="sheet-handle"></div>
+    <div class="sheet-hdr">
+      <div class="sheet-title">
+        <svg class="icon"><use href="#ic-list"/></svg>
+        <span>فهرس البيان</span>
+      </div>
+      <button class="icon-btn" id="btn-close-stmt-index" aria-label="إغلاق">
+        <svg class="icon"><use href="#ic-x"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body"><div class="stmt-idx-list" id="stmt-index-list"></div></div>
+  </div>
+</div>
+
+<!-- ── نافذة: تعديل طارئ (إضافة يدوية أو تأكيد مقترح) ────────────────────── -->
+<div id="modal-stmt-change" class="overlay" hidden aria-modal="true" role="dialog" aria-label="تعديل طارئ">
+  <div class="sheet sheet-sm">
+    <div class="sheet-handle"></div>
+    <div class="sheet-hdr">
+      <div class="sheet-title">
+        <svg class="icon"><use href="#ic-clipboard"/></svg>
+        <span id="stmt-chg-title">تعديل طارئ</span>
+      </div>
+      <button class="icon-btn" id="btn-close-stmt-change" aria-label="إغلاق">
+        <svg class="icon"><use href="#ic-x"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <div class="field-group">
+        <label for="stmt-chg-name">الاسم الثلاثي <span class="req">*</span></label>
+        <input id="stmt-chg-name" class="field-input" type="text" maxlength="120" />
+      </div>
+      <div class="field-group">
+        <label for="stmt-chg-group">الفئة</label>
+        <select id="stmt-chg-group" class="field-input">
+          <option value="admin">إداري</option>
+          <option value="teaching">تدريسي</option>
+          <option value="support">مهني / مستخدم / حارس</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label for="stmt-chg-job">العمل المسند إليه</label>
+        <input id="stmt-chg-job" class="field-input" type="text" maxlength="80" />
+      </div>
+      <div class="field-group">
+        <label for="stmt-chg-event">نوع الحدث <span class="req">*</span></label>
+        <select id="stmt-chg-event" class="field-input">
+          <option value="">— اختر —</option>
+          <option value="مباشرة">مباشرة</option>
+          <option value="انفكاك">انفكاك</option>
+          <option value="نقل">نقل</option>
+          <option value="تقاعد">تقاعد</option>
+          <option value="وفاة">وفاة</option>
+          <option value="أخرى">أخرى</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>تاريخ النفاذ</label>
+        <div class="dob-row">
+          <input id="stmt-chg-day"   class="field-input dob-in" type="text" inputmode="numeric" maxlength="2" placeholder="يوم" aria-label="اليوم" />
+          <input id="stmt-chg-month" class="field-input dob-in" type="text" inputmode="numeric" maxlength="2" placeholder="شهر" aria-label="الشهر" />
+          <input id="stmt-chg-year"  class="field-input dob-in dob-year" type="text" inputmode="numeric" maxlength="4" placeholder="سنة" aria-label="السنة" />
+        </div>
+      </div>
+      <div class="field-group">
+        <label for="stmt-chg-reason">السبب / ملاحظات</label>
+        <textarea id="stmt-chg-reason" class="field-input" rows="2" maxlength="400"></textarea>
+      </div>
+      <div id="stmt-chg-error" class="msg msg-error" hidden></div>
+      <button type="button" class="btn btn-primary btn-full" id="btn-save-stmt-change">
+        حفظ التعديل
+        <span class="spinner" id="stmt-chg-spinner" hidden></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── نافذة: تصنيف الكادر التدريسي غير المصنّف ──────────────────────────── -->
+<div id="modal-stmt-classify" class="overlay" hidden aria-modal="true" role="dialog" aria-label="تصنيف الجهاز التدريسي">
+  <div class="sheet sheet-sm">
+    <div class="sheet-handle"></div>
+    <div class="sheet-hdr">
+      <div class="sheet-title">
+        <svg class="icon"><use href="#ic-users"/></svg>
+        <span>تصنيف الجهاز التدريسي</span>
+      </div>
+      <button class="icon-btn" id="btn-close-stmt-classify" aria-label="إغلاق">
+        <svg class="icon"><use href="#ic-x"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <p class="stmt-hint">اختر رتبة كل كادر مرّة واحدة — تُحفظ في سجله ولا يُعاد سؤالك عنها.</p>
+      <div class="stmt-plist" id="stmt-classify-list"></div>
+      <div id="stmt-classify-error" class="msg msg-error" hidden></div>
+    </div>
+  </div>
+</div>
+
 <div id="modal-ask" class="confirm-modal-overlay" hidden role="dialog" aria-modal="true"
      aria-labelledby="ask-modal-title">
   <div class="confirm-modal-sheet">

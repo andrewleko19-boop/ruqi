@@ -597,6 +597,47 @@ end$$;
 --      (أنواع الإشعار: statement_submitted / statement_approved / statement_rejected)
 --
 -- ════════════════════════════════════════════════════════════════════════════
+--  ٩ج. §20 — إتمام البيان الشهري ليطابق النموذج الرسمي
+-- ════════════════════════════════════════════════════════════════════════════
+--
+--  أعمدة أُضيفت على schools:
+--    village, address, phone, shared_with, former_name, educational_zone
+--    day_type text  check ('كامل','نصفي')
+--      ⚠ محور مستقلّ عن schools.shift ('morning'|'evening'). لا تخلط بينهما:
+--        shift = صباحي/مسائي، day_type = كامل/نصفي. خانتان مختلفتان في الورقة.
+--
+--  school_building — صفّ واحد لكل مدرسة (school_id PK)
+--    floors, ownership('حكومي'|'مستأجر'), class_rooms, admin_rooms, unused_rooms,
+--    basement, lab, computer_lab, library, secretariat, gym, storage, guidance,
+--    health_room, workshop, theater, yard, other_halls
+--    RLS: school_admin كامل ضمن مدرسته؛ directorate_user select لمدارس مديريته
+--
+--  أعمدة أُضيفت على staff_records:
+--    landline, teaching_rank('معلم'|'مدرس'|'مدرس مساعد'), teaching_hours,
+--    quota_subjects, quota_school_external, assigned_grade, assigned_section
+--    teaching_rank يُحسب استنتاجاً مرّة ثم يُخزَّن — لا يُعاد تخمينه كل شهر.
+--
+--  classes.foreign_language ('انكليزي'|'فرنسي'|'روسي', default 'انكليزي')
+--    يؤتمت أعمدة اللغة الأجنبية في جدول طلاب البيان.
+--
+--  staff_leaves_unique_period — فهرس فريد (staff_id, leave_type, month, year)
+--    كان upsertStaffLeave يمرّر onConflict على قيد غير موجود فيفشل.
+--
+--  أعمدة أُضيفت على monthly_statement_changes:
+--    event_type('مباشرة'|'انفكاك'|'وفاة'|'تقاعد'|'نقل'|'أخرى'), staff_group,
+--    detected boolean, confirmed_at timestamptz
+--    change_type = ما رآه النظام؛ event_type = «لماذا» ويملؤه المدير.
+--    اقتراح مكتشَف غير مؤكَّد (confirmed_at is null) يمنع إرسال البيان.
+--
+--  monthly_statement_rosters — السير الذاتية الكاملة، جدول منفصل محمي
+--    (statement_id PK → monthly_statements, school_id, rosters jsonb)
+--    ⚠ قرار خصوصية مقصود — لا تنقل هذه الحقول إلى snapshot_data:
+--      الرقم الوطني، اسم الأم، تاريخ الولادة، الهاتف، العنوان تذهب هنا وحدها،
+--      ولا تقرأها المديرية إلا بعد status in ('submitted','approved') وضمن
+--      مديريتها. snapshot_data تُقرأ في شاشات المديرية العامة، فلا تصلح لها.
+--      get_school_staff_for_directorate يبقى منقّحاً كما هو للقراءة اليومية.
+--
+-- ════════════════════════════════════════════════════════════════════════════
 --  ١٠. قوالب إدراج جاهزة (طلاب / موجهين)
 -- ════════════════════════════════════════════════════════════════════════════
 -- إدراج طالب:

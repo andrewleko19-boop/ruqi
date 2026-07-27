@@ -3536,6 +3536,19 @@ window.NSAMS_DB = {
   getDirectorateStatements,
   reviewMonthlyStatement,
 
+  // البيان الشهري — المسودة الحيّة والتعديلات الطارئة (§20)
+  ensureDraftStatement,
+  saveStatementDraft,
+  getPreviousStatementSnapshot,
+  getStatementChanges,
+  upsertStatementChange,
+  deleteStatementChange,
+  getSchoolBuilding,
+  saveSchoolBuilding,
+  getSchoolProfile,
+  saveSchoolProfile,
+  saveStatementRosters,
+
   // Report photo resolution (signed URLs for private bucket)
   resolveReportPhotos,
 
@@ -3644,6 +3657,8 @@ async function getStaffLeaves(schoolId, month, year) {
   return data || [];
 }
 
+// onConflict يعتمد على الفهرس الفريد staff_leaves_unique_period (§20.5).
+// قبل إضافته كان هذا الاستدعاء يفشل وقت التنفيذ لأن القيد لم يكن موجوداً.
 async function upsertStaffLeave(payload) {
   const { data, error } = await db.from('staff_leaves')
     .upsert(payload, { onConflict: 'staff_id,leave_type,month,year' })
@@ -3658,24 +3673,36 @@ async function deleteStaffLeave(id) {
   if (error) throw error;
 }
 
-// إحصائية طلاب المدرسة للبيان: يعيد { 'grade': {sections, male, female} }
+// إحصائية طلاب المدرسة للبيان.
+// يعيد { 'grade': { sections, male, female, lang: { 'انكليزي': {m,f}, … } } }
+// تقسيم اللغة يأتي من classes.foreign_language (§20.4) فتُؤتمت أعمدة اللغة
+// الأجنبية الستّة في جدول البيان بدل إدخال أربعة منها يدوياً كل شهر.
 async function getSchoolStudentStats(schoolId) {
   const [clsRes, stuRes] = await Promise.all([
-    db.from('classes').select('id, grade, section').eq('school_id', schoolId),
+    db.from('classes').select('id, grade, section, foreign_language').eq('school_id', schoolId),
     db.from('students').select('class_id, gender').eq('school_id', schoolId).eq('is_active', true),
   ]);
   if (clsRes.error) throw clsRes.error;
   if (stuRes.error) throw stuRes.error;
   const byClass = {};
-  for (const c of clsRes.data || []) byClass[c.id] = { grade: String(c.grade ?? ''), male: 0, female: 0 };
+  for (const c of clsRes.data || []) {
+    byClass[c.id] = {
+      grade: String(c.grade ?? ''),
+      // العمود قد يكون null على صفوف أُنشئت قبل الهجرة — الافتراضي انكليزي.
+      lang: c.foreign_language || 'انكليزي',
+      male: 0, female: 0,
+    };
+  }
   for (const s of stuRes.data || []) {
     const e = byClass[s.class_id]; if (!e) continue;
     if (s.gender === 'female') e.female++; else e.male++;
   }
   const grades = {};
   for (const e of Object.values(byClass)) {
-    const g = grades[e.grade] ??= { sections: 0, male: 0, female: 0 };
+    const g = grades[e.grade] ??= { sections: 0, male: 0, female: 0, lang: {} };
     g.sections++; g.male += e.male; g.female += e.female;
+    const L = g.lang[e.lang] ??= { m: 0, f: 0 };
+    L.m += e.male; L.f += e.female;
   }
   return grades;
 }
@@ -3726,6 +3753,133 @@ async function reviewMonthlyStatement(statementId, decision, notes = null) {
     p_statement_id: statementId, p_decision: decision, p_notes: notes || null });
   if (error) throw error;
   return true;
+}
+
+// ── §20 — المسودة الحيّة، هوية المدرسة، البناء، التعديلات، السير الذاتية ─────
+
+// صفّ البيان يجب أن يوجد قبل أي شيء آخر: سطور التعديلات الطارئة تحمل
+// statement_id، والحفظ التلقائي لكل قسم يكتب في snapshot_data. يعيد الصفّ
+// كاملاً (id + status + snapshot_data) لا الـ id وحده.
+async function ensureDraftStatement(schoolId, month, year) {
+  const { data: found, error: selErr } = await db.from('monthly_statements')
+    .select('id, status, notes, snapshot_data, submitted_at, reviewed_at')
+    .eq('school_id', schoolId).eq('month', month).eq('year', year)
+    .maybeSingle();
+  if (selErr) throw selErr;
+  if (found) return found;
+
+  const { data, error } = await db.from('monthly_statements')
+    .insert({ school_id: schoolId, month, year, status: 'draft', snapshot_data: {} })
+    .select('id, status, notes, snapshot_data, submitted_at, reviewed_at')
+    .single();
+  if (error) {
+    // سباق: جلسة أخرى أنشأت الصفّ بين الـ select والـ insert — الفهرس الفريد
+    // على (school_id, year, month) يرفض الثاني. أعِد القراءة بدل الفشل.
+    const { data: again } = await db.from('monthly_statements')
+      .select('id, status, notes, snapshot_data, submitted_at, reviewed_at')
+      .eq('school_id', schoolId).eq('month', month).eq('year', year)
+      .maybeSingle();
+    if (again) return again;
+    throw error;
+  }
+  return data;
+}
+
+// حفظ تلقائي للمسودة. لا يلمس الحالة — «إرسال» وحده يقلبها.
+async function saveStatementDraft(statementId, snapshot) {
+  const { error } = await db.from('monthly_statements')
+    .update({ snapshot_data: snapshot, updated_at: new Date().toISOString() })
+    .eq('id', statementId)
+    .in('status', ['draft', 'rejected']);   // لا نكتب فوق بيان مُرسَل أو معتمد
+  if (error) throw error;
+}
+
+// لقطة آخر بيان مُرسَل قبل هذه الفترة — أساس كشف التعديلات الطارئة.
+// أوّل بيان لمدرسة لا سابق له: يعيد null، والواجهة تقول «لا توجد مقارنة»
+// بدل أن تخترع تعديلات.
+async function getPreviousStatementSnapshot(schoolId, month, year) {
+  const key = year * 12 + month;            // ترتيب زمني قابل للمقارنة
+  const { data, error } = await db.from('monthly_statements')
+    .select('id, month, year, status, snapshot_data')
+    .eq('school_id', schoolId)
+    .in('status', ['submitted', 'approved'])
+    .order('year', { ascending: false })
+    .order('month', { ascending: false })
+    .limit(24);
+  if (error) throw error;
+  for (const r of data || []) {
+    if (r.year * 12 + r.month < key) return r;
+  }
+  return null;
+}
+
+async function getStatementChanges(statementId) {
+  const { data, error } = await db.from('monthly_statement_changes')
+    .select('*')
+    .eq('statement_id', statementId)
+    .order('created_at');
+  if (error) throw error;
+  return data || [];
+}
+
+async function upsertStatementChange(row) {
+  if (row.id) {
+    const { id, ...patch } = row;
+    const { data, error } = await db.from('monthly_statement_changes')
+      .update(patch).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  }
+  const { data, error } = await db.from('monthly_statement_changes')
+    .insert(row).select().single();
+  if (error) throw error;
+  return data;
+}
+
+async function deleteStatementChange(id) {
+  const { error } = await db.from('monthly_statement_changes').delete().eq('id', id);
+  if (error) throw error;
+}
+
+async function getSchoolBuilding(schoolId) {
+  const { data, error } = await db.from('school_building')
+    .select('*').eq('school_id', schoolId).maybeSingle();
+  if (error) throw error;
+  return data;                              // null إن لم يُملأ بعد
+}
+
+async function saveSchoolBuilding(schoolId, patch) {
+  const { data, error } = await db.from('school_building')
+    .upsert({ ...patch, school_id: schoolId, updated_at: new Date().toISOString() },
+            { onConflict: 'school_id' })
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+
+// هوية المدرسة كما تظهر في ترويسة الورقة الرسمية.
+async function getSchoolProfile(schoolId) {
+  const { data, error } = await db.from('schools')
+    .select('id, name, former_name, cycle, statistical_number, rural_curriculum, ' +
+            'village, address, phone, shared_with, educational_zone, day_type, shift')
+    .eq('id', schoolId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function saveSchoolProfile(schoolId, patch) {
+  const { error } = await db.from('schools').update(patch).eq('id', schoolId);
+  if (error) throw error;
+}
+
+// السير الذاتية الكاملة — جدول منفصل بصلاحياته (§20.7). الحقول الشخصية
+// لا تدخل snapshot_data إطلاقاً.
+async function saveStatementRosters(statementId, schoolId, rosters) {
+  const { error } = await db.from('monthly_statement_rosters')
+    .upsert({ statement_id: statementId, school_id: schoolId, rosters,
+              updated_at: new Date().toISOString() },
+            { onConflict: 'statement_id' });
+  if (error) throw error;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

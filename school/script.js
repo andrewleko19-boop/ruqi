@@ -4988,6 +4988,14 @@ const srDobDay        = el('sr-dob-day');
 const srDobMonth      = el('sr-dob-month');
 const srDobYear       = el('sr-dob-year');
 const srPhone         = el('sr-phone');
+const srLandline      = el('sr-landline');
+const srTeachExtra    = el('sr-teach-extra');
+const srTeachRank     = el('sr-teaching-rank');
+const srTeachHours    = el('sr-teaching-hours');
+const srAsgGrade      = el('sr-assigned-grade');
+const srAsgSection    = el('sr-assigned-section');
+const srQuotaSubj     = el('sr-quota-subjects');
+const srQuotaSchool   = el('sr-quota-school');
 const srResZone       = el('sr-res-zone');
 const srEduZone       = el('sr-edu-zone');
 const srMinDoc        = el('sr-min-doc');
@@ -5152,11 +5160,14 @@ async function openStaffRecModal(rec) {
   fillSel(srEduZone, eduZones, '— لا يوجد —');
 
   if (srSubjectWrap) srSubjectWrap.hidden = _regSegment !== 'teaching';
+  // الحقول التي تطلبها ورقة الجهاز التدريسي وحدها (§20.3)
+  if (srTeachExtra)  srTeachExtra.hidden  = _regSegment !== 'teaching';
 
   const textInputs = [srFullName, srNationalId, srMotherName, srDobDay, srDobMonth,
                       srDobYear, srStartDay, srStartMonth, srStartYear, srSubject, srPhone, srResZone, srNotes,
-                      srSelfNumber, srGeneralNumber];
-  const numInputs  = [srSeniority];
+                      srSelfNumber, srGeneralNumber, srLandline, srAsgGrade, srAsgSection,
+                      srQuotaSubj, srQuotaSchool];
+  const numInputs  = [srSeniority, srTeachHours];
 
   if (rec) {
     srFullName.value      = rec.full_name          || '';
@@ -5168,6 +5179,12 @@ async function openStaffRecModal(rec) {
     srSubject.value       = rec.subject_taught     || '';
     srSeniority.value     = rec.seniority_years    ?? '';
     srSelfNumber.value    = rec.self_number        || '';
+    if (srLandline)    srLandline.value    = rec.landline              || '';
+    if (srTeachHours)  srTeachHours.value  = rec.teaching_hours        ?? '';
+    if (srAsgGrade)    srAsgGrade.value    = rec.assigned_grade        || '';
+    if (srAsgSection)  srAsgSection.value  = rec.assigned_section      || '';
+    if (srQuotaSubj)   srQuotaSubj.value   = rec.quota_subjects        || '';
+    if (srQuotaSchool) srQuotaSchool.value = rec.quota_school_external || '';
     srGeneralNumber.value = rec.general_number     || '';
     if (rec.start_date) {
       const [sy, sm, sd] = rec.start_date.split('-');
@@ -5188,8 +5205,9 @@ async function openStaffRecModal(rec) {
     srEduZone.value     = rec.educational_zone || '';
     srRosterType.value  = rec.roster_type      || 'inside';
     srMinDoc.value      = rec.ministerial_doc  || '';
+    if (srTeachRank) srTeachRank.value = rec.teaching_rank || '';
     srGender && (srGender.value = rec.gender   || '');
-    [srJobTitle, srSpec, srCertificate, srHigherDegree, srEduZone, srRosterType, srMinDoc]
+    [srJobTitle, srSpec, srCertificate, srHigherDegree, srEduZone, srRosterType, srMinDoc, srTeachRank]
       .forEach(s => CustomSelect.refresh(s));
     if (srGender) CustomSelect.refresh(srGender);
 
@@ -5205,8 +5223,9 @@ async function openStaffRecModal(rec) {
     numInputs.forEach(i => { if (i) i.value = ''; });
     srRosterType.value = 'inside';
     if (srGender) { srGender.value = ''; CustomSelect.refresh(srGender); }
-    [srJobTitle, srSpec, srCertificate, srHigherDegree, srEduZone, srRosterType, srMinDoc]
+    [srJobTitle, srSpec, srCertificate, srHigherDegree, srEduZone, srMinDoc, srTeachRank]
       .forEach(s => { if (s) { s.value = ''; CustomSelect.refresh(s); } });
+    CustomSelect.refresh(srRosterType);
     _lockStaffPersonalFields(false);
     hide(srRegResult);
   }
@@ -5317,12 +5336,24 @@ btnSaveStaffRec?.addEventListener('click', async () => {
                         ? `${String(srStartYear.value).padStart(4,'0')}-${String(srStartMonth.value).padStart(2,'0')}-${String(srStartDay.value).padStart(2,'0')}`
                         : null,
     phone:            srPhone?.value.trim() || null,
+    landline:         srLandline?.value.trim() || null,
     residential_zone: srResZone?.value.trim() || null,
     educational_zone: srEduZone?.value || null,
     roster_type:      srRosterType?.value || 'inside',
     ministerial_doc:  srMinDoc?.value || null,
     notes:            srNotes?.value.trim() || null,
   };
+
+  // حقول ورقة الجهاز التدريسي وحدها — تبقى null لغيرهم فلا تتسرّب بيانات
+  // تدريس إلى سجلّ إداري أو مهني.
+  if (_regSegment === 'teaching') {
+    payload.teaching_rank         = srTeachRank?.value || null;
+    payload.teaching_hours        = srTeachHours?.value ? parseInt(srTeachHours.value, 10) : null;
+    payload.assigned_grade        = srAsgGrade?.value.trim() || null;
+    payload.assigned_section      = srAsgSection?.value.trim() || null;
+    payload.quota_subjects        = srQuotaSubj?.value.trim() || null;
+    payload.quota_school_external = srQuotaSchool?.value.trim() || null;
+  }
 
   if (btnSaveStaffRec) btnSaveStaffRec.disabled = true;
   if (srSaveSpinner) srSaveSpinner.hidden = false;
@@ -5486,6 +5517,7 @@ CustomSelect.enhance('sr-certificate');
 CustomSelect.enhance('sr-higher-degree');
 CustomSelect.enhance('sr-edu-zone');
 CustomSelect.enhance('sr-min-doc');
+CustomSelect.enhance('sr-teaching-rank');
 CustomSelect.enhance('leave-type-sel');
 CustomSelect.enhance('leaves-month-sel');
 CustomSelect.enhance('status-new');
@@ -5758,6 +5790,14 @@ btnSaveAsn?.addEventListener('click', async () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // § البيان الشهري — statement tab
+//
+// عشرة أقسام تغطّي أوراق النموذج الرسمي السبع. الشريط اللاصق يحكم الفترة،
+// وشريط الأقسام يعرض قسماً واحداً في كل مرّة: النموذج ٢٠٠ حقل، فعرضها دفعةً
+// واحدة يُنتج صفحة تتجاوز ٤٠٠٠px ويقفز فيها المستخدم بلا مرجع.
+//
+// مصدر الحقيقة هو صفّ monthly_statements (status='draft') لا localStorage:
+// سطور التعديلات الطارئة تحتاج statement_id، والمسودة تُحفظ تلقائياً في
+// snapshot_data. localStorage صار احتياطاً للعمل دون اتصال فقط.
 // ─────────────────────────────────────────────────────────────────────────────
 
 let _statementLoaded = false;
@@ -5789,6 +5829,11 @@ function arNumWord(n) {
   return String(i);
 }
 
+// أرقام هندية للعرض فقط — القيم المخزَّنة والمُصدَّرة تبقى لاتينية.
+function arDigits(n) {
+  return String(n).replace(/[0-9]/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
+}
+
 // Month labels matching template format
 const MONTH_LABELS = [
   '', '1 / يناير / كانون الثاني', '2 / فبراير / شباط', '3 / مارس / آذار',
@@ -5796,16 +5841,45 @@ const MONTH_LABELS = [
   '7 / يوليو / تموز', '8 / أغسطس / آب', '9 / سبتمبر / أيلول',
   '10 / أكتوبر / تشرين الأول', '11 / نوفمبر / تشرين الثاني', '12 / ديسمبر / كانون الأول',
 ];
+const MONTH_SHORT = ['', 'كانون الثاني','شباط','آذار','نيسان','أيار','حزيران',
+                     'تموز','آب','أيلول','تشرين الأول','تشرين الثاني','كانون الأول'];
 
-// Admin role order matching template rows M20..M37
+// Admin role order matching template rows M20..M36 (المجموع في M38)
+// ⚠ الهمزات هنا يجب أن تطابق قيم lookup_lists حرفياً وإلا ظهر الصف صفراً
+// رغم وجود موظفين — لذلك تُطبَّع الأسماء بـ _stmtNormRole قبل المطابقة.
 const ADMIN_ROLE_ORDER = [
   'مدير','معاون مدير','توجيه','أمانة سر','معاون أمين سر',
-  'أمانة مكتبة','معاون أمين مكتبة','امين مخبر','مساعد امين مخبر',
-  'امين سر حاسوب','م.امين سر حاسوب','ارشاد اجتماعي','ارشاد نفسي',
-  'أمين مشغل','انشطة لاصفية','كاتب','مشرف جاهزية','مجموع الإداريين',
+  'أمانة مكتبة','معاون أمين مكتبة','أمين مخبر','مساعد أمين مخبر',
+  'أمين سر حاسوب','م. أمين سر حاسوب','ارشاد اجتماعي','ارشاد نفسي',
+  'أمين مشغل','انشطة لاصفية','كاتب','مشرف جاهزية',
+];
+// تطبيع يزيل الهمزات والمسافات الزائدة، فتتطابق «امين مخبر» مع «أمين مخبر».
+function _stmtNormRole(s) {
+  return String(s || '')
+    .replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه')
+    .replace(/[.‏‎]/g, '').replace(/\s+/g, ' ').trim();
+}
+const _ADMIN_ROLE_NORM = ADMIN_ROLE_ORDER.map(_stmtNormRole);
+
+// تصنيفات الجهاز التدريسي — بنفس ترتيب خلايا الورقة الرسمية (الصفوف ١٣–١٥)
+const STMT_TEACH_TEACHERS = [
+  ['معلم صف','E13'], ['تعميق تأهيل','G13'], ['أهلية تعليم','E14'], ['ق. 38','E15'],
+];
+const STMT_TEACH_MASTERS = [
+  ['عربي','J13'], ['رياضيات','J14'], ['فيزياء+كيمياء','J15'],
+  ['تاريخ','L13'], ['جغرافية','L14'], ['قومية','L15'],
+  ['اسلامية','N13'], ['مسيحية','N14'], ['معلوماتية','N15'],
+  ['انكليزي','P13'], ['فرنسي','P14'], ['روسي','P15'],
+  ['علوم','R13'], ['رياضة','R14'], ['فنون','R15'],
+  ['تجارة واقتصاد','T13'], ['فلسفة','T14'], ['مهندس','T15'],
+];
+const STMT_TEACH_ASSIST = [
+  ['عربي','W13'], ['رياضيات','W14'], ['علوم','W15'],
+  ['انكليزي','Y13'], ['فرنسي','Y14'], ['موسيقا','Y15'],
+  ['فنون','AA13'], ['معلوماتية','AA14'], ['رياضة','AA15'],
 ];
 
-// Grade key → DB grade value(s) mapping
+// Grade key → DB grade value(s) mapping — الترتيب هو ترتيب صفوف الورقة ٢٢..٤١
 const GRADE_KEY_MAP = {
   'استعدوا': ['استعدوا','0'],
   '1':['1'],'2':['2'],'3':['3'],'4':['4'],'5':['5'],
@@ -5821,6 +5895,15 @@ const GRADE_KEY_MAP = {
   'ث3أ':['الثالث الثانوي أدبي','الثالث الثانوي(أدبي)','12ث'],
   'ث3ع':['الثالث الثانوي علمي','الثالث الثانوي(علمي)','12ثع'],
 };
+const GRADE_LABELS = {
+  'استعدوا':'استعدوا','1':'الأول','2':'الثاني','3':'الثالث','4':'الرابع','5':'الخامس',
+  '6':'السادس','7':'السابع','8':'الثامن','9':'التاسع',
+  'م1':'المستوى الأول','م2':'المستوى الثاني','م3':'المستوى الثالث','م4':'المستوى الرابع',
+  'ث1أ':'الأول الثانوي (أدبي)','ث1ع':'الأول الثانوي (علمي)',
+  'ث2أ':'الثاني الثانوي (أدبي)','ث2ع':'الثاني الثانوي (علمي)',
+  'ث3أ':'الثالث الثانوي (أدبي)','ث3ع':'الثالث الثانوي (علمي)',
+};
+const GRADE_KEYS = Object.keys(GRADE_KEY_MAP);
 
 // Flatten to a reverse map: dbGrade → gradeKey
 const DB_GRADE_TO_KEY = {};
@@ -5828,368 +5911,1578 @@ for (const [key, vals] of Object.entries(GRADE_KEY_MAP)) {
   for (const v of vals) DB_GRADE_TO_KEY[String(v)] = key;
 }
 
-function _stmtMetaKey() { return `nsams_stmt_meta_${S.school?.id || 'x'}`; }
+// أقسام التبويب — الترتيب هو ترتيب الشريط والصفحات
+const STMT_SECS = [
+  { short: 'الترويسة',  full: 'الترويسة والتسليم' },
+  { short: 'المدرسة',   full: 'هوية المدرسة' },
+  { short: 'البناء',    full: 'البناء المدرسي' },
+  { short: 'الطلاب',    full: 'الطلاب والشعب' },
+  { short: 'التدريسي',  full: 'الجهاز التدريسي' },
+  { short: 'الإداري',   full: 'الجهاز الإداري' },
+  { short: 'الكوادر',   full: 'قوائم الكوادر — السير الذاتية' },
+  { short: 'التعديلات', full: 'التعديلات الطارئة' },
+  { short: 'النتائج',   full: 'نتائج نهاية العام' },
+  { short: 'الإرسال',   full: 'المراجعة والإرسال' },
+];
 
-function _stmtSaveMeta() {
-  const meta = {
-    eduZone:   el('stmt-edu-zone')?.value || '',
-    village:   el('stmt-village')?.value || '',
-    address:   el('stmt-address')?.value || '',
-    phone:     el('stmt-phone')?.value || '',
-    sharedWith:el('stmt-shared-with')?.value || '',
-    bFloors:   el('stmt-b-floors')?.value || '',
-    bOwnership:el('stmt-b-ownership')?.value || '',
-    bClassRooms:el('stmt-b-class-rooms')?.value || '',
-    bAdminRooms:el('stmt-b-admin-rooms')?.value || '',
-    bUnused:   el('stmt-b-unused')?.value || '',
-    bBasement: el('stmt-b-basement')?.value || '',
-    bLab:      el('stmt-b-lab')?.value || '',
-    bComputer: el('stmt-b-computer')?.value || '',
-    bLibrary:  el('stmt-b-library')?.value || '',
-    bSecretary:el('stmt-b-secretary')?.value || '',
-    bGym:      el('stmt-b-gym')?.value || '',
-    bStorage:  el('stmt-b-storage')?.value || '',
-    bGuidance: el('stmt-b-guidance')?.value || '',
-    bHealth:   el('stmt-b-health')?.value || '',
-    bWorkshop: el('stmt-b-workshop')?.value || '',
-    bTheater:  el('stmt-b-theater')?.value || '',
-    bYard:     el('stmt-b-yard')?.value || '',
-    bOther:    el('stmt-b-other')?.value || '',
+// أعمدة الأوراق الرسمية الثلاث — [مفتاح, عنوان, مطلوب]
+// مفاتيح مركّبة: '@birth' و '@start' تُبنى من يوم/شهر/سنة.
+const STMT_ROSTER_FIELDS = {
+  admin: [
+    ['national_id','الرقم الوطني',1], ['mother_name','الأم',1], ['@birth','تاريخ الولادة',1],
+    ['certificate','الشهادة /ج/م.م/أ.ه/ثا',1], ['specialization','الاختصاص',1],
+    ['seniority_years','القدم الوظيفي',1], ['job_title','العمل المسند إليه',1],
+    ['higher_degree','الشهادات العليا',0], ['@start','تاريخ المباشرة بالعمل الإداري الحالي',1],
+    ['phone','الهاتف — الجوال',1], ['landline','الهاتف — الأرضي',0],
+    ['residential_zone','المنطقة السكنية',1], ['@leave','إجازات ادارية/صحية/أمومة/زواج',0],
+    ['ministerial_doc','نوع الوثيقة / موافقة وزارية',0], ['notes','ملاحظات / عن أي بيانات مدخلة',0],
+  ],
+  teaching: [
+    ['national_id','الرقم الوطني',1], ['mother_name','الأم',1], ['@birth','تاريخ الولادة',1],
+    ['certificate','الشهادة ج/م.م/أ.ه/ثا',1], ['specialization','الاختصاص',1],
+    ['seniority_years','القدم الوظيفي',1], ['subject_taught','المادة التي يدرسها',1],
+    ['teaching_hours','عدد الساعات التي يدرسها',1],
+    ['quota_subjects','المواد التي يكمل فيها نصابه في مدرسته وعددها',0],
+    ['quota_school_external','المدرسة التي يكمل نصابه بها وعددها',0],
+    ['assigned_grade','الصف',0], ['assigned_section','الشعبة',0],
+    ['@start','تاريخ المباشرة في المدرسة',1],
+    ['phone','الهاتف — الجوال',1], ['landline','الهاتف — الأرضي',0],
+    ['residential_zone','المنطقة السكنية',1], ['@leave','إجازات ادارية/صحية/أمومة/زواج',0],
+    ['ministerial_doc','نوع الوثيقة / موافقة وزارية',0], ['notes','ملاحظات / عن أي بيانات مدخلة',0],
+  ],
+  support: [
+    ['national_id','الرقم الوطني',1], ['mother_name','الأم',1], ['@birth','تاريخ الولادة',1],
+    ['certificate','الشهادة',1], ['seniority_years','القدم الوظيفي',1],
+    ['job_title','العمل المسند إليه',1], ['@start','تاريخ المباشرة في المدرسة',1],
+    ['phone','الهاتف — الجوال',1], ['landline','الهاتف — الأرضي',0],
+    ['residential_zone','السكن',1], ['@leave','إجازات ادارية/صحية/أمومة/زواج',0],
+    ['ministerial_doc','نوع الوثيقة / موافقة وزارية',0], ['notes','ملاحظات / عن أي بيانات مدخلة',0],
+  ],
+};
+const STMT_ROSTER_LABELS = { admin: 'الإداري', teaching: 'التدريسي', support: 'مهنيون ومستخدمون وحراس' };
+// staff_records.staff_type القيم المسموحة: admin | teaching | professional | worker | guard
+// «support» ليست قيمة في القاعدة — كان الكود يقارن بها فيخرج صفراً دائماً.
+const STMT_SUPPORT_TYPES = ['professional','worker','guard'];
+
+const STMT_EVENTS = ['مباشرة','انفكاك','نقل','تقاعد','وفاة','أخرى'];
+
+// حالة التبويب — كل ما يُعرض ويُحفظ
+const STMT = {
+  sec: 0, id: null, status: 'draft', notes: null,
+  month: 1, year: new Date().getFullYear(),
+  school: null, building: null,
+  staff: [], leaves: [], stuStats: {}, changes: [], prev: null,
+  header: {}, students: {}, adminOverride: {}, teachFull: null,
+  yearEnd: null, sig: {}, noChange: false,
+  rosG: 'admin', rosQ: '', rosMiss: false,
+  saveTimer: null, loading: false, chgEditId: null,
+};
+
+// ── أدوات مساعدة ─────────────────────────────────────────────────────────────
+
+function _stmtVal(id) { return el(id)?.value?.trim() ?? ''; }
+function _stmtNum(id) { const v = parseInt(el(id)?.value ?? '', 10); return Number.isFinite(v) ? v : 0; }
+function _stmtSet(id, v) { const e = el(id); if (e) e.value = (v ?? '') === null ? '' : (v ?? ''); }
+
+// تاريخ ISO → 'يوم/شهر/سنة' كما يُكتب في الورقة
+function _stmtDMY(iso) {
+  if (!iso) return '';
+  const [y, m, d] = String(iso).split('-');
+  if (!y || !m || !d) return '';
+  return `${Number(d)}/${Number(m)}/${y}`;
+}
+
+// فئة الورقة التي ينتمي إليها الكادر
+function _stmtGroupOf(rec) {
+  if (rec.staff_type === 'admin') return 'admin';
+  if (rec.staff_type === 'teaching') return 'teaching';
+  return 'support';
+}
+
+// إجازات الشهر لكل كادر، مجمّعة نصّاً كما تُكتب في خانة الإجازات
+function _stmtLeaveText(staffId) {
+  const parts = STMT.leaves
+    .filter(l => l.staff_id === staffId)
+    // العمود اسمه leave_days — كتابة lv.days كانت تطبع «undefined» في الورقة
+    .map(l => `${l.leave_type} ${l.leave_days}`);
+  return parts.join(' + ');
+}
+
+// قيمة حقل واحد من سجل كادر بمنطق الأعمدة المركّبة
+function _stmtFieldVal(rec, key) {
+  if (key === '@birth') return _stmtDMY(rec.birth_date);
+  if (key === '@start') return _stmtDMY(rec.start_date);
+  if (key === '@leave') return _stmtLeaveText(rec.id);
+  const v = rec[key];
+  return (v === null || v === undefined || v === '') ? '' : String(v);
+}
+
+function _stmtMissingCount(rec) {
+  const spec = STMT_ROSTER_FIELDS[_stmtGroupOf(rec)];
+  let n = 0;
+  for (const [key, , req] of spec) if (req && !_stmtFieldVal(rec, key)) n++;
+  return n;
+}
+
+// ── تصنيف الجهاز التدريسي ────────────────────────────────────────────────────
+// التصنيف استنتاجي، لذا يُحسب مرّة ثم **يُخزَّن** في staff_records.teaching_rank
+// ولا يُعاد تخمينه. ومَن لم يطابق لا يُسقَط ولا يُخمَّن: يذهب لسلّة «غير مصنّف»
+// وهي خانة رسمية في النموذج نفسه (S23 «عدد الجهاز التدريسي غير المصنف»).
+function _stmtInferRank(rec) {
+  if (rec.teaching_rank) return rec.teaching_rank;
+  const hay = _stmtNormRole(`${rec.job_title || ''} ${rec.specialization || ''} ${rec.certificate || ''}`);
+  if (/معلم صف|اهليه تعليم|تعميق|ق ?38/.test(hay)) return 'معلم';
+  if (/مدرس مساعد/.test(hay)) return 'مدرس مساعد';
+  if (/^مدرس| مدرس/.test(hay)) return 'مدرس';
+  if (/معهد/.test(hay)) return 'مدرس مساعد';
+  if (/جامعه/.test(hay)) return 'مدرس';
+  return null;                       // غير مصنّف — لا تخمين
+}
+
+// الخانة الفرعية داخل الرتبة (معلم صف / عربي / …)
+function _stmtBucketOf(rec, rank) {
+  const list = rank === 'معلم' ? STMT_TEACH_TEACHERS
+             : rank === 'مدرس' ? STMT_TEACH_MASTERS
+             : STMT_TEACH_ASSIST;
+  const hay = _stmtNormRole(`${rec.specialization || ''} ${rec.job_title || ''} ${rec.subject_taught || ''} ${rec.certificate || ''}`);
+  for (const [label] of list) {
+    if (hay.includes(_stmtNormRole(label))) return label;
+  }
+  return rank === 'معلم' ? 'معلم صف' : null;
+}
+
+// كل أرقام الجهاز التدريسي في مكان واحد
+function _stmtTeaching() {
+  const buckets = { 'معلم': {}, 'مدرس': {}, 'مدرس مساعد': {} };
+  const unclassified = [];
+  for (const rec of STMT.staff) {
+    if (rec.staff_type !== 'teaching') continue;
+    const rank = _stmtInferRank(rec);
+    if (!rank) { unclassified.push(rec); continue; }
+    const b = _stmtBucketOf(rec, rank);
+    if (!b) { unclassified.push(rec); continue; }
+    buckets[rank][b] = (buckets[rank][b] || 0) + 1;
+  }
+  const sum = o => Object.values(o).reduce((a, b) => a + b, 0);
+  const teachers = sum(buckets['معلم']);
+  const masters  = sum(buckets['مدرس']);
+  const assist   = sum(buckets['مدرس مساعد']);
+  const bySpec   = teachers + masters + assist;
+  // «بشكل كامل» هو العدد الفعلي للكادر التدريسي، و«غير المصنف» فرقه عن المصنَّف.
+  const full = STMT.teachFull ?? STMT.staff.filter(r => r.staff_type === 'teaching').length;
+  return { buckets, unclassified, teachers, masters, assist, bySpec, full,
+           unclassifiedCount: full - bySpec };
+}
+
+// أعداد الجهاز الإداري لكل وظيفة (مع إمكان التصحيح اليدوي)
+function _stmtAdminCounts() {
+  const auto = {};
+  const unmapped = [];
+  for (const rec of STMT.staff) {
+    if (rec.staff_type !== 'admin') continue;
+    const idx = _ADMIN_ROLE_NORM.indexOf(_stmtNormRole(rec.job_title));
+    if (idx < 0) { unmapped.push(rec); continue; }
+    const role = ADMIN_ROLE_ORDER[idx];
+    auto[role] = (auto[role] || 0) + 1;
+  }
+  const rows = ADMIN_ROLE_ORDER.map(role => ({
+    role,
+    auto: auto[role] || 0,
+    count: STMT.adminOverride[role] ?? (auto[role] || 0),
+  }));
+  const total = rows.reduce((a, r) => a + r.count, 0);
+  return { rows, total, unmapped };
+}
+
+// أعداد المهنيين والمستخدمين والحراس — كلٌّ من نوعه في القاعدة مباشرةً
+function _stmtSupportCounts() {
+  const c = { professional: 0, worker: 0, guard: 0 };
+  for (const rec of STMT.staff) if (c[rec.staff_type] !== undefined) c[rec.staff_type]++;
+  return c;
+}
+
+// مجاميع جدول الطلاب
+function _stmtStudentTotals() {
+  let sections = 0, enM = 0, enF = 0, frM = 0, frF = 0, ruM = 0, ruF = 0;
+  const byKey = {};
+  for (const key of GRADE_KEYS) {
+    const r = STMT.students[key] || {};
+    const row = {
+      sections: r.sections || 0,
+      enM: r.enM || 0, enF: r.enF || 0, frM: r.frM || 0,
+      frF: r.frF || 0, ruM: r.ruM || 0, ruF: r.ruF || 0,
+    };
+    row.total = row.enM + row.enF + row.frM + row.frF + row.ruM + row.ruF;
+    byKey[key] = row;
+    sections += row.sections; enM += row.enM; enF += row.enF;
+    frM += row.frM; frF += row.frF; ruM += row.ruM; ruF += row.ruF;
+  }
+  const total = enM + enF + frM + frF + ruM + ruF;
+  const sumKeys = ks => ks.reduce((a, k) => a + byKey[k].total, 0);
+  return {
+    byKey, sections, enM, enF, frM, frF, ruM, ruF, total,
+    cycle1: sumKeys(['1','2','3','4','5','6']),
+    cycle2: sumKeys(['7','8','9']),
+    kinder: sumKeys(['استعدوا','م1','م2','م3','م4']),
+    secondary: sumKeys(['ث1أ','ث1ع','ث2أ','ث2ع','ث3أ','ث3ع']),
   };
-  localStorage.setItem(_stmtMetaKey(), JSON.stringify(meta));
-  return meta;
 }
 
-function _stmtLoadMeta() {
+// ملخّص العاملين (١١ رقماً في خانات S18..AA23)
+function _stmtWorkforce() {
+  const t = _stmtTeaching();
+  const a = _stmtAdminCounts();
+  const s = _stmtSupportCounts();
+  return {
+    teachers: t.teachers, masters: t.masters, assist: t.assist,
+    bySpec: t.bySpec, full: t.full, unclassified: t.unclassifiedCount,
+    admin: a.total, professional: s.professional, worker: s.worker, guard: s.guard,
+    grand: a.total + t.full + s.professional + s.worker + s.guard,
+  };
+}
+
+// ── حالة كل قسم: تُغذّي نقطة الشريط ونسبة الاكتمال وقائمة التحقّق ────────────
+// 'bad' يمنع الإرسال · 'warn' ينبّه · 'ok' مكتمل · 'empty' لم يُبدأ
+function _stmtSectionState(i) {
+  switch (i) {
+    case 0: {
+      const has = _stmtVal('stmt-deliver-d') && _stmtVal('stmt-deliver-m') && _stmtVal('stmt-deliver-y');
+      return has ? { s: 'ok', note: 'مكتمل' } : { s: 'empty', note: 'تاريخ التسليم لم يُملأ' };
+    }
+    case 1: {
+      const miss = [];
+      if (!_stmtVal('stmt-edu-zone')) miss.push('المنطقة التعليمية');
+      if (!_stmtVal('stmt-address'))  miss.push('العنوان');
+      if (!_stmtVal('stmt-day-type')) miss.push('نوع الدوام');
+      if (!STMT.school?.statistical_number) miss.push('الرقم الإحصائي');
+      return miss.length ? { s: 'warn', note: 'ينقص: ' + miss.join('، ') } : { s: 'ok', note: 'مكتمل' };
+    }
+    case 2: {
+      const any = _stmtNum('stmt-b-class-rooms') || _stmtNum('stmt-b-floors');
+      if (!any) return { s: 'empty', note: 'لم يُملأ بعد' };
+      return _stmtVal('stmt-b-ownership') ? { s: 'ok', note: 'مكتمل' }
+                                          : { s: 'warn', note: 'ينقص: حكومي/مستأجر' };
+    }
+    case 3: {
+      const t = _stmtStudentTotals();
+      if (!t.total) return { s: 'empty', note: 'لا طلاب' };
+      return { s: 'ok', note: `${t.sections} شعبة · ${t.total} طالب` };
+    }
+    case 4: {
+      const t = _stmtTeaching();
+      if (t.unclassified.length) return { s: 'warn', note: `${t.unclassified.length} غير مصنّفين` };
+      return t.full ? { s: 'ok', note: 'مكتمل' } : { s: 'empty', note: 'لا كادر تدريسي' };
+    }
+    case 5: {
+      const a = _stmtAdminCounts();
+      if (a.unmapped.length) return { s: 'warn', note: `${a.unmapped.length} خارج خانات النموذج` };
+      return a.total ? { s: 'ok', note: 'مكتمل' } : { s: 'empty', note: 'لا كادر إداري' };
+    }
+    case 6: {
+      const miss = STMT.staff.filter(r => _stmtMissingCount(r)).length;
+      if (!STMT.staff.length) return { s: 'empty', note: 'سجل الكوادر فارغ' };
+      return miss ? { s: 'warn', note: `${miss} سجلات ناقصة من ${STMT.staff.length}` }
+                  : { s: 'ok', note: 'كل السجلات مكتملة' };
+    }
+    case 7: {
+      const pending = STMT.changes.filter(c => c.detected && !c.confirmed_at).length;
+      if (pending) return { s: 'bad', note: `${pending} بانتظار التأكيد` };
+      if (STMT.noChange) return { s: 'ok', note: 'لا يوجد تعديل — موثَّق' };
+      const done = STMT.changes.length;
+      return done ? { s: 'ok', note: `${done} تعديلات مؤكَّدة` }
+                  : { s: 'empty', note: 'لم يُحسم بعد' };
+    }
+    case 8: {
+      if (!_stmtYearEndDue()) return { s: 'ok', note: 'غير مطلوبة هذا الشهر' };
+      return STMT.yearEnd ? { s: 'ok', note: 'مُملأة' } : { s: 'empty', note: 'مطلوبة — لم تُملأ' };
+    }
+    case 9: {
+      const blocks = _stmtChecklist().filter(c => c.k === 'bad').length;
+      return blocks ? { s: 'bad', note: `${blocks} يمنعان الإرسال` } : { s: 'ok', note: 'جاهز للإرسال' };
+    }
+    default: return { s: 'empty', note: '' };
+  }
+}
+
+// الورقة السادسة موسمية: تُملأ في نهاية العام الدراسي (أيار/حزيران)
+function _stmtYearEndDue() { return STMT.month === 5 || STMT.month === 6; }
+
+// قائمة التحقّق — ما يمنع الإرسال وما ينبّه فقط
+function _stmtChecklist() {
+  const out = [];
+  const pending = STMT.changes.filter(c => c.detected && !c.confirmed_at).length;
+  if (pending) out.push({ k: 'bad', t: `${arDigits(pending)} تعديلات مقترحة لم تُؤكَّد`, go: 7 });
+  if (!STMT.noChange && !STMT.changes.length)
+    out.push({ k: 'bad', t: 'لم تُحسم التعديلات الطارئة — أكّدها أو اكتب «لا يوجد تعديل»', go: 7 });
+  if (!STMT.school?.statistical_number)
+    out.push({ k: 'bad', t: 'الرقم الإحصائي غير محدَّد', go: 1 });
+  if (!_stmtVal('stmt-day-type'))
+    out.push({ k: 'bad', t: 'نوع الدوام (كامل/نصفي) غير محدَّد', go: 1 });
+
+  const t = _stmtTeaching();
+  if (t.unclassified.length)
+    out.push({ k: 'warn', t: `${arDigits(t.unclassified.length)} كوادر غير مصنّفين في الجهاز التدريسي`, go: 4 });
+  const a = _stmtAdminCounts();
+  if (a.unmapped.length)
+    out.push({ k: 'warn', t: `${arDigits(a.unmapped.length)} إداريون خارج خانات النموذج`, go: 5 });
+  const missRec = STMT.staff.filter(r => _stmtMissingCount(r)).length;
+  if (missRec)
+    out.push({ k: 'warn', t: `${arDigits(missRec)} سجلات كوادر ناقصة الحقول`, go: 6 });
+  if (_stmtYearEndDue() && !STMT.yearEnd)
+    out.push({ k: 'warn', t: 'ورقة نتائج نهاية العام مطلوبة هذا الشهر ولم تُملأ', go: 8 });
+
+  const st = _stmtStudentTotals();
+  const live = Object.values(STMT.stuStats).reduce((n, g) => n + g.male + g.female, 0);
+  if (st.total === live)
+    out.push({ k: 'ok', t: `مجموع الطلاب (${arDigits(st.total)}) يطابق سجلّ الطلاب النشطين` });
+  else
+    out.push({ k: 'warn', t: `مجموع البيان ${arDigits(st.total)} بينما سجلّ الطلاب ${arDigits(live)}`, go: 3 });
+  return out;
+}
+
+// ── الشريط والفهرس والتقدّم ─────────────────────────────────────────────────
+
+function renderStmtRail() {
+  const rail = el('stmt-rail');
+  if (!rail) return;
+  rail.innerHTML = STMT_SECS.map((s, i) => {
+    const st = _stmtSectionState(i);
+    return `<button type="button" class="stmt-chip" role="tab" data-go="${i}"
+      aria-selected="${i === STMT.sec}"><span class="stmt-chip-dot ${st.s}"></span>${escapeHtml(s.short)}</button>`;
+  }).join('');
+  const active = rail.querySelector('[aria-selected="true"]');
+  active?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+}
+
+function renderStmtProgress() {
+  let done = 0;
+  for (let i = 0; i < STMT_SECS.length; i++) if (_stmtSectionState(i).s === 'ok') done++;
+  const pct = Math.round(done / STMT_SECS.length * 100);
+  const fill = el('stmt-prog-fill'); if (fill) fill.style.width = pct + '%';
+  const num  = el('stmt-prog-num');  if (num)  num.textContent = arDigits(pct) + '٪';
+}
+
+function renderStmtPagers() {
+  document.querySelectorAll('#view-statement .stmt-pager').forEach(p => {
+    const i = Number(p.dataset.pager);
+    const prev = i > 0 ? `<button type="button" class="btn btn-outline btn-sm" data-go="${i - 1}">→ السابق</button>`
+                       : `<button type="button" class="btn btn-outline btn-sm" disabled>—</button>`;
+    const next = i < STMT_SECS.length - 1
+      ? `<button type="button" class="btn btn-outline btn-sm" data-go="${i + 1}">التالي: ${escapeHtml(STMT_SECS[i + 1].short)} ←</button>`
+      : `<button type="button" class="btn btn-outline btn-sm" disabled>—</button>`;
+    p.innerHTML = prev + next;
+  });
+}
+
+function renderStmtIndex() {
+  const host = el('stmt-index-list');
+  if (!host) return;
+  host.innerHTML = STMT_SECS.map((s, i) => {
+    const st = _stmtSectionState(i);
+    return `<button type="button" class="stmt-idx-row" data-go="${i}">
+      <span class="stmt-chip-dot ${st.s}"></span>
+      <span style="min-width:0"><span class="stmt-idx-row-n">${escapeHtml(s.full)}</span>
+      <span class="stmt-idx-row-s">${escapeHtml(st.note)}</span></span></button>`;
+  }).join('');
+}
+
+function stmtGo(i) {
+  STMT.sec = Math.max(0, Math.min(STMT_SECS.length - 1, i));
+  document.querySelectorAll('#view-statement .stmt-sec').forEach(sec => {
+    sec.hidden = Number(sec.dataset.sec) !== STMT.sec;
+  });
+  renderStmtRail();
+  el('stmt-period')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+// إعادة رسم المؤشّرات المشتركة بعد أي تغيير
+function stmtRefreshMeta() {
+  renderStmtRail();
+  renderStmtProgress();
+  renderStmtIndex();
+  renderStmtChecklist();
+}
+
+// ── رسم الأقسام ──────────────────────────────────────────────────────────────
+
+function renderStmtHeaderSec() {
+  _stmtSet('stmt-hdr-month', MONTH_LABELS[STMT.month] || String(STMT.month));
+  _stmtSet('stmt-hdr-year',  STMT.year);
+}
+
+function renderStmtSchoolSec() {
+  const s = STMT.school || {};
+  _stmtSet('stmt-school-name', s.name || '');
+  _stmtSet('stmt-cycle',       s.cycle || '—');
+  _stmtSet('stmt-statno',      s.statistical_number || '—');
+  _stmtSet('stmt-rural',       s.rural_curriculum ? 'نعم' : 'لا');
+  _stmtSet('stmt-former-name', s.former_name || '');
+  _stmtSet('stmt-village',     s.village || '');
+  _stmtSet('stmt-address',     s.address || '');
+  _stmtSet('stmt-phone',       s.phone || '');
+  _stmtSet('stmt-shared-with', s.shared_with || '');
+  _stmtSet('stmt-edu-zone',    s.educational_zone || '');
+  _stmtSet('stmt-day-type',    s.day_type || '');
+  CustomSelect.refresh(el('stmt-edu-zone'));
+  CustomSelect.refresh(el('stmt-day-type'));
+}
+
+const STMT_BUILDING_FIELDS = [
+  ['floors','stmt-b-floors'], ['class_rooms','stmt-b-class-rooms'],
+  ['admin_rooms','stmt-b-admin-rooms'], ['unused_rooms','stmt-b-unused'],
+  ['basement','stmt-b-basement'], ['lab','stmt-b-lab'], ['computer_lab','stmt-b-computer'],
+  ['library','stmt-b-library'], ['secretariat','stmt-b-secretary'], ['gym','stmt-b-gym'],
+  ['storage','stmt-b-storage'], ['guidance','stmt-b-guidance'], ['health_room','stmt-b-health'],
+  ['workshop','stmt-b-workshop'], ['theater','stmt-b-theater'], ['yard','stmt-b-yard'],
+  ['other_halls','stmt-b-other'],
+];
+
+function renderStmtBuildingSec() {
+  const b = STMT.building || {};
+  for (const [col, id] of STMT_BUILDING_FIELDS) _stmtSet(id, b[col] ?? 0);
+  _stmtSet('stmt-b-ownership', b.ownership || '');
+  CustomSelect.refresh(el('stmt-b-ownership'));
+  const banner = el('stmt-building-banner');
+  if (banner) {
+    banner.hidden = !STMT.building;
+    const txt = el('stmt-building-banner-txt');
+    if (txt && STMT.building?.updated_at) {
+      const d = new Date(STMT.building.updated_at);
+      txt.textContent = `محفوظ منذ ${d.toLocaleDateString('ar-SY')} — عدّل ما تغيّر فقط.`;
+    }
+  }
+  renderStmtBuildingTotal();
+}
+
+function renderStmtBuildingTotal() {
+  const n = _stmtNum('stmt-b-class-rooms') + _stmtNum('stmt-b-admin-rooms') + _stmtNum('stmt-b-unused');
+  const e = el('stmt-b-total');
+  if (e) e.textContent = `${arDigits(n)} غرفة (${arDigits(_stmtNum('stmt-b-class-rooms'))} صفية + ` +
+                         `${arDigits(_stmtNum('stmt-b-admin-rooms'))} إدارية + ` +
+                         `${arDigits(_stmtNum('stmt-b-unused'))} غير مستخدمة)`;
+}
+
+// ── القسم ٤: الطلاب ──────────────────────────────────────────────────────────
+// تمثيل واحد فقط في الشجرة: بطاقات على الجوّال، جدول رسمي على الشاشة العريضة.
+// وجود التمثيلين معاً يعني حقلَي إدخال لنفس الرقم — وهذا مصدر تعارض مضمون.
+const STMT_STU_COLS = [
+  ['sections','الشعب'], ['enM','انكليزي ذكور'], ['enF','انكليزي إناث'],
+  ['frM','فرنسي ذكور'], ['frF','فرنسي إناث'], ['ruM','روسي ذكور'], ['ruF','روسي إناث'],
+];
+
+function _stmtWide() { return window.matchMedia('(min-width: 760px)').matches; }
+
+function renderStmtStudentsSec() {
+  const host = el('stmt-students-host');
+  if (!host) return;
+  const t = _stmtStudentTotals();
+
+  if (_stmtWide()) {
+    host.innerHTML = `<div class="stmt-tw"><table class="stmt-table">
+      <thead>
+        <tr><th rowspan="2">الصف</th><th rowspan="2">الشعب</th><th colspan="2">انكليزي</th>
+            <th colspan="2">فرنسي</th><th colspan="2">روسي</th><th rowspan="2">المجموع</th></tr>
+        <tr><th>ذكور</th><th>إناث</th><th>ذكور</th><th>إناث</th><th>ذكور</th><th>إناث</th></tr>
+      </thead>
+      <tbody>${GRADE_KEYS.map(k => {
+        const r = t.byKey[k];
+        return `<tr><td>${escapeHtml(GRADE_LABELS[k])}</td>` +
+          STMT_STU_COLS.map(([c]) =>
+            `<td><input class="stmt-cell-in" type="number" min="0" inputmode="numeric"
+                 data-stu="${k}" data-col="${c}" value="${r[c]}"></td>`).join('') +
+          `<td>${arDigits(r.total)}</td></tr>`;
+      }).join('')}</tbody>
+      <tfoot><tr><td>المجموع</td><td>${arDigits(t.sections)}</td><td>${arDigits(t.enM)}</td>
+        <td>${arDigits(t.enF)}</td><td>${arDigits(t.frM)}</td><td>${arDigits(t.frF)}</td>
+        <td>${arDigits(t.ruM)}</td><td>${arDigits(t.ruF)}</td><td>${arDigits(t.total)}</td></tr></tfoot>
+    </table></div>`;
+  } else {
+    host.innerHTML = `<div class="stmt-gcards">${GRADE_KEYS.map(k => {
+      const r = t.byKey[k];
+      const open = STMT.stuOpen === k;
+      return `<div class="stmt-gcard" data-open="${open ? 1 : 0}">
+        <button type="button" class="stmt-gcard-h" data-stu-open="${k}">
+          <span class="stmt-gcard-n">${escapeHtml(GRADE_LABELS[k])}</span>
+          <span class="stmt-gcard-s">${arDigits(r.sections)} شعبة · ${arDigits(r.total)} طالب</span>
+        </button>
+        <div class="stmt-gcard-b"${open ? '' : ' hidden'}>
+          ${STMT_STU_COLS.map(([c, lab]) => `<div class="stmt-gcard-f">
+            <label for="stu-${k}-${c}">${escapeHtml(lab)}</label>
+            <input id="stu-${k}-${c}" type="number" min="0" inputmode="numeric"
+                   data-stu="${k}" data-col="${c}" value="${r[c]}"></div>`).join('')}
+        </div></div>`;
+    }).join('')}</div>`;
+  }
+
+  const badge = el('stmt-stu-badge');
+  if (badge) badge.textContent = `${arDigits(t.sections)} شعبة · ${arDigits(t.total)} طالب`;
+
+  const sum = el('stmt-stu-sum');
+  if (sum) sum.innerHTML = [
+    ['مجموع الطلاب الكلي <span class="stmt-tag-calc">محسوب</span>', t.total],
+    ['حلقة (١)', t.cycle1], ['حلقة (٢)', t.cycle2],
+    ['رياض', t.kinder], ['ثانوي', t.secondary],
+  ].map(([l, v]) => `<div class="stmt-sbox"><span class="stmt-sbox-l">${l}</span><b>${arDigits(v)}</b></div>`).join('');
+
+  renderStmtChangeStats();
+}
+
+function renderStmtTeachingSec() {
+  const t = _stmtTeaching();
+  const cell = (list, bucket) => list.map(([label]) =>
+    `<div class="stmt-cnt"><span>${escapeHtml(label)}</span><b>${arDigits(bucket[label] || 0)}</b></div>`).join('');
+  el('stmt-teach-teachers').innerHTML = cell(STMT_TEACH_TEACHERS, t.buckets['معلم']);
+  el('stmt-teach-masters').innerHTML  = cell(STMT_TEACH_MASTERS,  t.buckets['مدرس']);
+  el('stmt-teach-assist').innerHTML   = cell(STMT_TEACH_ASSIST,   t.buckets['مدرس مساعد']);
+  el('stmt-c-teachers').textContent = arDigits(t.teachers);
+  el('stmt-c-masters').textContent  = arDigits(t.masters);
+  el('stmt-c-assist').textContent   = arDigits(t.assist);
+
+  const box = el('stmt-unclass-box');
+  if (box) {
+    box.hidden = t.unclassifiedCount === 0;
+    el('stmt-c-unclass').textContent = arDigits(t.unclassifiedCount);
+  }
+  const warn = el('stmt-teach-warn');
+  if (warn) {
+    warn.hidden = t.unclassified.length === 0;
+    el('stmt-teach-warn-txt').textContent =
+      `${arDigits(t.unclassified.length)} كوادر لم يطابق تصنيفهم أياً من خانات النموذج.`;
+  }
+}
+
+function renderStmtAdminSec() {
+  const a = _stmtAdminCounts();
+  const body = el('stmt-adm-body');
+  if (body) {
+    body.innerHTML = a.rows.map(r => `<tr>
+      <td>${escapeHtml(r.role)}</td>
+      <td><input class="stmt-cell-in" type="number" min="0" inputmode="numeric"
+           data-adm="${escapeHtml(r.role)}" value="${r.count}"></td>
+      <td>${escapeHtml(arNumWord(r.count))}</td></tr>`).join('') +
+      `<tr><td><b>مجموع الإداريين</b></td><td><b>${arDigits(a.total)}</b></td>
+       <td><b>${escapeHtml(arNumWord(a.total))}</b></td></tr>`;
+  }
+  const badge = el('stmt-adm-badge');
+  if (badge) badge.textContent = `${arDigits(a.total)} إداري`;
+  const warn = el('stmt-adm-warn');
+  if (warn) {
+    warn.hidden = a.unmapped.length === 0;
+    el('stmt-adm-warn-txt').textContent =
+      `${arDigits(a.unmapped.length)} إداريون عملهم المسند خارج خانات النموذج: ` +
+      a.unmapped.map(r => r.job_title || '—').join('، ');
+  }
+}
+
+// ── القسم ٧: السير الذاتية الكاملة ──────────────────────────────────────────
+function renderStmtRosters() {
+  const list = el('stmt-ros-list');
+  if (!list) return;
+  const spec = STMT_ROSTER_FIELDS[STMT.rosG];
+  const inGroup = STMT.staff.filter(r => _stmtGroupOf(r) === STMT.rosG);
+  const q = STMT.rosQ.trim();
+  const shown = inGroup.filter(r => {
+    if (STMT.rosMiss && !_stmtMissingCount(r)) return false;
+    if (!q) return true;
+    return (r.full_name || '').includes(q) || (r.national_id || '').includes(q);
+  });
+
+  list.innerHTML = shown.length ? shown.map((r, i) => {
+    const miss = _stmtMissingCount(r);
+    const rows = spec.map(([key, label, req]) => {
+      const v = _stmtFieldVal(r, key);
+      const bad = !v && req;
+      return `<div class="stmt-dr${bad ? ' is-miss' : ''}"><dt>${escapeHtml(label)}</dt>
+        <dd>${v ? escapeHtml(v) : (req ? 'ناقص' : '—')}</dd></div>`;
+    }).join('');
+    const job = STMT.rosG === 'teaching' ? (r.subject_taught || r.specialization || '')
+                                         : (r.job_title || '');
+    return `<div class="stmt-cvc${miss ? ' is-miss' : ''}" data-open="0">
+      <button type="button" class="stmt-cvh" data-cv="${escapeHtml(r.id)}">
+        <span class="stmt-cvh-sq">${arDigits(i + 1)}</span>
+        <span class="stmt-cvh-who"><span class="stmt-cvh-nm">${escapeHtml(r.full_name || '—')}</span>
+        <span class="stmt-cvh-jb">${escapeHtml(job || '—')}</span></span>
+        ${miss ? `<span class="stmt-badge stmt-badge-warn">ينقص ${arDigits(miss)}</span>`
+               : '<span class="stmt-badge stmt-badge-ok">مكتمل</span>'}
+        <svg class="stmt-cvh-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <dl class="stmt-cvb" hidden>${rows}
+        <div class="stmt-cvact"><button type="button" class="stmt-mini"
+          data-cv-edit="${escapeHtml(r.id)}">تعديل في سجل الكوادر</button></div>
+      </dl></div>`;
+  }).join('') : '<div class="stmt-prow stmt-prow-empty">لا نتائج</div>';
+
+  const totalMiss = inGroup.filter(r => _stmtMissingCount(r)).length;
+  const badge = el('stmt-ros-badge');
+  if (badge) {
+    badge.textContent = totalMiss ? `${arDigits(totalMiss)} سجلات ناقصة` : 'كل السجلات مكتملة';
+    badge.className = 'stmt-badge ' + (totalMiss ? 'stmt-badge-warn' : 'stmt-badge-ok');
+  }
+  const cnt = el('stmt-ros-count');
+  if (cnt) cnt.textContent = `${arDigits(STMT.staff.length)} كادراً · العرض هنا للمراجعة فقط.`;
+
+  document.querySelectorAll('#view-statement .stmt-seg [data-ros]').forEach(b => {
+    b.setAttribute('aria-selected', String(b.dataset.ros === STMT.rosG));
+    const base = STMT_ROSTER_LABELS[b.dataset.ros];
+    const n = STMT.staff.filter(r => _stmtGroupOf(r) === b.dataset.ros).length;
+    b.textContent = `${base} (${arDigits(n)})`;
+  });
+
+  renderStmtLeaves();
+}
+
+function renderStmtLeaves() {
+  const host = el('stmt-leaves-list');
+  if (!host) return;
+  const byStaff = {};
+  for (const l of STMT.leaves) (byStaff[l.staff_id] ??= []).push(l);
+  const names = Object.fromEntries(STMT.staff.map(r => [r.id, r.full_name]));
+  const rows = Object.entries(byStaff);
+  host.innerHTML = rows.length ? rows.map(([sid, ls]) =>
+    `<div class="stmt-prow"><span class="stmt-prow-n">${escapeHtml(names[sid] || '—')}</span>
+      ${ls.map(l => `<span class="stmt-badge stmt-badge-info">${escapeHtml(l.leave_type)} (${arDigits(l.leave_days)} أيام)</span>`).join('')}
+      <span class="stmt-prow-sp"></span></div>`).join('')
+    : '<div class="stmt-prow stmt-prow-empty">لا إجازات مسجّلة هذا الشهر</div>';
+}
+
+// ── القسم ٨: التعديلات الطارئة ──────────────────────────────────────────────
+// بصمة مضغوطة لكل كادر — أساس المقارنة بين بيان وبيان.
+function _stmtRosterIndex() {
+  const idx = {};
+  for (const r of STMT.staff) {
+    idx[r.id] = {
+      n: r.full_name || '', g: _stmtGroupOf(r), j: r.job_title || '',
+      s: r.specialization || '', t: r.subject_taught || '',
+    };
+  }
+  return idx;
+}
+
+// الكشف اقتراح لا قرار: النظام يعرف *أنّ* أحداً غادر ولا يعرف *لماذا*،
+// والعمود الأخير في الورقة الرسمية هو الـ«لماذا». فالتأكيد البشري ضرورة
+// بنيوية لا تزيّن.
+function _stmtDetectChanges() {
+  const prevIdx = STMT.prev?.snapshot_data?.rosterIndex;
+  if (!prevIdx || typeof prevIdx !== 'object') return [];   // لا سابق → لا نخترع
+  const cur = _stmtRosterIndex();
+  const out = [];
+  for (const [id, c] of Object.entries(cur)) {
+    const p = prevIdx[id];
+    if (!p) { out.push({ staff_id: id, change_type: 'added', name: c.n, group: c.g, job: c.j, before: null, after: c }); continue; }
+    const diffs = [];
+    if (p.j !== c.j) diffs.push(['العمل المسند إليه', p.j, c.j]);
+    if (p.s !== c.s) diffs.push(['الاختصاص', p.s, c.s]);
+    if (p.t !== c.t) diffs.push(['المادة التي يدرسها', p.t, c.t]);
+    if (p.n !== c.n) diffs.push(['الاسم', p.n, c.n]);
+    if (diffs.length) out.push({ staff_id: id, change_type: 'modified', name: c.n, group: c.g, job: c.j, diffs });
+  }
+  for (const [id, p] of Object.entries(prevIdx)) {
+    if (!cur[id]) out.push({ staff_id: id, change_type: 'removed', name: p.n, group: p.g, job: p.j, before: p, after: null });
+  }
+  return out;
+}
+
+const _CHG_LABEL = { added: 'أُضيف', removed: 'غادر', modified: 'تغيّرت بياناته' };
+const _GRP_LABEL = { admin: 'إداري', teaching: 'تدريسي', support: 'مهني/مستخدم/حارس' };
+
+function renderStmtChangesSec() {
+  const detHost  = el('stmt-chg-detected');
+  const confHost = el('stmt-chg-confirmed');
+  if (!detHost || !confHost) return;
+
+  const known = new Set(STMT.changes.map(c => `${c.staff_id || ''}|${c.change_type}`));
+  const suggestions = _stmtDetectChanges().filter(s => !known.has(`${s.staff_id}|${s.change_type}`));
+
+  detHost.innerHTML = suggestions.map(s => {
+    const why = s.change_type === 'removed'
+      ? 'كان في البيان السابق ولم يعد في سجلّ الكوادر — النظام لا يعرف <b>السبب</b>، حدّده أنت.'
+      : s.change_type === 'added'
+        ? 'ظهر في سجلّ الكوادر بعد البيان السابق — أكّد نوع الحدث.'
+        : 'تغيّرت بياناته منذ البيان السابق.';
+    const diffs = (s.diffs || []).map(([lab, a, b]) =>
+      `<div class="stmt-dr"><dt>${escapeHtml(lab)}</dt><dd>${escapeHtml(a || '—')} ← ${escapeHtml(b || '—')}</dd></div>`).join('');
+    return `<div class="stmt-chgc is-pending" data-sug="${escapeHtml(s.staff_id)}">
+      <div class="stmt-chgc-h"><span class="stmt-badge stmt-badge-warn">${escapeHtml(_CHG_LABEL[s.change_type])}</span>
+        <span class="stmt-chgc-n">${escapeHtml(s.name || '—')}</span>
+        <span class="stmt-badge">${escapeHtml(_GRP_LABEL[s.group] || '')}</span></div>
+      ${diffs}
+      <div class="stmt-chgc-note">${why}</div>
+      <div class="stmt-chgc-act">
+        <button type="button" class="btn btn-primary btn-sm" data-sug-ok="${escapeHtml(s.staff_id)}"
+          data-sug-type="${s.change_type}">تأكيد وتحديد السبب</button>
+        <button type="button" class="btn btn-outline btn-sm" data-sug-skip="${escapeHtml(s.staff_id)}"
+          data-sug-type="${s.change_type}">تجاهل</button>
+      </div></div>`;
+  }).join('');
+
+  confHost.innerHTML = STMT.changes.map(c => {
+    const d = c.change_data || {};
+    return `<div class="stmt-chgc">
+      <div class="stmt-chgc-h">
+        <span class="stmt-badge stmt-badge-ok">${escapeHtml(c.event_type || _CHG_LABEL[c.change_type] || '')}</span>
+        <span class="stmt-chgc-n">${escapeHtml(d.name || '—')}</span>
+        <span class="stmt-badge">${escapeHtml(c.detected ? 'مكتشَف' : 'مُدخَل يدوياً')}</span></div>
+      <div class="stmt-dr"><dt>العمل المسند</dt><dd>${escapeHtml(d.job || '—')}</dd></div>
+      <div class="stmt-dr"><dt>الفئة</dt><dd>${escapeHtml(_GRP_LABEL[c.staff_group] || '—')}</dd></div>
+      <div class="stmt-dr"><dt>تاريخ النفاذ</dt><dd>${escapeHtml(_stmtDMY(c.effective_date) || '—')}</dd></div>
+      ${c.reason ? `<div class="stmt-dr"><dt>السبب</dt><dd>${escapeHtml(c.reason)}</dd></div>` : ''}
+      <div class="stmt-chgc-act">
+        <button type="button" class="stmt-mini" data-chg-edit="${escapeHtml(c.id)}">تعديل</button>
+        <button type="button" class="stmt-mini" data-chg-del="${escapeHtml(c.id)}">حذف</button>
+      </div></div>`;
+  }).join('');
+
+  el('stmt-chg-det-hd').hidden  = suggestions.length === 0;
+  el('stmt-chg-conf-hd').hidden = STMT.changes.length === 0;
+
+  const banner = el('stmt-chg-banner');
+  const txt    = el('stmt-chg-banner-txt');
+  const badge  = el('stmt-chg-badge');
+  const pending = suggestions.length;
+  if (!STMT.prev) {
+    banner.className = 'stmt-banner';
+    txt.textContent = 'لا يوجد بيان سابق مُرسَل لهذه المدرسة — لا مقارنة تلقائية. أضف التعديلات يدوياً أو اكتب «لا يوجد تعديل».';
+  } else if (pending) {
+    banner.className = 'stmt-banner stmt-banner-warn';
+    txt.innerHTML = `قارنّا كادرك ببيان ${escapeHtml(MONTH_SHORT[STMT.prev.month] || '')} ${arDigits(STMT.prev.year)} ووجدنا ` +
+                    `${arDigits(pending)} تغييرات — أكّد سببها قبل الإرسال.`;
+  } else if (STMT.noChange) {
+    banner.className = 'stmt-banner stmt-banner-ok';
+    txt.textContent = 'مسجَّل صراحةً: لا يوجد تعديل هذا الشهر.';
+  } else {
+    banner.className = 'stmt-banner stmt-banner-ok';
+    txt.textContent = `قارنّا كادرك ببيان ${MONTH_SHORT[STMT.prev.month] || ''} ${STMT.prev.year} — لا فروق غير محسومة.`;
+  }
+  if (badge) {
+    badge.textContent = pending ? `${arDigits(pending)} بانتظار التأكيد`
+                                : STMT.noChange ? 'لا يوجد تعديل'
+                                : `${arDigits(STMT.changes.length)} مؤكَّدة`;
+    badge.className = 'stmt-badge ' + (pending ? 'stmt-badge-bad' : 'stmt-badge-ok');
+  }
+  renderStmtChangeStats();
+}
+
+// إحصائية الشعب والطلاب في ورقة التعديلات — محسوبة من القسم ٤ لا مُدخَلة
+function renderStmtChangeStats() {
+  const tbl = el('stmt-chg-stats');
+  if (!tbl) return;
+  const keys = ['استعدوا','1','2','3','4','5','6','7','8','9'];
+  const t = _stmtStudentTotals();
+  const row = (label, pick) => `<tr><td>${label}</td>` +
+    keys.map(k => `<td>${arDigits(pick(t.byKey[k]))}</td>`).join('') +
+    `<td><b>${arDigits(keys.reduce((a, k) => a + pick(t.byKey[k]), 0))}</b></td></tr>`;
+  tbl.innerHTML = `<thead><tr><th>البند</th>${keys.map(k => `<th>${escapeHtml(GRADE_LABELS[k])}</th>`).join('')}<th>المجموع</th></tr></thead>
+    <tbody>${row('عدد الشعب', r => r.sections)}
+      ${row('عدد الطلاب الذكور', r => r.enM + r.frM + r.ruM)}
+      ${row('عدد الطلاب الإناث', r => r.enF + r.frF + r.ruF)}</tbody>`;
+}
+
+// ── القسم ٩: نتائج نهاية العام ──────────────────────────────────────────────
+const STMT_YE_GRADES = ['1','2','3','4','5','6','7','8','9'];
+const STMT_YE_LEVELS = ['م1','م2','م3','م4'];
+const STMT_YE_EXAM_GRADES = ['1','2','3','4','5','6','7','8'];
+const STMT_YE_ROWS = [
+  ['total','العدد الكلي'], ['dropout','متسرب'], ['sat','متقدم'],
+  ['pass','ناجح'], ['partial','مكمل (معلقة نتيجته)'], ['fail','راسب'],
+];
+
+function renderStmtYearEndSec() {
+  const due  = _stmtYearEndDue();
+  const gate = el('stmt-ye-gate');
+  const wrap = el('stmt-ye-wrap');
+  const badge = el('stmt-ye-badge');
+  const open = !!STMT.yearEnd;
+
+  if (gate) {
+    gate.hidden = open;
+    el('stmt-ye-gate-txt').textContent = due
+      ? 'هذه الورقة مطلوبة الآن — تُملأ مرّة واحدة في نهاية العام بعد صدور نتائج الفصل الثاني.'
+      : 'ورقة موسمية غير مطلوبة هذا الشهر — تُملأ في أيار أو حزيران. يمكنك فتحها الآن إن لزم.';
+  }
+  if (badge) {
+    badge.textContent = open ? 'مُملأة' : due ? 'مطلوبة' : 'غير مطلوبة';
+    badge.className = 'stmt-badge ' + (open ? 'stmt-badge-ok' : due ? 'stmt-badge-warn' : '');
+  }
+  if (wrap) wrap.hidden = !open;
+  if (!open) return;
+
+  const ye = STMT.yearEnd;
+  const next = el('stmt-ye-next');
+  if (next) {
+    const cols = [...STMT_YE_GRADES, ...STMT_YE_LEVELS];
+    const lab = k => STMT_YE_GRADES.includes(k) ? 'الصف ' + GRADE_LABELS[k] : GRADE_LABELS[k];
+    const cell = (k, g) => `<td><input class="stmt-cell-in" type="number" min="0" inputmode="numeric"
+        data-ye-next="${k}" data-g="${g}" value="${ye.next?.[k]?.[g] ?? 0}"></td>`;
+    const tot = g => cols.reduce((a, k) => a + (Number(ye.next?.[k]?.[g]) || 0), 0);
+    next.innerHTML = `<thead><tr><th>الصف</th><th>ذكور</th><th>اناث</th><th>المجموع</th></tr></thead>
+      <tbody>${cols.map(k => {
+        const m = Number(ye.next?.[k]?.m) || 0, f = Number(ye.next?.[k]?.f) || 0;
+        return `<tr><td>${escapeHtml(lab(k))}</td>${cell(k, 'm')}${cell(k, 'f')}<td>${arDigits(m + f)}</td></tr>`;
+      }).join('')}</tbody>
+      <tfoot><tr><td>جميع الصفوف</td><td>${arDigits(tot('m'))}</td><td>${arDigits(tot('f'))}</td>
+        <td>${arDigits(tot('m') + tot('f'))}</td></tr></tfoot>`;
+  }
+
+  const exam = el('stmt-ye-exam');
+  if (exam) {
+    const val = (rk, g) => Number(ye.exam?.[rk]?.[g]) || 0;
+    exam.innerHTML = `<thead><tr><th>الصف</th>${STMT_YE_EXAM_GRADES.map(g =>
+        `<th>${escapeHtml(GRADE_LABELS[g])}</th>`).join('')}<th>المجموع</th></tr></thead>
+      <tbody>${STMT_YE_ROWS.map(([rk, lab]) => {
+        const computed = rk === 'sat';
+        return `<tr><td>${escapeHtml(lab)}${computed ? ' <span class="stmt-tag-calc">محسوب</span>' : ''}</td>` +
+          STMT_YE_EXAM_GRADES.map(g => computed
+            ? `<td>${arDigits(val('total', g) - val('dropout', g))}</td>`
+            : `<td><input class="stmt-cell-in" type="number" min="0" inputmode="numeric"
+                 data-ye-exam="${rk}" data-g="${g}" value="${val(rk, g)}"></td>`).join('') +
+          `<td><b>${arDigits(STMT_YE_EXAM_GRADES.reduce((a, g) =>
+            a + (computed ? val('total', g) - val('dropout', g) : val(rk, g)), 0))}</b></td></tr>`;
+      }).join('')}</tbody>`;
+  }
+}
+
+// ── القسم ١٠: المراجعة ──────────────────────────────────────────────────────
+function renderStmtReviewSec() {
+  const w = _stmtWorkforce();
+  const host = el('stmt-workforce');
+  if (host) host.innerHTML = [
+    ['عدد المعلمين', w.teachers, 0], ['عدد المدرسين', w.masters, 0],
+    ['عدد المدرسين المساعدين', w.assist, 0],
+    ['الجهاز التدريسي حسب الاختصاصات', w.bySpec, 0],
+    ['الجهاز التدريسي بشكل كامل', w.full, 0],
+    ['غير المصنّف', w.unclassified, 1],
+    ['كل العاملين في الجهاز الإداري', w.admin, 0],
+    ['العاملون المهنيون', w.professional, 0],
+    ['المستخدمون', w.worker, 0], ['الحراس', w.guard, 0],
+    ['مجموع العاملين في المدرسة', w.grand, 0],
+  ].map(([l, v, hi]) =>
+    `<div class="stmt-sbox${hi && v !== 0 ? ' stmt-sbox-hi' : ''}">
+      <span class="stmt-sbox-l">${escapeHtml(l)}</span><b>${arDigits(v)}</b></div>`).join('');
+  renderStmtChecklist();
+}
+
+function renderStmtChecklist() {
+  const host = el('stmt-checklist');
+  if (!host) return;
+  const items = _stmtChecklist();
+  const icon = { bad: '⛔', warn: '⚠', ok: '✓' };
+  host.innerHTML = items.map(c =>
+    `<div class="stmt-ci stmt-ci-${c.k}"><span>${icon[c.k]}</span><span>${escapeHtml(c.t)}</span>
+      ${c.go !== undefined ? `<button type="button" class="stmt-ci-go" data-go="${c.go}">اذهب</button>` : ''}</div>`).join('');
+  const btn = el('btn-submit-statement');
+  const blocked = items.some(c => c.k === 'bad');
+  const locked  = STMT.status === 'submitted' || STMT.status === 'approved';
+  if (btn) btn.disabled = blocked || locked;
+}
+
+// ── اللقطة (snapshot_data v2) ────────────────────────────────────────────────
+// مبدأ: **مُصدَّرة ذاتياً** — المُصدِّر يقرأ اللقطة وحدها ولا يستعلم من جديد،
+// فالبيان المُرسَل يُطبَع بعد سنة كما أُرسل تماماً.
+// ⚠ الحقول الشخصية (الرقم الوطني، الأم، الولادة، الهاتف، العنوان) **لا تدخل
+// هنا** — تذهب إلى monthly_statement_rosters وحده بصلاحياته (§20.7).
+function _stmtSnapshot() {
+  const t = _stmtStudentTotals();
+  const teach = _stmtTeaching();
+  const adm   = _stmtAdminCounts();
+  const sup   = _stmtSupportCounts();
+  const s     = STMT.school || {};
+  return {
+    schemaVersion: 2,
+    period: {
+      month: STMT.month, year: STMT.year,
+      deliveryDay: _stmtVal('stmt-deliver-d'),
+      deliveryMonth: _stmtVal('stmt-deliver-m'),
+      deliveryYear: _stmtVal('stmt-deliver-y'),
+      receivedBy: _stmtVal('stmt-receiver'),
+    },
+    school: {
+      name: s.name || '', formerName: _stmtVal('stmt-former-name'),
+      cycle: s.cycle || '', statisticalNumber: s.statistical_number || '',
+      ruralCurriculum: !!s.rural_curriculum,
+      educationalZone: _stmtVal('stmt-edu-zone'), village: _stmtVal('stmt-village'),
+      address: _stmtVal('stmt-address'), phone: _stmtVal('stmt-phone'),
+      dayType: _stmtVal('stmt-day-type'), sharedWith: _stmtVal('stmt-shared-with'),
+    },
+    building: Object.fromEntries([
+      ...STMT_BUILDING_FIELDS.map(([col, id]) => [col, _stmtNum(id)]),
+      ['ownership', _stmtVal('stmt-b-ownership')],
+    ]),
+    students: {
+      rows: GRADE_KEYS.map(k => ({ key: k, label: GRADE_LABELS[k], ...t.byKey[k] })),
+      totals: { sections: t.sections, enM: t.enM, enF: t.enF, frM: t.frM, frF: t.frF,
+                ruM: t.ruM, ruF: t.ruF, total: t.total },
+      byCycle: { cycle1: t.cycle1, cycle2: t.cycle2, kinder: t.kinder, secondary: t.secondary },
+    },
+    teachingStaff: {
+      buckets: teach.buckets, teachers: teach.teachers, masters: teach.masters,
+      assistants: teach.assist, bySpec: teach.bySpec, full: teach.full,
+      unclassified: teach.unclassifiedCount,
+      unclassifiedNames: teach.unclassified.map(r => r.full_name),
+    },
+    adminStaff: {
+      rows: adm.rows.map(r => ({ role: r.role, count: r.count, words: arNumWord(r.count) })),
+      total: adm.total, unmapped: adm.unmapped.map(r => r.job_title || ''),
+    },
+    workforce: _stmtWorkforce(),
+    supportCounts: sup,
+    leaves: STMT.leaves.map(l => ({
+      staffId: l.staff_id, type: l.leave_type, days: l.leave_days,
+    })),
+    changes: {
+      none: STMT.noChange,
+      items: STMT.changes.map(c => ({
+        staffId: c.staff_id, group: c.staff_group, changeType: c.change_type,
+        eventType: c.event_type, effectiveDate: c.effective_date, reason: c.reason,
+        detected: c.detected, confirmedAt: c.confirmed_at, data: c.change_data,
+      })),
+    },
+    yearEnd: STMT.yearEnd,
+    signatures: { secretary: _stmtVal('stmt-sig-secretary'), principal: _stmtVal('stmt-sig-principal') },
+    rosterIndex: _stmtRosterIndex(),
+    meta: { generatedAt: new Date().toISOString(), checklist: _stmtChecklist() },
+  };
+}
+
+// السير الذاتية الكاملة — تذهب للجدول المحمي وحده
+function _stmtRosterPayload() {
+  const out = { admin: [], teaching: [], support: [] };
+  for (const r of STMT.staff) {
+    const g = _stmtGroupOf(r);
+    const row = { id: r.id, full_name: r.full_name || '' };
+    for (const [key] of STMT_ROSTER_FIELDS[g]) row[key.replace('@', '')] = _stmtFieldVal(r, key);
+    out[g].push(row);
+  }
+  return out;
+}
+
+// ── الحفظ التلقائي ───────────────────────────────────────────────────────────
+// كل تغيير يُجدول حفظاً بعد سكون قصير، فلا نكتب على كل ضغطة مفتاح.
+function stmtQueueSave() {
+  if (STMT.loading || !STMT.id) return;
+  clearTimeout(STMT.saveTimer);
+  STMT.saveTimer = setTimeout(() => { stmtSaveNow().catch(() => {}); }, 900);
+}
+
+async function stmtSaveNow() {
+  if (!STMT.id || STMT.status === 'submitted' || STMT.status === 'approved') return;
   try {
-    const raw = localStorage.getItem(_stmtMetaKey());
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
+    await NDB.saveStatementDraft(STMT.id, _stmtSnapshot());
+  } catch (err) {
+    console.warn('[Statement] autosave', err);
+  }
 }
 
-function _stmtRestoreMeta(meta) {
-  const set = (id, val) => { const e = el(id); if (e && val !== undefined) e.value = val; };
-  set('stmt-edu-zone',     meta.eduZone);
-  set('stmt-village',      meta.village);
-  set('stmt-address',      meta.address);
-  set('stmt-phone',        meta.phone);
-  set('stmt-shared-with',  meta.sharedWith);
-  set('stmt-b-floors',     meta.bFloors);
-  set('stmt-b-ownership',  meta.bOwnership);
-  set('stmt-b-class-rooms',meta.bClassRooms);
-  set('stmt-b-admin-rooms',meta.bAdminRooms);
-  set('stmt-b-unused',     meta.bUnused);
-  set('stmt-b-basement',   meta.bBasement);
-  set('stmt-b-lab',        meta.bLab);
-  set('stmt-b-computer',   meta.bComputer);
-  set('stmt-b-library',    meta.bLibrary);
-  set('stmt-b-secretary',  meta.bSecretary);
-  set('stmt-b-gym',        meta.bGym);
-  set('stmt-b-storage',    meta.bStorage);
-  set('stmt-b-guidance',   meta.bGuidance);
-  set('stmt-b-health',     meta.bHealth);
-  set('stmt-b-workshop',   meta.bWorkshop);
-  set('stmt-b-theater',    meta.bTheater);
-  set('stmt-b-yard',       meta.bYard);
-  set('stmt-b-other',      meta.bOther);
-  if (meta.eduZone) CustomSelect.refresh(el('stmt-edu-zone'));
-  if (meta.bOwnership) CustomSelect.refresh(el('stmt-b-ownership'));
+// هوية المدرسة والبناء يُحفظان في جدوليهما لا في اللقطة — فهما ثابتان
+// عبر الأشهر، وهذا ما يقتل الاعتماد على localStorage.
+async function stmtSaveSchoolProfile() {
+  if (!S.school?.id) return;
+  const patch = {
+    former_name:      _stmtVal('stmt-former-name') || null,
+    village:          _stmtVal('stmt-village') || null,
+    address:          _stmtVal('stmt-address') || null,
+    phone:            _stmtVal('stmt-phone') || null,
+    shared_with:      _stmtVal('stmt-shared-with') || null,
+    educational_zone: _stmtVal('stmt-edu-zone') || null,
+    day_type:         _stmtVal('stmt-day-type') || null,
+  };
+  await NDB.saveSchoolProfile(S.school.id, patch);
+  STMT.school = { ...(STMT.school || {}), ...patch };
 }
+
+async function stmtSaveBuilding() {
+  if (!S.school?.id) return;
+  const patch = Object.fromEntries(STMT_BUILDING_FIELDS.map(([col, id]) => [col, _stmtNum(id)]));
+  patch.ownership = _stmtVal('stmt-b-ownership') || null;
+  STMT.building = await NDB.saveSchoolBuilding(S.school.id, patch);
+}
+
+// ── التحميل ──────────────────────────────────────────────────────────────────
+
+function _stmtSeedStudents() {
+  // الشعب والأعداد من سجلّ الطلاب، وتوزيع اللغة من classes.foreign_language
+  const seeded = {};
+  const claimed = new Set();
+  for (const key of GRADE_KEYS) {
+    const row = { sections: 0, enM: 0, enF: 0, frM: 0, frF: 0, ruM: 0, ruF: 0 };
+    for (const dbGrade of GRADE_KEY_MAP[key]) {
+      const g = STMT.stuStats[dbGrade];
+      if (!g) continue;
+      claimed.add(dbGrade);
+      row.sections += g.sections;
+      for (const [lang, v] of Object.entries(g.lang || {})) {
+        if (lang === 'فرنسي')      { row.frM += v.m; row.frF += v.f; }
+        else if (lang === 'روسي')  { row.ruM += v.m; row.ruF += v.f; }
+        else                       { row.enM += v.m; row.enF += v.f; }
+      }
+    }
+    seeded[key] = row;
+  }
+  // صفوف لم يطابق اسمها أي مفتاح — لا تُسقَط بصمت
+  STMT.unclaimed = Object.entries(STMT.stuStats)
+    .filter(([g]) => !claimed.has(g))
+    .map(([g, v]) => ({ grade: g, ...v }));
+  return seeded;
+}
+
+async function loadStatementPeriod() {
+  const school = S.school;
+  if (!school?.id) return;
+  STMT.loading = true;
+  const errEl = el('stmt-error');
+  if (errEl) errEl.hidden = true;
+
+  try {
+    STMT.month = parseInt(el('stmt-month-sel')?.value || '1', 10);
+    STMT.year  = parseInt(el('stmt-year-in')?.value || String(new Date().getFullYear()), 10);
+
+    const [row, profile, building, staff, leaves, stats, prev] = await Promise.all([
+      NDB.ensureDraftStatement(school.id, STMT.month, STMT.year),
+      NDB.getSchoolProfile(school.id),
+      NDB.getSchoolBuilding(school.id),
+      NDB.getStaffRecords(school.id),
+      NDB.getStaffLeaves(school.id, STMT.month, STMT.year),
+      NDB.getSchoolStudentStats(school.id),
+      NDB.getPreviousStatementSnapshot(school.id, STMT.month, STMT.year),
+    ]);
+
+    STMT.id       = row.id;
+    STMT.status   = row.status;
+    STMT.notes    = row.notes;
+    STMT.school   = profile || school;
+    STMT.building = building;
+    STMT.staff    = staff;
+    STMT.leaves   = leaves;
+    STMT.stuStats = stats;
+    STMT.prev     = prev;
+    STMT.changes  = await NDB.getStatementChanges(row.id);
+
+    const snap = row.snapshot_data && row.snapshot_data.schemaVersion === 2 ? row.snapshot_data : null;
+
+    // الأعداد تُبذَر من سجلّ الطلاب، ثم تُغلَّب تعديلات المسودة المحفوظة.
+    STMT.students = _stmtSeedStudents();
+    if (snap?.students?.rows) {
+      for (const r of snap.students.rows) {
+        if (STMT.students[r.key]) {
+          STMT.students[r.key] = {
+            sections: r.sections | 0, enM: r.enM | 0, enF: r.enF | 0,
+            frM: r.frM | 0, frF: r.frF | 0, ruM: r.ruM | 0, ruF: r.ruF | 0,
+          };
+        }
+      }
+    }
+    STMT.adminOverride = {};
+    if (snap?.adminStaff?.rows) for (const r of snap.adminStaff.rows) STMT.adminOverride[r.role] = r.count;
+    STMT.teachFull = snap?.teachingStaff?.full ?? null;
+    STMT.yearEnd   = snap?.yearEnd || null;
+    STMT.noChange  = !!snap?.changes?.none;
+
+    _stmtSet('stmt-deliver-d', snap?.period?.deliveryDay || '');
+    _stmtSet('stmt-deliver-m', snap?.period?.deliveryMonth || '');
+    _stmtSet('stmt-deliver-y', snap?.period?.deliveryYear || '');
+    _stmtSet('stmt-receiver',  snap?.period?.receivedBy || '');
+    _stmtSet('stmt-sig-secretary', snap?.signatures?.secretary || '');
+    _stmtSet('stmt-sig-principal', snap?.signatures?.principal || '');
+
+    renderStmtHeaderSec();
+    renderStmtSchoolSec();
+    renderStmtBuildingSec();
+    renderStmtStudentsSec();
+    renderStmtTeachingSec();
+    renderStmtAdminSec();
+    renderStmtRosters();
+    renderStmtChangesSec();
+    renderStmtYearEndSec();
+    renderStmtReviewSec();
+    _renderStatementStatus(row);
+    stmtRefreshMeta();
+  } catch (err) {
+    console.error('[Statement] load', err);
+    if (errEl) { errEl.textContent = 'تعذّر تحميل البيان — ' + (err?.message || err); errEl.hidden = false; }
+  } finally {
+    STMT.loading = false;
+  }
+}
+
+// شارة الحالة في الشريط + لافتة الحالة + قفل زر الإرسال
+function _renderStatementStatus(st) {
+  const status = st?.status || 'draft';
+  STMT.status = status;
+  const map = {
+    draft:     { cls: '',             chip: 'مسودة',   b: 'stmt-status--draft',     t: 'مسودة محفوظة — لم تُرسَل بعد.' },
+    submitted: { cls: 'is-sent',      chip: 'مُرسَل',   b: 'stmt-status--submitted', t: 'مُرسَل للمديرية — بانتظار المراجعة.' },
+    approved:  { cls: 'is-approved',  chip: 'معتمد',   b: 'stmt-status--approved',  t: 'معتمد من المديرية ✓' },
+    rejected:  { cls: 'is-rejected',  chip: 'مرفوض',   b: 'stmt-status--rejected',  t: 'رُفض من المديرية' + (st?.notes ? ' — ' + st.notes : '') },
+  };
+  const m = map[status] || map.draft;
+  const chip = el('stmt-state');
+  if (chip) { chip.className = 'stmt-state ' + m.cls; el('stmt-state-txt').textContent = m.chip; }
+  const banner = el('stmt-status-banner');
+  if (banner) {
+    banner.className = 'stmt-status-banner ' + m.b;
+    banner.textContent = m.t;
+    banner.hidden = (status === 'draft');
+  }
+  const lbl = el('btn-submit-label');
+  if (lbl) lbl.textContent = status === 'rejected' ? 'إعادة الإرسال للمديرية' : 'إرسال للمديرية';
+}
+
+// ── التهيئة والتفاعل ─────────────────────────────────────────────────────────
 
 async function initStatementTab() {
   _statementLoaded = true;
-  // Set default year to current
+
   const yearIn = el('stmt-year-in');
   if (yearIn && !yearIn.value) yearIn.value = new Date().getFullYear();
-  // Restore saved meta
-  _stmtRestoreMeta(_stmtLoadMeta());
-  // Populate educational zone lookup
+  // البيان يُسلَّم عن الشهر الذي انتهى، فالافتراضي هو الشهر الماضي. لا يمكن
+  // الاعتماد على !monthSel.value: عنصر select بلا selected يعيد قيمة أول خيار.
+  const monthSel = el('stmt-month-sel');
+  if (monthSel && !STMT._periodInit) {
+    STMT._periodInit = true;
+    const now = new Date();
+    monthSel.value = String(now.getMonth() === 0 ? 12 : now.getMonth());
+    if (yearIn) yearIn.value = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+    CustomSelect.refresh(monthSel);
+  }
+
+  // الشريط اللاصق يجب أن يقف تحت شريط التبويبات لا فوقه.
+  _stmtSyncStickyOffsets();
+  window.addEventListener('resize', _stmtSyncStickyOffsets);
+
   const zoneEl = el('stmt-edu-zone');
   if (zoneEl) {
     try {
       const zones = await getLookup('educational_zone');
       const cur = zoneEl.value;
       zoneEl.innerHTML = '<option value="">— اختر —</option>' +
-        zones.map(z => `<option value="${escapeHtml(z)}"${z===cur?' selected':''}>${escapeHtml(z)}</option>`).join('');
+        zones.map(z => `<option value="${escapeHtml(z)}"${z === cur ? ' selected' : ''}>${escapeHtml(z)}</option>`).join('');
       CustomSelect.refresh(zoneEl);
     } catch { /* non-fatal */ }
   }
-  el('btn-gen-statement')?.addEventListener('click', generateStatementPreview);
+
+  renderStmtPagers();
+  _stmtWire();
+  await loadStatementPeriod();
+  stmtGo(0);
+}
+
+function _stmtSyncStickyOffsets() {
+  const bar = document.querySelector('.tabbar');
+  const period = el('stmt-period');
+  const root = document.documentElement;
+  if (bar) root.style.setProperty('--stmt-top', bar.offsetHeight + 'px');
+  if (period) root.style.setProperty('--stmt-period-h', period.offsetHeight + 'px');
+}
+
+let _stmtWired = false;
+function _stmtWire() {
+  if (_stmtWired) return;
+  _stmtWired = true;
+  const view = el('view-statement');
+  if (!view) return;
+
+  // تغيير الفترة يعيد التحميل بالكامل — كل شيء مرتبط بها.
+  el('stmt-month-sel')?.addEventListener('change', () => { loadStatementPeriod(); stmtGo(STMT.sec); });
+  el('stmt-year-in')?.addEventListener('change',   () => { loadStatementPeriod(); stmtGo(STMT.sec); });
+
+  // التنقّل — زرّ واحد يخدم الشريط والفهرس وقائمة التحقّق والصفحات.
+  document.addEventListener('click', (e) => {
+    const go = e.target.closest('[data-go]');
+    if (!go) return;
+    if (!go.closest('#view-statement') && !go.closest('#modal-stmt-index')) return;
+    stmtGo(Number(go.dataset.go));
+    const idx = el('modal-stmt-index');
+    if (idx && !idx.hidden) { idx.hidden = true; document.body.style.overflow = ''; }
+  });
+
+  el('btn-stmt-index')?.addEventListener('click', () => {
+    renderStmtIndex();
+    const m = el('modal-stmt-index');
+    if (m) { m.hidden = false; document.body.style.overflow = 'hidden'; }
+  });
+  el('btn-close-stmt-index')?.addEventListener('click', () => {
+    const m = el('modal-stmt-index');
+    if (m) { m.hidden = true; document.body.style.overflow = ''; }
+  });
+
+  // القسم ٢ + ٣: كل تغيير يُحفظ في جدوله ثم في اللقطة
+  ['stmt-former-name','stmt-village','stmt-address','stmt-phone','stmt-shared-with']
+    .forEach(id => el(id)?.addEventListener('input', () => {
+      stmtQueueSave(); clearTimeout(STMT.profTimer);
+      STMT.profTimer = setTimeout(() => stmtSaveSchoolProfile().catch(() => {}), 1200);
+      stmtRefreshMeta();
+    }));
+  ['stmt-edu-zone','stmt-day-type'].forEach(id => el(id)?.addEventListener('change', () => {
+    stmtSaveSchoolProfile().catch(() => {}); stmtQueueSave(); stmtRefreshMeta();
+  }));
+
+  const buildingIds = STMT_BUILDING_FIELDS.map(([, id]) => id);
+  buildingIds.forEach(id => el(id)?.addEventListener('input', () => {
+    renderStmtBuildingTotal(); stmtQueueSave(); stmtRefreshMeta();
+    clearTimeout(STMT.bldTimer);
+    STMT.bldTimer = setTimeout(() => stmtSaveBuilding().catch(() => {}), 1200);
+  }));
+  el('stmt-b-ownership')?.addEventListener('change', () => {
+    stmtSaveBuilding().catch(() => {}); stmtQueueSave(); stmtRefreshMeta();
+  });
+  el('btn-stmt-building-same')?.addEventListener('click', async () => {
+    await stmtSaveBuilding().catch(() => {});
+    toast('تم تأكيد بيانات البناء دون تغيير ✓', 'success');
+    stmtRefreshMeta();
+  });
+
+  // القسم ١ + ١٠: حقول نصّية بسيطة
+  ['stmt-deliver-d','stmt-deliver-m','stmt-deliver-y','stmt-receiver',
+   'stmt-sig-secretary','stmt-sig-principal']
+    .forEach(id => el(id)?.addEventListener('input', () => { stmtQueueSave(); stmtRefreshMeta(); }));
+
+  // القسم ٤: بطاقات الصفوف والجدول — مصدر واحد في STMT.students
+  view.addEventListener('input', (e) => {
+    const t = e.target;
+    if (t.dataset?.stu) {
+      const row = STMT.students[t.dataset.stu];
+      if (row) {
+        row[t.dataset.col] = Math.max(0, parseInt(t.value || '0', 10) || 0);
+        _stmtUpdateStudentEcho(t.dataset.stu);
+        stmtQueueSave(); stmtRefreshMeta();
+      }
+      return;
+    }
+    if (t.dataset?.adm) {
+      STMT.adminOverride[t.dataset.adm] = Math.max(0, parseInt(t.value || '0', 10) || 0);
+      _stmtUpdateAdminEcho(t);
+      stmtQueueSave(); stmtRefreshMeta();
+      return;
+    }
+    if (t.dataset?.yeNext || t.dataset?.yeExam) {
+      _stmtApplyYearEndInput(t);
+      stmtQueueSave(); stmtRefreshMeta();
+    }
+  });
+  // الحقول المحسوبة تُعاد كتابتها عند مغادرة الحقل لا على كل ضغطة، وإلا قفز
+  // مؤشّر الكتابة داخل الخانة التي يحرّرها المستخدم.
+  view.addEventListener('change', (e) => {
+    if (e.target.dataset?.stu) renderStmtStudentsSec();
+    if (e.target.dataset?.adm) renderStmtAdminSec();
+    if (e.target.dataset?.yeNext || e.target.dataset?.yeExam) renderStmtYearEndSec();
+  });
+  window.addEventListener('resize', () => {
+    const wide = _stmtWide();
+    if (wide !== STMT._wasWide) { STMT._wasWide = wide; renderStmtStudentsSec(); }
+  });
+  STMT._wasWide = _stmtWide();
+
+  // القسم ٥: تصنيف غير المصنّفين
+  el('btn-stmt-classify')?.addEventListener('click', openStmtClassify);
+  el('btn-close-stmt-classify')?.addEventListener('click', () => {
+    const m = el('modal-stmt-classify');
+    if (m) { m.hidden = true; document.body.style.overflow = ''; }
+  });
+
+  // القسم ٧: البحث، الفلتر، المُقسِّم، فتح البطاقة، التعديل
+  el('stmt-ros-q')?.addEventListener('input', (e) => { STMT.rosQ = e.target.value; renderStmtRosters(); });
+  el('stmt-ros-miss')?.addEventListener('change', (e) => { STMT.rosMiss = e.target.checked; renderStmtRosters(); });
+  view.addEventListener('click', (e) => {
+    const seg = e.target.closest('.stmt-seg [data-ros]');
+    if (seg) { STMT.rosG = seg.dataset.ros; renderStmtRosters(); return; }
+
+    const cv = e.target.closest('[data-cv]');
+    if (cv) {
+      const card = cv.parentNode;
+      const open = card.dataset.open === '1';
+      card.dataset.open = open ? '0' : '1';
+      card.querySelector('.stmt-cvb').hidden = open;
+      return;
+    }
+    const edit = e.target.closest('[data-cv-edit]');
+    if (edit) { _stmtOpenStaffRecord(edit.dataset.cvEdit); return; }
+  });
+  el('btn-stmt-open-registry')?.addEventListener('click', () => switchTab('registry'));
+
+  // القسم ٨
+  el('btn-stmt-add-change')?.addEventListener('click', () => openStmtChangeModal(null));
+  el('btn-stmt-no-change')?.addEventListener('click', stmtMarkNoChange);
+  el('btn-close-stmt-change')?.addEventListener('click', closeStmtChangeModal);
+  el('btn-save-stmt-change')?.addEventListener('click', saveStmtChange);
+  view.addEventListener('click', (e) => {
+    const ok = e.target.closest('[data-sug-ok]');
+    if (ok) { _stmtConfirmSuggestion(ok.dataset.sugOk, ok.dataset.sugType); return; }
+    const skip = e.target.closest('[data-sug-skip]');
+    if (skip) { _stmtSkipSuggestion(skip.dataset.sugSkip, skip.dataset.sugType); return; }
+    const ed = e.target.closest('[data-chg-edit]');
+    if (ed) { openStmtChangeModal(STMT.changes.find(c => c.id === ed.dataset.chgEdit)); return; }
+    const del = e.target.closest('[data-chg-del]');
+    if (del) { _stmtDeleteChange(del.dataset.chgDel); return; }
+  });
+
+  // القسم ٩
+  el('btn-stmt-ye-fill')?.addEventListener('click', () => {
+    STMT.yearEnd = STMT.yearEnd || { next: {}, exam: {} };
+    renderStmtYearEndSec(); stmtQueueSave(); stmtRefreshMeta();
+  });
+
   el('btn-print-statement')?.addEventListener('click', printStatement);
   el('btn-export-excel')?.addEventListener('click', exportStatementExcel);
   el('btn-submit-statement')?.addEventListener('click', submitStatement);
+
+  // الحفظ المعلّق يُنجَز قبل مغادرة الصفحة
+  window.addEventListener('pagehide', () => { if (STMT.saveTimer) stmtSaveNow(); });
 }
 
-// Render submission status banner + toggle submit button enabled/disabled
-function _renderStatementStatus(st) {
-  const banner = el('stmt-status-banner');
-  const btn    = el('btn-submit-statement');
-  const status = st?.status || 'none';
-  const map = {
-    none:      { cls: 'stmt-status--draft',     txt: 'لم يُرسَل بعد — يمكنك الإرسال للمديرية.' },
-    draft:     { cls: 'stmt-status--draft',     txt: 'مسودة محفوظة — لم تُرسَل بعد.' },
-    submitted: { cls: 'stmt-status--submitted', txt: 'مُرسَل للمديرية — بانتظار المراجعة.' },
-    approved:  { cls: 'stmt-status--approved',  txt: 'معتمد من المديرية ✓' },
-    rejected:  { cls: 'stmt-status--rejected',  txt: 'رُفض من المديرية' + (st?.notes ? ' — ' + st.notes : '') },
-  };
-  const m = map[status] || map.none;
-  if (banner) {
-    banner.className = 'stmt-status-banner ' + m.cls;
-    banner.textContent = m.txt;
-    banner.hidden = false;
-  }
-  if (btn) {
-    const locked = (status === 'submitted' || status === 'approved');
-    btn.disabled = locked;
-    const lbl = el('btn-submit-label');
-    if (lbl) lbl.textContent = status === 'rejected' ? 'إعادة الإرسال للمديرية' : 'إرسال للمديرية';
+// تحديث الأرقام المشتقّة داخل بطاقة الصف دون إعادة رسم الحقل الذي يُحرَّر
+function _stmtUpdateStudentEcho(key) {
+  const t = _stmtStudentTotals();
+  const card = document.querySelector(`[data-stu-open="${key}"] .stmt-gcard-s`);
+  if (card) card.textContent = `${arDigits(t.byKey[key].sections)} شعبة · ${arDigits(t.byKey[key].total)} طالب`;
+  const badge = el('stmt-stu-badge');
+  if (badge) badge.textContent = `${arDigits(t.sections)} شعبة · ${arDigits(t.total)} طالب`;
+}
+
+function _stmtUpdateAdminEcho(input) {
+  const cell = input.closest('tr')?.children?.[2];
+  if (cell) cell.textContent = arNumWord(Math.max(0, parseInt(input.value || '0', 10) || 0));
+}
+
+function _stmtApplyYearEndInput(t) {
+  STMT.yearEnd ??= { next: {}, exam: {} };
+  const v = Math.max(0, parseInt(t.value || '0', 10) || 0);
+  if (t.dataset.yeNext) {
+    (STMT.yearEnd.next[t.dataset.yeNext] ??= {})[t.dataset.g] = v;
+  } else {
+    (STMT.yearEnd.exam[t.dataset.yeExam] ??= {})[t.dataset.g] = v;
   }
 }
 
-// Collect a JSONB snapshot from the current (possibly hand-edited) preview
-function _collectStatementSnapshot(d) {
-  const students = [];
-  const stuBody = el('stmt-students-body');
-  if (stuBody) {
-    for (const row of stuBody.querySelectorAll('tr[data-grade-key]')) {
-      const cells = row.querySelectorAll('.stmt-num');
-      const n = i => parseInt(cells[i]?.textContent || '0', 10) || 0;
-      students.push({
-        key: row.dataset.gradeKey,
-        sections: n(0), enM: n(1), enF: n(2),
-        frM: n(3), frF: n(4), ruM: n(5), ruF: n(6),
+// يفتح نافذة سجل الكوادر القائمة على هذا الشخص — مسار كتابة واحد فقط.
+function _stmtOpenStaffRecord(id) {
+  const rec = STMT.staff.find(r => r.id === id);
+  if (!rec) return;
+  _regSegment = rec.staff_type === 'admin' ? 'admin'
+              : rec.staff_type === 'teaching' ? 'teaching' : 'support';
+  openStaffRecModal(rec);
+}
+
+// ── التعديلات الطارئة: تأكيد، إضافة، حذف ────────────────────────────────────
+
+function openStmtChangeModal(chg) {
+  STMT.chgEditId = chg?.id || null;
+  const d = chg?.change_data || {};
+  el('stmt-chg-title').textContent = chg ? 'تعديل سطر' : 'إضافة تعديل يدوي';
+  _stmtSet('stmt-chg-name',  d.name || '');
+  _stmtSet('stmt-chg-job',   d.job  || '');
+  _stmtSet('stmt-chg-group', chg?.staff_group || 'admin');
+  _stmtSet('stmt-chg-event', chg?.event_type || '');
+  _stmtSet('stmt-chg-reason', chg?.reason || '');
+  const [y, m, dd] = String(chg?.effective_date || '').split('-');
+  _stmtSet('stmt-chg-year',  y || String(STMT.year));
+  _stmtSet('stmt-chg-month', m ? String(Number(m)) : String(STMT.month));
+  _stmtSet('stmt-chg-day',   dd ? String(Number(dd)) : '');
+  STMT.chgPending = chg ? null : STMT.chgPending;
+  CustomSelect.refresh(el('stmt-chg-group'));
+  CustomSelect.refresh(el('stmt-chg-event'));
+  el('stmt-chg-error').hidden = true;
+  const m2 = el('modal-stmt-change');
+  if (m2) { m2.hidden = false; document.body.style.overflow = 'hidden'; }
+}
+
+function closeStmtChangeModal() {
+  const m = el('modal-stmt-change');
+  if (m) { m.hidden = true; document.body.style.overflow = ''; }
+  STMT.chgEditId = null;
+  STMT.chgPending = null;
+}
+
+// تأكيد اقتراح مكتشَف: نفتح النافذة نفسها مملوءة، فالمدير يختار **السبب**.
+function _stmtConfirmSuggestion(staffId, changeType) {
+  const sug = _stmtDetectChanges().find(s => s.staff_id === staffId && s.change_type === changeType);
+  if (!sug) return;
+  STMT.chgPending = { staff_id: staffId, change_type: changeType, detected: true };
+  openStmtChangeModal(null);
+  _stmtSet('stmt-chg-name',  sug.name || '');
+  _stmtSet('stmt-chg-job',   sug.job  || '');
+  _stmtSet('stmt-chg-group', sug.group || 'admin');
+  // اقتراح افتراضي للسبب حسب نوع التغيير — والمدير يبقى صاحب القرار.
+  _stmtSet('stmt-chg-event', changeType === 'added' ? 'مباشرة' : '');
+  CustomSelect.refresh(el('stmt-chg-group'));
+  CustomSelect.refresh(el('stmt-chg-event'));
+}
+
+// «تجاهل» يُسجَّل سطراً بـ event_type='أخرى' لا يُحذف بصمت — البيان وثيقة،
+// وتجاهل تغيير حقيقي بلا أثر يجعل الشهر القادم يكتشفه من جديد إلى الأبد.
+async function _stmtSkipSuggestion(staffId, changeType) {
+  if (!await askConfirm('تجاهل هذا التغيير؟ سيُسجَّل في البيان بوصفه «أخرى» بلا سبب محدَّد.', 'تجاهل')) return;
+  const sug = _stmtDetectChanges().find(s => s.staff_id === staffId && s.change_type === changeType);
+  try {
+    const row = await NDB.upsertStatementChange({
+      statement_id: STMT.id, school_id: S.school.id,
+      change_type: changeType, staff_id: staffId,
+      staff_group: sug?.group || null, event_type: 'أخرى',
+      change_data: { name: sug?.name || '', job: sug?.job || '' },
+      reason: 'تُجوهل من المدير', detected: true,
+      confirmed_at: new Date().toISOString(),
+    });
+    STMT.changes.push(row);
+    STMT.noChange = false;
+    renderStmtChangesSec(); stmtQueueSave(); stmtRefreshMeta();
+  } catch (err) {
+    console.error('[Statement] skip suggestion', err);
+    toast('تعذّر حفظ التجاهل — ' + (err?.message || err), 'error');
+  }
+}
+
+async function saveStmtChange() {
+  const errEl = el('stmt-chg-error');
+  const spin  = el('stmt-chg-spinner');
+  const name  = _stmtVal('stmt-chg-name');
+  const event = _stmtVal('stmt-chg-event');
+  if (!name)  { errEl.textContent = 'الاسم مطلوب'; errEl.hidden = false; return; }
+  if (!event) { errEl.textContent = 'نوع الحدث مطلوب — النظام لا يعرف السبب، وهو عمود في الورقة الرسمية'; errEl.hidden = false; return; }
+  errEl.hidden = true;
+  if (spin) spin.hidden = false;
+
+  const d = _stmtNum('stmt-chg-day'), m = _stmtNum('stmt-chg-month'), y = _stmtNum('stmt-chg-year');
+  const eff = (d && m && y) ? `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}` : null;
+  const pend = STMT.chgPending;
+
+  try {
+    const payload = {
+      statement_id: STMT.id, school_id: S.school.id,
+      change_type: pend?.change_type
+        || STMT.changes.find(c => c.id === STMT.chgEditId)?.change_type
+        || (event === 'مباشرة' ? 'added' : 'removed'),
+      staff_id: pend?.staff_id || STMT.changes.find(c => c.id === STMT.chgEditId)?.staff_id || null,
+      staff_group: _stmtVal('stmt-chg-group'),
+      event_type: event,
+      change_data: { name, job: _stmtVal('stmt-chg-job') },
+      reason: _stmtVal('stmt-chg-reason') || null,
+      effective_date: eff,
+      detected: !!pend?.detected || !!STMT.changes.find(c => c.id === STMT.chgEditId)?.detected,
+      confirmed_at: new Date().toISOString(),
+    };
+    if (STMT.chgEditId) payload.id = STMT.chgEditId;
+    const row = await NDB.upsertStatementChange(payload);
+    const i = STMT.changes.findIndex(c => c.id === row.id);
+    if (i >= 0) STMT.changes[i] = row; else STMT.changes.push(row);
+    STMT.noChange = false;
+    closeStmtChangeModal();
+    renderStmtChangesSec(); stmtQueueSave(); stmtRefreshMeta();
+    toast('حُفظ التعديل ✓', 'success');
+  } catch (err) {
+    console.error('[Statement] save change', err);
+    errEl.textContent = 'تعذّر الحفظ — ' + (err?.message || err);
+    errEl.hidden = false;
+  } finally {
+    if (spin) spin.hidden = true;
+  }
+}
+
+async function _stmtDeleteChange(id) {
+  if (!await askConfirm('حذف هذا السطر من التعديلات الطارئة؟', 'حذف')) return;
+  try {
+    await NDB.deleteStatementChange(id);
+    STMT.changes = STMT.changes.filter(c => c.id !== id);
+    renderStmtChangesSec(); stmtQueueSave(); stmtRefreshMeta();
+  } catch (err) {
+    console.error('[Statement] delete change', err);
+    toast('تعذّر الحذف — ' + (err?.message || err), 'error');
+  }
+}
+
+// النموذج ينصّ: «في حال لايوجد تعديلات نكتب داخلها لايوجد تعديل» — فنكتبها
+// صراحةً بدل ترك الورقة فارغة، ليصير «لم يحدث شيء» أمراً موثَّقاً.
+async function stmtMarkNoChange() {
+  const pending = _stmtDetectChanges().length;
+  if (pending) {
+    toast('هناك تغييرات مكتشفة — أكّدها أو تجاهلها أولاً', 'error');
+    stmtGo(7);
+    return;
+  }
+  if (STMT.changes.length) {
+    if (!await askConfirm('يوجد تعديلات مسجّلة — هل تريد تعليم الشهر بـ«لا يوجد تعديل» رغم ذلك؟', 'متابعة')) return;
+  }
+  STMT.noChange = true;
+  renderStmtChangesSec(); stmtQueueSave(); stmtRefreshMeta();
+  toast('سُجّل صراحةً: لا يوجد تعديل هذا الشهر ✓', 'success');
+}
+
+// ── تصنيف الجهاز التدريسي غير المصنّف ───────────────────────────────────────
+function openStmtClassify() {
+  const list = el('stmt-classify-list');
+  const t = _stmtTeaching();
+  if (list) {
+    list.innerHTML = t.unclassified.map(r => `<div class="stmt-prow">
+      <span class="stmt-prow-n">${escapeHtml(r.full_name || '—')}</span>
+      <span class="stmt-prow-sp"></span>
+      <select class="stmt-fld" data-rank="${escapeHtml(r.id)}" style="width:auto">
+        <option value="">— اختر —</option>
+        <option value="معلم">معلم</option>
+        <option value="مدرس">مدرس</option>
+        <option value="مدرس مساعد">مدرس مساعد</option>
+      </select></div>`).join('') ||
+      '<div class="stmt-prow stmt-prow-empty">لا كوادر غير مصنّفين</div>';
+    list.querySelectorAll('[data-rank]').forEach(sel => {
+      sel.addEventListener('change', async () => {
+        if (!sel.value) return;
+        sel.disabled = true;
+        try {
+          await NDB.updateStaffRecord(sel.dataset.rank, { teaching_rank: sel.value });
+          const rec = STMT.staff.find(r => r.id === sel.dataset.rank);
+          if (rec) rec.teaching_rank = sel.value;
+          renderStmtTeachingSec(); renderStmtReviewSec(); stmtQueueSave(); stmtRefreshMeta();
+          toast('حُفظ التصنيف ✓', 'success');
+          openStmtClassify();
+        } catch (err) {
+          console.error('[Statement] classify', err);
+          el('stmt-classify-error').textContent = 'تعذّر الحفظ — ' + (err?.message || err);
+          el('stmt-classify-error').hidden = false;
+          sel.disabled = false;
+        }
       });
-    }
+    });
   }
-  return {
-    month: d.month, year: d.year,
-    schoolName: d.school.name || '',
-    statisticalNumber: d.school.statistical_number || '',
-    cycle: d.school.cycle || '',
-    students,
-    adminByRole: d.adminByRole,
-    staffCounts: d.staffCounts,
-    leaveLines: d.leaveLines,
-    generatedAt: new Date().toISOString(),
-  };
+  const m = el('modal-stmt-classify');
+  if (m) { m.hidden = false; document.body.style.overflow = 'hidden'; }
 }
 
+// ── الإرسال ──────────────────────────────────────────────────────────────────
 async function submitStatement() {
   const btn     = el('btn-submit-statement');
   const label   = el('btn-submit-label');
   const spinner = el('stmt-submit-spinner');
-  const errEl   = el('stmt-preview-error');
+  const errEl   = el('stmt-error');
+  const blocks  = _stmtChecklist().filter(c => c.k === 'bad');
+  if (blocks.length) {
+    toast('لا يمكن الإرسال — راجع قائمة التحقّق', 'error');
+    stmtGo(9);
+    return;
+  }
   if (!await askConfirm('إرسال البيان للمديرية؟ لن يمكن تعديله حتى تُراجعه المديرية.', 'إرسال')) return;
   if (btn) btn.disabled = true;
   if (label) label.textContent = 'جارٍ الإرسال...';
   if (spinner) spinner.hidden = false;
-  hide(errEl);
+  if (errEl) errEl.hidden = true;
   try {
-    const d = await buildStatementData();
-    const snapshot = _collectStatementSnapshot(d);
-    await NDB.submitMonthlyStatement(d.school.id, d.month, d.year, snapshot);
+    clearTimeout(STMT.saveTimer);
+    await stmtSaveSchoolProfile().catch(() => {});
+    await stmtSaveBuilding().catch(() => {});
+    // السير الذاتية الكاملة تُكتب قبل قلب الحالة: سياسة المديرية تقرأ
+    // الجدول بعد status='submitted'، والكتابة بعده تصطدم بقفل التعديل.
+    await NDB.saveStatementRosters(STMT.id, S.school.id, _stmtRosterPayload());
+    await NDB.submitMonthlyStatement(S.school.id, STMT.month, STMT.year, _stmtSnapshot());
     toast('أُرسل البيان للمديرية ✓', 'success');
-    const st = await NDB.getMonthlyStatement(d.school.id, d.month, d.year);
-    if (spinner) spinner.hidden = true;
-    if (label) label.textContent = 'إرسال للمديرية';
-    _renderStatementStatus(st);   // locks the button (status now 'submitted')
+    const st = await NDB.getMonthlyStatement(S.school.id, STMT.month, STMT.year);
+    _renderStatementStatus(st);
+    stmtRefreshMeta();
   } catch (err) {
     console.error('[Statement] submit', err);
-    if (errEl) { errEl.textContent = 'تعذّر إرسال البيان — ' + (err?.message || err); show(errEl); }
+    if (errEl) { errEl.textContent = 'تعذّر إرسال البيان — ' + (err?.message || err); errEl.hidden = false; }
+    if (btn) btn.disabled = false;
+  } finally {
     if (spinner) spinner.hidden = true;
     if (label) label.textContent = 'إرسال للمديرية';
-    if (btn) btn.disabled = false;  // failed → allow retry
   }
 }
 
-async function buildStatementData() {
-  const month  = parseInt(el('stmt-month-sel')?.value || '1', 10);
-  const year   = parseInt(el('stmt-year-in')?.value || new Date().getFullYear(), 10);
-  const meta   = _stmtSaveMeta();
-  const school = S.school;
-
-  const [stuStats, staffRecs, staffLeaves] = await Promise.all([
-    NDB.getSchoolStudentStats(school.id),
-    NDB.getStaffRecords(school.id),
-    NDB.getStaffLeaves(school.id, month, year),
-  ]);
-
-  // Build admin role counts
-  const adminByRole = {};
-  for (const r of (staffRecs || [])) {
-    if (r.staff_type !== 'admin') continue;
-    const role = r.job_title || 'غير محدد';
-    adminByRole[role] = (adminByRole[role] || 0) + 1;
-  }
-
-  // Staff type counts
-  const staffCounts = { admin: 0, teaching: 0, professional: 0, worker: 0, guard: 0 };
-  for (const r of (staffRecs || [])) {
-    if (r.staff_type === 'admin') staffCounts.admin++;
-    else if (r.staff_type === 'teaching') staffCounts.teaching++;
-    else if (r.staff_type === 'support') {
-      const jt = r.job_title || '';
-      if (jt === 'مستخدم') staffCounts.worker++;
-      else if (jt === 'حارس') staffCounts.guard++;
-      else staffCounts.professional++;
-    }
-  }
-
-  // Teaching counts by specialization category
-  const teachBySpec = {};
-  for (const r of (staffRecs || [])) {
-    if (r.staff_type !== 'teaching') continue;
-    const sp = r.specialization || 'غير محدد';
-    teachBySpec[sp] = (teachBySpec[sp] || 0) + 1;
-  }
-
-  // Leaves: merge by staff_id
-  const leavesMap = {};
-  for (const lv of (staffLeaves || [])) {
-    if (!leavesMap[lv.staff_id]) leavesMap[lv.staff_id] = [];
-    leavesMap[lv.staff_id].push(`${lv.leave_type} ${lv.days}`);
-  }
-  // Enrich with staff name
-  const staffById = {};
-  for (const r of (staffRecs || [])) staffById[r.id] = r;
-  const leaveLines = Object.entries(leavesMap).map(([sid, parts]) => {
-    const name = staffById[sid]?.full_name || '—';
-    return `${name}: ${parts.join(' + ')}`;
-  });
-
-  return { month, year, meta, school, stuStats, staffRecs,
-           adminByRole, staffCounts, teachBySpec, leaveLines };
-}
-
-async function generateStatementPreview() {
-  const genBtn  = el('btn-gen-statement');
-  const spinner = el('stmt-gen-spinner');
-  const errEl   = el('stmt-gen-error');
-  if (genBtn) genBtn.disabled = true;
-  if (spinner) spinner.hidden = false;
-  hide(errEl);
-
-  try {
-    const d = await buildStatementData();
-
-    // Header summary
-    const headerEl = el('stmt-header-summary');
-    if (headerEl) {
-      headerEl.innerHTML = `
-        <span><strong>المدرسة:</strong> ${escapeHtml(d.school.name || '—')}</span>
-        <span><strong>الشهر:</strong> ${escapeHtml(MONTH_LABELS[d.month] || d.month)}</span>
-        <span><strong>العام:</strong> ${d.year}</span>
-        <span><strong>الحلقة:</strong> ${escapeHtml(d.school.cycle || d.meta.eduZone || '—')}</span>
-        ${d.school.statistical_number ? `<span><strong>الرقم الإحصائي:</strong> ${escapeHtml(d.school.statistical_number)}</span>` : ''}
-      `;
-    }
-
-    // Student table
-    const allKeys = Object.keys(GRADE_KEY_MAP);
-    const claimed = new Set();
-    for (const key of allKeys) {
-      const row = el('stmt-students-body')?.querySelector(`[data-grade-key="${key}"]`);
-      if (!row) continue;
-      const cells = row.querySelectorAll('.stmt-num');
-      let sections = 0, male = 0, female = 0;
-      for (const dbGrade of GRADE_KEY_MAP[key]) {
-        const s = d.stuStats[dbGrade];
-        if (s) { sections += s.sections; male += s.male; female += s.female; claimed.add(dbGrade); }
-      }
-      if (cells[0]) cells[0].textContent = sections;
-      if (cells[1]) cells[1].textContent = male;
-      if (cells[2]) cells[2].textContent = female;
-      // cols 3-6 (French/Russian) left for manual edit, zero them only on first generate
-      if (cells[3] && cells[3].textContent === '0') cells[3].textContent = '0';
-    }
-
-    // Unclassified grades
-    let uncSec = 0, uncM = 0, uncF = 0;
-    for (const [grade, s] of Object.entries(d.stuStats)) {
-      if (!claimed.has(grade)) { uncSec += s.sections; uncM += s.male; uncF += s.female; }
-    }
-    const uncRow = el('stmt-unclassified-row');
-    if (uncRow) {
-      uncRow.hidden = (uncSec === 0);
-      const secEl = el('stmt-unclassified-sections');
-      const mEl   = el('stmt-unclassified-male');
-      const fEl   = el('stmt-unclassified-female');
-      if (secEl) secEl.textContent = uncSec;
-      if (mEl)   mEl.textContent   = uncM;
-      if (fEl)   fEl.textContent   = uncF;
-    }
-
-    // Update totals
-    _updateStudentTotals();
-
-    // Admin staff table
-    const adminBody = el('stmt-admin-body');
-    if (adminBody) {
-      adminBody.innerHTML = ADMIN_ROLE_ORDER.map(role => {
-        const cnt = role === 'مجموع الإداريين'
-          ? d.staffCounts.admin
-          : (d.adminByRole[role] || 0);
-        return `<tr><td>${escapeHtml(role)}</td><td class="stmt-num">${cnt}</td></tr>`;
-      }).join('');
-    }
-
-    // Staff totals
-    const totalsEl = el('stmt-staff-totals');
-    if (totalsEl) {
-      const total = d.staffCounts.admin + d.staffCounts.teaching +
-                    d.staffCounts.professional + d.staffCounts.worker + d.staffCounts.guard;
-      totalsEl.innerHTML = `
-        <strong>إجمالي العاملين: ${total}</strong> &nbsp;|&nbsp;
-        إداري: ${d.staffCounts.admin} &nbsp;|&nbsp;
-        تدريسي: ${d.staffCounts.teaching} &nbsp;|&nbsp;
-        مهني: ${d.staffCounts.professional} &nbsp;|&nbsp;
-        مستخدم: ${d.staffCounts.worker} &nbsp;|&nbsp;
-        حارس: ${d.staffCounts.guard}
-        ${d.leaveLines.length ? '<br><small style="color:#475569">إجازات الشهر: ' + d.leaveLines.map(l => escapeHtml(l)).join(' — ') + '</small>' : ''}
-      `;
-    }
-
-    // Show preview
-    const previewCard = el('stmt-preview-card');
-    if (previewCard) previewCard.hidden = false;
-    const titleEl = el('stmt-preview-title');
-    if (titleEl) titleEl.textContent = `${MONTH_LABELS[d.month]} / ${d.year}`;
-
-    // Reflect existing submission status (if any) on the banner + submit button
-    try {
-      const st = await NDB.getMonthlyStatement(d.school.id, d.month, d.year);
-      _renderStatementStatus(st);
-    } catch (e) {
-      console.warn('[Statement] status fetch', e);
-      _renderStatementStatus(null);
-    }
-
-    previewCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } catch (err) {
-    console.error('[Statement] generate', err);
-    if (errEl) { errEl.textContent = 'تعذّر توليد البيان — ' + (err?.message || err); show(errEl); }
-  } finally {
-    if (genBtn) genBtn.disabled = false;
-    if (spinner) spinner.hidden = true;
-  }
-}
-
-function _updateStudentTotals() {
-  const tbody = el('stmt-students-body');
-  if (!tbody) return;
-  let totSec = 0, totM = 0, totF = 0;
-  for (const row of tbody.querySelectorAll('tr[data-grade-key]:not([hidden])')) {
-    const cells = row.querySelectorAll('.stmt-num');
-    totSec += parseInt(cells[0]?.textContent || '0', 10) || 0;
-    totM   += parseInt(cells[1]?.textContent || '0', 10) || 0;
-    totF   += parseInt(cells[2]?.textContent || '0', 10) || 0;
-  }
-  const st = el('stmt-total-sections'); if (st) st.textContent = totSec;
-  const tm = el('stmt-total-male');     if (tm) tm.textContent = totM;
-  const tf = el('stmt-total-female');   if (tf) tf.textContent = totF;
-}
-
-// ── ExcelJS lazy loader ───────────────────────────────────────────────────────
+// ── ExcelJS lazy loader ──────────────────────────────────────────────────────
 let _excelJsPromise = null;
 function loadExcelJS() {
   if (window.ExcelJS) return Promise.resolve();
@@ -6210,224 +7503,309 @@ function _setCell(ws, addr, val) {
   } catch { /* merged/invalid cell */ }
 }
 
+// يوم/شهر/سنة من تاريخ ISO إلى ثلاث خلايا متتالية
+function _setDate(ws, iso, c1, c2, c3, row) {
+  if (!iso) return;
+  const [y, m, d] = String(iso).split('-');
+  if (!y) return;
+  _setCell(ws, `${c1}${row}`, Number(d));
+  _setCell(ws, `${c2}${row}`, Number(m));
+  _setCell(ws, `${c3}${row}`, Number(y));
+}
+
+// صفّ كادر واحد في ورقة الكوادر أو في ورقة التعديلات، حسب خريطة أعمدة.
+// المفاتيح هنا هي أسماء أعمدة الورقة، والقيم أحرف العمود.
+function _writeStaffRow(ws, row, r, map, leaveText) {
+  const put = (k, v) => { if (map[k]) _setCell(ws, `${map[k]}${row}`, v); };
+  put('seq', row);
+  put('national_id',  r.national_id || '');
+  put('full_name',    r.full_name || '');
+  put('mother_name',  r.mother_name || '');
+  if (map.birth_d) _setDate(ws, r.birth_date, map.birth_d, map.birth_m, map.birth_y, row);
+  put('certificate',  r.certificate || '');
+  put('specialization', r.specialization || '');
+  // ⚠ العمود اسمه seniority_years — كتابة seniority_year كانت تترك
+  // «القدم الوظيفي» فارغاً في كل الأوراق المُصدَّرة.
+  put('seniority',    r.seniority_years ?? '');
+  put('job_title',    r.job_title || '');
+  put('higher_degree', r.higher_degree || '');
+  put('subject',      r.subject_taught || '');
+  put('hours',        r.teaching_hours ?? '');
+  put('quota_subj',   r.quota_subjects || '');
+  put('quota_school', r.quota_school_external || '');
+  put('grade',        r.assigned_grade || '');
+  put('section',      r.assigned_section || '');
+  if (map.start_d) _setDate(ws, r.start_date, map.start_d, map.start_m, map.start_y, row);
+  put('phone',        r.phone || '');
+  put('landline',     r.landline || '');
+  put('zone',         r.residential_zone || '');
+  put('leave',        leaveText || '');
+  put('doc',          r.ministerial_doc || '');
+  put('notes',        r.notes || '');
+}
+
+// خرائط أعمدة الأوراق الثلاث المستقلّة (الصفوف تبدأ من ٤)
+const _MAP_ADMIN_SHEET = {
+  seq:'A', national_id:'B', full_name:'C', mother_name:'D',
+  birth_d:'E', birth_m:'F', birth_y:'G', certificate:'H', specialization:'I',
+  seniority:'J', job_title:'K', higher_degree:'L',
+  start_d:'M', start_m:'N', start_y:'O', phone:'P', landline:'Q',
+  zone:'R', leave:'S', doc:'T', notes:'U',
+};
+const _MAP_TEACH_SHEET = {
+  seq:'A', national_id:'B', full_name:'C', mother_name:'D',
+  birth_d:'E', birth_m:'F', birth_y:'G', certificate:'H', specialization:'I',
+  seniority:'J', subject:'K', hours:'L', quota_subj:'M', quota_school:'N',
+  grade:'O', section:'P', start_d:'Q', start_m:'R', start_y:'S',
+  phone:'T', landline:'U', zone:'V', leave:'W', doc:'X', notes:'Y',
+};
+const _MAP_SUPPORT_SHEET = {
+  seq:'A', national_id:'B', full_name:'C', mother_name:'D',
+  birth_d:'E', birth_m:'F', birth_y:'G', certificate:'H',
+  seniority:'I', job_title:'J', start_d:'K', start_m:'L', start_y:'M',
+  phone:'N', landline:'O', zone:'P', leave:'Q', doc:'R', notes:'S',
+};
+// ورقة التعديلات — ثلاث كتل بأعمدة مختلفة، وعمود الحدث في آخر كل كتلة
+const _MAP_CHG_ADMIN = { ...{
+  seq:'A', national_id:'B', full_name:'C', mother_name:'D',
+  birth_d:'E', birth_m:'F', birth_y:'G', certificate:'H', specialization:'I',
+  seniority:'J', job_title:'K', higher_degree:'L',
+  start_d:'M', start_m:'N', start_y:'O', phone:'P', landline:'Q',
+  zone:'R', leave:'S', doc:'T', notes:'U' } };
+const _MAP_CHG_TEACH = { ..._MAP_TEACH_SHEET };
+const _MAP_CHG_SUPPORT = {
+  seq:'A', national_id:'B', full_name:'C', mother_name:'D',
+  birth_d:'E', birth_m:'F', birth_y:'G', certificate:'H', specialization:'I',
+  seniority:'J', job_title:'K', start_d:'M', start_m:'N', start_y:'O',
+  phone:'P', landline:'Q', zone:'R', leave:'T', doc:'U', notes:'V',
+};
+
 async function exportStatementExcel() {
   const btn     = el('btn-export-excel');
   const label   = el('btn-export-label');
   const spinner = el('stmt-export-spinner');
-  const errEl   = el('stmt-preview-error');
+  const errEl   = el('stmt-error');
   if (btn) btn.disabled = true;
   if (label) label.textContent = 'جارٍ التصدير...';
   if (spinner) spinner.hidden = false;
-  hide(errEl);
+  if (errEl) errEl.hidden = true;
 
   try {
     await loadExcelJS();
-    const d = await buildStatementData();
+    // المُصدِّر يقرأ اللقطة وحدها — فما يُصدَّر هو بالضبط ما يُرسَل.
+    const snap = _stmtSnapshot();
 
     const resp = await fetch('../shared/statement_template.xlsx');
     if (!resp.ok) throw new Error(`تعذّر تحميل القالب (${resp.status})`);
-    const buffer = await resp.arrayBuffer();
-
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buffer);
+    await wb.xlsx.load(await resp.arrayBuffer());
 
-    const wsBayan = wb.getWorksheet('البيان');
-    if (!wsBayan) throw new Error('ورقة البيان غير موجودة في القالب');
+    const ws1 = wb.getWorksheet('البيان');
+    if (!ws1) throw new Error('ورقة البيان غير موجودة في القالب');
+    const sc = snap.school;
 
-    // ── الترويسة ──────────────────────────────────────────────────────────────
-    _setCell(wsBayan, 'E3', MONTH_LABELS[d.month] || String(d.month));
-    _setCell(wsBayan, 'K3', d.year);
-    _setCell(wsBayan, 'C7', d.meta.eduZone);
-    _setCell(wsBayan, 'E7', d.meta.village);
-    _setCell(wsBayan, 'G7', d.meta.address);
-    _setCell(wsBayan, 'J7', d.school.cycle || '');
-    _setCell(wsBayan, 'K7', d.school.name || '');
-    _setCell(wsBayan, 'O7', d.meta.phone);
-    _setCell(wsBayan, 'R7', d.school.statistical_number || '');
-    _setCell(wsBayan, 'T7', d.school.rural_curriculum ? 'نعم' : 'لا');
-    _setCell(wsBayan, 'Y7', d.school.shift === 'full' ? 'كامل' : d.school.shift === 'half' ? 'نصفي' : (d.school.shift || ''));
-    _setCell(wsBayan, 'W8', d.meta.sharedWith);
+    // ── الورقة ١: البيان ───────────────────────────────────────────────────
+    _setCell(ws1, 'E3', MONTH_LABELS[snap.period.month] || String(snap.period.month));
+    _setCell(ws1, 'K3', snap.period.year);
+    if (snap.period.deliveryDay)   _setCell(ws1, 'R3', Number(snap.period.deliveryDay));
+    if (snap.period.deliveryMonth) _setCell(ws1, 'S3', Number(snap.period.deliveryMonth));
+    if (snap.period.deliveryYear)  _setCell(ws1, 'T3', Number(snap.period.deliveryYear));
+    _setCell(ws1, 'U4', snap.period.receivedBy);
+    _setCell(ws1, 'C7', sc.educationalZone);
+    _setCell(ws1, 'E7', sc.village);
+    _setCell(ws1, 'G7', sc.address);
+    _setCell(ws1, 'J7', sc.cycle);
+    _setCell(ws1, 'K7', sc.name);
+    _setCell(ws1, 'O7', sc.phone);
+    _setCell(ws1, 'R7', sc.statisticalNumber);
+    _setCell(ws1, 'T7', sc.ruralCurriculum ? 'نعم' : 'لا');
+    // ⚠ نوع الدوام كامل/نصفي محورٌ مستقلّ عن schools.shift (صباحي/مسائي).
+    _setCell(ws1, 'Y7', sc.dayType);
+    _setCell(ws1, 'W8', sc.sharedWith);
 
-    // ── البناء ───────────────────────────────────────────────────────────────
-    const bCols = ['C','E','H','K','M','O','P','Q','R','S','T','U','V','W','X','Y','Z','AA'];
-    const bVals = [
-      d.meta.bFloors, d.meta.bOwnership, d.meta.bClassRooms, d.meta.bAdminRooms,
-      d.meta.bUnused, d.meta.bBasement, d.meta.bLab, d.meta.bComputer,
-      d.meta.bLibrary, d.meta.bSecretary, d.meta.bGym, d.meta.bStorage,
-      d.meta.bGuidance, d.meta.bHealth, d.meta.bWorkshop, d.meta.bTheater,
-      d.meta.bYard, d.meta.bOther,
+    const b = snap.building;
+    const bCols = [['C','floors'],['E','ownership'],['H','class_rooms'],['K','admin_rooms'],
+      ['M','unused_rooms'],['O','basement'],['P','lab'],['Q','computer_lab'],['R','library'],
+      ['S','secretariat'],['T','gym'],['U','storage'],['V','guidance'],['W','health_room'],
+      ['X','workshop'],['Y','theater'],['Z','yard'],['AA','other_halls']];
+    for (const [col, key] of bCols) _setCell(ws1, `${col}11`, b[key] === '' ? null : b[key]);
+
+    // الجهاز التدريسي — الخانات الفرعية في مواضعها الحرفية
+    for (const [label, addr] of STMT_TEACH_TEACHERS) _setCell(ws1, addr, snap.teachingStaff.buckets['معلم'][label] || 0);
+    for (const [label, addr] of STMT_TEACH_MASTERS)  _setCell(ws1, addr, snap.teachingStaff.buckets['مدرس'][label] || 0);
+    for (const [label, addr] of STMT_TEACH_ASSIST)   _setCell(ws1, addr, snap.teachingStaff.buckets['مدرس مساعد'][label] || 0);
+    _setCell(ws1, 'G16',  snap.teachingStaff.teachers);
+    _setCell(ws1, 'T16',  snap.teachingStaff.masters);
+    _setCell(ws1, 'AA16', snap.teachingStaff.assistants);
+
+    // أعداد الطلاب — الصفوف ٢٢..٤١ بترتيب GRADE_KEYS
+    snap.students.rows.forEach((r, i) => {
+      const row = 22 + i;
+      _setCell(ws1, `D${row}`, r.sections);
+      _setCell(ws1, `E${row}`, r.enM); _setCell(ws1, `F${row}`, r.enF);
+      _setCell(ws1, `G${row}`, r.frM); _setCell(ws1, `H${row}`, r.frF);
+      _setCell(ws1, `I${row}`, r.ruM); _setCell(ws1, `J${row}`, r.ruF);
+      _setCell(ws1, `K${row}`, r.total);
+    });
+    const tt = snap.students.totals;
+    _setCell(ws1, 'D42', tt.sections); _setCell(ws1, 'E42', tt.enM); _setCell(ws1, 'F42', tt.enF);
+    _setCell(ws1, 'G42', tt.frM); _setCell(ws1, 'H42', tt.frF);
+    _setCell(ws1, 'I42', tt.ruM); _setCell(ws1, 'J42', tt.ruF);
+    _setCell(ws1, 'F43', tt.total);
+    _setCell(ws1, 'I43', snap.students.byCycle.cycle1);
+    _setCell(ws1, 'K43', snap.students.byCycle.cycle2);
+    _setCell(ws1, 'I44', snap.students.byCycle.kinder);
+    _setCell(ws1, 'K44', snap.students.byCycle.secondary);
+
+    // الجهاز الإداري — العدد رقماً وكتابةً (الصفوف ٢٠..٣٦، المجموع ٣٨)
+    snap.adminStaff.rows.forEach((r, i) => {
+      const row = 20 + i;
+      _setCell(ws1, `O${row}`, r.count);
+      _setCell(ws1, `P${row}`, r.words);
+    });
+    _setCell(ws1, 'O38', snap.adminStaff.total);
+    _setCell(ws1, 'P38', arNumWord(snap.adminStaff.total));
+
+    // ملخّص العاملين
+    const w = snap.workforce;
+    _setCell(ws1, 'V18', w.teachers);  _setCell(ws1, 'V19', w.masters);
+    _setCell(ws1, 'V20', w.assist);    _setCell(ws1, 'V21', w.bySpec);
+    _setCell(ws1, 'V22', w.full);      _setCell(ws1, 'V23', w.unclassified);
+    _setCell(ws1, 'AA18', w.admin);    _setCell(ws1, 'AA19', w.professional);
+    _setCell(ws1, 'AA20', w.worker);   _setCell(ws1, 'AA21', w.guard);
+    _setCell(ws1, 'AA23', w.grand);
+    _setCell(ws1, 'T44', snap.signatures.secretary);
+    _setCell(ws1, 'X44', snap.signatures.principal);
+
+    // ── الأوراق ٢–٤: الكوادر ───────────────────────────────────────────────
+    const leaveOf = id => (snap.leaves.filter(l => l.staffId === id)
+      .map(l => `${l.type} ${l.days}`).join(' + '));
+    const sheets = [
+      ['الجهاز الإداري', 'admin', _MAP_ADMIN_SHEET],
+      ['الجهاز التدريسي', 'teaching', _MAP_TEACH_SHEET],
+      ['مهنيين ومستخدمين وحراس', 'support', _MAP_SUPPORT_SHEET],
     ];
-    bCols.forEach((col, i) => {
-      const v = bVals[i];
-      _setCell(wsBayan, `${col}11`, v === '' ? null : (isNaN(Number(v)) ? v : Number(v)));
-    });
+    for (const [sheetName, group, map] of sheets) {
+      const ws = wb.getWorksheet(sheetName);
+      if (!ws) continue;
+      // ⚠ «support» ليست قيمة staff_type في القاعدة — المقارنة بها كانت
+      // تُخرج قائمة فارغة، فتُصدَّر ورقة المهنيين بلا صفّ واحد.
+      const recs = STMT.staff.filter(r => _stmtGroupOf(r) === group);
+      recs.forEach((r, i) => _writeStaffRow(ws, 4 + i, r, map, leaveOf(r.id)));
+    }
 
-    // ── أعداد الطلاب (تُقرأ من المعاينة المحررة) ────────────────────────────
-    const gradeKeys = Object.keys(GRADE_KEY_MAP);
-    // Template row offsets: استعدوا=22, 1..9=23..31, م1..م4=32..35, ث1أ..ث3ع=36..41
-    const keyToTemplateRow = {};
-    gradeKeys.forEach((key, idx) => { keyToTemplateRow[key] = 22 + idx; });
+    // ── الورقة ٥: التعديلات الطارئة ────────────────────────────────────────
+    const ws5 = wb.getWorksheet('التعديلات الطارئة الشهرية');
+    if (ws5) {
+      _setCell(ws5, 'A6', sc.educationalZone);
+      _setCell(ws5, 'D6', sc.village);
+      _setCell(ws5, 'H6', sc.formerName);
+      _setCell(ws5, 'K6', sc.cycle);
+      _setCell(ws5, 'L6', sc.name);
+      _setCell(ws5, 'Q6', sc.phone);
+      // الجواب يُكتب تحت الخانة المختارة، كما في الورقة الأصلية
+      _setCell(ws5, sc.ruralCurriculum ? 'T7' : 'U7', sc.ruralCurriculum ? 'نعم' : 'لا');
+      if (sc.dayType) _setCell(ws5, sc.dayType === 'كامل' ? 'V7' : 'W7', sc.dayType);
+      _setCell(ws5, 'X7', sc.sharedWith);
 
-    const stuBody = el('stmt-students-body');
-    if (stuBody) {
-      for (const row of stuBody.querySelectorAll('tr[data-grade-key]')) {
-        const key = row.dataset.gradeKey;
-        const tRow = keyToTemplateRow[key];
-        if (!tRow) continue;
-        const cells = row.querySelectorAll('.stmt-num');
-        const sec = parseInt(cells[0]?.textContent || '0', 10) || 0;
-        const enM = parseInt(cells[1]?.textContent || '0', 10) || 0;
-        const enF = parseInt(cells[2]?.textContent || '0', 10) || 0;
-        const frM = parseInt(cells[3]?.textContent || '0', 10) || 0;
-        const frF = parseInt(cells[4]?.textContent || '0', 10) || 0;
-        const ruM = parseInt(cells[5]?.textContent || '0', 10) || 0;
-        const ruF = parseInt(cells[6]?.textContent || '0', 10) || 0;
-        _setCell(wsBayan, `D${tRow}`, sec);
-        _setCell(wsBayan, `E${tRow}`, enM);
-        _setCell(wsBayan, `F${tRow}`, enF);
-        _setCell(wsBayan, `G${tRow}`, frM);
-        _setCell(wsBayan, `H${tRow}`, frF);
-        _setCell(wsBayan, `I${tRow}`, ruM);
-        _setCell(wsBayan, `J${tRow}`, ruF);
+      const byGroup = { admin: [], teaching: [], support: [] };
+      for (const c of snap.changes.items) (byGroup[c.group] ??= byGroup.admin).push(c);
+      const blocks = [
+        ['admin',    11, 13, _MAP_CHG_ADMIN,   'notes'],
+        ['teaching', 17, 20, _MAP_CHG_TEACH,   'notes'],
+        ['support',  24, 29, _MAP_CHG_SUPPORT, 'notes'],
+      ];
+      for (const [g, first, last, map, eventCol] of blocks) {
+        const items = byGroup[g] || [];
+        items.slice(0, last - first + 1).forEach((c, i) => {
+          const row = first + i;
+          const rec = STMT.staff.find(r => r.id === c.staffId)
+                   || { full_name: c.data?.name || '', job_title: c.data?.job || '' };
+          _writeStaffRow(ws5, row, rec, map, leaveOf(c.staffId));
+          _setCell(ws5, `${map[eventCol]}${row}`, c.eventType || '');
+        });
       }
+      // «لا يوجد تعديل» يُكتب صراحةً كما ينصّ النموذج
+      if (snap.changes.none && !snap.changes.items.length) _setCell(ws5, 'C11', 'لا يوجد تعديل');
+
+      const cols = ['استعدوا','1','2','3','4','5','6','7','8','9'];
+      const colLetters = ['D','E','F','G','H','I','J','K','L','M'];
+      const byKey = Object.fromEntries(snap.students.rows.map(r => [r.key, r]));
+      cols.forEach((k, i) => {
+        const r = byKey[k] || {};
+        _setCell(ws5, `${colLetters[i]}32`, r.sections || 0);
+        _setCell(ws5, `${colLetters[i]}33`, (r.enM || 0) + (r.frM || 0) + (r.ruM || 0));
+        _setCell(ws5, `${colLetters[i]}34`, (r.enF || 0) + (r.frF || 0) + (r.ruF || 0));
+      });
+      const sum = pick => cols.reduce((a, k) => a + pick(byKey[k] || {}), 0);
+      _setCell(ws5, 'N32', sum(r => r.sections || 0));
+      _setCell(ws5, 'N33', sum(r => (r.enM || 0) + (r.frM || 0) + (r.ruM || 0)));
+      _setCell(ws5, 'N34', sum(r => (r.enF || 0) + (r.frF || 0) + (r.ruF || 0)));
+      _setCell(ws5, 'K35', snap.students.totals.total);
+      _setCell(ws5, 'W37', sc.name);
     }
 
-    // ── الجهاز الإداري — أعداد حسب الوظيفة ───────────────────────────────────
-    const roleRows = ADMIN_ROLE_ORDER.slice(0, -1); // exclude مجموع الإداريين row
-    roleRows.forEach((role, idx) => {
-      const tRow = 20 + idx;
-      const cnt = role === 'مجموع الإداريين' ? d.staffCounts.admin : (d.adminByRole[role] || 0);
-      _setCell(wsBayan, `O${tRow}`, cnt);
-      _setCell(wsBayan, `P${tRow}`, arNumWord(cnt));
-    });
-    // مجموع الإداريين (row 38)
-    _setCell(wsBayan, `O38`, d.staffCounts.admin);
-    _setCell(wsBayan, `P38`, arNumWord(d.staffCounts.admin));
+    // ── الورقة ٦: نتائج نهاية العام ────────────────────────────────────────
+    const ws6 = wb.getWorksheet('جدول نتائج نهاية العام');
+    if (ws6 && snap.yearEnd) {
+      _setCell(ws6, 'C1', sc.name);
+      _setCell(ws6, 'B6', sc.educationalZone);
+      _setCell(ws6, 'D6', sc.village);
+      _setCell(ws6, 'F6', sc.address);
+      _setCell(ws6, 'I6', sc.cycle);
+      _setCell(ws6, 'J6', sc.name);
+      _setCell(ws6, 'N6', sc.statisticalNumber);
+      _setCell(ws6, 'P6', sc.ruralCurriculum ? 'نعم' : 'لا');
+      _setCell(ws6, 'U6', sc.dayType);
+      _setCell(ws6, 'U7', sc.sharedWith);
 
-    // ── ملخص المهنيين / مستخدمين / حراس ─────────────────────────────────────
-    _setCell(wsBayan, 'AA19', d.staffCounts.professional);
-    _setCell(wsBayan, 'AA20', d.staffCounts.worker);
-    _setCell(wsBayan, 'AA21', d.staffCounts.guard);
-    const grandTotal = d.staffCounts.admin + d.staffCounts.teaching +
-                       d.staffCounts.professional + d.staffCounts.worker + d.staffCounts.guard;
-    _setCell(wsBayan, 'AA23', grandTotal);
+      const gCols = ['B','D','F','H','J','L','N','P','R'];
+      let tm = 0, tf = 0;
+      STMT_YE_GRADES.forEach((k, i) => {
+        const m = Number(snap.yearEnd.next?.[k]?.m) || 0;
+        const f = Number(snap.yearEnd.next?.[k]?.f) || 0;
+        tm += m; tf += f;
+        const c = gCols[i], c2 = String.fromCharCode(c.charCodeAt(0) + 1);
+        _setCell(ws6, `${c}11`, m); _setCell(ws6, `${c2}11`, f);
+        _setCell(ws6, `${c2}12`, m + f);
+      });
+      _setCell(ws6, 'T11', tm); _setCell(ws6, 'U11', tf); _setCell(ws6, 'U12', tm + tf);
 
-    // ── أوراق الكوادر — الجهاز الإداري ───────────────────────────────────────
-    const wsAdmin = wb.getWorksheet('الجهاز الإداري');
-    if (wsAdmin) {
-      const adminRecs = (d.staffRecs || []).filter(r => r.staff_type === 'admin');
-      adminRecs.forEach((r, i) => {
-        const row = 4 + i;
-        _setCell(wsAdmin, `B${row}`, r.national_id || '');
-        _setCell(wsAdmin, `C${row}`, r.full_name || '');
-        _setCell(wsAdmin, `D${row}`, r.mother_name || '');
-        if (r.birth_date) {
-          const bd = new Date(r.birth_date);
-          _setCell(wsAdmin, `E${row}`, bd.getDate());
-          _setCell(wsAdmin, `F${row}`, bd.getMonth() + 1);
-          _setCell(wsAdmin, `G${row}`, bd.getFullYear());
-        }
-        _setCell(wsAdmin, `H${row}`, r.certificate || '');
-        _setCell(wsAdmin, `I${row}`, r.specialization || '');
-        _setCell(wsAdmin, `J${row}`, r.seniority_year || '');
-        _setCell(wsAdmin, `K${row}`, r.job_title || '');
-        _setCell(wsAdmin, `L${row}`, r.higher_degree || '');
-        if (r.start_date) {
-          const sd = new Date(r.start_date);
-          _setCell(wsAdmin, `M${row}`, sd.getDate());
-          _setCell(wsAdmin, `N${row}`, sd.getMonth() + 1);
-          _setCell(wsAdmin, `O${row}`, sd.getFullYear());
-        }
-        _setCell(wsAdmin, `P${row}`, r.phone || '');
-        _setCell(wsAdmin, `R${row}`, r.residential_zone || '');
-        // إجازات
-        const lvParts = (d.leaveLines.find(l => l.startsWith(r.full_name + ':')) || '').split(':')[1] || '';
-        _setCell(wsAdmin, `S${row}`, lvParts.trim());
-        _setCell(wsAdmin, `T${row}`, r.ministerial_doc || '');
-        _setCell(wsAdmin, `U${row}`, r.notes || '');
+      const lCols = ['H','J','L','N'];
+      STMT_YE_LEVELS.forEach((k, i) => {
+        const m = Number(snap.yearEnd.next?.[k]?.m) || 0;
+        const f = Number(snap.yearEnd.next?.[k]?.f) || 0;
+        const c = lCols[i], c2 = String.fromCharCode(c.charCodeAt(0) + 1);
+        _setCell(ws6, `${c}15`, m); _setCell(ws6, `${c2}15`, f);
+        _setCell(ws6, `${c2}16`, m + f);
+      });
+
+      const eCols = ['D','F','H','J','L','N','P','R'];
+      const val = (rk, g) => Number(snap.yearEnd.exam?.[rk]?.[g]) || 0;
+      STMT_YE_ROWS.forEach(([rk], ri) => {
+        const row = 21 + ri;
+        let total = 0;
+        STMT_YE_EXAM_GRADES.forEach((g, gi) => {
+          const v = rk === 'sat' ? val('total', g) - val('dropout', g) : val(rk, g);
+          total += v;
+          _setCell(ws6, `${eCols[gi]}${row}`, v);
+        });
+        _setCell(ws6, `T${row}`, total);
       });
     }
 
-    // ── أوراق الكوادر — الجهاز التدريسي ──────────────────────────────────────
-    const wsTeach = wb.getWorksheet('الجهاز التدريسي');
-    if (wsTeach) {
-      const teachRecs = (d.staffRecs || []).filter(r => r.staff_type === 'teaching');
-      teachRecs.forEach((r, i) => {
-        const row = 4 + i;
-        _setCell(wsTeach, `B${row}`, r.national_id || '');
-        _setCell(wsTeach, `C${row}`, r.full_name || '');
-        _setCell(wsTeach, `D${row}`, r.mother_name || '');
-        if (r.birth_date) {
-          const bd = new Date(r.birth_date);
-          _setCell(wsTeach, `E${row}`, bd.getDate());
-          _setCell(wsTeach, `F${row}`, bd.getMonth() + 1);
-          _setCell(wsTeach, `G${row}`, bd.getFullYear());
-        }
-        _setCell(wsTeach, `H${row}`, r.certificate || '');
-        _setCell(wsTeach, `I${row}`, r.specialization || '');
-        _setCell(wsTeach, `J${row}`, r.seniority_year || '');
-        _setCell(wsTeach, `K${row}`, r.subject_taught || '');
-        if (r.start_date) {
-          const sd = new Date(r.start_date);
-          _setCell(wsTeach, `Q${row}`, sd.getDate());
-          _setCell(wsTeach, `R${row}`, sd.getMonth() + 1);
-          _setCell(wsTeach, `S${row}`, sd.getFullYear());
-        }
-        _setCell(wsTeach, `T${row}`, r.phone || '');
-        _setCell(wsTeach, `V${row}`, r.residential_zone || '');
-        const lvParts = (d.leaveLines.find(l => l.startsWith(r.full_name + ':')) || '').split(':')[1] || '';
-        _setCell(wsTeach, `W${row}`, lvParts.trim());
-        _setCell(wsTeach, `X${row}`, r.ministerial_doc || '');
-        _setCell(wsTeach, `Y${row}`, r.notes || '');
-      });
-    }
-
-    // ── أوراق الكوادر — مهنيون ومستخدمون وحراس ───────────────────────────────
-    const wsSupport = wb.getWorksheet('مهنيين ومستخدمين وحراس');
-    if (wsSupport) {
-      const suppRecs = (d.staffRecs || []).filter(r => r.staff_type === 'support');
-      suppRecs.forEach((r, i) => {
-        const row = 4 + i;
-        _setCell(wsSupport, `B${row}`, r.national_id || '');
-        _setCell(wsSupport, `C${row}`, r.full_name || '');
-        _setCell(wsSupport, `D${row}`, r.mother_name || '');
-        if (r.birth_date) {
-          const bd = new Date(r.birth_date);
-          _setCell(wsSupport, `E${row}`, bd.getDate());
-          _setCell(wsSupport, `F${row}`, bd.getMonth() + 1);
-          _setCell(wsSupport, `G${row}`, bd.getFullYear());
-        }
-        _setCell(wsSupport, `H${row}`, r.certificate || '');
-        _setCell(wsSupport, `I${row}`, r.seniority_year || '');
-        _setCell(wsSupport, `J${row}`, r.job_title || '');
-        if (r.start_date) {
-          const sd = new Date(r.start_date);
-          _setCell(wsSupport, `K${row}`, sd.getDate());
-          _setCell(wsSupport, `L${row}`, sd.getMonth() + 1);
-          _setCell(wsSupport, `M${row}`, sd.getFullYear());
-        }
-        _setCell(wsSupport, `N${row}`, r.phone || '');
-        _setCell(wsSupport, `P${row}`, r.residential_zone || '');
-        const lvParts = (d.leaveLines.find(l => l.startsWith(r.full_name + ':')) || '').split(':')[1] || '';
-        _setCell(wsSupport, `Q${row}`, lvParts.trim());
-        _setCell(wsSupport, `R${row}`, r.ministerial_doc || '');
-        _setCell(wsSupport, `S${row}`, r.notes || '');
-      });
-    }
-
-    // ── تنزيل الملف ──────────────────────────────────────────────────────────
     const outBuf = await wb.xlsx.writeBuffer();
     const blob = new Blob([outBuf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
-    const safeName = (d.school.name || 'المدرسة').replace(/[/\\?%*:|"<>]/g, '-');
+    const safeName = (sc.name || 'المدرسة').replace(/[/\\?%*:|"<>]/g, '-');
     a.href = url;
-    a.download = `بيان_${safeName}_${MONTH_LABELS[d.month]}_${d.year}.xlsx`;
+    a.download = `بيان_${safeName}_${MONTH_SHORT[snap.period.month]}_${snap.period.year}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   } catch (err) {
     console.error('[Statement] exportExcel', err);
-    if (errEl) { errEl.textContent = 'تعذّر تصدير Excel — ' + (err?.message || err); show(errEl); }
+    if (errEl) { errEl.textContent = 'تعذّر تصدير Excel — ' + (err?.message || err); errEl.hidden = false; }
   } finally {
     if (btn) btn.disabled = false;
     if (label) label.textContent = 'تصدير Excel';
@@ -6435,88 +7813,91 @@ async function exportStatementExcel() {
   }
 }
 
+// ── الطباعة ──────────────────────────────────────────────────────────────────
+// تُطبع من اللقطة نفسها التي تُرسَل، فالورقة والمُرسَل لا يفترقان.
 function printStatement() {
-  const d_school = S.school;
-  const month  = parseInt(el('stmt-month-sel')?.value || '1', 10);
-  const year   = parseInt(el('stmt-year-in')?.value || new Date().getFullYear(), 10);
-
-  // Collect current preview data
-  const stuRows = [];
-  el('stmt-students-body')?.querySelectorAll('tr[data-grade-key]:not([hidden])').forEach(row => {
-    const label = row.querySelector('td:first-child')?.textContent || '';
-    const cells = row.querySelectorAll('.stmt-num');
-    const vals  = [...cells].map(c => c.textContent || '0');
-    stuRows.push({ label, vals });
-  });
-
-  const adminRows = [];
-  el('stmt-admin-body')?.querySelectorAll('tr').forEach(row => {
-    const tds = row.querySelectorAll('td');
-    adminRows.push({ role: tds[0]?.textContent || '', cnt: tds[1]?.textContent || '0' });
-  });
-
-  const totals = el('stmt-staff-totals')?.textContent || '';
-
+  const snap = _stmtSnapshot();
+  const sc = snap.school;
   const win = window.open('', '_blank', 'width=1000,height=700');
   if (!win) { toast('يرجى السماح بالنوافذ المنبثقة', 'error'); return; }
 
-  const stuTableHtml = `
-    <table>
-      <thead>
-        <tr>
-          <th rowspan="2">الصف</th><th rowspan="2">عدد الشعب</th>
-          <th colspan="2">انكليزي</th><th colspan="2">فرنسي</th><th colspan="2">روسي</th>
-        </tr>
-        <tr><th>ذكور</th><th>إناث</th><th>ذكور</th><th>إناث</th><th>ذكور</th><th>إناث</th></tr>
-      </thead>
-      <tbody>
-        ${stuRows.map(r => `<tr><td>${r.label}</td>${r.vals.map(v=>`<td>${v}</td>`).join('')}</tr>`).join('')}
-      </tbody>
-    </table>
-  `;
-
-  const adminHtml = `
-    <table>
-      <thead><tr><th>المنصب</th><th>العدد</th></tr></thead>
-      <tbody>${adminRows.map(r=>`<tr><td>${r.role}</td><td>${r.cnt}</td></tr>`).join('')}</tbody>
-    </table>
-  `;
+  const esc = escapeHtml;
+  const stuRows = snap.students.rows.map(r =>
+    `<tr><td>${esc(r.label)}</td><td>${r.sections}</td><td>${r.enM}</td><td>${r.enF}</td>
+     <td>${r.frM}</td><td>${r.frF}</td><td>${r.ruM}</td><td>${r.ruF}</td><td>${r.total}</td></tr>`).join('');
+  const t = snap.students.totals;
+  const admRows = snap.adminStaff.rows.map(r =>
+    `<tr><td>${esc(r.role)}</td><td>${r.count}</td><td>${esc(r.words)}</td></tr>`).join('');
+  const w = snap.workforce;
+  const wfRows = [
+    ['عدد المعلمين', w.teachers], ['عدد المدرسين', w.masters],
+    ['عدد المدرسين المساعدين', w.assist], ['الجهاز التدريسي حسب الاختصاصات', w.bySpec],
+    ['الجهاز التدريسي بشكل كامل', w.full], ['عدد الجهاز التدريسي غير المصنف', w.unclassified],
+    ['كل العاملين في الجهاز الإداري', w.admin], ['العاملون المهنيون', w.professional],
+    ['المستخدمون', w.worker], ['الحراس', w.guard], ['مجموع العاملين في المدرسة', w.grand],
+  ].map(([l, v]) => `<tr><td>${esc(l)}</td><td>${v}</td></tr>`).join('');
+  const chgRows = snap.changes.none && !snap.changes.items.length
+    ? '<tr><td colspan="5">لا يوجد تعديل</td></tr>'
+    : snap.changes.items.map(c =>
+      `<tr><td>${esc(c.data?.name || '')}</td><td>${esc(c.data?.job || '')}</td>
+       <td>${esc(_GRP_LABEL[c.group] || '')}</td><td>${esc(c.eventType || '')}</td>
+       <td>${esc(c.effectiveDate || '')}</td></tr>`).join('');
 
   win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl">
-<head>
-<meta charset="UTF-8">
-<title>البيان الشهري — ${escapeHtml(d_school?.name || '')} — ${MONTH_LABELS[month]} ${year}</title>
+<head><meta charset="UTF-8">
+<title>البيان الشهري — ${esc(sc.name)} — ${esc(MONTH_LABELS[snap.period.month])} ${snap.period.year}</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
   @page { size:A4 landscape; margin:10mm; }
-  body { font-family:'Cairo',sans-serif; font-size:9pt; direction:rtl; }
+  body { font-family:'Segoe UI',Tahoma,sans-serif; font-size:9pt; direction:rtl; }
   h1 { font-size:12pt; margin:0 0 4px; }
-  h2 { font-size:10pt; margin:8px 0 4px; }
+  h2 { font-size:10pt; margin:10px 0 4px; }
   table { border-collapse:collapse; width:100%; margin-bottom:8px; }
   th, td { border:1px solid #555; padding:3px 5px; text-align:center; }
   th { background:#e2e8f0; font-weight:700; }
-  .page-break { page-break-after: always; }
-  .header-meta { font-size:8pt; color:#333; margin-bottom:6px; }
-</style>
-</head>
-<body>
-<h1>البيان الشهري — ${escapeHtml(d_school?.name || '')} — ${MONTH_LABELS[month]} ${year}</h1>
-<div class="header-meta">
-  الحلقة: ${escapeHtml(d_school?.cycle||'—')} | الرقم الإحصائي: ${escapeHtml(d_school?.statistical_number||'—')} | نوع الدوام: ${escapeHtml(d_school?.shift||'—')}
+  td:first-child, th:first-child { text-align:right; }
+  .meta { font-size:8pt; color:#333; margin-bottom:6px; line-height:1.7; }
+  .sig { display:flex; justify-content:space-between; margin-top:18px; font-size:9pt; }
+</style></head><body>
+<h1>البيان الشهري — ${esc(sc.name)} — ${esc(MONTH_LABELS[snap.period.month])} ${snap.period.year}</h1>
+<div class="meta">
+  المنطقة التعليمية: ${esc(sc.educationalZone || '—')} | القرية: ${esc(sc.village || '—')} |
+  العنوان: ${esc(sc.address || '—')} | الهاتف: ${esc(sc.phone || '—')}<br>
+  الحلقة: ${esc(sc.cycle || '—')} | الرقم الإحصائي: ${esc(sc.statisticalNumber || '—')} |
+  منهاج ريفي: ${sc.ruralCurriculum ? 'نعم' : 'لا'} | نوع الدوام: ${esc(sc.dayType || '—')} |
+  مشترك مع: ${esc(sc.sharedWith || '—')}${sc.formerName ? ' | الاسم سابقاً: ' + esc(sc.formerName) : ''}
 </div>
-<h2>أعداد الطلاب</h2>
-${stuTableHtml}
+<h2>أعداد الطلاب والشعب</h2>
+<table><thead><tr><th rowspan="2">الصف</th><th rowspan="2">الشعب</th><th colspan="2">انكليزي</th>
+<th colspan="2">فرنسي</th><th colspan="2">روسي</th><th rowspan="2">المجموع</th></tr>
+<tr><th>ذكور</th><th>إناث</th><th>ذكور</th><th>إناث</th><th>ذكور</th><th>إناث</th></tr></thead>
+<tbody>${stuRows}</tbody>
+<tfoot><tr><td>المجموع</td><td>${t.sections}</td><td>${t.enM}</td><td>${t.enF}</td>
+<td>${t.frM}</td><td>${t.frF}</td><td>${t.ruM}</td><td>${t.ruF}</td><td>${t.total}</td></tr></tfoot></table>
+<div class="meta">حلقة (١): ${snap.students.byCycle.cycle1} | حلقة (٢): ${snap.students.byCycle.cycle2} |
+رياض: ${snap.students.byCycle.kinder} | ثانوي: ${snap.students.byCycle.secondary}</div>
 <h2>الجهاز الإداري</h2>
-${adminHtml}
-<p style="font-size:8pt">${escapeHtml(totals)}</p>
+<table><thead><tr><th>الوظيفة</th><th>العدد</th><th>كتابةً</th></tr></thead><tbody>${admRows}
+<tr><td><b>مجموع الإداريين</b></td><td><b>${snap.adminStaff.total}</b></td>
+<td><b>${esc(arNumWord(snap.adminStaff.total))}</b></td></tr></tbody></table>
+<h2>ملخّص العاملين</h2>
+<table><tbody>${wfRows}</tbody></table>
+<h2>التعديلات الطارئة</h2>
+<table><thead><tr><th>الاسم</th><th>العمل المسند</th><th>الفئة</th><th>نوع الحدث</th><th>تاريخ النفاذ</th></tr></thead>
+<tbody>${chgRows}</tbody></table>
+<div class="sig"><span>أمين سر المدرسة: ${esc(snap.signatures.secretary || '')}</span>
+<span>مدير المدرسة: ${esc(snap.signatures.principal || '')}</span></div>
 </body></html>`);
   win.document.close();
-  setTimeout(() => { win.focus(); win.print(); }, 600);
+  setTimeout(() => { win.focus(); win.print(); }, 400);
 }
 
 CustomSelect.enhance('stmt-month-sel');
 CustomSelect.enhance('stmt-edu-zone');
+CustomSelect.enhance('stmt-day-type');
 CustomSelect.enhance('stmt-b-ownership');
+CustomSelect.enhance('stmt-chg-group');
+CustomSelect.enhance('stmt-chg-event');
+
 
 // ── Start the app (after all declarations are initialized) ──
 bootstrap();
