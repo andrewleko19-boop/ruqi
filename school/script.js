@@ -787,6 +787,42 @@ btnLogoutOk.addEventListener('click', async () => {
   showScreen('login');
 });
 
+// ── In-app confirm ────────────────────────────────────────────────────────────
+// Replaces native confirm(): the browser's dialog renders the hosting domain
+// to the user ("andrewleko19-boop.github.io says…") and breaks the
+// installed-app illusion. Returns a promise that resolves true (continue) or
+// false (cancel) — same pattern as the teacher portal's askConfirm.
+const modalAsk     = el('modal-ask');
+const askModalText = el('ask-modal-text');
+const btnAskCancel = el('btn-ask-cancel');
+const btnAskOk     = el('btn-ask-ok');
+
+let _askResolve = null;
+
+function settleAsk(answer) {
+  if (!_askResolve) return;
+  const resolve = _askResolve;
+  _askResolve = null;
+  modalAsk.hidden = true;
+  resolve(answer);
+}
+
+function askConfirm(message, okLabel = 'متابعة') {
+  // A second call while one is open cancels the first rather than orphaning it.
+  settleAsk(false);
+  askModalText.textContent = message;
+  btnAskOk.textContent     = okLabel;
+  modalAsk.hidden = false;
+  btnAskOk.focus();
+  return new Promise((resolve) => { _askResolve = resolve; });
+}
+
+btnAskCancel.addEventListener('click', () => settleAsk(false));
+btnAskOk.addEventListener('click',     () => settleAsk(true));
+modalAsk.addEventListener('click', (e) => {
+  if (e.target === modalAsk) settleAsk(false);
+});
+
 // ── Change Password Drawer ────────────────────────────────────────────────────
 const pwdOverlay   = el('pwd-drawer-overlay');
 const btnChangePwd = el('btn-change-pwd');
@@ -1929,7 +1965,7 @@ async function handleRemoveTeacher(classId, teacherId, name) {
       _mngBusy = false;
       return;
     }
-    const ok = confirm(RW.removeConfirm(name));
+    const ok = await askConfirm(RW.removeConfirm(name));
     if (!ok) { _mngBusy = false; return; }
 
     await NDB.removeTeacherFromClass(classId, teacherId);
@@ -2156,7 +2192,7 @@ function buildSubjectRow(sub) {
 }
 
 async function deleteSubjectRow(sub) {
-  if (!confirm(`حذف المادة «${sub.name}»؟ ستُحذف درجاتها أيضاً.`)) return;
+  if (!await askConfirm(`حذف المادة «${sub.name}»؟ ستُحذف درجاتها أيضاً.`, 'حذف')) return;
   try {
     await NDB.deleteSubject(sub.id);
     toast('تم حذف المادة', 'success');
@@ -2767,7 +2803,7 @@ btnPromoteClass?.addEventListener('click', async () => {
     toast(`${incomplete.length} طالب لم تكتمل نتائجه — يجب إدخال كل الدرجات أولاً`, 'error');
     return;
   }
-  if (!confirm(`تأكيد تنفيذ الترفيع السنوي لـ ${cards.length} طالب؟ هذا الإجراء لا يمكن التراجع عنه.`)) return;
+  if (!await askConfirm(`تأكيد تنفيذ الترفيع السنوي لـ ${cards.length} طالب؟ هذا الإجراء لا يمكن التراجع عنه.`, 'ترفيع')) return;
 
   btnPromoteClass.disabled = true;
   btnPromoteClass.textContent = 'جارٍ الترفيع…';
@@ -2878,7 +2914,7 @@ el('btn-submit-result-sheet')?.addEventListener('click', async () => {
     toast(`${incomplete.length} طالب لم تكتمل نتائجه — أكمل الدرجات قبل إرسال الجلاء`, 'error');
     return;
   }
-  if (!confirm('إرسال الجلاء للمديرية؟ لن يمكن تعديله حتى تُراجعه المديرية.')) return;
+  if (!await askConfirm('إرسال الجلاء للمديرية؟ لن يمكن تعديله حتى تُراجعه المديرية.', 'إرسال')) return;
 
   const btn = el('btn-submit-result-sheet');
   const spinner = el('rs-submit-spinner');
@@ -3745,7 +3781,7 @@ if (personnelListEl) personnelListEl.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-act="del-personnel"]');
   if (!btn) return;
   const id = btn.closest('.staff-roster-item').dataset.id;
-  if (!confirm('إزالة هذا الموظف من السجل؟')) return;
+  if (!await askConfirm('إزالة هذا الموظف من السجل؟', 'إزالة')) return;
   try {
     await window.NSAMS_DB.setPersonnelActive(id, false);
     await Promise.all([loadPersonnelRoster(), loadRosterCard()]);
@@ -3954,7 +3990,7 @@ async function loadDropoutWarning() {
         const sid        = btn.dataset.flagId;
         const gradeRaw   = parseInt(btn.dataset.flagGrade, 10);
         const grade      = Number.isFinite(gradeRaw) ? gradeRaw : null;
-        if (!confirm('تأكيد ترقين قيد هذا الطالب؟')) return;
+        if (!await askConfirm('تأكيد ترقين قيد هذا الطالب؟', 'ترقين')) return;
         btn.disabled = true;
         try {
           await DB.flagStudentDropout(sid, grade);
@@ -5560,7 +5596,7 @@ asnList?.addEventListener('click', async (e) => {
   if (!asn) return;
   if (btn.dataset.act === 'edit') openAssignmentModal(asn);
   else if (btn.dataset.act === 'end') {
-    if (!confirm('إنهاء هذا التكليف؟ سيُزال جسر الصلاحية المُزامَن إن وُجد.')) return;
+    if (!await askConfirm('إنهاء هذا التكليف؟ سيُزال جسر الصلاحية المُزامَن إن وُجد.', 'إنهاء')) return;
     try {
       await NDB.endStaffAssignment(asn.id);
       toast('أُنهي التكليف', 'success');
@@ -5943,7 +5979,7 @@ async function submitStatement() {
   const label   = el('btn-submit-label');
   const spinner = el('stmt-submit-spinner');
   const errEl   = el('stmt-preview-error');
-  if (!confirm('إرسال البيان للمديرية؟ لن يمكن تعديله حتى تُراجعه المديرية.')) return;
+  if (!await askConfirm('إرسال البيان للمديرية؟ لن يمكن تعديله حتى تُراجعه المديرية.', 'إرسال')) return;
   if (btn) btn.disabled = true;
   if (label) label.textContent = 'جارٍ الإرسال...';
   if (spinner) spinner.hidden = false;

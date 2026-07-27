@@ -2998,6 +2998,20 @@
   </div>
 </div>
 
+<!-- Generic yes/no modal — replaces the native confirm() calls throughout this
+     portal. Distinct from #modal-confirm-logout, which has its own copy. -->
+<div id="modal-ask" class="confirm-modal-overlay" hidden role="dialog" aria-modal="true"
+     aria-labelledby="ask-modal-title">
+  <div class="confirm-modal-sheet">
+    <h2 class="confirm-modal-title" id="ask-modal-title">تأكيد</h2>
+    <p class="confirm-modal-sub" id="ask-modal-text">…</p>
+    <div class="confirm-modal-actions">
+      <button type="button" class="btn btn-outline" id="btn-ask-cancel">إلغاء</button>
+      <button type="button" class="btn btn-danger" id="btn-ask-ok">متابعة</button>
+    </div>
+  </div>
+</div>
+
 <!-- Load order: Supabase → shared DB → this module -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/qr.js"></script>
