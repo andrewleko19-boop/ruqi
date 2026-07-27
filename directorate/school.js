@@ -2,7 +2,7 @@
 // الجلسة مشتركة مع اللوحة (LAYER يُكتشف من مقطع المسار /directorate/)
 if (!window.NSAMS_DB) {
   document.body.innerHTML =
-    '<p style="padding:24px;color:#EF4444;font-family:sans-serif;direction:rtl">' +
+    '<p style="padding:24px;color:#e2685a;font-family:sans-serif;direction:rtl">' +
     'خطأ: تعذّر تحميل طبقة البيانات. تأكد من تضمين shared/db.js قبل هذا الملف.</p>';
   throw new Error('window.NSAMS_DB is not defined');
 }
@@ -146,10 +146,10 @@ function renderMiniMap() {
 // ══════════════════════════════════════════════
 const CHART_FONT = "'Segoe UI', system-ui, sans-serif";
 const CH = {
-  grid:      'rgba(38, 48, 72, 0.55)',
-  tick:      '#8a9bbf',
-  tooltipBg: '#131929',
-  green: '#22c55e', blue: '#4f8cff', amber: '#f59e0b', red: '#ef4444', purple: '#a855f7',
+  grid:      '#202a48',
+  tick:      '#75809c',
+  tooltipBg: '#0b1120',
+  green: '#3fbd80', blue: '#35b3ac', amber: '#e0a83f', red: '#e2685a', purple: '#a78bfa',
 };
 
 function chartBaseOptions() {
@@ -166,7 +166,7 @@ function chartBaseOptions() {
       tooltip: {
         rtl: true, textDirection: 'rtl',
         backgroundColor: CH.tooltipBg, borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1,
-        titleColor: '#e8edf7', bodyColor: '#8a9bbf', padding: 10,
+        titleColor: '#eef1f8', bodyColor: '#aab3c8', padding: 10,
         titleFont: { family: CHART_FONT }, bodyFont: { family: CHART_FONT },
       },
     },
@@ -210,7 +210,7 @@ function rateLineConfig(labels, datasetsData) {
         label: 'نسبة الحضور',
         data: datasetsData[0],
         borderColor: CH.blue,
-        backgroundColor: 'rgba(79,140,255,0.12)',
+        backgroundColor: 'rgba(53,179,172,0.18)',
         fill: true,
         tension: 0.35,
         spanGaps: false,

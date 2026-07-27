@@ -3,56 +3,74 @@
 /* ══════════════════════════════════════════════
    Design tokens – same system as school app
 ══════════════════════════════════════════════ */
-/* Palette: warm paper ground, navy ink, teal for interaction, brass for the
+/* Palette: deep navy ground, near-white ink, teal for interaction, brass for the
    official/records accent. The semantic trio (green/amber/red) is deliberately
    kept off the interaction hue so a school's status never reads as a control.
    Legacy names (--blue, --green-dim, …) are kept as aliases so the many rules
    and inline styles written against them keep working. */
 :root {
-  --paper:        #f5f2ea;
-  --paper-2:      #ffffff;
-  --line:         #d9d3c0;
-  --line-soft:    #e7e2d3;
+  /* Primitives */
+  --paper:        #11182b;
+  --paper-2:      #182140;
+  --ink:          #eef1f8;
+  --ink-soft:     #aab3c8;
+  --ink-faint:    #75809c;
+  --line:         #2b3557;
+  --line-soft:    #202a48;
 
-  --accent:       #0e6e6b;
-  --accent-tint:  #e2efee;
-  --brass:        #a6752b;
-  --brass-tint:   #f3e6d1;
+  --accent:       #35b3ac;
+  --accent-ink:   #08201f;
+  --accent-tint:  #14312f;
+  --brass:        #d4a24e;
+  --brass-tint:   #3a2c14;
 
+  --good:         #3fbd80;  --good-tint:    #10301f;
+  --warn:         #e0a83f;  --warn-tint:    #362a10;
+  --bad:          #e2685a;  --bad-tint:     #391814;
+  --no-data:      #7d8296;  --no-data-tint: #232a3f;
+
+  /* Surface aliases */
   --bg-base:      var(--paper);
   --bg-surface:   var(--paper);
   --bg-card:      var(--paper-2);
-  --bg-hover:     #efece2;
+  --bg-hover:     var(--line-soft);
   --border:       var(--line);
   --border-light: var(--line-soft);
 
+  /* Legacy aliases — kept so existing rules invert with the tokens */
   --blue:         var(--accent);
   --blue-dim:     var(--accent-tint);
-  --blue-dark:    #16223c;
-  --green:        #1f8a57;
-  --green-dim:    #e2f3e9;
-  --amber:        #c98a1f;
-  --amber-dim:    #faf0dd;
-  --red:          #c0392b;
-  --red-dim:      #fbe6e3;
-  --purple:       #7c5cbf;
-  --purple-dim:   #ece6f8;
+  --blue-dark:    #0b1120;
+  --green:        var(--good);
+  --green-dim:    var(--good-tint);
+  --amber:        var(--warn);
+  --amber-dim:    var(--warn-tint);
+  --red:          var(--bad);
+  --red-dim:      var(--bad-tint);
+  --purple:       #a78bfa;
+  --purple-dim:   #262046;
 
-  --text-primary:   #16223c;
-  --text-secondary: #4b5568;
-  --text-muted:     #7c8090;
+  --text-primary:   var(--ink);
+  --text-secondary: var(--ink-soft);
+  --text-muted:     var(--ink-faint);
 
   --radius-sm: 4px;
-  --radius:    8px;
-  --radius-lg: 12px;
+  --radius:    6px;
+  --radius-lg: 10px;
 
-  --shadow: 0 1px 2px rgba(22,34,60,.06), 0 8px 24px -12px rgba(22,34,60,.18);
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.55);
   --transition: 0.18s ease;
+
+  --font-num: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
 
   --topnav-h: 60px;
   --rail-w:   216px;
   --map-h: 440px;
 }
+
+/* The dashboard commits to the dark operations-room look the design defines;
+   it must not be re-tinted by the OS scheme heuristics on form controls. */
+:root { color-scheme: dark; }
 
 /* ══════ Reset ══════ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -247,8 +265,8 @@ body {
 }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
-.btn-primary { background: var(--blue); color: #fff; }
-.btn-primary:hover:not(:disabled) { background: #1a2744; }
+.btn-primary { background: var(--accent); color: var(--accent-ink); }
+.btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
 
 .btn-ghost {
   background: transparent;
@@ -260,21 +278,21 @@ body {
   color: var(--text-primary);
 }
 
-.btn-success { background: var(--green); color: #fff; }
-.btn-success:hover:not(:disabled) { background: #16a34a; }
+.btn-success { background: var(--green); color: #08210f; }
+.btn-success:hover:not(:disabled) { filter: brightness(1.08); }
 
-.btn-warning { background: var(--amber); color: #000; }
-.btn-warning:hover:not(:disabled) { background: #d97706; }
+.btn-warning { background: var(--amber); color: #291d05; }
+.btn-warning:hover:not(:disabled) { filter: brightness(1.08); }
 
-.btn-danger { background: var(--red); color: #fff; }
-.btn-danger:hover:not(:disabled) { background: #dc2626; }
+.btn-danger { background: var(--red); color: #2a0b08; }
+.btn-danger:hover:not(:disabled) { filter: brightness(1.08); }
 
 .btn-outline {
   background: transparent;
-  border: 1.5px solid var(--border, #cbd5e1);
-  color: var(--text-primary, #0f172a);
+  border: 1.5px solid var(--border);
+  color: var(--text-primary);
 }
-.btn-outline:hover:not(:disabled) { background: var(--bg-hover, #f0fafb); }
+.btn-outline:hover:not(:disabled) { background: var(--bg-hover); }
 
 .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
 .btn-full { width: 100%; justify-content: center; }
@@ -469,11 +487,28 @@ input::placeholder { color: var(--text-muted); }
 .legend-dot--red     { background: var(--red); }
 .legend-dot--no-data { background: var(--text-muted); }
 
-/* Leaflet popup on the light card theme */
+/* OpenStreetMap only serves light raster tiles. Inverting the tile pane (and
+   re-rotating the hue so water stays blue rather than turning orange) is the
+   standard way to land them on a dark surface; the marker/popup/control panes
+   are siblings, so they are untouched by the filter. */
+.leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) saturate(0.7) contrast(0.92);
+}
+.leaflet-container { background: var(--paper); }
+.leaflet-control-zoom a,
+.leaflet-control-attribution {
+  background: var(--paper-2) !important;
+  color: var(--ink-soft) !important;
+  border-color: var(--line) !important;
+}
+.leaflet-control-zoom a:hover { background: var(--line-soft) !important; }
+.leaflet-control-attribution a { color: var(--accent) !important; }
+
+/* Leaflet popup: a deeper navy card than the map surface, so it lifts. */
 .leaflet-popup-content-wrapper {
   background: var(--blue-dark);
   color: #f4f6fb;
-  border: none;
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: 0 14px 34px -10px rgba(0,0,0,.4);
 }
@@ -482,7 +517,9 @@ input::placeholder { color: var(--text-muted); }
 .popup-school-name { font-weight: 700; margin-bottom: 0.3rem; color: #fff; }
 .popup-row { display: flex; justify-content: space-between; gap: 1rem; color: rgba(244,246,251,.72); }
 .popup-row span:last-child { color: #fff; font-weight: 600; font-variant-numeric: tabular-nums; }
-.popup-link { color: var(--brass); font-weight: 700; text-decoration: none; }
+/* Leaflet ships `.leaflet-container a { color: #0078A8 }`, which outranks a bare
+   `.popup-link`; matching its specificity is what keeps the link brass. */
+.leaflet-container a.popup-link { color: var(--brass); font-weight: 700; text-decoration: none; }
 
 /* ══════════════════════════════════════════════
    PENDING REPORTS LIST
@@ -648,32 +685,30 @@ input::placeholder { color: var(--text-muted); }
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.87rem;
 }
-.data-table thead {
-  background: var(--bg-surface);
+.data-table th {
+  text-align: start;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+  font-weight: 800;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
   position: sticky;
   top: 0;
   z-index: 1;
-}
-.data-table th {
-  padding: 0.75rem 1rem;
-  text-align: right;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
+  background: var(--paper-2);
 }
 .data-table td {
-  padding: 0.7rem 1rem;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-secondary);
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+  color: var(--ink-soft);
   vertical-align: middle;
 }
-.data-table tbody tr:hover td { background: var(--bg-hover); }
+.data-table tbody tr:hover td { background: var(--paper); }
 .data-table tbody tr:last-child td { border-bottom: none; }
 
 .td-primary { color: var(--text-primary) !important; font-weight: 600; }
@@ -684,17 +719,25 @@ input::placeholder { color: var(--text-muted); }
 /* ══════════════════════════════════════════════
    STATUS BADGES
 ══════════════════════════════════════════════ */
+/* Chip, literal to the design file: pill, 11.5px/700, tint background, coloured
+   text, and a currentColor status dot supplied by CSS so no call site changes. */
 .badge, .status-badge, .type-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
-  padding: 0.18rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.73rem;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 11.5px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  border: 1px solid transparent;
   white-space: nowrap;
+}
+.status-badge::before, .type-badge::before {
+  content: '';
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
 }
 
 .badge--amber   { background: var(--amber-dim); color: var(--amber); }
@@ -802,8 +845,8 @@ input::placeholder { color: var(--text-muted); }
   min-width: 16px; height: 16px;
   padding: 0 4px;
   border-radius: 8px;
-  background: #EF4444;
-  color: #fff;
+  background: var(--bad);
+  color: #2a0b08;
   font-size: .65rem;
   font-weight: 700;
   line-height: 16px;
@@ -818,39 +861,42 @@ input::placeholder { color: var(--text-muted); }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.15rem 0.55rem;
-  border-radius: 9999px;
-  font-size: 0.72rem;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 11.5px;
   font-weight: 700;
+  border: 1px solid transparent;
   white-space: nowrap;
 }
-.sev-none { background: var(--surface-2, #f1f5f9); color: var(--text-secondary); }
-.sev-1    { background: #dcfce7; color: #166534; }
-.sev-2    { background: #d1fae5; color: #065f46; }
-.sev-3    { background: #fef3c7; color: #92400e; }
-.sev-4    { background: #fee2e2; color: #991b1b; }
-.sev-5    { background: #7f1d1d; color: #fff; }
+.sev-none { background: var(--no-data-tint); color: var(--no-data); }
+.sev-1    { background: var(--good-tint); color: var(--good); }
+.sev-2    { background: var(--good-tint); color: var(--good); }
+.sev-3    { background: var(--warn-tint); color: var(--warn); }
+.sev-4    { background: var(--bad-tint);  color: var(--bad); }
+/* Severity 5 is the only inverted chip — the top of the scale must not read as
+   just another tint. */
+.sev-5    { background: var(--bad); color: #2a0b08; }
 
 /* ══════════════════════════════════════════════
    PHASE 1 — OVERDUE / SLA
 ══════════════════════════════════════════════ */
 tr.row-overdue td:first-child {
-  border-inline-start: 3px solid var(--red, #ef4444);
+  border-inline-start: 3px solid var(--red);
 }
 .pending-card.row-overdue {
-  border-inline-start: 3px solid var(--red, #ef4444);
+  border-inline-start: 3px solid var(--red);
   animation: pulse-border 2s ease-in-out infinite;
 }
 @keyframes pulse-border {
-  0%, 100% { border-inline-start-color: var(--red, #ef4444); }
+  0%, 100% { border-inline-start-color: var(--red); }
   50%       { border-inline-start-color: transparent; }
 }
 .overdue-tag {
   display: inline-block;
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--bad-tint);
+  color: var(--bad);
   font-size: 0.68rem;
   font-weight: 700;
   margin-inline-start: 0.35rem;
@@ -861,7 +907,7 @@ tr.row-overdue td:first-child {
    PHASE 1 — ROW FLASH (new report)
 ══════════════════════════════════════════════ */
 @keyframes row-flash-in {
-  0%   { background: rgba(37, 99, 235, 0.35); }
+  0%   { background: color-mix(in srgb, var(--accent) 32%, transparent); }
   100% { background: transparent; }
 }
 tr.row-flash {
@@ -878,14 +924,14 @@ tr.row-flash {
   margin-inline-start: 0.6rem;
   font-size: 0.72rem;
   font-weight: 600;
-  color: var(--green, #16a34a);
+  color: var(--green);
   vertical-align: middle;
 }
 .live-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--green, #16a34a);
+  background: var(--green);
   animation: live-pulse 1.8s ease-in-out infinite;
   flex-shrink: 0;
 }
@@ -916,18 +962,18 @@ tr.row-flash {
 .progress-track {
   width: 100%;
   height: 8px;
-  background: var(--surface-2, #e2e8f0);
+  background: var(--line-soft);
   border-radius: 4px;
   overflow: hidden;
 }
 .progress-fill {
   height: 100%;
   border-radius: 4px;
-  background: var(--green, #16a34a);
+  background: var(--green);
   transition: width 0.7s ease, background 0.4s;
 }
-.progress-fill.pct-warn  { background: var(--amber, #d97706); }
-.progress-fill.pct-low   { background: var(--red,   #ef4444); }
+.progress-fill.pct-warn  { background: var(--amber); }
+.progress-fill.pct-low   { background: var(--red); }
 
 .silent-list {
   display: flex;
@@ -942,8 +988,8 @@ tr.row-flash {
   gap: 0.3rem;
   padding: 0.2rem 0.55rem;
   border-radius: 9999px;
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--bad-tint);
+  color: var(--bad);
   font-size: 0.76rem;
   font-weight: 600;
 }
@@ -963,7 +1009,7 @@ tr.row-flash {
   display: inline-block;
   width: 60px;
   height: 6px;
-  background: var(--surface-2, #e2e8f0);
+  background: var(--line-soft);
   border-radius: 3px;
   overflow: hidden;
   vertical-align: middle;
@@ -972,7 +1018,7 @@ tr.row-flash {
   display: block;
   height: 100%;
   border-radius: 3px;
-  background: var(--blue, #2563eb);
+  background: var(--blue);
   transition: width 0.6s ease;
 }
 
@@ -1297,11 +1343,20 @@ tr.row-flash {
 .dir-req-badge {
   display: inline-flex;
   align-items: center;
-  padding: 0.18rem 0.65rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 11.5px;
   font-weight: 700;
+  gap: 5px;
+  border: 1px solid transparent;
   white-space: nowrap;
+}
+.dir-req-badge::before {
+  content: '';
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
 }
 .dir-req-badge--pending  { background: var(--amber-dim); color: var(--amber); }
 .dir-req-badge--approved { background: var(--green-dim); color: var(--green); }
@@ -1514,7 +1569,7 @@ select.csel-native {
   white-space: normal; line-height: 1.4;
 }
 .csel-option:hover { background: var(--blue-dim); }
-.csel-option.is-selected { background: var(--blue); color: #fff; font-weight: 600; }
+.csel-option.is-selected { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .csel-option.is-disabled { color: var(--text-muted); cursor: not-allowed; opacity: .7; }
 .csel-option.is-disabled:hover { background: transparent; }
 
@@ -1540,7 +1595,8 @@ select.csel-native {
 }
 .confirm-modal-overlay[hidden] { display: none; }
 .confirm-modal-sheet {
-  background: var(--bg-card, #fff);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 28px 24px 20px;
   width: min(340px, 100%);
@@ -1548,8 +1604,8 @@ select.csel-native {
   text-align: center;
   display: flex; flex-direction: column; gap: 8px;
 }
-.confirm-modal-title { font-size: 1.1rem; font-weight: 700; margin: 0; color: var(--text-primary, #0f172a); }
-.confirm-modal-sub   { font-size: .9rem; color: var(--text-muted, #64748b); margin: 0 0 8px; }
+.confirm-modal-title { font-size: 1.1rem; font-weight: 700; margin: 0; color: var(--text-primary); }
+.confirm-modal-sub   { font-size: .9rem; color: var(--text-muted); margin: 0 0 8px; }
 .confirm-modal-actions { display: flex; gap: 10px; margin-top: 4px; }
 .confirm-modal-actions .btn { flex: 1; }
 
@@ -1603,7 +1659,7 @@ select.csel-native {
 /* ── Search inputs get an inline magnifier (RTL: sits on the right) ── */
 input[type="search"].input-sm {
   padding-inline-start: 1.9rem;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c8090' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2375809c' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.55rem center;
   background-size: 0.9rem;
