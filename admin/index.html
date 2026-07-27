@@ -491,14 +491,21 @@
         <label>البريد الإلكتروني</label>
         <span id="cred-email">—</span>
       </div>
-      <div class="cred-field">
-        <label>كلمة المرور</label>
-        <span id="cred-password">—</span>
+      <!-- كلمة المرور لا تُقرأ ولا تُخزَّن — تُولَّد جديدة وتُعرَض مرة واحدة -->
+      <div class="cred-reset hidden" id="cred-reset-box">
+        <label>كلمة المرور الجديدة</label>
+        <div class="cred-reset-row">
+          <code id="cred-newpass">—</code>
+          <button type="button" class="btn btn-ghost btn-sm" id="cred-copy">نسخ</button>
+        </div>
+        <p class="cred-warn">اكتبها الآن — لن تُعرَض مرة أخرى، ولم تعد تُخزَّن في قاعدة البيانات.</p>
       </div>
+      <div id="cred-msg" class="error-msg hidden"></div>
       <div id="cred-not-found" class="error-msg hidden" style="background:none;border:none;color:var(--text-muted)">
         لا تتوفر بيانات حساب لهذا المستخدم.
       </div>
       <div class="modal-footer">
+        <button class="btn btn-primary" id="cred-reset">إنشاء كلمة مرور جديدة</button>
         <button class="btn btn-ghost" id="cred-modal-ok">إغلاق</button>
       </div>
     </div>

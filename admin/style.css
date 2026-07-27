@@ -687,3 +687,31 @@ select.csel-native {
   color: var(--text, #0f172a);
 }
 .btn-outline:hover { background: var(--bg, #f0f4fa); }
+
+/* ── إعادة تعيين كلمة المرور (تُعرَض مرة واحدة) ── */
+.cred-reset {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-hover, rgba(0,0,0,.03));
+  border-radius: 8px;
+}
+.cred-reset > label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.cred-reset-row { display: flex; align-items: center; gap: 8px; }
+.cred-reset-row code {
+  flex: 1;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.cred-warn { margin-top: 8px; font-size: 0.72rem; font-weight: 600; opacity: .85; }
