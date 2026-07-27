@@ -3710,3 +3710,194 @@ end $$;
 
 alter table public.admin_credentials alter column password drop not null;
 alter table public.admin_credentials add column if not exists updated_at timestamptz;
+
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- §20 — البيان الشهري: ما يلزم لتغطية النموذج الرسمي بالكامل
+-- ═════════════════════════════════════════════════════════════════════════════
+-- تبويب البيان كان يغطّي ثلث الورقة الأولى فقط، وكان يحفظ ٢٣ حقلاً من هوية
+-- المدرسة وبنائها في localStorage — أي أنها تضيع بتبديل الجهاز ولا تصل
+-- المديرية إطلاقاً. هذا القسم ينقلها إلى القاعدة، ويضيف الحقول التي تطلبها
+-- أوراق الكوادر الثلاث، ويصلح قيداً ناقصاً كان يُفشل حفظ الإجازات.
+--
+-- كل الأوامر idempotent: التنفيذ مرّتين لا يضرّ.
+
+-- ── ٢٠.١  هوية المدرسة (تقتل الاعتماد على localStorage) ─────────────────────
+alter table public.schools
+  add column if not exists village          text,
+  add column if not exists address          text,
+  add column if not exists phone            text,
+  add column if not exists shared_with      text,
+  add column if not exists former_name      text,
+  add column if not exists educational_zone text;
+
+-- نوع الدوام (كامل/نصفي) محورٌ مستقلّ تماماً عن schools.shift (صباحي/مسائي).
+-- كان التصدير يقابل shift بـ full|half فيكتب «morning» داخل خانة كامل/نصفي في
+-- الورقة الرسمية. العمودان مختلفان ويلزم لكلٍّ منهما خانته.
+do $$
+begin
+  if not exists (select 1 from information_schema.columns
+                 where table_schema='public' and table_name='schools' and column_name='day_type') then
+    alter table public.schools add column day_type text;
+    alter table public.schools add constraint schools_day_type_chk
+      check (day_type is null or day_type in ('كامل','نصفي'));
+  end if;
+end $$;
+
+-- ── ٢٠.٢  البناء المدرسي: صفّ واحد لكل مدرسة، ثابت عبر الأشهر ───────────────
+create table if not exists public.school_building (
+  school_id     uuid        primary key references public.schools(id) on delete cascade,
+  floors        int,
+  ownership     text        check (ownership is null or ownership in ('حكومي','مستأجر')),
+  class_rooms   int,
+  admin_rooms   int,
+  unused_rooms  int,
+  basement      int,
+  lab           int,
+  computer_lab  int,
+  library       int,
+  secretariat   int,
+  gym           int,
+  storage       int,
+  guidance      int,
+  health_room   int,
+  workshop      int,
+  theater       int,
+  yard          int,
+  other_halls   int,
+  updated_at    timestamptz not null default now()
+);
+
+alter table public.school_building enable row level security;
+
+drop policy if exists school_building_school_admin on public.school_building;
+drop policy if exists school_building_dir_sel      on public.school_building;
+
+create policy school_building_school_admin on public.school_building
+  for all to authenticated
+  using (
+    school_id = current_user_school_id()
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'school_admin')
+  )
+  with check (
+    school_id = current_user_school_id()
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'school_admin')
+  );
+
+create policy school_building_dir_sel on public.school_building
+  for select to authenticated
+  using (
+    exists (
+      select 1 from public.schools s
+      where s.id = school_building.school_id
+        and s.directorate_id = current_user_directorate_id()
+    )
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'directorate_user')
+  );
+
+grant select, insert, update on public.school_building to authenticated;
+
+-- ── ٢٠.٣  حقول الكوادر التي تطلبها الأوراق الثلاث ولم تكن موجودة ────────────
+alter table public.staff_records
+  add column if not exists landline               text,   -- الهاتف الأرضي
+  add column if not exists teaching_rank          text,   -- معلم / مدرس / مدرس مساعد
+  add column if not exists teaching_hours         int,    -- عدد الساعات التي يدرسها
+  add column if not exists quota_subjects         text,   -- المواد التي يكمل فيها نصابه في مدرسته وعددها
+  add column if not exists quota_school_external  text,   -- المدرسة التي يكمل نصابه بها وعددها
+  add column if not exists assigned_grade         text,   -- الصف
+  add column if not exists assigned_section       text;   -- الشعبة
+
+-- teaching_rank استنتاجيّ يُحسب مرّة ثم يُخزَّن، فلا يُعاد تخمينه كل شهر.
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'staff_records_teaching_rank_chk') then
+    alter table public.staff_records add constraint staff_records_teaching_rank_chk
+      check (teaching_rank is null or teaching_rank in ('معلم','مدرس','مدرس مساعد'));
+  end if;
+end $$;
+
+-- ── ٢٠.٤  لغة الشعبة → تؤتمت ٤ من ٦ خانات في جدول الطلاب ────────────────────
+alter table public.classes
+  add column if not exists foreign_language text default 'انكليزي';
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'classes_foreign_language_chk') then
+    alter table public.classes add constraint classes_foreign_language_chk
+      check (foreign_language is null or foreign_language in ('انكليزي','فرنسي','روسي'));
+  end if;
+end $$;
+
+-- ── ٢٠.٥  القيد الفريد الذي يفتقده upsertStaffLeave ─────────────────────────
+-- كان الحفظ يمرّر onConflict على (staff_id, leave_type, month, year) وهو قيد
+-- غير موجود، فيفشل الطلب وقت التنفيذ.
+create unique index if not exists staff_leaves_unique_period
+  on public.staff_leaves (staff_id, leave_type, month, year);
+
+-- ── ٢٠.٦  التعديلات الطارئة: فصل محور الكشف عن محور الحدث الرسمي ────────────
+-- change_type يصف ما رآه النظام (أُضيف/غادر/تغيّر)، أمّا العمود الأخير في
+-- الورقة الرسمية فهو «لماذا» — والنظام لا يعرفه. لذلك event_type منفصل
+-- ويملؤه المدير، و confirmed_at يوثّق أن بشراً أقرّ السطر.
+alter table public.monthly_statement_changes
+  add column if not exists event_type   text,
+  add column if not exists staff_group  text,
+  add column if not exists detected     boolean not null default false,
+  add column if not exists confirmed_at timestamptz;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'stmt_changes_event_type_chk') then
+    alter table public.monthly_statement_changes add constraint stmt_changes_event_type_chk
+      check (event_type is null or event_type in ('مباشرة','انفكاك','وفاة','تقاعد','نقل','أخرى'));
+  end if;
+end $$;
+
+-- ── ٢٠.٧  السير الذاتية الكاملة — جدول منفصل محمي ───────────────────────────
+-- قرار خصوصية مقصود: الرقم الوطني واسم الأم وتاريخ الولادة والهاتف والعنوان
+-- **لا تدخل** monthly_statements.snapshot_data — لأن اللقطة تُقرأ في شاشات
+-- المديرية العامة. تذهب إلى هذا الجدول وحده، ولا تُقرأ إلا بعد إرسال البيان
+-- ومن مديرية المدرسة نفسها. get_school_staff_for_directorate يبقى كما هو
+-- (منقّحاً) للقراءة اليومية خارج البيان.
+create table if not exists public.monthly_statement_rosters (
+  statement_id uuid        primary key references public.monthly_statements(id) on delete cascade,
+  school_id    uuid        not null references public.schools(id) on delete cascade,
+  rosters      jsonb       not null default '{}',   -- { admin:[…], teaching:[…], support:[…] }
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+
+create index if not exists stmt_rosters_school on public.monthly_statement_rosters (school_id);
+
+alter table public.monthly_statement_rosters enable row level security;
+
+drop policy if exists stmt_rosters_school_admin on public.monthly_statement_rosters;
+drop policy if exists stmt_rosters_dir_sel      on public.monthly_statement_rosters;
+
+create policy stmt_rosters_school_admin on public.monthly_statement_rosters
+  for all to authenticated
+  using (
+    school_id = current_user_school_id()
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'school_admin')
+  )
+  with check (
+    school_id = current_user_school_id()
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'school_admin')
+  );
+
+-- المديرية تقرأ فقط بعد الإرسال — لا اطّلاع على مسوّدة لم تُسلَّم بعد.
+create policy stmt_rosters_dir_sel on public.monthly_statement_rosters
+  for select to authenticated
+  using (
+    exists (
+      select 1
+      from public.monthly_statements ms
+      join public.schools s on s.id = ms.school_id
+      where ms.id = monthly_statement_rosters.statement_id
+        and ms.status in ('submitted','approved')
+        and s.directorate_id = current_user_directorate_id()
+    )
+    and exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'directorate_user')
+  );
+
+grant select, insert, update on public.monthly_statement_rosters to authenticated;
+-- لا delete: السجل جزء من وثيقة رسمية مُسلَّمة.
