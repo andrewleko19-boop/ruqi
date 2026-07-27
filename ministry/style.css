@@ -45,6 +45,12 @@
    so browser-supplied control chrome must follow it. */
 :root { color-scheme: dark; }
 
+/* Any rule that sets `display` outranks the UA's `[hidden] { display: none }`,
+   so toggling the attribute silently stops working — that is why the approvals
+   spinners span forever under a loaded table. One guard, applied everywhere,
+   instead of chasing each component that grows a display rule later. */
+[hidden] { display: none !important; }
+
 body {
   font-family: 'Segoe UI', system-ui, sans-serif;
   background: var(--bg);

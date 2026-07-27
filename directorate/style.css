@@ -72,6 +72,12 @@
    it must not be re-tinted by the OS scheme heuristics on form controls. */
 :root { color-scheme: dark; }
 
+/* Any rule that sets `display` outranks the UA's `[hidden] { display: none }`,
+   so toggling the attribute silently stops working — that is why the approvals
+   spinners span forever under a loaded table. One guard, applied everywhere,
+   instead of chasing each component that grows a display rule later. */
+[hidden] { display: none !important; }
+
 /* ══════ Reset ══════ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 15px; }
@@ -1378,7 +1384,10 @@ tr.row-flash {
   align-items: center;
   justify-content: center;
 }
-.modal-overlay.hidden { display: none; }
+/* `display:flex` above outranks the UA rule for [hidden], so both the legacy
+   .hidden class and the attribute have to be spelled out here. */
+.modal-overlay.hidden,
+.modal-overlay[hidden] { display: none; }
 
 .modal-box {
   background: var(--bg-card);
@@ -1677,3 +1686,134 @@ input[type="search"].input-sm {
   .live-pill { display: none; }
   .topnav { padding: 0 0.9rem; gap: 0.6rem; }
 }
+
+/* ══════════════════════════════════════════════
+   الاعتماد الجماعي — شريط + خانات الاختيار
+══════════════════════════════════════════════ */
+.check {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  vertical-align: middle;
+}
+.th-check, .td-check { width: 34px; padding-inline-end: 0 !important; }
+
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 1.1rem 0.8rem;
+  padding: 10px 16px;
+  background: var(--accent-tint);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: var(--radius);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.bulk-bar[hidden] { display: none; }
+.bulk-bar .icon { width: 16px; height: 16px; flex-shrink: 0; }
+.bulk-bar-spacer { flex: 1; }
+
+.bulk-mixed {
+  margin: 0 1.1rem 0.8rem;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--warn-tint);
+  color: var(--warn);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.bulk-mixed[hidden] { display: none; }
+
+@media (max-width: 700px) {
+  .bulk-bar { flex-wrap: wrap; }
+  .bulk-bar-spacer { display: none; }
+}
+
+/* ══════════════════════════════════════════════
+   تفصيل الطلاب داخل نافذة الجلاء
+══════════════════════════════════════════════ */
+.rs-students { margin-top: 14px; border-top: 1px solid var(--line-soft); padding-top: 12px; }
+.rs-students[hidden] { display: none; }
+.rs-students-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.rs-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.rs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.rs-chip--good    { background: var(--good-tint); color: var(--good); }
+.rs-chip--bad     { background: var(--bad-tint);  color: var(--bad); }
+.rs-chip--outline { background: transparent; border-color: var(--line); color: var(--ink-soft); }
+.rs-chip--warn    { background: var(--warn-tint); color: var(--warn); }
+
+.rs-only-failed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: auto;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* A class roll can run past 40 names, so the list scrolls inside the modal
+   instead of pushing the decision buttons below the fold. */
+.rs-student-list {
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+}
+.rs-student-list::-webkit-scrollbar { width: 5px; }
+.rs-student-list::-webkit-scrollbar-track { background: transparent; }
+.rs-student-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+.rs-student-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 12.5px;
+}
+.rs-student-row:last-child { border-bottom: none; }
+.rs-student-row .nm { flex: 1; font-weight: 700; color: var(--text-primary); min-width: 0; }
+.rs-student-row .pct {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.rs-student-empty { padding: 18px; text-align: center; color: var(--text-muted); font-size: 0.85rem; }
+
+/* ══════════════════════════════════════════════
+   المستوى الأكاديمي
+══════════════════════════════════════════════ */
+.acad-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.acad-title { font-size: 1.25rem; font-weight: 800; color: var(--text-primary); }
+.stats-row--4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 900px) { .stats-row--4 { grid-template-columns: repeat(2, 1fr); } }
+
+.acad-sheets-total { font-size: 0.9rem; color: var(--text-muted); font-weight: 600; }

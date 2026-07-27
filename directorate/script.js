@@ -174,6 +174,8 @@ function showApp(session) {
   setupDirSeg();
   setupDirSchools();
   setupDirPrincipals();
+  setupRsBulk();
+  setupAcademicTerm();
 }
 
 // ══════════════════════════════════════════════
@@ -1091,6 +1093,7 @@ const CH = {
   amber: cssVar('--warn',   '#e0a83f'),
   red:   cssVar('--bad',    '#e2685a'),
   purple: cssVar('--purple', '#a78bfa'),
+  line:   cssVar('--line',   '#2b3557'),
 };
 // Canvas fillStyle cannot parse color-mix(), so the area fill is derived here.
 CH.blueFill = hexToRgba(CH.blue, 0.18);
@@ -1944,9 +1947,11 @@ async function loadResultSheets() {
       countEl.textContent = pending ? `${pending} بانتظار الإجراء` : '';
       countEl.hidden = !pending;
     }
-    if (!sheets.length) { if (emptyEl) emptyEl.hidden = false; return; }
+    renderAcademic();
+    if (!sheets.length) { if (emptyEl) emptyEl.hidden = false; refreshBulkBar(); return; }
     sheets.forEach(s => listEl.appendChild(buildRsRow(s)));
     if (wrapEl) wrapEl.hidden = false;
+    refreshBulkBar();
   } catch (err) {
     console.error('[DirResultSheets] load', err);
     if (loadEl) loadEl.hidden = true;
@@ -1975,7 +1980,16 @@ function buildRsRow(s) {
          data-snap='${esc(JSON.stringify(s.snapshot_data || {}))}'>${s.status === 'approved' ? 'إصدار' : 'مراجعة'}</button>`
     : `<span class="dir-req-reason">${s.notes ? esc(s.notes) : '—'}</span>`;
 
+  // Only sheets still awaiting a decision are selectable — there is nothing to
+  // batch about one that is already issued or rejected.
+  const checkHtml = actionable
+    ? `<input type="checkbox" class="check dir-rs-check" data-id="${esc(s.id)}"
+         data-status="${esc(s.status)}"
+         aria-label="تحديد جلاء ${esc(schoolName)} — ${esc(clsLabel)}" />`
+    : '';
+
   tr.innerHTML = `
+    <td class="td-check">${checkHtml}</td>
     <td>${esc(schoolName)}</td>
     <td>${esc(clsLabel)} <small style="color:var(--text-secondary)">(${esc(termLabel)})</small></td>
     <td>${statusHtml}</td>
@@ -1983,6 +1997,144 @@ function buildRsRow(s) {
   `;
   return tr;
 }
+
+// ══════════════════════════════════════════════
+//  الاعتماد الجماعي للجلاءات
+// ══════════════════════════════════════════════
+// A batch carries exactly one decision, so a mixed selection is refused rather
+// than silently split: "approve" and "issue" are different acts, and issuing is
+// final (it publishes certificates). Homogeneous selections only.
+
+function _rsChecked() {
+  return Array.from(document.querySelectorAll('.dir-rs-check:checked'));
+}
+
+// The single status shared by the whole selection, or null when it is mixed.
+function _rsSelectionStatus(boxes) {
+  if (!boxes.length) return null;
+  const first = boxes[0].dataset.status;
+  return boxes.every(b => b.dataset.status === first) ? first : null;
+}
+
+function refreshBulkBar() {
+  const bar     = document.getElementById('dir-bulk-bar');
+  const mixed   = document.getElementById('dir-bulk-mixed');
+  const countEl = document.getElementById('dir-bulk-count');
+  const applyBtn = document.getElementById('dir-bulk-apply');
+  const allBox  = document.getElementById('dir-rs-check-all');
+  if (!bar) return;
+
+  const boxes  = _rsChecked();
+  const status = _rsSelectionStatus(boxes);
+  bar.hidden   = boxes.length === 0;
+  if (mixed) mixed.hidden = !(boxes.length > 0 && status === null);
+
+  if (allBox) {
+    const selectable = document.querySelectorAll('.dir-rs-check').length;
+    allBox.checked = selectable > 0 && boxes.length === selectable;
+    allBox.indeterminate = boxes.length > 0 && boxes.length < selectable;
+  }
+
+  if (!boxes.length) return;
+  if (countEl) countEl.textContent = `${boxes.length} جلاء محدَّد`;
+  if (applyBtn) {
+    applyBtn.disabled = status === null;
+    applyBtn.textContent = status === 'approved'
+      ? `إصدار المحدَّد نهائياً (${boxes.length})`
+      : `اعتماد المحدَّد (${boxes.length})`;
+  }
+}
+
+function clearBulkSelection() {
+  document.querySelectorAll('.dir-rs-check').forEach(b => { b.checked = false; });
+  refreshBulkBar();
+}
+
+function setupRsBulk() {
+  // Delegated: rows are re-rendered on every refresh, so per-row binding would
+  // be lost each time loadResultSheets() runs.
+  document.getElementById('dir-rs-list')?.addEventListener('change', (e) => {
+    if (e.target.classList?.contains('dir-rs-check')) refreshBulkBar();
+  });
+
+  document.getElementById('dir-rs-check-all')?.addEventListener('change', (e) => {
+    const boxes = Array.from(document.querySelectorAll('.dir-rs-check'));
+    if (!e.target.checked) { clearBulkSelection(); return; }
+    // "Select all" must stay within one decision. Pending review is the bulk
+    // step that matters, so it wins whenever both groups are present.
+    const target = boxes.some(b => b.dataset.status === 'submitted') ? 'submitted' : 'approved';
+    boxes.forEach(b => { b.checked = b.dataset.status === target; });
+    refreshBulkBar();
+  });
+
+  document.getElementById('dir-bulk-clear')?.addEventListener('click', clearBulkSelection);
+  document.getElementById('dir-bulk-apply')?.addEventListener('click', runBulkReview);
+}
+
+async function runBulkReview() {
+  const boxes  = _rsChecked();
+  const status = _rsSelectionStatus(boxes);
+  if (!boxes.length || status === null) return;
+
+  const ids      = boxes.map(b => b.dataset.id);
+  const decision = status === 'approved' ? 'issued' : 'approved';
+  const ok = await dirConfirm(
+    decision === 'issued' ? 'إصدار نهائي جماعي' : 'اعتماد جماعي',
+    decision === 'issued'
+      ? `سيصدر ${ids.length} جلاء نهائياً وتُنشَر شهاداتها. لا يمكن التراجع عن هذا الإجراء.`
+      : `سيُعتمَد ${ids.length} جلاء وتنتقل لانتظار الإصدار النهائي.`
+  );
+  if (!ok) return;
+
+  const applyBtn = document.getElementById('dir-bulk-apply');
+  if (applyBtn) applyBtn.disabled = true;
+
+  // Sequential, not Promise.all: each call is a separate RPC write and a
+  // partial failure must be reportable per sheet rather than collapsing the
+  // whole batch into one rejected promise.
+  let done = 0;
+  const failed = [];
+  for (const id of ids) {
+    try { await reviewResultSheet(id, decision, null); done++; }
+    catch (err) { console.error('[DirResultSheets] bulk', id, err); failed.push(err?.message || id); }
+  }
+
+  if (applyBtn) applyBtn.disabled = false;
+  const verb = decision === 'issued' ? 'صدر' : 'اعتُمد';
+  if (failed.length) {
+    showToast(`${verb} ${done} من ${ids.length}`, `تعذّر ${failed.length}: ${failed[0]}`, 'warning');
+  } else {
+    showToast(`${verb} ${done} جلاء ✓`, '', 'success');
+  }
+  clearBulkSelection();
+  await loadResultSheets();
+  refreshRailCounts();
+}
+
+// A promise-based confirm rendered in-app (never the browser's own dialog).
+let _dirConfirmResolve = null;
+function dirConfirm(title, message) {
+  const overlay = document.getElementById('dir-confirm-modal');
+  if (!overlay) return Promise.resolve(false);      // fail closed
+  document.getElementById('dir-confirm-title').textContent = title;
+  document.getElementById('dir-confirm-text').textContent  = message;
+  overlay.hidden = false;
+  return new Promise(resolve => { _dirConfirmResolve = resolve; });
+}
+
+function settleDirConfirm(value) {
+  const overlay = document.getElementById('dir-confirm-modal');
+  if (overlay) overlay.hidden = true;
+  const r = _dirConfirmResolve;
+  _dirConfirmResolve = null;
+  if (r) r(value);
+}
+
+document.getElementById('dir-confirm-ok')?.addEventListener('click',     () => settleDirConfirm(true));
+document.getElementById('dir-confirm-cancel')?.addEventListener('click', () => settleDirConfirm(false));
+document.getElementById('dir-confirm-modal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'dir-confirm-modal') settleDirConfirm(false);
+});
 
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.dir-rs-review-btn');
@@ -1997,6 +2149,13 @@ document.addEventListener('click', (e) => {
   document.getElementById('dir-rs-body').innerHTML = buildRsSummary(snap);
   document.getElementById('dir-rs-notes').value = '';
   document.getElementById('dir-rs-msg').hidden = true;
+
+  // Student roll — the whole list already travelled inside snapshot_data, so
+  // opening the drill-down costs no extra query.
+  _reviewingStudents = Array.isArray(snap.students) ? snap.students : [];
+  const failedOnly = document.getElementById('dir-rs-failed-only');
+  if (failedOnly) failedOnly.checked = false;
+  renderRsStudents();
 
   // أزرار حسب الحالة: submitted → موافقة/رفض · approved → إصدار/رفض
   const approveBtn = document.getElementById('dir-rs-approve');
@@ -2023,6 +2182,185 @@ function buildRsSummary(snap) {
   return rows.map(([k, v]) =>
     `<div class="dir-req-detail"><span>${esc(k)}</span><strong>${esc(String(v ?? '—'))}</strong></div>`
   ).join('');
+}
+
+// ── تفصيل الطلاب داخل نافذة الجلاء ──────────────────────────────────────────
+let _reviewingStudents = [];
+
+function renderRsStudents() {
+  const wrap    = document.getElementById('dir-rs-students');
+  const chipsEl = document.getElementById('dir-rs-chips');
+  const listEl  = document.getElementById('dir-rs-student-list');
+  if (!wrap || !listEl) return;
+
+  const all = _reviewingStudents;
+  wrap.hidden = all.length === 0;
+  if (!all.length) return;
+
+  const passed     = all.filter(s => s.result === 'ناجح').length;
+  const failed     = all.filter(s => s.result === 'راسب').length;
+  const incomplete = all.filter(s => !s.complete).length;
+  if (chipsEl) {
+    chipsEl.innerHTML =
+      `<span class="rs-chip rs-chip--good">ناجح ${passed}</span>` +
+      `<span class="rs-chip rs-chip--bad">راسب ${failed}</span>` +
+      (incomplete ? `<span class="rs-chip rs-chip--warn">غير مكتمل ${incomplete}</span>` : '') +
+      `<span class="rs-chip rs-chip--outline">الإجمالي ${all.length}</span>`;
+  }
+
+  const onlyFailed = document.getElementById('dir-rs-failed-only')?.checked;
+  const shown = onlyFailed ? all.filter(s => s.result === 'راسب') : all;
+  if (!shown.length) {
+    listEl.innerHTML = '<div class="rs-student-empty">لا يوجد طلاب راسبون في هذا الصف ✓</div>';
+    return;
+  }
+
+  listEl.innerHTML = shown.map(s => {
+    const pct = Number.isFinite(Number(s.finalPercent))
+      ? `${Number(s.finalPercent).toFixed(1)}٪` : '—';
+    // Grace marks changed the outcome, so the reviewer is told rather than
+    // shown a bare pass they cannot account for.
+    const grace = Number(s.graceMarks) > 0
+      ? `<span class="rs-chip rs-chip--warn">مساعدة ${Number(s.graceMarks)}</span>` : '';
+    const cls = s.result === 'ناجح' ? 'rs-chip--good'
+              : s.result === 'راسب' ? 'rs-chip--bad' : 'rs-chip--outline';
+    const label = s.result ?? (s.complete ? '—' : 'غير مكتمل');
+    return `<div class="rs-student-row">
+      <span class="nm">${esc(s.name ?? '—')}</span>
+      ${grace}
+      <span class="pct">${esc(pct)}</span>
+      <span class="rs-chip ${cls}">${esc(label)}</span>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('dir-rs-failed-only')?.addEventListener('change', renderRsStudents);
+
+// ══════════════════════════════════════════════
+//  المستوى الأكاديمي
+// ══════════════════════════════════════════════
+// Built entirely from allResultSheets, which loadResultSheets() already holds —
+// no extra query, no new RLS surface. Only sheets the directorate has actually
+// decided on count: a `submitted` sheet is a claim, not a result.
+let _acadTerm = 'year';
+let acadCompareChart = null;
+
+const ACAD_DECIDED = new Set(['approved', 'issued']);
+
+function setupAcademicTerm() {
+  document.querySelectorAll('.acad-term-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.acad-term-btn').forEach(b => {
+        b.classList.remove('is-active');
+        b.setAttribute('aria-selected', 'false');
+      });
+      btn.classList.add('is-active');
+      btn.setAttribute('aria-selected', 'true');
+      _acadTerm = btn.dataset.term === 's1' ? 's1' : 'year';
+      renderAcademic();
+    });
+  });
+}
+
+// Roll a set of sheets up into { total, passed, failed } over their snapshots.
+function _acadTally(sheets) {
+  let total = 0, passed = 0, failed = 0;
+  for (const sh of sheets) {
+    const students = Array.isArray(sh.snapshot_data?.students) ? sh.snapshot_data.students : [];
+    total += students.length;
+    for (const st of students) {
+      if (st.result === 'ناجح') passed++;
+      else if (st.result === 'راسب') failed++;
+    }
+  }
+  return { total, passed, failed };
+}
+
+function renderAcademic() {
+  const rankEl = document.getElementById('acad-rank');
+  if (!rankEl) return;
+
+  const decided = allResultSheets.filter(s => ACAD_DECIDED.has(s.status));
+  const forTerm = decided.filter(s => s.term === _acadTerm);
+  const { total, passed, failed } = _acadTally(forTerm);
+
+  const setTxt = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  setTxt('acad-total',  total ? total.toLocaleString('en-US') : '—');
+  // Percent is over graded students only; an ungraded student is not a failure.
+  const graded = passed + failed;
+  setTxt('acad-rate',   graded ? `${((passed / graded) * 100).toFixed(1)}٪` : '—');
+  setTxt('acad-failed', graded ? failed.toLocaleString('en-US') : '—');
+  setTxt('acad-sheets', `${forTerm.length} / ${allResultSheets.filter(s => s.term === _acadTerm).length}`);
+
+  // ── ترتيب المدارس بنسبة النجاح ──
+  const bySchool = new Map();
+  for (const sh of forTerm) {
+    const name = sh.school?.name ?? '—';
+    if (!bySchool.has(name)) bySchool.set(name, []);
+    bySchool.get(name).push(sh);
+  }
+  const ranked = Array.from(bySchool, ([name, sheets]) => {
+    const t = _acadTally(sheets);
+    const g = t.passed + t.failed;
+    return { name, rate: g ? (t.passed / g) * 100 : null, students: t.total };
+  })
+    .filter(r => r.rate !== null)
+    .sort((a, b) => a.rate - b.rate);   // الأسوأ أولاً — الغرض متابعة المتعثّر
+
+  const emptyEl = document.getElementById('acad-rank-empty');
+  if (emptyEl) emptyEl.hidden = ranked.length > 0;
+  rankEl.innerHTML = ranked.map((r, i) => {
+    const color = r.rate >= 85 ? 'var(--good)' : r.rate >= 70 ? 'var(--warn)' : 'var(--bad)';
+    return `<div class="rank-row">
+      <span class="rank-idx">${i + 1}</span>
+      <span class="rank-name" title="${esc(r.name)} — ${r.students} طالباً">${esc(r.name)}</span>
+      <span class="rank-bar-bg"><span class="rank-bar-fill" style="width:${r.rate.toFixed(1)}%;background:${color}"></span></span>
+      <span class="rank-val" style="color:${color}">${r.rate.toFixed(0)}٪</span>
+    </div>`;
+  }).join('');
+
+  renderAcadCompare(decided);
+}
+
+// Term comparison: only schools that have BOTH a first-term and a full-year
+// decided sheet can be compared — one bar alone would invite a false reading.
+function renderAcadCompare(decided) {
+  const canvas  = document.getElementById('acad-compare-chart');
+  const emptyEl = document.getElementById('acad-compare-empty');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  const rateFor = (name, term) => {
+    const t = _acadTally(decided.filter(s => (s.school?.name ?? '—') === name && s.term === term));
+    const g = t.passed + t.failed;
+    return g ? (t.passed / g) * 100 : null;
+  };
+
+  const names = Array.from(new Set(decided.map(s => s.school?.name ?? '—')));
+  const rows = names
+    .map(name => ({ name, s1: rateFor(name, 's1'), year: rateFor(name, 'year') }))
+    .filter(r => r.s1 !== null && r.year !== null)
+    .sort((a, b) => a.year - b.year)
+    .slice(0, 10);
+
+  if (emptyEl) emptyEl.hidden = rows.length > 0;
+  canvas.hidden = rows.length === 0;
+  if (acadCompareChart) { acadCompareChart.destroy(); acadCompareChart = null; }
+  if (!rows.length) return;
+
+  const opts = chartBaseOptions();
+  opts.scales.y.max = 100;
+  opts.scales.y.ticks.callback = (v) => `${v}٪`;
+  acadCompareChart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: rows.map(r => r.name),
+      datasets: [
+        { label: 'الفصل الأول',   data: rows.map(r => +r.s1.toFixed(1)),   backgroundColor: CH.line,  borderRadius: 3 },
+        { label: 'السنة الكاملة', data: rows.map(r => +r.year.toFixed(1)), backgroundColor: CH.blue,  borderRadius: 3 },
+      ],
+    },
+    options: opts,
+  });
 }
 
 document.getElementById('dir-rs-approve')?.addEventListener('click', () => doRsReview('approved'));
@@ -2106,6 +2444,10 @@ function _dirActivateTab(tabName) {
   // Leaflet measures 0×0 while its panel is display:none, so it must be told to
   // re-measure whenever the overview becomes visible again.
   if (tabName === 'overview' && map) setTimeout(() => map.invalidateSize(), 0);
+
+  // Chart.js sizes to its container, which is 0×0 while the panel is hidden —
+  // the same reason the map needs invalidateSize above.
+  if (tabName === 'academic') setTimeout(() => renderAcademic(), 0);
 }
 
 // Segmented control inside the "schools" section (schools ⇄ principals).
