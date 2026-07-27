@@ -1540,14 +1540,17 @@ async function loadDirNotifList() {
       list.innerHTML = '<li style="padding:32px 16px;text-align:center;color:var(--text-muted);font-size:.9rem">لا توجد إشعارات</li>';
       return;
     }
+    // esc() on every field: notification text is composed by DB triggers from
+    // school-supplied strings (report descriptions, school names), so it is
+    // untrusted input arriving in a directorate session.
     list.innerHTML = items.map(n => {
       const diff = Date.now() - new Date(n.created_at).getTime();
       const m    = Math.floor(diff / 60000);
       const ago  = m < 1 ? 'الآن' : m < 60 ? `منذ ${m} دقيقة` : m < 1440 ? `منذ ${Math.floor(m/60)} ساعة` : `منذ ${Math.floor(m/1440)} يوم`;
       const bg   = !n.read_at ? 'background:var(--accent-tint);' : '';
       return `<li style="${bg}padding:12px 16px;border-bottom:1px solid var(--border-light);direction:rtl">
-        <div style="font-weight:600;font-size:.9rem">${n.title}</div>
-        ${n.body ? `<div style="font-size:.82rem;color:var(--text-secondary);margin-top:2px">${n.body}</div>` : ''}
+        <div style="font-weight:600;font-size:.9rem">${esc(n.title)}</div>
+        ${n.body ? `<div style="font-size:.82rem;color:var(--text-secondary);margin-top:2px">${esc(n.body)}</div>` : ''}
         <div style="font-size:.75rem;color:var(--text-muted);margin-top:4px">${ago}</div>
       </li>`;
     }).join('');
@@ -2116,6 +2119,9 @@ let _dirConfirmResolve = null;
 function dirConfirm(title, message) {
   const overlay = document.getElementById('dir-confirm-modal');
   if (!overlay) return Promise.resolve(false);      // fail closed
+  // A second open would orphan the first promise, leaving its caller awaiting
+  // forever; settle it as a decline before taking over the dialog.
+  if (_dirConfirmResolve) { _dirConfirmResolve(false); _dirConfirmResolve = null; }
   document.getElementById('dir-confirm-title').textContent = title;
   document.getElementById('dir-confirm-text').textContent  = message;
   overlay.hidden = false;

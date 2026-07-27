@@ -1068,6 +1068,9 @@ function renderNationalMap(schools, perSchool, directorates) {
     }).addTo(natMap);
   }
 
+  // Markers are rebuilt on every refresh, which would silently close a popup an
+  // operator is reading. Remember which school was open and restore it.
+  const openSchoolId = natMarkers.find(m => m.isPopupOpen?.())?._natSchoolId ?? null;
   natMarkers.forEach(m => natMap.removeLayer(m));
   natMarkers = [];
 
@@ -1078,6 +1081,7 @@ function renderNationalMap(schools, perSchool, directorates) {
     const lat = Number(s.lat), lng = Number(s.lng);
     const marker = L.marker([lat, lng], { icon: natMarkerIcon(status) }).addTo(natMap);
     marker._natStatus = status;
+    marker._natSchoolId = s.id;
     marker.bindPopup(
       `<div class="popup-school-name">${esc(s.name ?? '—')}</div>` +
       `<div class="popup-row"><span>المديرية</span><span>${esc(dirName[s.directorate_id] ?? '—')}</span></div>` +
@@ -1095,6 +1099,7 @@ function renderNationalMap(schools, perSchool, directorates) {
     natMapFitted = true;
   }
   applyNatMapFilter();
+  if (openSchoolId) natMarkers.find(m => m._natSchoolId === openSchoolId)?.openPopup();
   setTimeout(() => natMap.invalidateSize(), 0);
 }
 
@@ -1195,6 +1200,7 @@ function renderNationalAcademic(sheets) {
 // reports itself as polling instead of claiming to be live.
 let liveChannel = null;
 let liveBurstTimer = null;
+let liveFeedDate = null;
 
 function setLivePillState(isLive) {
   const pill  = document.getElementById('live-pill');
@@ -1208,27 +1214,43 @@ function setLivePillState(isLive) {
 }
 
 // A nationwide attendance table produces bursts of row events (a whole class at
-// once). Coalescing them into one reload keeps a busy morning from triggering
-// hundreds of full dashboard reloads.
+// once), and loadAllData() pulls every attendance row in the country. Bursts are
+// coalesced AND floored: during a busy morning the events never stop arriving,
+// so a plain debounce would still fire a full national reload every few seconds.
+// At most one live-driven reload per LIVE_MIN_GAP_MS; the 60s poll covers the
+// rest, which caps the portal at roughly two reloads a minute either way.
+const LIVE_BURST_MS   = 4000;
+const LIVE_MIN_GAP_MS = 30000;
+let lastLiveReload = 0;
+
 function scheduleLiveRefresh() {
   if (liveBurstTimer) return;
+  const sinceLast = Date.now() - lastLiveReload;
+  const delay = Math.max(LIVE_BURST_MS, LIVE_MIN_GAP_MS - sinceLast);
   liveBurstTimer = setTimeout(async () => {
     liveBurstTimer = null;
     const { data: { session } } = await supabase.auth.getSession();
-    if (session) { loadAllData(); resetCountdown(); }
-  }, 4000);
+    if (!session) return;
+    lastLiveReload = Date.now();
+    // An ops screen left open overnight would keep filtering on yesterday's
+    // date, so the channel is rebuilt when the day rolls over.
+    if (liveFeedDate && liveFeedDate !== today()) { startLiveFeed(); return; }
+    loadAllData();
+    resetCountdown();
+  }, delay);
 }
 
 function startLiveFeed() {
   stopLiveFeed();
   setLivePillState(false);                 // pessimistic until the channel says otherwise
+  liveFeedDate = today();
   liveChannel = supabase
     .channel('ministry-live')
     .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'daily_student_attendance', filter: `date=eq.${today()}` },
+        { event: '*', schema: 'public', table: 'daily_student_attendance', filter: `date=eq.${liveFeedDate}` },
         scheduleLiveRefresh)
     .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'daily_attendance', filter: `date=eq.${today()}` },
+        { event: '*', schema: 'public', table: 'daily_attendance', filter: `date=eq.${liveFeedDate}` },
         scheduleLiveRefresh)
     .subscribe((status) => setLivePillState(status === 'SUBSCRIBED'));
 }
@@ -1236,6 +1258,7 @@ function startLiveFeed() {
 function stopLiveFeed() {
   clearTimeout(liveBurstTimer);
   liveBurstTimer = null;
+  liveFeedDate = null;
   if (liveChannel) { supabase.removeChannel(liveChannel); liveChannel = null; }
 }
 

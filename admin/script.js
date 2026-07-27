@@ -124,7 +124,6 @@ const umDir             = document.getElementById('um-directorate');
 const credModal     = document.getElementById('cred-modal');
 const credName      = document.getElementById('cred-name');
 const credEmail     = document.getElementById('cred-email');
-const credPassword  = document.getElementById('cred-password');
 const credNotFound  = document.getElementById('cred-not-found');
 const credModalClose= document.getElementById('cred-modal-close');
 const credModalOk   = document.getElementById('cred-modal-ok');
@@ -1093,28 +1092,60 @@ delLookupConfirm.addEventListener('click', async () => {
 });
 
 // ── Credentials modal ─────────────────────────────────────────────────────────
+// The stored password is never read back — handing an operator an existing
+// credential puts the plaintext one screenshot away. They mint a fresh one,
+// see it once, and pass it on; the stored copy is destroyed server-side.
+let credUserId = null;
+
 async function openCredModal(userId, name) {
-  credName.textContent     = name || '—';
-  credEmail.textContent    = '…';
-  credPassword.textContent = '…';
+  credUserId = userId;
+  credName.textContent  = name || '—';
+  credEmail.textContent = '…';
   credNotFound.classList.add('hidden');
+  document.getElementById('cred-reset-box')?.classList.add('hidden');
+  document.getElementById('cred-msg')?.classList.add('hidden');
   show(credModal);
 
+  // Only the address is selected — the password column is deliberately not read.
   const { data, error } = await supabase
     .from('admin_credentials')
-    .select('email, password')
+    .select('email')
     .eq('user_id', userId)
     .maybeSingle();
 
   if (error || !data) {
-    credEmail.textContent    = '—';
-    credPassword.textContent = '—';
+    credEmail.textContent = '—';
     credNotFound.classList.remove('hidden');
   } else {
-    credEmail.textContent    = data.email;
-    credPassword.textContent = data.password;
+    credEmail.textContent = data.email;
   }
 }
+
+document.getElementById('cred-reset')?.addEventListener('click', async () => {
+  if (!credUserId) return;
+  const btn    = document.getElementById('cred-reset');
+  const box    = document.getElementById('cred-reset-box');
+  const msgEl  = document.getElementById('cred-msg');
+  const passEl = document.getElementById('cred-newpass');
+  btn.disabled = true;
+  msgEl?.classList.add('hidden');
+  try {
+    const res = await edgeFetch('admin-create-user', { action: 'reset_password', userId: credUserId });
+    if (passEl) passEl.textContent = res.password;
+    box?.classList.remove('hidden');
+    if (res.warning && msgEl) { msgEl.textContent = res.warning; msgEl.classList.remove('hidden'); }
+  } catch (e) {
+    if (msgEl) { msgEl.textContent = e.message || 'تعذّرت إعادة التعيين'; msgEl.classList.remove('hidden'); }
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('cred-copy')?.addEventListener('click', async () => {
+  const txt = document.getElementById('cred-newpass')?.textContent ?? '';
+  if (!txt || txt === '—') return;
+  try { await navigator.clipboard.writeText(txt); } catch { /* المتصفّح منع النسخ — النصّ محدَّد يدوياً */ }
+});
 
 function closeCredModal() { hide(credModal); }
 credModalClose.addEventListener('click', closeCredModal);

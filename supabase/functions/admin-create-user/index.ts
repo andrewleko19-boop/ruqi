@@ -202,9 +202,17 @@ Deno.serve(async (req) => {
       const { error: updErr } = await admin.auth.admin.updateUserById(userId, { password });
       if (updErr) return json({ error: updErr.message }, 400);
 
-      await admin.from("admin_credentials")
-        .update({ password, updated_at: new Date().toISOString() })
+      // Destroy the stored plaintext rather than replacing it. Keeping a
+      // readable copy is the hole this action exists to close — the operator
+      // sees the value once, in this response, and nowhere else.
+      const { error: credErr } = await admin.from("admin_credentials")
+        .update({ password: null, updated_at: new Date().toISOString() })
         .eq("user_id", userId);
+      if (credErr) {
+        // The auth password is already changed, so the caller must still get it;
+        // surface the bookkeeping failure instead of swallowing it.
+        return json({ ok: true, password, warning: `تعذّر تحديث سجل الحساب: ${credErr.message}` });
+      }
 
       return json({ ok: true, password });
     }
