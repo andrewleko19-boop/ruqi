@@ -3636,3 +3636,35 @@ create policy parent_read_linked_conduct on public.student_conduct
       where pl.user_id = auth.uid() and pl.student_id = student_conduct.student_id
     )
   );
+
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- §18 — تفعيل Realtime على جدولَي الحضور (لبثّ لوحة الوزارة المباشر)
+-- ═════════════════════════════════════════════════════════════════════════════
+-- بوابة الوزارة تشترك في تغييرات حضور اليوم عبر postgres_changes. بدون إضافة
+-- الجدولين إلى منشور supabase_realtime لا يصل أي حدث، فتبقى اللوحة تعمل
+-- بالتحديث الدوري كل ٦٠ ثانية وتعلن ذلك بصدق في شارة الحالة («تحديث دوري»)
+-- بدل ادّعاء البثّ المباشر.
+--
+-- الاشتراك يمرّ عبر RLS كأي قراءة أخرى: لا يستقبل المشترك إلا الصفوف التي
+-- تسمح له سياساته بقراءتها، فتفعيل المنشور لا يوسّع صلاحيات أحد.
+--
+-- idempotent: `add table` يفشل إن كان الجدول مضافاً سلفاً، لذا نتحقّق أولاً.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public' and tablename = 'daily_student_attendance'
+  ) then
+    alter publication supabase_realtime add table public.daily_student_attendance;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public' and tablename = 'daily_attendance'
+  ) then
+    alter publication supabase_realtime add table public.daily_attendance;
+  end if;
+end $$;

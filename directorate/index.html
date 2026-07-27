@@ -948,7 +948,7 @@
           <svg width="16" height="16"><use href="#icon-close"/></svg>
         </button>
       </div>
-      <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:14px">اطّلع على بيانات دخول المدير وشاركها معه بشكل آمن.</p>
+      <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:14px">بيانات دخول المدير. كلمة المرور لا تُعرَض — أنشئ كلمة جديدة وسلّمها له بشكل آمن.</p>
       <div class="cred-field">
         <label>الاسم</label>
         <span id="dir-cred-name">—</span>
@@ -957,14 +957,23 @@
         <label>البريد الإلكتروني</label>
         <span id="dir-cred-email">—</span>
       </div>
-      <div class="cred-field">
-        <label>كلمة المرور</label>
-        <span id="dir-cred-password">—</span>
+
+      <!-- كلمة المرور الجديدة تُعرَض مرة واحدة فقط بعد إعادة التعيين -->
+      <div class="cred-reset" id="dir-cred-reset-box" hidden>
+        <label>كلمة المرور الجديدة</label>
+        <div class="cred-reset-row">
+          <code id="dir-cred-newpass">—</code>
+          <button type="button" class="btn btn-ghost btn-sm" id="dir-cred-copy">نسخ</button>
+        </div>
+        <p class="cred-warn">اكتبها الآن — لن تُعرَض مرة أخرى، ولا تُخزَّن في مكان يمكن قراءته منه.</p>
       </div>
+
+      <p id="dir-cred-msg" class="dir-review-msg" hidden></p>
       <div id="dir-cred-not-found" class="dir-review-msg" hidden style="color:var(--text-muted);font-size:.88rem">
         لا تتوفر بيانات حساب لهذا المستخدم.
       </div>
       <div class="modal-actions" style="margin-top:8px">
+        <button class="btn btn-sm btn-primary" id="dir-cred-reset">إنشاء كلمة مرور جديدة</button>
         <button class="btn btn-ghost btn-sm" id="dir-cred-modal-ok">إغلاق</button>
       </div>
     </div>

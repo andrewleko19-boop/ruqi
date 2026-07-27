@@ -1817,3 +1817,34 @@ input[type="search"].input-sm {
 @media (max-width: 900px) { .stats-row--4 { grid-template-columns: repeat(2, 1fr); } }
 
 .acad-sheets-total { font-size: 0.9rem; color: var(--text-muted); font-weight: 600; }
+
+/* ── إعادة تعيين كلمة المرور (تُعرَض مرة واحدة) ── */
+.cred-reset {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  background: var(--accent-tint);
+  border-radius: var(--radius);
+}
+.cred-reset > label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.cred-reset-row { display: flex; align-items: center; gap: 8px; }
+.cred-reset-row code {
+  flex: 1;
+  font-family: var(--font-num);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.cred-warn { margin-top: 8px; font-size: 0.72rem; color: var(--warn); font-weight: 600; }
