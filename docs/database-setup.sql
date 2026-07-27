@@ -1196,12 +1196,34 @@ begin
       );
 
     elsif v_req.type = 'correct_student' then
+      -- tools/add-national-registry.sql (Phase 2, applied separately) adds a
+      -- trigger that locks first_name/father_name/family_name/national_id/
+      -- birth_date once a student is linked to the national registry — so a
+      -- plain UPDATE here raises P0001 for any linked student, blocking even
+      -- a legitimate typo fix. The directorate's approval of this request IS
+      -- the governance gate the lock exists to enforce (the same role the
+      -- lock already grants an escape hatch to via link_student_to_registry),
+      -- so it is lifted for the duration of this one correction. `set local`
+      -- is transaction-scoped and never leaks past this call. Deliberately
+      -- NOT propagated to national_students_registry — that table is meant to
+      -- be authoritative from the ministry's own import, and silently writing
+      -- into it here could be undone by the next import batch with no
+      -- signal to anyone.
+      set local nsams.skip_registry_lock = 'true';
+
       update public.students set
         first_name  = coalesce(nullif(trim(v_payload->>'first_name'), ''),  first_name),
         father_name = coalesce(nullif(trim(v_payload->>'father_name'),''), father_name),
         family_name = coalesce(nullif(trim(v_payload->>'family_name'),''), family_name),
         birth_date  = coalesce(nullif(v_payload->>'birth_date','')::date,   birth_date),
         national_id = coalesce(nullif(trim(v_payload->>'national_id'),''),  national_id),
+        -- full_name is what report cards, rosters, and certificates actually
+        -- display; recomputed here or a name correction would silently never
+        -- appear anywhere despite the underlying columns being fixed.
+        full_name   = trim(concat_ws(' ',
+                        coalesce(nullif(trim(v_payload->>'first_name'), ''),  first_name),
+                        coalesce(nullif(trim(v_payload->>'father_name'),''), father_name),
+                        coalesce(nullif(trim(v_payload->>'family_name'),''), family_name))),
         updated_at  = now()
       where id      = (v_payload->>'student_id')::uuid
         and school_id = v_req.school_id;
