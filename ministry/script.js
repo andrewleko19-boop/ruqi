@@ -153,7 +153,7 @@ async function checkSession() {
   const { data: { session } } = await supabase.auth.getSession();
   if (session) {
     const ok = await verifyRole(session.user.id);
-    if (ok) showDashboard(session.user.email);
+    if (ok) showDashboard(session.user.email, session.user.id);
     else await supabase.auth.signOut();
   }
 }
@@ -193,7 +193,7 @@ loginBtn.addEventListener('click', async () => {
     loginBtn.textContent = 'تسجيل الدخول';
     return;
   }
-  showDashboard(data.user.email);
+  showDashboard(data.user.email, data.user.id);
 });
 
 const modalConfirmLogout = document.getElementById('modal-confirm-logout');
@@ -208,6 +208,9 @@ modalConfirmLogout.addEventListener('click', e => {
 btnLogoutOk.addEventListener('click', async () => {
   modalConfirmLogout.hidden = true;
   stopAutoRefresh();
+  stopLiveFeed();
+  if (minUnsubNotif) { minUnsubNotif(); minUnsubNotif = null; }
+  setNotifBadge(0);
   await supabase.auth.signOut();
   dashboard.classList.add('hidden');
   loginScreen.classList.remove('hidden');
@@ -221,13 +224,15 @@ btnLogoutOk.addEventListener('click', async () => {
   document.getElementById('drill-card')?.classList.add('hidden');
 });
 
-function showDashboard(email) {
+function showDashboard(email, userId) {
   loginScreen.classList.add('hidden');
   dashboard.classList.remove('hidden');
   userEmailEl.textContent = email;
   setTodayLabel();
   loadAllData();
   startAutoRefresh();
+  startLiveFeed();
+  if (userId) initNotifications(userId);
 
   // Web Push registration (fire-and-forget) — ministry_user devices must
   // subscribe here or they never receive OS push notifications.
@@ -256,7 +261,7 @@ async function loadAllData() {
 
     const { data: schools, error: schErr } = await supabase
       .from('schools')
-      .select('id, name, directorate_id, total_students');
+      .select('id, name, directorate_id, total_students, lat, lng');
     if (schErr) throw schErr;
 
     const allSchoolIds = (schools || []).map(s => s.id);
@@ -352,6 +357,9 @@ async function loadAllData() {
     renderStats(rows);
     renderTable(rows);
     renderGovRankChart(rows);
+    renderGovRanking(rows);
+    renderNationalMap(schools || [], perSchool, directorates);
+    loadNationalHeadline();       // بلاغات مفتوحة — استعلام عدّ خفيف
     renderDrill();         // يعيد رسم مستوى التعمق الحالي ببيانات طازجة
     loadNationalTrend();          // try/catch داخلي — فشل RPC لا يمسّ اللوحة
     loadNationalPeriodicReports(); // نفس النمط
@@ -926,6 +934,7 @@ async function loadNationalResultSheets() {
   try {
     const sheets = await window.NSAMS_DB.getMinistryResultSheets();
     loadingEl?.classList.add('hidden');
+    renderNationalAcademic(sheets);        // same fetch, no extra query
     if (!sheets.length) { emptyEl?.classList.remove('hidden'); return; }
 
     sheets.forEach(s => {
@@ -992,3 +1001,311 @@ function printNationalReport(rep) {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 checkSession();
+
+// ════════════════════════════════════════════════════════════════════════════
+//  الخريطة الوطنية
+// ════════════════════════════════════════════════════════════════════════════
+// Same status thresholds the directorate map uses, so a school reads identically
+// in both portals. Built from data loadAllData() already fetched — the only
+// change to any query was adding lat/lng to the existing schools select.
+let natMap = null;
+let natMarkers = [];
+let natMapFitted = false;
+const NAT_STATUS_LABELS = {
+  green: 'طبيعي', amber: 'تغطية ناقصة', red: 'حضور منخفض', no_data: 'لم تُسجّل اليوم',
+};
+const NAT_STATUS_COLORS = {
+  green: '#3fbd80', amber: '#e0a83f', red: '#e2685a', no_data: '#7d8296',
+};
+
+function natMarkerIcon(status) {
+  const fill = NAT_STATUS_COLORS[status] || NAT_STATUS_COLORS.no_data;
+  return L.divIcon({
+    html: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="31" viewBox="0 0 28 36">
+      <path d="M14 0C6.268 0 0 6.268 0 14c0 9.917 14 22 14 22S28 23.917 28 14C28 6.268 21.732 0 14 0z"
+        fill="${fill}" stroke="#11182b" stroke-width="1.5"/>
+      <circle cx="14" cy="14" r="6" fill="#11182b" fill-opacity="0.55"/></svg>`,
+    className: '', iconSize: [24, 31], iconAnchor: [12, 31], popupAnchor: [0, -31],
+  });
+}
+
+// A school with no record today is `no_data`, which is a different claim from
+// "zero students attended" — it must never be rendered as 0%.
+function natSchoolStatus(agg) {
+  if (!agg) return { status: 'no_data', rate: null };
+  const enrolled = agg.present + agg.late + agg.absent + agg.excused;
+  if (enrolled === 0) return { status: 'no_data', rate: null };
+  const rate = ((agg.present + agg.late + agg.excused) / enrolled) * 100;
+  return { status: rate >= 90 ? 'green' : rate >= 75 ? 'amber' : 'red', rate };
+}
+
+function renderNationalMap(schools, perSchool, directorates) {
+  const host = document.getElementById('nat-map');
+  const emptyEl = document.getElementById('nat-map-empty');
+  const countEl = document.getElementById('map-count');
+  if (!host || typeof L === 'undefined') return;
+
+  // Number(null) is 0, which is finite — a school with no coordinates would land
+  // in the Gulf of Guinea. Require a real, non-zero pair.
+  const hasCoords = (s) => {
+    const lat = Number(s.lat), lng = Number(s.lng);
+    return s.lat != null && s.lng != null
+      && Number.isFinite(lat) && Number.isFinite(lng)
+      && !(lat === 0 && lng === 0);
+  };
+  const located = schools.filter(hasCoords);
+  if (emptyEl) emptyEl.hidden = located.length > 0;
+  host.hidden = located.length === 0;
+  if (countEl) countEl.textContent = located.length
+    ? `${located.length} مدرسة على الخريطة من ${schools.length}` : '';
+  if (!located.length) return;
+
+  if (!natMap) {
+    natMap = L.map(host, { zoomControl: true, attributionControl: true })
+      .setView([34.8, 38.0], 7);                      // سوريا، حتى يصل fitBounds
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/">OpenStreetMap</a>', maxZoom: 18,
+    }).addTo(natMap);
+  }
+
+  natMarkers.forEach(m => natMap.removeLayer(m));
+  natMarkers = [];
+
+  const dirName = Object.fromEntries((directorates || []).map(d => [d.id, d.name]));
+  const bounds = [];
+  for (const s of located) {
+    const { status, rate } = natSchoolStatus(perSchool?.[s.id]);
+    const lat = Number(s.lat), lng = Number(s.lng);
+    const marker = L.marker([lat, lng], { icon: natMarkerIcon(status) }).addTo(natMap);
+    marker._natStatus = status;
+    marker.bindPopup(
+      `<div class="popup-school-name">${esc(s.name ?? '—')}</div>` +
+      `<div class="popup-row"><span>المديرية</span><span>${esc(dirName[s.directorate_id] ?? '—')}</span></div>` +
+      `<div class="popup-row"><span>الحالة</span><span>${esc(NAT_STATUS_LABELS[status])}</span></div>` +
+      `<div class="popup-row"><span>نسبة الحضور</span><span>${rate === null ? '—' : rate.toFixed(1) + '٪'}</span></div>`
+    );
+    natMarkers.push(marker);
+    bounds.push([lat, lng]);
+  }
+
+  // Fit once: refitting on every 60s refresh would yank the view out from under
+  // anyone who had panned or zoomed in.
+  if (!natMapFitted && bounds.length) {
+    natMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 12 });
+    natMapFitted = true;
+  }
+  applyNatMapFilter();
+  setTimeout(() => natMap.invalidateSize(), 0);
+}
+
+function applyNatMapFilter() {
+  const on = new Set(
+    Array.from(document.querySelectorAll('#nat-map-legend .legend-btn.is-on'))
+      .map(b => b.dataset.status)
+  );
+  for (const m of natMarkers) {
+    const el = m.getElement();
+    if (!el) continue;
+    const show = on.has(m._natStatus);
+    el.style.display = show ? '' : 'none';
+  }
+}
+
+document.getElementById('nat-map-legend')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.legend-btn');
+  if (!btn) return;
+  btn.classList.toggle('is-on');
+  applyNatMapFilter();
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+//  ترتيب المحافظات حسب نسبة الحضور
+// ════════════════════════════════════════════════════════════════════════════
+function renderGovRanking(rows) {
+  const host = document.getElementById('gov-rank');
+  const emptyEl = document.getElementById('gov-rank-empty');
+  if (!host) return;
+
+  const ranked = rows
+    .map(r => {
+      const enrolled = r.present + r.late + r.absent + r.excused;
+      return { name: r.governorate, rate: enrolled ? ((r.present + r.late + r.excused) / enrolled) * 100 : null };
+    })
+    .filter(r => r.rate !== null)
+    .sort((a, b) => a.rate - b.rate);   // الأسوأ أولاً — الغرض متابعة المتعثّر
+
+  if (emptyEl) emptyEl.hidden = ranked.length > 0;
+  host.innerHTML = ranked.map((r, i) => {
+    const color = r.rate >= 90 ? 'var(--good)' : r.rate >= 75 ? 'var(--warn)' : 'var(--bad)';
+    return `<div class="rank-row">
+      <span class="rank-idx">${i + 1}</span>
+      <span class="rank-name" title="${esc(r.name)}">${esc(r.name)}</span>
+      <span class="rank-bar-bg"><span class="rank-bar-fill" style="width:${r.rate.toFixed(1)}%;background:${color}"></span></span>
+      <span class="rank-val" style="color:${color}">${r.rate.toFixed(0)}٪</span>
+    </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  مؤشّرات وطنية إضافية
+// ════════════════════════════════════════════════════════════════════════════
+// Open reports is a head-only count (no rows transferred). The academic figures
+// are folded out of loadNationalResultSheets, which already fetches the sheets.
+async function loadNationalHeadline() {
+  const el = document.getElementById('stat-open-reports');
+  if (!el) return;
+  try {
+    const { count, error } = await supabase
+      .from('emergency_reports')
+      .select('id', { count: 'exact', head: true })
+      .in('status', ['open', 'acknowledged']);
+    if (error) throw error;
+    el.textContent = fmt(count ?? 0);
+  } catch {
+    el.textContent = '—';     // صلاحية أو شبكة — لا تُفشِل بقية اللوحة
+  }
+}
+
+function renderNationalAcademic(sheets) {
+  const issuedEl = document.getElementById('stat-issued');
+  const rateEl   = document.getElementById('stat-pass-rate');
+  if (issuedEl) issuedEl.textContent = fmt(sheets.length);
+  if (!rateEl) return;
+
+  let passed = 0, failed = 0;
+  for (const sh of sheets) {
+    const students = Array.isArray(sh.snapshot_data?.students) ? sh.snapshot_data.students : [];
+    for (const st of students) {
+      if (st.result === 'ناجح') passed++;
+      else if (st.result === 'راسب') failed++;
+    }
+  }
+  // Over graded students only — an ungraded student is not a failure.
+  const graded = passed + failed;
+  rateEl.textContent = graded ? `${((passed / graded) * 100).toFixed(1)}%` : '—';
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  البثّ الحيّ الحقيقي
+// ════════════════════════════════════════════════════════════════════════════
+// The "مباشر" pill used to be decoration: a 60-second timer with a pulsing dot.
+// It now carries the real channel state, and a genuine postgres_changes
+// subscription drives refreshes. The timer stays as the fallback — if the table
+// is not in the `supabase_realtime` publication the portal still works, it just
+// reports itself as polling instead of claiming to be live.
+let liveChannel = null;
+let liveBurstTimer = null;
+
+function setLivePillState(isLive) {
+  const pill  = document.getElementById('live-pill');
+  const label = document.getElementById('live-label');
+  if (!pill || !label) return;
+  pill.classList.toggle('is-polling', !isLive);
+  label.textContent = isLive ? 'مباشر' : 'تحديث دوري';
+  pill.title = isLive
+    ? 'متّصل بالبثّ المباشر — تصل التسجيلات فور حدوثها'
+    : 'البثّ المباشر غير متاح — التحديث كل ٦٠ ثانية';
+}
+
+// A nationwide attendance table produces bursts of row events (a whole class at
+// once). Coalescing them into one reload keeps a busy morning from triggering
+// hundreds of full dashboard reloads.
+function scheduleLiveRefresh() {
+  if (liveBurstTimer) return;
+  liveBurstTimer = setTimeout(async () => {
+    liveBurstTimer = null;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) { loadAllData(); resetCountdown(); }
+  }, 4000);
+}
+
+function startLiveFeed() {
+  stopLiveFeed();
+  setLivePillState(false);                 // pessimistic until the channel says otherwise
+  liveChannel = supabase
+    .channel('ministry-live')
+    .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'daily_student_attendance', filter: `date=eq.${today()}` },
+        scheduleLiveRefresh)
+    .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'daily_attendance', filter: `date=eq.${today()}` },
+        scheduleLiveRefresh)
+    .subscribe((status) => setLivePillState(status === 'SUBSCRIBED'));
+}
+
+function stopLiveFeed() {
+  clearTimeout(liveBurstTimer);
+  liveBurstTimer = null;
+  if (liveChannel) { supabase.removeChannel(liveChannel); liveChannel = null; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  جرس الإشعارات
+// ════════════════════════════════════════════════════════════════════════════
+let minUnsubNotif = null;
+let minUnreadCount = 0;
+
+function setNotifBadge(n) {
+  minUnreadCount = Math.max(0, n | 0);
+  const el = document.getElementById('notif-badge');
+  if (!el) return;
+  el.textContent = minUnreadCount > 99 ? '99+' : String(minUnreadCount);
+  el.hidden = minUnreadCount === 0;
+}
+
+function timeAgoAr(iso) {
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1)    return 'الآن';
+  if (m < 60)   return `منذ ${m} دقيقة`;
+  if (m < 1440) return `منذ ${Math.floor(m / 60)} ساعة`;
+  return `منذ ${Math.floor(m / 1440)} يوم`;
+}
+
+async function loadNotifList() {
+  const list = document.getElementById('notif-list');
+  if (!list) return;
+  try {
+    const items = await window.NSAMS_DB.getNotifications(30);
+    if (!items.length) {
+      list.innerHTML = '<li class="notif-empty">لا توجد إشعارات</li>';
+      return;
+    }
+    // esc() on every field: notification bodies carry school-supplied text.
+    list.innerHTML = items.map(n => `
+      <li class="notif-item${n.read_at ? '' : ' is-unread'}">
+        <div class="notif-item-title">${esc(n.title)}</div>
+        ${n.body ? `<div class="notif-item-body">${esc(n.body)}</div>` : ''}
+        <div class="notif-item-time">${esc(timeAgoAr(n.created_at))}</div>
+      </li>`).join('');
+  } catch (err) {
+    console.warn('[NSAMS-M] loadNotifList', err);
+    list.innerHTML = '<li class="notif-empty">تعذّر تحميل الإشعارات</li>';
+  }
+}
+
+function initNotifications(userId) {
+  const modal = document.getElementById('modal-notif');
+
+  document.getElementById('btn-notif')?.addEventListener('click', () => {
+    if (modal) { modal.hidden = false; loadNotifList(); }
+  });
+  document.getElementById('btn-notif-close')?.addEventListener('click', () => {
+    if (modal) modal.hidden = true;
+  });
+  modal?.addEventListener('click', (e) => { if (e.target === modal) modal.hidden = true; });
+  document.getElementById('btn-notif-read-all')?.addEventListener('click', async () => {
+    await window.NSAMS_DB.markAllNotificationsRead().catch(() => {});
+    setNotifBadge(0);
+    loadNotifList();
+  });
+
+  window.NSAMS_DB.getUnreadNotificationsCount().then(setNotifBadge).catch(() => {});
+
+  if (minUnsubNotif) minUnsubNotif();
+  minUnsubNotif = window.NSAMS_DB.subscribeNotifications(userId, (notif) => {
+    setNotifBadge(minUnreadCount + 1);
+    if (modal && !modal.hidden) loadNotifList();
+    // A national report is the one notification worth pulling fresh numbers for.
+    if (notif.type === 'report_new') scheduleLiveRefresh();
+  });
+}

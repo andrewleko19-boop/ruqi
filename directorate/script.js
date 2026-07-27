@@ -2760,31 +2760,80 @@ function openDirDeactivate(userId, name) {
   document.getElementById('dir-deactivate-modal')?.classList.remove('hidden');
 }
 
+// The stored password is never read back. Handing an operator an existing
+// credential means the plaintext is only ever one screenshot away; instead they
+// mint a fresh one, see it once, and pass it on.
+let _dirCredUserId = null;
+
 async function openDirCredModal(userId, name) {
   const modal    = document.getElementById('dir-cred-modal');
   const nameEl   = document.getElementById('dir-cred-name');
   const emailEl  = document.getElementById('dir-cred-email');
-  const passEl   = document.getElementById('dir-cred-password');
   const nfEl     = document.getElementById('dir-cred-not-found');
   if (!modal) return;
+
+  _dirCredUserId = userId;
   if (nameEl)  nameEl.textContent  = name || '—';
   if (emailEl) emailEl.textContent = '…';
-  if (passEl)  passEl.textContent  = '…';
   if (nfEl)    nfEl.hidden = true;
+  const resetBox = document.getElementById('dir-cred-reset-box');
+  const msgBox   = document.getElementById('dir-cred-msg');
+  if (resetBox) resetBox.hidden = true;
+  if (msgBox)   msgBox.hidden   = true;
   modal.classList.remove('hidden');
 
+  // Only the address is read — the password column is deliberately not selected.
   const { data, error } = await _sb.from('admin_credentials')
-    .select('email, password').eq('user_id', userId).maybeSingle();
+    .select('email').eq('user_id', userId).maybeSingle();
 
   if (error || !data) {
     if (emailEl) emailEl.textContent = '—';
-    if (passEl)  passEl.textContent  = '—';
     if (nfEl)    nfEl.hidden = false;
-  } else {
-    if (emailEl) emailEl.textContent = data.email;
-    if (passEl)  passEl.textContent  = data.password;
+  } else if (emailEl) {
+    emailEl.textContent = data.email;
   }
 }
+
+document.getElementById('dir-cred-reset')?.addEventListener('click', async () => {
+  if (!_dirCredUserId) return;
+  const name = document.getElementById('dir-cred-name')?.textContent || 'هذا الحساب';
+  const ok = await dirConfirm(
+    'إنشاء كلمة مرور جديدة',
+    `ستتوقّف كلمة المرور الحالية لـ«${name}» عن العمل فوراً، وتُعرَض الجديدة مرة واحدة فقط.`
+  );
+  if (!ok) return;
+
+  const btn    = document.getElementById('dir-cred-reset');
+  const msgEl  = document.getElementById('dir-cred-msg');
+  const box    = document.getElementById('dir-cred-reset-box');
+  const passEl = document.getElementById('dir-cred-newpass');
+  if (btn) btn.disabled = true;
+  if (msgEl) msgEl.hidden = true;
+  try {
+    const res = await dirEdgeFetch('admin-create-user', { action: 'reset_password', userId: _dirCredUserId });
+    if (passEl) passEl.textContent = res.password;
+    if (box) box.hidden = false;
+  } catch (e) {
+    if (msgEl) {
+      msgEl.className   = 'dir-review-msg';
+      msgEl.textContent = e.message || 'تعذّرت إعادة التعيين';
+      msgEl.hidden      = false;
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+});
+
+document.getElementById('dir-cred-copy')?.addEventListener('click', async () => {
+  const txt = document.getElementById('dir-cred-newpass')?.textContent ?? '';
+  if (!txt || txt === '—') return;
+  try {
+    await navigator.clipboard.writeText(txt);
+    showToast('نُسخت كلمة المرور', '', 'success');
+  } catch {
+    showToast('تعذّر النسخ', 'حدّد النصّ وانسخه يدوياً.', 'info');
+  }
+});
 
 function setupDirPrincipals() {
   document.getElementById('dir-add-principal-btn')?.addEventListener('click', () => {

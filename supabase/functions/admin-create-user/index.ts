@@ -7,6 +7,7 @@
 //   create_school_admin    → { email, fullName, password, schoolId }
 //   create_directorate_user → { email, fullName, password, directorateId }
 //   deactivate             → { userId }  ⇒ ban the auth user
+//   reset_password         → { userId }  ⇒ mint a new password, returned once
 //
 // Env (auto-injected by Supabase): SUPABASE_URL, SUPABASE_ANON_KEY,
 // SUPABASE_SERVICE_ROLE_KEY.
@@ -160,6 +161,52 @@ Deno.serve(async (req) => {
       if (error) return json({ error: error.message }, 400);
       await admin.from("users").update({ is_active: false }).eq("id", userId);
       return json({ ok: true });
+    }
+
+    // ── reset_password ────────────────────────────────────────────────────────
+    // Replaces the stored-plaintext model: the caller never reads an existing
+    // password, they mint a new one that is returned exactly once. The generated
+    // value is written to admin_credentials only so the row stays consistent for
+    // the account listing; nothing in the UI reads that column back any more.
+    if (action === "reset_password") {
+      const userId = String(body.userId ?? "").trim();
+      if (!userId) return json({ error: "معرّف المستخدم مطلوب" }, 400);
+
+      const { data: target } = await admin.from("users")
+        .select("role, school_id, directorate_id").eq("id", userId).maybeSingle();
+      if (!target) return json({ error: "المستخدم غير موجود" }, 404);
+      if (target.role === "ministry_user")
+        return json({ error: "لا يمكن إعادة تعيين كلمة مرور مستخدم وزارة من هنا" }, 403);
+
+      // A directorate may only reset accounts inside its own directorate —
+      // either its schools' admins, or its own staff.
+      if (isDirectorate) {
+        let allowed = false;
+        if (target.school_id) {
+          const { data: school } = await admin.from("schools")
+            .select("directorate_id").eq("id", target.school_id).maybeSingle();
+          allowed = !!school && school.directorate_id === callerDirectorateId;
+        } else if (target.directorate_id) {
+          allowed = target.directorate_id === callerDirectorateId;
+        }
+        if (!allowed) return json({ error: "هذا الحساب لا يتبع مديريتك" }, 403);
+      }
+
+      // 18 random bytes → base64url, so the value is unguessable rather than
+      // built from a predictable pattern an operator could reproduce.
+      const bytes = new Uint8Array(18);
+      crypto.getRandomValues(bytes);
+      const password = btoa(String.fromCharCode(...bytes))
+        .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+      const { error: updErr } = await admin.auth.admin.updateUserById(userId, { password });
+      if (updErr) return json({ error: updErr.message }, 400);
+
+      await admin.from("admin_credentials")
+        .update({ password, updated_at: new Date().toISOString() })
+        .eq("user_id", userId);
+
+      return json({ ok: true, password });
     }
 
     return json({ error: "إجراء غير معروف" }, 400);
