@@ -173,6 +173,9 @@
         <svg class="icon"><use href="#icon-check"/></svg><span class="dir-rail-label">الاعتمادات</span>
         <span class="dir-rail-count" id="rail-count-approvals" hidden>0</span>
       </button>
+      <button class="dir-tab-btn" data-tab="academic" role="tab" aria-selected="false">
+        <svg class="icon"><use href="#icon-clipboard"/></svg><span class="dir-rail-label">المستوى الأكاديمي</span>
+      </button>
       <button class="dir-tab-btn" data-tab="reports" role="tab" aria-selected="false">
         <svg class="icon"><use href="#icon-alert"/></svg><span class="dir-rail-label">البلاغات</span>
         <span class="dir-rail-count" id="rail-count-reports" hidden>0</span>
@@ -435,10 +438,27 @@
         <div id="dir-rs-loading" class="dir-req-loading">
           <div class="spinner"></div>
         </div>
+
+        <!-- شريط الاعتماد الجماعي — يظهر عند تحديد جلاء واحد على الأقل -->
+        <div class="bulk-bar" id="dir-bulk-bar" hidden>
+          <svg class="icon"><use href="#icon-check"/></svg>
+          <span id="dir-bulk-count">—</span>
+          <span class="bulk-bar-spacer"></span>
+          <button class="btn btn-sm btn-primary" id="dir-bulk-apply">اعتماد المحدَّد</button>
+          <button class="btn btn-ghost btn-sm" id="dir-bulk-clear">إلغاء التحديد</button>
+        </div>
+        <p class="bulk-mixed" id="dir-bulk-mixed" hidden>
+          حدِّد جلاءات بالحالة نفسها — الاعتماد والإصدار قراران مختلفان.
+        </p>
+
         <div class="table-wrapper" id="dir-rs-table-wrap" hidden>
           <table class="data-table" id="dir-rs-table">
             <thead>
               <tr>
+                <th class="th-check">
+                  <input type="checkbox" class="check" id="dir-rs-check-all"
+                         aria-label="تحديد كل الجلاءات المنتظرة" />
+                </th>
                 <th>المدرسة</th>
                 <th>الصف / الفصل</th>
                 <th>الحالة</th>
@@ -505,6 +525,66 @@
       </section>
     </div>
     </div><!-- /dir-tab-approvals -->
+
+    <!-- ═════ المستوى الأكاديمي ═════ -->
+    <div id="dir-tab-academic" class="dir-tab-panel">
+    <div class="main-content">
+      <div class="acad-head">
+        <div>
+          <span class="eyebrow">نتائج</span>
+          <h2 class="acad-title">المستوى الأكاديمي</h2>
+          <p class="panel-hint">نتائج الجلاءات المعتمدة والصادرة عبر كل مدارس المديرية</p>
+        </div>
+        <div class="dir-seg" role="tablist" aria-label="الفصل">
+          <button class="dir-seg-btn acad-term-btn is-active" data-term="year" role="tab" aria-selected="true">السنة الكاملة</button>
+          <button class="dir-seg-btn acad-term-btn" data-term="s1" role="tab" aria-selected="false">الفصل الأول</button>
+        </div>
+      </div>
+
+      <section class="stats-row stats-row--4" id="acad-stats">
+        <div class="kpi">
+          <div class="kpi-top"><span class="kpi-label">الطلاب المُقيَّمون</span></div>
+          <div class="kpi-value" id="acad-total">—</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-top"><span class="kpi-label">نسبة النجاح</span></div>
+          <div class="kpi-value" id="acad-rate" style="color:var(--green)">—</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-top"><span class="kpi-label">راسبون</span></div>
+          <div class="kpi-value" id="acad-failed" style="color:var(--red)">—</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-top"><span class="kpi-label">جلاءات معتمدة / إجمالي</span></div>
+          <div class="kpi-value" id="acad-sheets" dir="ltr" style="text-align:start">—</div>
+        </div>
+      </section>
+
+      <div class="two-col">
+        <section class="panel">
+          <div class="panel-header">
+            <div><span class="eyebrow">ترتيب</span>
+              <h2>نسبة النجاح حسب المدرسة</h2></div>
+          </div>
+          <div id="acad-rank" class="ranking-list"></div>
+          <p id="acad-rank-empty" class="empty-state" hidden>لا توجد جلاءات معتمدة بعد لهذا الفصل.</p>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div><span class="eyebrow">مقارنة</span>
+              <h2>الفصل الأول مقابل السنة الكاملة</h2></div>
+          </div>
+          <div class="chart-canvas-wrap chart-canvas-wrap--tall">
+            <canvas id="acad-compare-chart"></canvas>
+          </div>
+          <p id="acad-compare-empty" class="empty-state" hidden>
+            تظهر المقارنة عندما تُعتمَد جلاءات الفصل الأول والسنة الكاملة لمدرسة واحدة على الأقل.
+          </p>
+        </section>
+      </div>
+    </div>
+    </div><!-- /dir-tab-academic -->
 
     <!-- ═════ البلاغات ═════ -->
     <div id="dir-tab-reports" class="dir-tab-panel">
@@ -693,6 +773,19 @@
         <div class="modal-box">
           <h3 id="dir-rs-title">مراجعة الجلاء</h3>
           <div id="dir-rs-body" class="dir-review-body"></div>
+
+          <!-- تفصيل الطلاب — من snapshot_data المحمَّلة أصلاً، بلا استعلام إضافي -->
+          <div class="rs-students" id="dir-rs-students" hidden>
+            <div class="rs-students-head">
+              <div class="rs-chips" id="dir-rs-chips"></div>
+              <label class="rs-only-failed">
+                <input type="checkbox" class="check" id="dir-rs-failed-only" />
+                <span>الراسبون فقط</span>
+              </label>
+            </div>
+            <div class="rs-student-list" id="dir-rs-student-list"></div>
+          </div>
+
           <div class="form-group" style="margin-top:12px">
             <label for="dir-rs-notes" style="font-size:.88rem;color:var(--text-secondary)">السبب / ملاحظة (اختياري)</label>
             <textarea id="dir-rs-notes" class="field-input" rows="2"
@@ -707,6 +800,19 @@
           </div>
         </div>
       </div>
+
+  <!-- ══ تأكيد داخل التطبيق (بديل confirm الأصلي) ══ -->
+  <div id="dir-confirm-modal" class="modal-overlay" role="dialog" aria-modal="true"
+       aria-labelledby="dir-confirm-title" hidden>
+    <div class="modal-box" style="max-width:400px">
+      <h3 id="dir-confirm-title">تأكيد</h3>
+      <p id="dir-confirm-text" class="dir-req-reason" style="font-style:normal;margin:10px 0 4px"></p>
+      <div class="modal-actions">
+        <button class="btn btn-sm btn-primary" id="dir-confirm-ok">متابعة</button>
+        <button class="btn btn-ghost btn-sm" id="dir-confirm-cancel">إلغاء</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ══ مودال إضافة/تعديل مدرسة ══ -->
   <div id="dir-school-modal" class="modal-overlay hidden">
