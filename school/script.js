@@ -4978,7 +4978,6 @@ const srStartDay      = el('sr-start-day');
 const srStartMonth    = el('sr-start-month');
 const srStartYear     = el('sr-start-year');
 const srSelfNumber    = el('sr-self-number');
-const srGeneralNumber = el('sr-general-number');
 const srGender        = el('sr-gender');
 const srRegResult     = el('sr-reg-result');
 const btnSrRegLookup  = el('btn-sr-reg-lookup');
@@ -5083,7 +5082,6 @@ function renderRegistryList() {
         : '';
     const nums = [
       r.self_number    ? `ذاتي: ${escapeHtml(r.self_number)}`    : null,
-      r.general_number ? `عام: ${escapeHtml(r.general_number)}`   : null,
     ].filter(Boolean).join(' / ');
     const linkedBadge = r.registry_self_number
       ? '<span class="reg-linked-badge">مرتبط بالسجل</span>' : '';
@@ -5165,7 +5163,7 @@ async function openStaffRecModal(rec) {
 
   const textInputs = [srFullName, srNationalId, srMotherName, srDobDay, srDobMonth,
                       srDobYear, srStartDay, srStartMonth, srStartYear, srSubject, srPhone, srResZone, srNotes,
-                      srSelfNumber, srGeneralNumber, srLandline, srAsgGrade, srAsgSection,
+                      srSelfNumber, srLandline, srAsgGrade, srAsgSection,
                       srQuotaSubj, srQuotaSchool];
   const numInputs  = [srSeniority, srTeachHours];
 
@@ -5177,7 +5175,7 @@ async function openStaffRecModal(rec) {
     srResZone.value       = rec.residential_zone   || '';
     srNotes.value         = rec.notes              || '';
     srSubject.value       = rec.subject_taught     || '';
-    srSeniority.value     = rec.seniority_years    ?? '';
+    srSeniority.value     = rec.seniority_year     ?? '';
     srSelfNumber.value    = rec.self_number        || '';
     if (srLandline)    srLandline.value    = rec.landline              || '';
     if (srTeachHours)  srTeachHours.value  = rec.teaching_hours        ?? '';
@@ -5185,7 +5183,6 @@ async function openStaffRecModal(rec) {
     if (srAsgSection)  srAsgSection.value  = rec.assigned_section      || '';
     if (srQuotaSubj)   srQuotaSubj.value   = rec.quota_subjects        || '';
     if (srQuotaSchool) srQuotaSchool.value = rec.quota_school_external || '';
-    srGeneralNumber.value = rec.general_number     || '';
     if (rec.start_date) {
       const [sy, sm, sd] = rec.start_date.split('-');
       srStartYear.value = sy; srStartMonth.value = String(Number(sm)); srStartDay.value = String(Number(sd));
@@ -5238,7 +5235,7 @@ async function openStaffRecModal(rec) {
 
 function _lockStaffPersonalFields(locked) {
   [srFullName, srNationalId, srMotherName, srDobDay, srDobMonth, srDobYear,
-   srGeneralNumber, srGender].forEach(el => {
+   srGender].forEach(el => {
     if (!el) return;
     el.readOnly = locked;
     el.disabled = locked && el.tagName === 'SELECT';
@@ -5280,7 +5277,6 @@ btnSrRegLookup?.addEventListener('click', async () => {
     srFullName.value      = d.full_name      || '';
     srNationalId.value    = d.national_id    || '';
     srMotherName.value    = d.mother_name    || '';
-    srGeneralNumber.value = d.general_number || '';
     if (srGender) { srGender.value = d.gender || ''; CustomSelect.refresh(srGender); }
     if (d.birth_date) {
       const [y, m, dd] = d.birth_date.split('-');
@@ -5325,13 +5321,13 @@ btnSaveStaffRec?.addEventListener('click', async () => {
     birth_date,
     gender:           srGender?.value || null,
     self_number:      srSelfNumber?.value.trim() || null,
-    general_number:   srGeneralNumber?.value.trim() || null,
     job_title:        jt,
     specialization:   srSpec?.value || null,
     subject_taught:   _regSegment === 'teaching' ? (srSubject?.value.trim() || null) : null,
     certificate:      srCertificate?.value || null,
     higher_degree:    srHigherDegree?.value || null,
-    seniority_years:  srSeniority?.value ? parseFloat(srSeniority.value) : null,
+    // سنة التعيين لا عدد سنوات — هكذا تكتبها الورقة الرسمية (مثال: 1978).
+    seniority_year:   srSeniority?.value ? parseInt(srSeniority.value, 10) : null,
     start_date:       (srStartYear?.value && srStartMonth?.value && srStartDay?.value)
                         ? `${String(srStartYear.value).padStart(4,'0')}-${String(srStartMonth.value).padStart(2,'0')}-${String(srStartDay.value).padStart(2,'0')}`
                         : null,
@@ -5829,9 +5825,10 @@ function arNumWord(n) {
   return String(i);
 }
 
-// أرقام هندية للعرض فقط — القيم المخزَّنة والمُصدَّرة تبقى لاتينية.
-function arDigits(n) {
-  return String(n).replace(/[0-9]/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
+// أرقام البيان تُعرض لاتينية — كما تُكتب في الورقة الرسمية وكما تُخزَّن
+// وتُصدَّر. (كانت تُحوَّل إلى هندية للعرض، فاختلف ما يراه المدير عمّا يُسلَّم.)
+function stmtNum(n) {
+  return String(n ?? 0);
 }
 
 // Month labels matching template format
@@ -5903,7 +5900,18 @@ const GRADE_LABELS = {
   'ث2أ':'الثاني الثانوي (أدبي)','ث2ع':'الثاني الثانوي (علمي)',
   'ث3أ':'الثالث الثانوي (أدبي)','ث3ع':'الثالث الثانوي (علمي)',
 };
-const GRADE_KEYS = Object.keys(GRADE_KEY_MAP);
+// ⚠ الترتيب هنا هو ترتيب الصفوف C22..C41 في ورقة «البيان»، والتصدير يكتب
+// الأعداد **بالموضع** في تلك الصفوف. لا تُشتقّ هذه المصفوفة من
+// Object.keys(GRADE_KEY_MAP): جافاسكربت ترفع المفاتيح الشبيهة بمؤشّرات المصفوفة
+// ('1'..'9') إلى مقدّمة الكائن مهما كان ترتيب الكتابة، فيصير «استعدوا» عاشراً
+// وتُزاح أعداد كل الصفوف سطراً كاملاً في الورقة الرسمية.
+// «استعدوا» صفّ روضة لا صفّ ابتدائي — يتصدّر الجدول كما في الورقة، ويُحتسب
+// ضمن «رياض» في _stmtStudentTotals لا ضمن حلقة (1).
+const GRADE_KEYS = [
+  'استعدوا', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+  'م1', 'م2', 'م3', 'م4',
+  'ث1أ', 'ث1ع', 'ث2أ', 'ث2ع', 'ث3أ', 'ث3ع',
+];
 
 // Flatten to a reverse map: dbGrade → gradeKey
 const DB_GRADE_TO_KEY = {};
@@ -5927,20 +5935,24 @@ const STMT_SECS = [
 
 // أعمدة الأوراق الرسمية الثلاث — [مفتاح, عنوان, مطلوب]
 // مفاتيح مركّبة: '@birth' و '@start' تُبنى من يوم/شهر/سنة.
+// «الرقم الذاتي» ليس عموداً في النموذج الورقي فلا يُكتب في xlsx، لكنه مفتاح
+// الربط بالسجلّ الوطني فيظهر في بطاقات القسم ٧ ويُحفظ في جدول السير المحمي.
 const STMT_ROSTER_FIELDS = {
   admin: [
-    ['national_id','الرقم الوطني',1], ['mother_name','الأم',1], ['@birth','تاريخ الولادة',1],
+    ['national_id','الرقم الوطني',1], ['self_number','الرقم الذاتي',0],
+    ['mother_name','الأم',1], ['@birth','تاريخ الولادة',1],
     ['certificate','الشهادة /ج/م.م/أ.ه/ثا',1], ['specialization','الاختصاص',1],
-    ['seniority_years','القدم الوظيفي',1], ['job_title','العمل المسند إليه',1],
+    ['seniority_year','القدم الوظيفي (سنة التعيين)',1], ['job_title','العمل المسند إليه',1],
     ['higher_degree','الشهادات العليا',0], ['@start','تاريخ المباشرة بالعمل الإداري الحالي',1],
     ['phone','الهاتف — الجوال',1], ['landline','الهاتف — الأرضي',0],
     ['residential_zone','المنطقة السكنية',1], ['@leave','إجازات ادارية/صحية/أمومة/زواج',0],
     ['ministerial_doc','نوع الوثيقة / موافقة وزارية',0], ['notes','ملاحظات / عن أي بيانات مدخلة',0],
   ],
   teaching: [
-    ['national_id','الرقم الوطني',1], ['mother_name','الأم',1], ['@birth','تاريخ الولادة',1],
+    ['national_id','الرقم الوطني',1], ['self_number','الرقم الذاتي',0],
+    ['mother_name','الأم',1], ['@birth','تاريخ الولادة',1],
     ['certificate','الشهادة ج/م.م/أ.ه/ثا',1], ['specialization','الاختصاص',1],
-    ['seniority_years','القدم الوظيفي',1], ['subject_taught','المادة التي يدرسها',1],
+    ['seniority_year','القدم الوظيفي (سنة التعيين)',1], ['subject_taught','المادة التي يدرسها',1],
     ['teaching_hours','عدد الساعات التي يدرسها',1],
     ['quota_subjects','المواد التي يكمل فيها نصابه في مدرسته وعددها',0],
     ['quota_school_external','المدرسة التي يكمل نصابه بها وعددها',0],
@@ -5951,8 +5963,9 @@ const STMT_ROSTER_FIELDS = {
     ['ministerial_doc','نوع الوثيقة / موافقة وزارية',0], ['notes','ملاحظات / عن أي بيانات مدخلة',0],
   ],
   support: [
-    ['national_id','الرقم الوطني',1], ['mother_name','الأم',1], ['@birth','تاريخ الولادة',1],
-    ['certificate','الشهادة',1], ['seniority_years','القدم الوظيفي',1],
+    ['national_id','الرقم الوطني',1], ['self_number','الرقم الذاتي',0],
+    ['mother_name','الأم',1], ['@birth','تاريخ الولادة',1],
+    ['certificate','الشهادة',1], ['seniority_year','القدم الوظيفي (سنة التعيين)',1],
     ['job_title','العمل المسند إليه',1], ['@start','تاريخ المباشرة في المدرسة',1],
     ['phone','الهاتف — الجوال',1], ['landline','الهاتف — الأرضي',0],
     ['residential_zone','السكن',1], ['@leave','إجازات ادارية/صحية/أمومة/زواج',0],
@@ -5966,6 +5979,71 @@ const STMT_SUPPORT_TYPES = ['professional','worker','guard'];
 
 const STMT_EVENTS = ['مباشرة','انفكاك','نقل','تقاعد','وفاة','أخرى'];
 
+// ── أعمدة ورقة «التعديلات الطارئة الشهرية» ──────────────────────────────────
+// مستخرجة حرفياً من القالب: كتلة الإداري (رؤوس السطر ٩)، التدريسي (١٥)،
+// المهنيين والمستخدمين والحراس (٢٢). كل عمود حقلٌ يُملأ يدوياً ويُمحى يدوياً —
+// حتى المملوء آلياً من سجلّ الكوادر يبقى قابلاً للتعديل.
+// [مفتاح, عنوان, نوع, مطلوب؟] — 'date' يعني ثلاثة حقول يوم/شهر/سنة.
+const _CHG_ID   = ['national_id','الرقم الوطني','text'];
+const _CHG_SELF  = ['self_number','الرقم الذاتي','text'];
+const _CHG_NAME  = ['full_name','الاسم الثلاثي','text', 1];
+const _CHG_MOM   = ['mother_name','الأم','text'];
+const _CHG_BIRTH = ['@birth','تاريخ الولادة','date'];
+const _CHG_CERT  = ['certificate','الشهادة /ج/م.م/أ.ه/ثا','text'];
+const _CHG_SPEC  = ['specialization','الاختصاص','text'];
+const _CHG_SEN   = ['seniority_year','القدم الوظيفي (سنة التعيين)','num'];
+const _CHG_PHONE = ['phone','الهاتف — الجوال','text'];
+const _CHG_LAND  = ['landline','الهاتف — الأرضي','text'];
+const _CHG_LEAVE = ['leave_text','إجازات ادارية / صحية / أمومة / زواج','text'];
+const _CHG_DOC   = ['ministerial_doc','نوع الوثيقة / موافقة وزارية','text'];
+const _CHG_NOTES = ['notes','ملاحظات / عن أي بيانات مدخلة','textarea'];
+
+const STMT_CHG_FIELDS = {
+  admin: [
+    _CHG_ID, _CHG_SELF, _CHG_NAME, _CHG_MOM, _CHG_BIRTH, _CHG_CERT, _CHG_SPEC, _CHG_SEN,
+    ['job_title','العمل المسند إليه','text'],
+    ['higher_degree','الشهادات العليا','text'],
+    ['@start','تاريخ المباشرة بالعمل الإداري الحالي','date'],
+    _CHG_PHONE, _CHG_LAND,
+    ['residential_zone','المنطقة السكنية','text'],
+    _CHG_LEAVE, _CHG_DOC, _CHG_NOTES,
+  ],
+  teaching: [
+    _CHG_ID, _CHG_SELF, _CHG_NAME, _CHG_MOM, _CHG_BIRTH, _CHG_CERT, _CHG_SPEC, _CHG_SEN,
+    ['subject_taught','المادة التي يدرسها','text'],
+    ['teaching_hours','عدد الساعات التي يدرسها','num'],
+    ['quota_subjects','المواد التي يكمل فيها نصابه في مدرسته وعددها','text'],
+    ['quota_school_external','المدرسة التي يكمل نصابه بها وعددها','text'],
+    ['assigned_grade','الصف','text'],
+    ['assigned_section','الشعبة','text'],
+    ['@start','تاريخ المباشرة في المدرسة','date'],
+    _CHG_PHONE, _CHG_LAND,
+    ['residential_zone','المنطقة السكنية','text'],
+    _CHG_LEAVE, _CHG_DOC, _CHG_NOTES,
+  ],
+  support: [
+    _CHG_ID, _CHG_SELF, _CHG_NAME, _CHG_MOM, _CHG_BIRTH, _CHG_CERT, _CHG_SPEC, _CHG_SEN,
+    ['job_title','العمل المسند إليه','text'],
+    ['@start','تاريخ المباشرة في المدرسة','date'],
+    _CHG_PHONE, _CHG_LAND,
+    ['residential_zone','السكن','text'],
+    ['roster_note','داخل الملاك / تحديد مركز عمل محافظة','text'],
+    _CHG_LEAVE,
+    ['ministerial_doc','ملاحظات إدارية / نوع الوثيقة / موافقة وزارية','text'],
+    _CHG_NOTES,
+  ],
+};
+
+// مفتاح الحقل → عمود staff_records، لتعبئة النافذة من السجلّ عند اختيار شخص.
+// ما ليس هنا يُشتقّ خاصّةً (@birth و@start و leave_text و roster_note).
+const STMT_CHG_FROM_REC = [
+  'national_id','self_number','full_name','mother_name','certificate','specialization',
+  'seniority_year','job_title','higher_degree','phone','landline','residential_zone',
+  'ministerial_doc','notes','subject_taught','teaching_hours','quota_subjects',
+  'quota_school_external','assigned_grade','assigned_section',
+];
+const STMT_ROSTER_TYPE_LABEL = { inside: 'داخل الملاك', outside: 'خارج الملاك', contract: 'عقود' };
+
 // حالة التبويب — كل ما يُعرض ويُحفظ
 const STMT = {
   sec: 0, id: null, status: 'draft', notes: null,
@@ -5975,7 +6053,7 @@ const STMT = {
   header: {}, students: {}, adminOverride: {}, teachFull: null,
   yearEnd: null, sig: {}, noChange: false,
   rosG: 'admin', rosQ: '', rosMiss: false,
-  saveTimer: null, loading: false, chgEditId: null,
+  saveTimer: null, loading: false, chgEditId: null, chgGroup: 'admin',
 };
 
 // ── أدوات مساعدة ─────────────────────────────────────────────────────────────
@@ -6154,7 +6232,8 @@ function _stmtSectionState(i) {
       if (!_stmtVal('stmt-edu-zone')) miss.push('المنطقة التعليمية');
       if (!_stmtVal('stmt-address'))  miss.push('العنوان');
       if (!_stmtVal('stmt-day-type')) miss.push('نوع الدوام');
-      if (!STMT.school?.statistical_number) miss.push('الرقم الإحصائي');
+      if (!_stmtVal('stmt-statno')) miss.push('الرقم الإحصائي');
+      if (!_stmtVal('stmt-cycle'))  miss.push('الحلقة');
       return miss.length ? { s: 'warn', note: 'ينقص: ' + miss.join('، ') } : { s: 'ok', note: 'مكتمل' };
     }
     case 2: {
@@ -6211,32 +6290,32 @@ function _stmtYearEndDue() { return STMT.month === 5 || STMT.month === 6; }
 function _stmtChecklist() {
   const out = [];
   const pending = STMT.changes.filter(c => c.detected && !c.confirmed_at).length;
-  if (pending) out.push({ k: 'bad', t: `${arDigits(pending)} تعديلات مقترحة لم تُؤكَّد`, go: 7 });
+  if (pending) out.push({ k: 'bad', t: `${stmtNum(pending)} تعديلات مقترحة لم تُؤكَّد`, go: 7 });
   if (!STMT.noChange && !STMT.changes.length)
     out.push({ k: 'bad', t: 'لم تُحسم التعديلات الطارئة — أكّدها أو اكتب «لا يوجد تعديل»', go: 7 });
-  if (!STMT.school?.statistical_number)
+  if (!_stmtVal('stmt-statno'))
     out.push({ k: 'bad', t: 'الرقم الإحصائي غير محدَّد', go: 1 });
   if (!_stmtVal('stmt-day-type'))
     out.push({ k: 'bad', t: 'نوع الدوام (كامل/نصفي) غير محدَّد', go: 1 });
 
   const t = _stmtTeaching();
   if (t.unclassified.length)
-    out.push({ k: 'warn', t: `${arDigits(t.unclassified.length)} كوادر غير مصنّفين في الجهاز التدريسي`, go: 4 });
+    out.push({ k: 'warn', t: `${stmtNum(t.unclassified.length)} كوادر غير مصنّفين في الجهاز التدريسي`, go: 4 });
   const a = _stmtAdminCounts();
   if (a.unmapped.length)
-    out.push({ k: 'warn', t: `${arDigits(a.unmapped.length)} إداريون خارج خانات النموذج`, go: 5 });
+    out.push({ k: 'warn', t: `${stmtNum(a.unmapped.length)} إداريون خارج خانات النموذج`, go: 5 });
   const missRec = STMT.staff.filter(r => _stmtMissingCount(r)).length;
   if (missRec)
-    out.push({ k: 'warn', t: `${arDigits(missRec)} سجلات كوادر ناقصة الحقول`, go: 6 });
+    out.push({ k: 'warn', t: `${stmtNum(missRec)} سجلات كوادر ناقصة الحقول`, go: 6 });
   if (_stmtYearEndDue() && !STMT.yearEnd)
     out.push({ k: 'warn', t: 'ورقة نتائج نهاية العام مطلوبة هذا الشهر ولم تُملأ', go: 8 });
 
   const st = _stmtStudentTotals();
   const live = Object.values(STMT.stuStats).reduce((n, g) => n + g.male + g.female, 0);
   if (st.total === live)
-    out.push({ k: 'ok', t: `مجموع الطلاب (${arDigits(st.total)}) يطابق سجلّ الطلاب النشطين` });
+    out.push({ k: 'ok', t: `مجموع الطلاب (${stmtNum(st.total)}) يطابق سجلّ الطلاب النشطين` });
   else
-    out.push({ k: 'warn', t: `مجموع البيان ${arDigits(st.total)} بينما سجلّ الطلاب ${arDigits(live)}`, go: 3 });
+    out.push({ k: 'warn', t: `مجموع البيان ${stmtNum(st.total)} بينما سجلّ الطلاب ${stmtNum(live)}`, go: 3 });
   return out;
 }
 
@@ -6259,7 +6338,7 @@ function renderStmtProgress() {
   for (let i = 0; i < STMT_SECS.length; i++) if (_stmtSectionState(i).s === 'ok') done++;
   const pct = Math.round(done / STMT_SECS.length * 100);
   const fill = el('stmt-prog-fill'); if (fill) fill.style.width = pct + '%';
-  const num  = el('stmt-prog-num');  if (num)  num.textContent = arDigits(pct) + '٪';
+  const num  = el('stmt-prog-num');  if (num)  num.textContent = stmtNum(pct) + '%';
 }
 
 function renderStmtPagers() {
@@ -6313,9 +6392,13 @@ function renderStmtHeaderSec() {
 function renderStmtSchoolSec() {
   const s = STMT.school || {};
   _stmtSet('stmt-school-name', s.name || '');
-  _stmtSet('stmt-cycle',       s.cycle || '—');
-  _stmtSet('stmt-statno',      s.statistical_number || '—');
-  _stmtSet('stmt-rural',       s.rural_curriculum ? 'نعم' : 'لا');
+  // لا حارس «—» هنا: الحقول صارت قابلة للتحرير، وأي حارس يُقرأ لاحقاً بـ _stmtVal
+  // فيُحفظ نصّاً في schools.cycle. الفراغ يعني فراغاً.
+  _stmtSet('stmt-cycle',       s.cycle || '');
+  _stmtSet('stmt-statno',      s.statistical_number || '');
+  // ثلاثي الحالة: null يعني «لم يُحدَّد بعد»، وهو غير «لا».
+  _stmtSet('stmt-rural', s.rural_curriculum === true ? 'نعم'
+                       : s.rural_curriculum === false ? 'لا' : '');
   _stmtSet('stmt-former-name', s.former_name || '');
   _stmtSet('stmt-village',     s.village || '');
   _stmtSet('stmt-address',     s.address || '');
@@ -6325,6 +6408,7 @@ function renderStmtSchoolSec() {
   _stmtSet('stmt-day-type',    s.day_type || '');
   CustomSelect.refresh(el('stmt-edu-zone'));
   CustomSelect.refresh(el('stmt-day-type'));
+  CustomSelect.refresh(el('stmt-rural'));
 }
 
 const STMT_BUILDING_FIELDS = [
@@ -6348,7 +6432,9 @@ function renderStmtBuildingSec() {
     const txt = el('stmt-building-banner-txt');
     if (txt && STMT.building?.updated_at) {
       const d = new Date(STMT.building.updated_at);
-      txt.textContent = `محفوظ منذ ${d.toLocaleDateString('ar-SY')} — عدّل ما تغيّر فقط.`;
+      // تنسيق صريح: toLocaleDateString('ar-SY') يطبع أرقاماً هندية، والتبويب لاتيني بالكامل.
+      const dmy = `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+      txt.textContent = `محفوظ منذ ${dmy} — عدّل ما تغيّر فقط.`;
     }
   }
   renderStmtBuildingTotal();
@@ -6357,9 +6443,9 @@ function renderStmtBuildingSec() {
 function renderStmtBuildingTotal() {
   const n = _stmtNum('stmt-b-class-rooms') + _stmtNum('stmt-b-admin-rooms') + _stmtNum('stmt-b-unused');
   const e = el('stmt-b-total');
-  if (e) e.textContent = `${arDigits(n)} غرفة (${arDigits(_stmtNum('stmt-b-class-rooms'))} صفية + ` +
-                         `${arDigits(_stmtNum('stmt-b-admin-rooms'))} إدارية + ` +
-                         `${arDigits(_stmtNum('stmt-b-unused'))} غير مستخدمة)`;
+  if (e) e.textContent = `${stmtNum(n)} غرفة (${stmtNum(_stmtNum('stmt-b-class-rooms'))} صفية + ` +
+                         `${stmtNum(_stmtNum('stmt-b-admin-rooms'))} إدارية + ` +
+                         `${stmtNum(_stmtNum('stmt-b-unused'))} غير مستخدمة)`;
 }
 
 // ── القسم ٤: الطلاب ──────────────────────────────────────────────────────────
@@ -6390,11 +6476,11 @@ function renderStmtStudentsSec() {
           STMT_STU_COLS.map(([c]) =>
             `<td><input class="stmt-cell-in" type="number" min="0" inputmode="numeric"
                  data-stu="${k}" data-col="${c}" value="${r[c]}"></td>`).join('') +
-          `<td>${arDigits(r.total)}</td></tr>`;
+          `<td>${stmtNum(r.total)}</td></tr>`;
       }).join('')}</tbody>
-      <tfoot><tr><td>المجموع</td><td>${arDigits(t.sections)}</td><td>${arDigits(t.enM)}</td>
-        <td>${arDigits(t.enF)}</td><td>${arDigits(t.frM)}</td><td>${arDigits(t.frF)}</td>
-        <td>${arDigits(t.ruM)}</td><td>${arDigits(t.ruF)}</td><td>${arDigits(t.total)}</td></tr></tfoot>
+      <tfoot><tr><td>المجموع</td><td>${stmtNum(t.sections)}</td><td>${stmtNum(t.enM)}</td>
+        <td>${stmtNum(t.enF)}</td><td>${stmtNum(t.frM)}</td><td>${stmtNum(t.frF)}</td>
+        <td>${stmtNum(t.ruM)}</td><td>${stmtNum(t.ruF)}</td><td>${stmtNum(t.total)}</td></tr></tfoot>
     </table></div>`;
   } else {
     host.innerHTML = `<div class="stmt-gcards">${GRADE_KEYS.map(k => {
@@ -6403,7 +6489,7 @@ function renderStmtStudentsSec() {
       return `<div class="stmt-gcard" data-open="${open ? 1 : 0}">
         <button type="button" class="stmt-gcard-h" data-stu-open="${k}">
           <span class="stmt-gcard-n">${escapeHtml(GRADE_LABELS[k])}</span>
-          <span class="stmt-gcard-s">${arDigits(r.sections)} شعبة · ${arDigits(r.total)} طالب</span>
+          <span class="stmt-gcard-s">${stmtNum(r.sections)} شعبة · ${stmtNum(r.total)} طالب</span>
         </button>
         <div class="stmt-gcard-b"${open ? '' : ' hidden'}>
           ${STMT_STU_COLS.map(([c, lab]) => `<div class="stmt-gcard-f">
@@ -6415,14 +6501,14 @@ function renderStmtStudentsSec() {
   }
 
   const badge = el('stmt-stu-badge');
-  if (badge) badge.textContent = `${arDigits(t.sections)} شعبة · ${arDigits(t.total)} طالب`;
+  if (badge) badge.textContent = `${stmtNum(t.sections)} شعبة · ${stmtNum(t.total)} طالب`;
 
   const sum = el('stmt-stu-sum');
   if (sum) sum.innerHTML = [
     ['مجموع الطلاب الكلي <span class="stmt-tag-calc">محسوب</span>', t.total],
-    ['حلقة (١)', t.cycle1], ['حلقة (٢)', t.cycle2],
+    ['حلقة (1)', t.cycle1], ['حلقة (2)', t.cycle2],
     ['رياض', t.kinder], ['ثانوي', t.secondary],
-  ].map(([l, v]) => `<div class="stmt-sbox"><span class="stmt-sbox-l">${l}</span><b>${arDigits(v)}</b></div>`).join('');
+  ].map(([l, v]) => `<div class="stmt-sbox"><span class="stmt-sbox-l">${l}</span><b>${stmtNum(v)}</b></div>`).join('');
 
   renderStmtChangeStats();
 }
@@ -6430,24 +6516,24 @@ function renderStmtStudentsSec() {
 function renderStmtTeachingSec() {
   const t = _stmtTeaching();
   const cell = (list, bucket) => list.map(([label]) =>
-    `<div class="stmt-cnt"><span>${escapeHtml(label)}</span><b>${arDigits(bucket[label] || 0)}</b></div>`).join('');
+    `<div class="stmt-cnt"><span>${escapeHtml(label)}</span><b>${stmtNum(bucket[label] || 0)}</b></div>`).join('');
   el('stmt-teach-teachers').innerHTML = cell(STMT_TEACH_TEACHERS, t.buckets['معلم']);
   el('stmt-teach-masters').innerHTML  = cell(STMT_TEACH_MASTERS,  t.buckets['مدرس']);
   el('stmt-teach-assist').innerHTML   = cell(STMT_TEACH_ASSIST,   t.buckets['مدرس مساعد']);
-  el('stmt-c-teachers').textContent = arDigits(t.teachers);
-  el('stmt-c-masters').textContent  = arDigits(t.masters);
-  el('stmt-c-assist').textContent   = arDigits(t.assist);
+  el('stmt-c-teachers').textContent = stmtNum(t.teachers);
+  el('stmt-c-masters').textContent  = stmtNum(t.masters);
+  el('stmt-c-assist').textContent   = stmtNum(t.assist);
 
   const box = el('stmt-unclass-box');
   if (box) {
     box.hidden = t.unclassifiedCount === 0;
-    el('stmt-c-unclass').textContent = arDigits(t.unclassifiedCount);
+    el('stmt-c-unclass').textContent = stmtNum(t.unclassifiedCount);
   }
   const warn = el('stmt-teach-warn');
   if (warn) {
     warn.hidden = t.unclassified.length === 0;
     el('stmt-teach-warn-txt').textContent =
-      `${arDigits(t.unclassified.length)} كوادر لم يطابق تصنيفهم أياً من خانات النموذج.`;
+      `${stmtNum(t.unclassified.length)} كوادر لم يطابق تصنيفهم أياً من خانات النموذج.`;
   }
 }
 
@@ -6460,16 +6546,16 @@ function renderStmtAdminSec() {
       <td><input class="stmt-cell-in" type="number" min="0" inputmode="numeric"
            data-adm="${escapeHtml(r.role)}" value="${r.count}"></td>
       <td>${escapeHtml(arNumWord(r.count))}</td></tr>`).join('') +
-      `<tr><td><b>مجموع الإداريين</b></td><td><b>${arDigits(a.total)}</b></td>
+      `<tr><td><b>مجموع الإداريين</b></td><td><b>${stmtNum(a.total)}</b></td>
        <td><b>${escapeHtml(arNumWord(a.total))}</b></td></tr>`;
   }
   const badge = el('stmt-adm-badge');
-  if (badge) badge.textContent = `${arDigits(a.total)} إداري`;
+  if (badge) badge.textContent = `${stmtNum(a.total)} إداري`;
   const warn = el('stmt-adm-warn');
   if (warn) {
     warn.hidden = a.unmapped.length === 0;
     el('stmt-adm-warn-txt').textContent =
-      `${arDigits(a.unmapped.length)} إداريون عملهم المسند خارج خانات النموذج: ` +
+      `${stmtNum(a.unmapped.length)} إداريون عملهم المسند خارج خانات النموذج: ` +
       a.unmapped.map(r => r.job_title || '—').join('، ');
   }
 }
@@ -6499,10 +6585,10 @@ function renderStmtRosters() {
                                          : (r.job_title || '');
     return `<div class="stmt-cvc${miss ? ' is-miss' : ''}" data-open="0">
       <button type="button" class="stmt-cvh" data-cv="${escapeHtml(r.id)}">
-        <span class="stmt-cvh-sq">${arDigits(i + 1)}</span>
+        <span class="stmt-cvh-sq">${stmtNum(i + 1)}</span>
         <span class="stmt-cvh-who"><span class="stmt-cvh-nm">${escapeHtml(r.full_name || '—')}</span>
         <span class="stmt-cvh-jb">${escapeHtml(job || '—')}</span></span>
-        ${miss ? `<span class="stmt-badge stmt-badge-warn">ينقص ${arDigits(miss)}</span>`
+        ${miss ? `<span class="stmt-badge stmt-badge-warn">ينقص ${stmtNum(miss)}</span>`
                : '<span class="stmt-badge stmt-badge-ok">مكتمل</span>'}
         <svg class="stmt-cvh-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
       </button>
@@ -6515,17 +6601,17 @@ function renderStmtRosters() {
   const totalMiss = inGroup.filter(r => _stmtMissingCount(r)).length;
   const badge = el('stmt-ros-badge');
   if (badge) {
-    badge.textContent = totalMiss ? `${arDigits(totalMiss)} سجلات ناقصة` : 'كل السجلات مكتملة';
+    badge.textContent = totalMiss ? `${stmtNum(totalMiss)} سجلات ناقصة` : 'كل السجلات مكتملة';
     badge.className = 'stmt-badge ' + (totalMiss ? 'stmt-badge-warn' : 'stmt-badge-ok');
   }
   const cnt = el('stmt-ros-count');
-  if (cnt) cnt.textContent = `${arDigits(STMT.staff.length)} كادراً · العرض هنا للمراجعة فقط.`;
+  if (cnt) cnt.textContent = `${stmtNum(STMT.staff.length)} كادراً · العرض هنا للمراجعة فقط.`;
 
   document.querySelectorAll('#view-statement .stmt-seg [data-ros]').forEach(b => {
     b.setAttribute('aria-selected', String(b.dataset.ros === STMT.rosG));
     const base = STMT_ROSTER_LABELS[b.dataset.ros];
     const n = STMT.staff.filter(r => _stmtGroupOf(r) === b.dataset.ros).length;
-    b.textContent = `${base} (${arDigits(n)})`;
+    b.textContent = `${base} (${stmtNum(n)})`;
   });
 
   renderStmtLeaves();
@@ -6540,7 +6626,7 @@ function renderStmtLeaves() {
   const rows = Object.entries(byStaff);
   host.innerHTML = rows.length ? rows.map(([sid, ls]) =>
     `<div class="stmt-prow"><span class="stmt-prow-n">${escapeHtml(names[sid] || '—')}</span>
-      ${ls.map(l => `<span class="stmt-badge stmt-badge-info">${escapeHtml(l.leave_type)} (${arDigits(l.leave_days)} أيام)</span>`).join('')}
+      ${ls.map(l => `<span class="stmt-badge stmt-badge-info">${escapeHtml(l.leave_type)} (${stmtNum(l.leave_days)} أيام)</span>`).join('')}
       <span class="stmt-prow-sp"></span></div>`).join('')
     : '<div class="stmt-prow stmt-prow-empty">لا إجازات مسجّلة هذا الشهر</div>';
 }
@@ -6644,8 +6730,8 @@ function renderStmtChangesSec() {
     txt.textContent = 'لا يوجد بيان سابق مُرسَل لهذه المدرسة — لا مقارنة تلقائية. أضف التعديلات يدوياً أو اكتب «لا يوجد تعديل».';
   } else if (pending) {
     banner.className = 'stmt-banner stmt-banner-warn';
-    txt.innerHTML = `قارنّا كادرك ببيان ${escapeHtml(MONTH_SHORT[STMT.prev.month] || '')} ${arDigits(STMT.prev.year)} ووجدنا ` +
-                    `${arDigits(pending)} تغييرات — أكّد سببها قبل الإرسال.`;
+    txt.innerHTML = `قارنّا كادرك ببيان ${escapeHtml(MONTH_SHORT[STMT.prev.month] || '')} ${stmtNum(STMT.prev.year)} ووجدنا ` +
+                    `${stmtNum(pending)} تغييرات — أكّد سببها قبل الإرسال.`;
   } else if (STMT.noChange) {
     banner.className = 'stmt-banner stmt-banner-ok';
     txt.textContent = 'مسجَّل صراحةً: لا يوجد تعديل هذا الشهر.';
@@ -6654,9 +6740,9 @@ function renderStmtChangesSec() {
     txt.textContent = `قارنّا كادرك ببيان ${MONTH_SHORT[STMT.prev.month] || ''} ${STMT.prev.year} — لا فروق غير محسومة.`;
   }
   if (badge) {
-    badge.textContent = pending ? `${arDigits(pending)} بانتظار التأكيد`
+    badge.textContent = pending ? `${stmtNum(pending)} بانتظار التأكيد`
                                 : STMT.noChange ? 'لا يوجد تعديل'
-                                : `${arDigits(STMT.changes.length)} مؤكَّدة`;
+                                : `${stmtNum(STMT.changes.length)} مؤكَّدة`;
     badge.className = 'stmt-badge ' + (pending ? 'stmt-badge-bad' : 'stmt-badge-ok');
   }
   renderStmtChangeStats();
@@ -6669,8 +6755,8 @@ function renderStmtChangeStats() {
   const keys = ['استعدوا','1','2','3','4','5','6','7','8','9'];
   const t = _stmtStudentTotals();
   const row = (label, pick) => `<tr><td>${label}</td>` +
-    keys.map(k => `<td>${arDigits(pick(t.byKey[k]))}</td>`).join('') +
-    `<td><b>${arDigits(keys.reduce((a, k) => a + pick(t.byKey[k]), 0))}</b></td></tr>`;
+    keys.map(k => `<td>${stmtNum(pick(t.byKey[k]))}</td>`).join('') +
+    `<td><b>${stmtNum(keys.reduce((a, k) => a + pick(t.byKey[k]), 0))}</b></td></tr>`;
   tbl.innerHTML = `<thead><tr><th>البند</th>${keys.map(k => `<th>${escapeHtml(GRADE_LABELS[k])}</th>`).join('')}<th>المجموع</th></tr></thead>
     <tbody>${row('عدد الشعب', r => r.sections)}
       ${row('عدد الطلاب الذكور', r => r.enM + r.frM + r.ruM)}
@@ -6685,6 +6771,27 @@ const STMT_YE_ROWS = [
   ['total','العدد الكلي'], ['dropout','متسرب'], ['sat','متقدم'],
   ['pass','ناجح'], ['partial','مكمل (معلقة نتيجته)'], ['fail','راسب'],
 ];
+
+// اقتراح أعداد العام القادم من أعداد هذا العام (القسم ٤).
+// القاعدة التي يتّبعها المدير على الورق: كل صفّ ينتقل إلى الذي يليه، والصف
+// الأول يأتي من خرّيجي الروضة. «المستوى الأول» وافدون جدد فلا مصدر له هنا،
+// ويبقى كما تركه المستخدم. الاقتراح يملأ ولا يقفل — كل خانة تبقى قابلة للتعديل.
+function _stmtYearEndSuggest() {
+  const t = _stmtStudentTotals();
+  const m = k => { const r = t.byKey[k] || {}; return (r.enM || 0) + (r.frM || 0) + (r.ruM || 0); };
+  const f = k => { const r = t.byKey[k] || {}; return (r.enF || 0) + (r.frF || 0) + (r.ruF || 0); };
+
+  STMT.yearEnd ??= { next: {}, exam: {} };
+  const next = STMT.yearEnd.next;
+  const put = (key, mv, fv) => { (next[key] ??= {}).m = mv; next[key].f = fv; };
+
+  // الصف الأول ← خرّيجو الروضة (استعدوا + المستوى الرابع)
+  put('1', m('استعدوا') + m('م4'), f('استعدوا') + f('م4'));
+  // الصفوف ٢..٩ ← الصف الذي قبلها
+  for (let g = 2; g <= 9; g++) put(String(g), m(String(g - 1)), f(String(g - 1)));
+  // مستويات الرياض ٢..٤ ← المستوى الذي قبلها؛ المستوى الأول لا مصدر له
+  for (let l = 2; l <= 4; l++) put('م' + l, m('م' + (l - 1)), f('م' + (l - 1)));
+}
 
 function renderStmtYearEndSec() {
   const due  = _stmtYearEndDue();
@@ -6717,10 +6824,10 @@ function renderStmtYearEndSec() {
     next.innerHTML = `<thead><tr><th>الصف</th><th>ذكور</th><th>اناث</th><th>المجموع</th></tr></thead>
       <tbody>${cols.map(k => {
         const m = Number(ye.next?.[k]?.m) || 0, f = Number(ye.next?.[k]?.f) || 0;
-        return `<tr><td>${escapeHtml(lab(k))}</td>${cell(k, 'm')}${cell(k, 'f')}<td>${arDigits(m + f)}</td></tr>`;
+        return `<tr><td>${escapeHtml(lab(k))}</td>${cell(k, 'm')}${cell(k, 'f')}<td>${stmtNum(m + f)}</td></tr>`;
       }).join('')}</tbody>
-      <tfoot><tr><td>جميع الصفوف</td><td>${arDigits(tot('m'))}</td><td>${arDigits(tot('f'))}</td>
-        <td>${arDigits(tot('m') + tot('f'))}</td></tr></tfoot>`;
+      <tfoot><tr><td>جميع الصفوف</td><td>${stmtNum(tot('m'))}</td><td>${stmtNum(tot('f'))}</td>
+        <td>${stmtNum(tot('m') + tot('f'))}</td></tr></tfoot>`;
   }
 
   const exam = el('stmt-ye-exam');
@@ -6732,10 +6839,10 @@ function renderStmtYearEndSec() {
         const computed = rk === 'sat';
         return `<tr><td>${escapeHtml(lab)}${computed ? ' <span class="stmt-tag-calc">محسوب</span>' : ''}</td>` +
           STMT_YE_EXAM_GRADES.map(g => computed
-            ? `<td>${arDigits(val('total', g) - val('dropout', g))}</td>`
+            ? `<td>${stmtNum(val('total', g) - val('dropout', g))}</td>`
             : `<td><input class="stmt-cell-in" type="number" min="0" inputmode="numeric"
                  data-ye-exam="${rk}" data-g="${g}" value="${val(rk, g)}"></td>`).join('') +
-          `<td><b>${arDigits(STMT_YE_EXAM_GRADES.reduce((a, g) =>
+          `<td><b>${stmtNum(STMT_YE_EXAM_GRADES.reduce((a, g) =>
             a + (computed ? val('total', g) - val('dropout', g) : val(rk, g)), 0))}</b></td></tr>`;
       }).join('')}</tbody>`;
   }
@@ -6757,7 +6864,7 @@ function renderStmtReviewSec() {
     ['مجموع العاملين في المدرسة', w.grand, 0],
   ].map(([l, v, hi]) =>
     `<div class="stmt-sbox${hi && v !== 0 ? ' stmt-sbox-hi' : ''}">
-      <span class="stmt-sbox-l">${escapeHtml(l)}</span><b>${arDigits(v)}</b></div>`).join('');
+      <span class="stmt-sbox-l">${escapeHtml(l)}</span><b>${stmtNum(v)}</b></div>`).join('');
   renderStmtChecklist();
 }
 
@@ -6796,9 +6903,11 @@ function _stmtSnapshot() {
       receivedBy: _stmtVal('stmt-receiver'),
     },
     school: {
+      // تُقرأ من الحقول لا من STMT.school: حفظ الملف الشخصي مؤجَّل بمؤقّت،
+      // فقراءة الكائن تلتقط قيمة ما قبل آخر تعديل.
       name: s.name || '', formerName: _stmtVal('stmt-former-name'),
-      cycle: s.cycle || '', statisticalNumber: s.statistical_number || '',
-      ruralCurriculum: !!s.rural_curriculum,
+      cycle: _stmtVal('stmt-cycle'), statisticalNumber: _stmtVal('stmt-statno'),
+      ruralCurriculum: _stmtRuralVal(),
       educationalZone: _stmtVal('stmt-edu-zone'), village: _stmtVal('stmt-village'),
       address: _stmtVal('stmt-address'), phone: _stmtVal('stmt-phone'),
       dayType: _stmtVal('stmt-day-type'), sharedWith: _stmtVal('stmt-shared-with'),
@@ -6872,6 +6981,12 @@ async function stmtSaveNow() {
   }
 }
 
+// «منهاج التعليم الريفي» ثلاثي الحالة: نعم / لا / لم يُحدَّد (null).
+function _stmtRuralVal() {
+  const v = _stmtVal('stmt-rural');
+  return v === 'نعم' ? true : v === 'لا' ? false : null;
+}
+
 // هوية المدرسة والبناء يُحفظان في جدوليهما لا في اللقطة — فهما ثابتان
 // عبر الأشهر، وهذا ما يقتل الاعتماد على localStorage.
 async function stmtSaveSchoolProfile() {
@@ -6884,6 +6999,11 @@ async function stmtSaveSchoolProfile() {
     shared_with:      _stmtVal('stmt-shared-with') || null,
     educational_zone: _stmtVal('stmt-edu-zone') || null,
     day_type:         _stmtVal('stmt-day-type') || null,
+    // الثلاثة الآتية كانت للقراءة فقط ولا واجهة أخرى في التطبيق تضبطها،
+    // فكانت تبقى فارغة أبداً وتمنع إرسال البيان.
+    cycle:              _stmtVal('stmt-cycle') || null,
+    statistical_number: _stmtVal('stmt-statno') || null,
+    rural_curriculum:   _stmtRuralVal(),
   };
   await NDB.saveSchoolProfile(S.school.id, patch);
   STMT.school = { ...(STMT.school || {}), ...patch };
@@ -6945,14 +7065,16 @@ async function loadStatementPeriod() {
       NDB.getPreviousStatementSnapshot(school.id, STMT.month, STMT.year),
     ]);
 
-    STMT.id       = row.id;
-    STMT.status   = row.status;
-    STMT.notes    = row.notes;
+    // احتياطات مقصودة: كل استدعاء أعلاه قد يعود فارغاً (شبكة، صلاحية، جدول
+    // فارغ). بلا هذه الحواجز يسقط التبويب كلّه لأن أحد الاستدعاءات عاد null.
+    STMT.id       = row?.id ?? null;
+    STMT.status   = row?.status ?? 'draft';
+    STMT.notes    = row?.notes ?? null;
     STMT.school   = profile || school;
     STMT.building = building;
-    STMT.staff    = staff;
-    STMT.leaves   = leaves;
-    STMT.stuStats = stats;
+    STMT.staff    = staff  || [];
+    STMT.leaves   = leaves || [];
+    STMT.stuStats = stats  || {};
     STMT.prev     = prev;
     STMT.changes  = await NDB.getStatementChanges(row.id);
 
@@ -7105,13 +7227,14 @@ function _stmtWire() {
   });
 
   // القسم ٢ + ٣: كل تغيير يُحفظ في جدوله ثم في اللقطة
-  ['stmt-former-name','stmt-village','stmt-address','stmt-phone','stmt-shared-with']
+  ['stmt-former-name','stmt-village','stmt-address','stmt-phone','stmt-shared-with',
+   'stmt-cycle','stmt-statno']
     .forEach(id => el(id)?.addEventListener('input', () => {
       stmtQueueSave(); clearTimeout(STMT.profTimer);
       STMT.profTimer = setTimeout(() => stmtSaveSchoolProfile().catch(() => {}), 1200);
       stmtRefreshMeta();
     }));
-  ['stmt-edu-zone','stmt-day-type'].forEach(id => el(id)?.addEventListener('change', () => {
+  ['stmt-edu-zone','stmt-day-type','stmt-rural'].forEach(id => el(id)?.addEventListener('change', () => {
     stmtSaveSchoolProfile().catch(() => {}); stmtQueueSave(); stmtRefreshMeta();
   }));
 
@@ -7203,6 +7326,25 @@ function _stmtWire() {
   el('btn-stmt-no-change')?.addEventListener('click', stmtMarkNoChange);
   el('btn-close-stmt-change')?.addEventListener('click', closeStmtChangeModal);
   el('btn-save-stmt-change')?.addEventListener('click', saveStmtChange);
+
+  // تبديل الفئة يعيد بناء الحقول (أعمدة كل كتلة مختلفة) مع الحفاظ على
+  // ما أُدخل في الحقول المشتركة، فلا يضيع عمل المستخدم بضغطة خطأ.
+  el('stmt-chg-group')?.addEventListener('change', () => {
+    const group = _stmtVal('stmt-chg-group') || 'admin';
+    const keep  = _stmtCollectChangeData(STMT.chgGroup || 'admin');
+    STMT.chgGroup = group;
+    renderStmtChangeStaffPicker(group, null);
+    renderStmtChangeFields(group, keep);
+  });
+
+  // اختيار شخص من السجلّ يملأ الخانات — ثم تبقى كلها قابلة للتحرير والمسح.
+  el('stmt-chg-staff')?.addEventListener('change', () => {
+    const id = _stmtVal('stmt-chg-staff');
+    const group = _stmtVal('stmt-chg-group') || 'admin';
+    if (!id) return;
+    const rec = STMT.staff.find(r => r.id === id);
+    if (rec) renderStmtChangeFields(group, _stmtChangeDataFromRecord(rec));
+  });
   view.addEventListener('click', (e) => {
     const ok = e.target.closest('[data-sug-ok]');
     if (ok) { _stmtConfirmSuggestion(ok.dataset.sugOk, ok.dataset.sugType); return; }
@@ -7220,6 +7362,12 @@ function _stmtWire() {
     renderStmtYearEndSec(); stmtQueueSave(); stmtRefreshMeta();
   });
 
+  el('btn-stmt-ye-suggest')?.addEventListener('click', () => {
+    _stmtYearEndSuggest();
+    renderStmtYearEndSec(); stmtQueueSave(); stmtRefreshMeta();
+    toast('مُلئ الجدول من أعداد هذا العام — عدّل ما تعرفه', 'success');
+  });
+
   el('btn-print-statement')?.addEventListener('click', printStatement);
   el('btn-export-excel')?.addEventListener('click', exportStatementExcel);
   el('btn-submit-statement')?.addEventListener('click', submitStatement);
@@ -7232,9 +7380,9 @@ function _stmtWire() {
 function _stmtUpdateStudentEcho(key) {
   const t = _stmtStudentTotals();
   const card = document.querySelector(`[data-stu-open="${key}"] .stmt-gcard-s`);
-  if (card) card.textContent = `${arDigits(t.byKey[key].sections)} شعبة · ${arDigits(t.byKey[key].total)} طالب`;
+  if (card) card.textContent = `${stmtNum(t.byKey[key].sections)} شعبة · ${stmtNum(t.byKey[key].total)} طالب`;
   const badge = el('stmt-stu-badge');
-  if (badge) badge.textContent = `${arDigits(t.sections)} شعبة · ${arDigits(t.total)} طالب`;
+  if (badge) badge.textContent = `${stmtNum(t.sections)} شعبة · ${stmtNum(t.total)} طالب`;
 }
 
 function _stmtUpdateAdminEcho(input) {
@@ -7263,13 +7411,76 @@ function _stmtOpenStaffRecord(id) {
 
 // ── التعديلات الطارئة: تأكيد، إضافة، حذف ────────────────────────────────────
 
+// يبني حقول الفئة المختارة ويملؤها من `data` — الحقول كلها قابلة للتحرير والمسح.
+function renderStmtChangeFields(group, data) {
+  const host = el('stmt-chg-fields');
+  if (!host) return;
+  const d = data || {};
+  const spec = STMT_CHG_FIELDS[group] || STMT_CHG_FIELDS.admin;
+
+  host.innerHTML = spec.map(([key, label, type, req]) => {
+    const id  = 'stmt-chg-f-' + key.replace('@', '');
+    const lbl = escapeHtml(label) + (req ? ' <span class="req">*</span>' : '');
+    if (type === 'date') {
+      const [y, m, dd] = String(d[key] || '').split('-');
+      return `<div class="field-group"><label>${lbl}</label><div class="dob-row">
+        <input id="${id}-d" class="field-input dob-in" type="text" inputmode="numeric" maxlength="2"
+               placeholder="يوم" aria-label="اليوم" value="${dd ? Number(dd) : ''}">
+        <input id="${id}-m" class="field-input dob-in" type="text" inputmode="numeric" maxlength="2"
+               placeholder="شهر" aria-label="الشهر" value="${m ? Number(m) : ''}">
+        <input id="${id}-y" class="field-input dob-in dob-year" type="text" inputmode="numeric" maxlength="4"
+               placeholder="سنة" aria-label="السنة" value="${escapeHtml(y || '')}">
+      </div></div>`;
+    }
+    if (type === 'textarea') {
+      return `<div class="field-group"><label for="${id}">${lbl}</label>
+        <textarea id="${id}" class="field-input" rows="2" maxlength="400">${escapeHtml(d[key] ?? '')}</textarea></div>`;
+    }
+    const attrs = type === 'num'
+      ? 'type="number" inputmode="numeric"'
+      : 'type="text" maxlength="120"';
+    return `<div class="field-group"><label for="${id}">${lbl}</label>
+      <input id="${id}" class="field-input" ${attrs} value="${escapeHtml(String(d[key] ?? ''))}"></div>`;
+  }).join('');
+}
+
+// قائمة «تعبئة من سجلّ الكوادر» — كوادر الفئة المختارة وحدهم.
+function renderStmtChangeStaffPicker(group, selectedId) {
+  const sel = el('stmt-chg-staff');
+  if (!sel) return;
+  const inGroup = STMT.staff.filter(r => _stmtGroupOf(r) === group);
+  sel.innerHTML = '<option value="">— شخص خارج السجلّ (أدخل يدوياً) —</option>' +
+    inGroup.map(r =>
+      `<option value="${escapeHtml(r.id)}">${escapeHtml(r.full_name || '—')}</option>`).join('');
+  sel.value = selectedId && inGroup.some(r => r.id === selectedId) ? selectedId : '';
+  CustomSelect.refresh(sel);
+}
+
+// يحوّل سجلّ كادر إلى شكل change_data — نسخة لحظة الحدث، لا مرجعاً حيّاً:
+// السجلّ قد يتغيّر لاحقاً، والورقة المُسلَّمة يجب أن تبقى كما سُلِّمت.
+function _stmtChangeDataFromRecord(rec) {
+  const d = {};
+  for (const k of STMT_CHG_FROM_REC) {
+    const v = rec[k];
+    if (v !== null && v !== undefined && v !== '') d[k] = String(v);
+  }
+  if (rec.birth_date) d['@birth'] = rec.birth_date;
+  if (rec.start_date) d['@start'] = rec.start_date;
+  const lv = _stmtLeaveText(rec.id);
+  if (lv) d.leave_text = lv;
+  if (rec.roster_type) d.roster_note = STMT_ROSTER_TYPE_LABEL[rec.roster_type] || rec.roster_type;
+  return d;
+}
+
 function openStmtChangeModal(chg) {
   STMT.chgEditId = chg?.id || null;
   const d = chg?.change_data || {};
+  const group = chg?.staff_group || 'admin';
   el('stmt-chg-title').textContent = chg ? 'تعديل سطر' : 'إضافة تعديل يدوي';
-  _stmtSet('stmt-chg-name',  d.name || '');
-  _stmtSet('stmt-chg-job',   d.job  || '');
-  _stmtSet('stmt-chg-group', chg?.staff_group || 'admin');
+  STMT.chgGroup = group;
+  _stmtSet('stmt-chg-group', group);
+  renderStmtChangeStaffPicker(group, chg?.staff_id || null);
+  renderStmtChangeFields(group, d);
   _stmtSet('stmt-chg-event', chg?.event_type || '');
   _stmtSet('stmt-chg-reason', chg?.reason || '');
   const [y, m, dd] = String(chg?.effective_date || '').split('-');
@@ -7281,7 +7492,26 @@ function openStmtChangeModal(chg) {
   CustomSelect.refresh(el('stmt-chg-event'));
   el('stmt-chg-error').hidden = true;
   const m2 = el('modal-stmt-change');
-  if (m2) { m2.hidden = false; document.body.style.overflow = 'hidden'; }
+  if (m2) { m2.hidden = false; m2.querySelector('.sheet-body')?.scrollTo(0, 0);
+            document.body.style.overflow = 'hidden'; }
+}
+
+// يجمع كل حقول الفئة المعروضة إلى كائن change_data
+function _stmtCollectChangeData(group) {
+  const out = {};
+  for (const [key, , type] of (STMT_CHG_FIELDS[group] || STMT_CHG_FIELDS.admin)) {
+    const id = 'stmt-chg-f-' + key.replace('@', '');
+    if (type === 'date') {
+      const dd = _stmtNum(id + '-d'), mm = _stmtNum(id + '-m'), yy = _stmtNum(id + '-y');
+      if (dd && mm && yy) {
+        out[key] = `${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+      }
+      continue;
+    }
+    const v = _stmtVal(id);
+    if (v) out[key] = v;
+  }
+  return out;
 }
 
 function closeStmtChangeModal() {
@@ -7296,14 +7526,21 @@ function _stmtConfirmSuggestion(staffId, changeType) {
   const sug = _stmtDetectChanges().find(s => s.staff_id === staffId && s.change_type === changeType);
   if (!sug) return;
   STMT.chgPending = { staff_id: staffId, change_type: changeType, detected: true };
-  openStmtChangeModal(null);
-  _stmtSet('stmt-chg-name',  sug.name || '');
-  _stmtSet('stmt-chg-job',   sug.job  || '');
-  _stmtSet('stmt-chg-group', sug.group || 'admin');
-  // اقتراح افتراضي للسبب حسب نوع التغيير — والمدير يبقى صاحب القرار.
-  _stmtSet('stmt-chg-event', changeType === 'added' ? 'مباشرة' : '');
-  CustomSelect.refresh(el('stmt-chg-group'));
-  CustomSelect.refresh(el('stmt-chg-event'));
+  const group = sug.group || 'admin';
+  // نملأ من سجلّ الكادر إن كان ما يزال موجوداً (أُضيف/تغيّر)، وإلا من
+  // بصمة الشهر السابق (غادر) — فسطر «من غادر» يحتاج بياناته كاملة أيضاً.
+  const rec = STMT.staff.find(r => r.id === staffId);
+  const data = rec ? _stmtChangeDataFromRecord(rec)
+                   : { full_name: sug.name || '', job_title: sug.job || '' };
+  openStmtChangeModal({
+    staff_group: group, staff_id: staffId, change_data: data,
+    // اقتراح افتراضي للسبب حسب نوع التغيير — والمدير يبقى صاحب القرار.
+    event_type: changeType === 'added' ? 'مباشرة' : '',
+  });
+  // openStmtChangeModal تظنّه سطراً محفوظاً فتصفّر chgPending — نعيدها.
+  el('stmt-chg-title').textContent = 'تأكيد تعديل مكتشَف';
+  STMT.chgEditId = null;
+  STMT.chgPending = { staff_id: staffId, change_type: changeType, detected: true };
 }
 
 // «تجاهل» يُسجَّل سطراً بـ event_type='أخرى' لا يُحذف بصمت — البيان وثيقة،
@@ -7332,9 +7569,11 @@ async function _stmtSkipSuggestion(staffId, changeType) {
 async function saveStmtChange() {
   const errEl = el('stmt-chg-error');
   const spin  = el('stmt-chg-spinner');
-  const name  = _stmtVal('stmt-chg-name');
+  const group = _stmtVal('stmt-chg-group') || 'admin';
+  const data  = _stmtCollectChangeData(group);
+  const name  = data.full_name || '';
   const event = _stmtVal('stmt-chg-event');
-  if (!name)  { errEl.textContent = 'الاسم مطلوب'; errEl.hidden = false; return; }
+  if (!name)  { errEl.textContent = 'الاسم الثلاثي مطلوب'; errEl.hidden = false; return; }
   if (!event) { errEl.textContent = 'نوع الحدث مطلوب — النظام لا يعرف السبب، وهو عمود في الورقة الرسمية'; errEl.hidden = false; return; }
   errEl.hidden = true;
   if (spin) spin.hidden = false;
@@ -7349,10 +7588,13 @@ async function saveStmtChange() {
       change_type: pend?.change_type
         || STMT.changes.find(c => c.id === STMT.chgEditId)?.change_type
         || (event === 'مباشرة' ? 'added' : 'removed'),
-      staff_id: pend?.staff_id || STMT.changes.find(c => c.id === STMT.chgEditId)?.staff_id || null,
-      staff_group: _stmtVal('stmt-chg-group'),
+      staff_id: _stmtVal('stmt-chg-staff') || pend?.staff_id
+        || STMT.changes.find(c => c.id === STMT.chgEditId)?.staff_id || null,
+      staff_group: group,
       event_type: event,
-      change_data: { name, job: _stmtVal('stmt-chg-job') },
+      // `name` و`job` يبقيان للتوافق مع السطور المحفوظة بالصيغة القديمة،
+      // وبقية الأعمدة الرسمية تُحفظ بمفاتيحها.
+      change_data: { ...data, name, job: data.job_title || '' },
       reason: _stmtVal('stmt-chg-reason') || null,
       effective_date: eff,
       detected: !!pend?.detected || !!STMT.changes.find(c => c.id === STMT.chgEditId)?.detected,
@@ -7513,6 +7755,40 @@ function _setDate(ws, iso, c1, c2, c3, row) {
   _setCell(ws, `${c3}${row}`, Number(y));
 }
 
+// سطر التعديل → شكل سجلّ كادر صالح لـ _writeStaffRow.
+// **ما كتبه المدير في النافذة يسبق سجلّ الكوادر**: البيان وثيقة تصف لحظةً
+// بعينها، والسجلّ قد يكون تغيّر بعدها — بل قد يكون صاحبه غادر فلم يعد له سجلّ.
+function _stmtChangeRecord(c) {
+  const live = STMT.staff.find(r => r.id === c.staffId) || {};
+  const d = c.data || {};
+  const pick = (dk, lk) => (d[dk] !== undefined && d[dk] !== '') ? d[dk] : (live[lk] ?? '');
+  return {
+    national_id:  pick('national_id', 'national_id'),
+    full_name:    d.full_name || d.name || live.full_name || '',
+    mother_name:  pick('mother_name', 'mother_name'),
+    birth_date:   pick('@birth', 'birth_date'),
+    certificate:  pick('certificate', 'certificate'),
+    specialization: pick('specialization', 'specialization'),
+    seniority_year: pick('seniority_year', 'seniority_year'),
+    job_title:    d.job_title || d.job || live.job_title || '',
+    higher_degree: pick('higher_degree', 'higher_degree'),
+    subject_taught: pick('subject_taught', 'subject_taught'),
+    teaching_hours: pick('teaching_hours', 'teaching_hours'),
+    quota_subjects: pick('quota_subjects', 'quota_subjects'),
+    quota_school_external: pick('quota_school_external', 'quota_school_external'),
+    assigned_grade:   pick('assigned_grade', 'assigned_grade'),
+    assigned_section: pick('assigned_section', 'assigned_section'),
+    start_date:   pick('@start', 'start_date'),
+    phone:        pick('phone', 'phone'),
+    landline:     pick('landline', 'landline'),
+    residential_zone: pick('residential_zone', 'residential_zone'),
+    ministerial_doc:  pick('ministerial_doc', 'ministerial_doc'),
+    notes:        pick('notes', 'notes'),
+    leave_text:   d.leave_text || '',
+    roster_note:  d.roster_note || STMT_ROSTER_TYPE_LABEL[live.roster_type] || '',
+  };
+}
+
 // صفّ كادر واحد في ورقة الكوادر أو في ورقة التعديلات، حسب خريطة أعمدة.
 // المفاتيح هنا هي أسماء أعمدة الورقة، والقيم أحرف العمود.
 function _writeStaffRow(ws, row, r, map, leaveText) {
@@ -7524,9 +7800,10 @@ function _writeStaffRow(ws, row, r, map, leaveText) {
   if (map.birth_d) _setDate(ws, r.birth_date, map.birth_d, map.birth_m, map.birth_y, row);
   put('certificate',  r.certificate || '');
   put('specialization', r.specialization || '');
-  // ⚠ العمود اسمه seniority_years — كتابة seniority_year كانت تترك
-  // «القدم الوظيفي» فارغاً في كل الأوراق المُصدَّرة.
-  put('seniority',    r.seniority_years ?? '');
+  // «القدم الوظيفي» في الورقة الرسمية سنةُ تعيين (1931 / 2015 في عيّنة
+  // النموذج) لا عددَ سنوات. seniority_years القديم كان numeric(4,1) فلا
+  // يتّسع لسنة أصلاً؛ يُقرأ هنا احتياطاً للسجلات التي لم تُحدَّث بعد.
+  put('seniority',    r.seniority_year ?? r.seniority_years ?? '');
   put('job_title',    r.job_title || '');
   put('higher_degree', r.higher_degree || '');
   put('subject',      r.subject_taught || '');
@@ -7565,19 +7842,25 @@ const _MAP_SUPPORT_SHEET = {
   seniority:'I', job_title:'J', start_d:'K', start_m:'L', start_y:'M',
   phone:'N', landline:'O', zone:'P', leave:'Q', doc:'R', notes:'S',
 };
-// ورقة التعديلات — ثلاث كتل بأعمدة مختلفة، وعمود الحدث في آخر كل كتلة
-const _MAP_CHG_ADMIN = { ...{
+// ورقة التعديلات — ثلاث كتل بأعمدة مختلفة. كتلة المهنيين وحدها لها عمود حدث
+// مستقلّ (V22 «مباشرة/انفكاك/وفاة/تقاعد/ملاحظات أخرى»)؛ الإداري والتدريسي
+// يكتبان الحدث داخل عمود الملاحظات كما تفعل المدارس على الورق.
+const _MAP_CHG_ADMIN = {
   seq:'A', national_id:'B', full_name:'C', mother_name:'D',
   birth_d:'E', birth_m:'F', birth_y:'G', certificate:'H', specialization:'I',
   seniority:'J', job_title:'K', higher_degree:'L',
   start_d:'M', start_m:'N', start_y:'O', phone:'P', landline:'Q',
-  zone:'R', leave:'S', doc:'T', notes:'U' } };
+  zone:'R', leave:'S', doc:'T', notes:'U',
+};
 const _MAP_CHG_TEACH = { ..._MAP_TEACH_SHEET };
 const _MAP_CHG_SUPPORT = {
   seq:'A', national_id:'B', full_name:'C', mother_name:'D',
   birth_d:'E', birth_m:'F', birth_y:'G', certificate:'H', specialization:'I',
   seniority:'J', job_title:'K', start_d:'M', start_m:'N', start_y:'O',
-  phone:'P', landline:'Q', zone:'R', leave:'T', doc:'U', notes:'V',
+  phone:'P', landline:'Q', zone:'R',
+  roster_note:'S',   // داخل الملاك / تحديد مركز عمل محافظة — لم يكن مُسنداً
+  leave:'T', doc:'U',
+  event:'V',         // كان مُسنداً لـ notes فيُكتب الحدث فوق الملاحظات
 };
 
 async function exportStatementExcel() {
@@ -7594,6 +7877,8 @@ async function exportStatementExcel() {
     await loadExcelJS();
     // المُصدِّر يقرأ اللقطة وحدها — فما يُصدَّر هو بالضبط ما يُرسَل.
     const snap = _stmtSnapshot();
+    // كتل ورقة التعديلات ذات سعة ثابتة؛ ما يفيض كان يُقتطع بصمت.
+    const overflow = [];
 
     const resp = await fetch('../shared/statement_template.xlsx');
     if (!resp.ok) throw new Error(`تعذّر تحميل القالب (${resp.status})`);
@@ -7618,7 +7903,8 @@ async function exportStatementExcel() {
     _setCell(ws1, 'K7', sc.name);
     _setCell(ws1, 'O7', sc.phone);
     _setCell(ws1, 'R7', sc.statisticalNumber);
-    _setCell(ws1, 'T7', sc.ruralCurriculum ? 'نعم' : 'لا');
+    // ثلاثي الحالة: null يعني «لم يُحدَّد» فتبقى الخانة فارغة بدل ادّعاء «لا».
+    _setCell(ws1, 'T7', sc.ruralCurriculum === null ? '' : (sc.ruralCurriculum ? 'نعم' : 'لا'));
     // ⚠ نوع الدوام كامل/نصفي محورٌ مستقلّ عن schools.shift (صباحي/مسائي).
     _setCell(ws1, 'Y7', sc.dayType);
     _setCell(ws1, 'W8', sc.sharedWith);
@@ -7704,26 +7990,44 @@ async function exportStatementExcel() {
       _setCell(ws5, 'L6', sc.name);
       _setCell(ws5, 'Q6', sc.phone);
       // الجواب يُكتب تحت الخانة المختارة، كما في الورقة الأصلية
-      _setCell(ws5, sc.ruralCurriculum ? 'T7' : 'U7', sc.ruralCurriculum ? 'نعم' : 'لا');
+      if (sc.ruralCurriculum !== null)
+        _setCell(ws5, sc.ruralCurriculum ? 'T7' : 'U7', sc.ruralCurriculum ? 'نعم' : 'لا');
       if (sc.dayType) _setCell(ws5, sc.dayType === 'كامل' ? 'V7' : 'W7', sc.dayType);
       _setCell(ws5, 'X7', sc.sharedWith);
 
+      // ⚠ كان `byGroup[c.group] ??= byGroup.admin` يُسند مصفوفة الإداريين نفسها
+      // لأي فئة مجهولة، فتسقط سطورها في كتلة الإداريين بصمت.
       const byGroup = { admin: [], teaching: [], support: [] };
-      for (const c of snap.changes.items) (byGroup[c.group] ??= byGroup.admin).push(c);
+      for (const c of snap.changes.items) (byGroup[c.group] || byGroup.admin).push(c);
       const blocks = [
-        ['admin',    11, 13, _MAP_CHG_ADMIN,   'notes'],
-        ['teaching', 17, 20, _MAP_CHG_TEACH,   'notes'],
-        ['support',  24, 29, _MAP_CHG_SUPPORT, 'notes'],
+        ['admin',    11, 13, _MAP_CHG_ADMIN],
+        ['teaching', 17, 20, _MAP_CHG_TEACH],
+        ['support',  24, 29, _MAP_CHG_SUPPORT],
       ];
-      for (const [g, first, last, map, eventCol] of blocks) {
+      for (const [g, first, last, map] of blocks) {
         const items = byGroup[g] || [];
-        items.slice(0, last - first + 1).forEach((c, i) => {
+        const cap = last - first + 1;
+        items.slice(0, cap).forEach((c, i) => {
           const row = first + i;
-          const rec = STMT.staff.find(r => r.id === c.staffId)
-                   || { full_name: c.data?.name || '', job_title: c.data?.job || '' };
-          _writeStaffRow(ws5, row, rec, map, leaveOf(c.staffId));
-          _setCell(ws5, `${map[eventCol]}${row}`, c.eventType || '');
+          const rec = _stmtChangeRecord(c);
+          _writeStaffRow(ws5, row, rec, map, rec.leave_text || leaveOf(c.staffId));
+          // الورقة لا تفرد عمود حدث إلا لكتلة المهنيين (V). في كتلتَي الإداري
+          // والتدريسي يُكتب الحدث والسبب داخل عمود الملاحظات نفسه — وكان
+          // الكود يكتب الحدث فوق الملاحظات فيمحوها، ويُسقط السبب أصلاً.
+          const eventTxt = [c.eventType, c.reason].filter(Boolean).join(' — ');
+          if (map.event) {
+            _setCell(ws5, `${map.event}${row}`, eventTxt);
+            if (map.doc) _setCell(ws5, `${map.doc}${row}`,
+              [rec.ministerial_doc, rec.notes].filter(Boolean).join(' — '));
+          } else if (map.notes) {
+            _setCell(ws5, `${map.notes}${row}`,
+              [rec.notes, eventTxt].filter(Boolean).join(' — '));
+          }
+          if (map.roster_note) _setCell(ws5, `${map.roster_note}${row}`, rec.roster_note || '');
         });
+        if (items.length > cap) {
+          overflow.push(`${STMT_ROSTER_LABELS[g]}: ${items.length} سطراً والورقة تتّسع لـ ${cap}`);
+        }
       }
       // «لا يوجد تعديل» يُكتب صراحةً كما ينصّ النموذج
       if (snap.changes.none && !snap.changes.items.length) _setCell(ws5, 'C11', 'لا يوجد تعديل');
@@ -7755,7 +8059,7 @@ async function exportStatementExcel() {
       _setCell(ws6, 'I6', sc.cycle);
       _setCell(ws6, 'J6', sc.name);
       _setCell(ws6, 'N6', sc.statisticalNumber);
-      _setCell(ws6, 'P6', sc.ruralCurriculum ? 'نعم' : 'لا');
+      _setCell(ws6, 'P6', sc.ruralCurriculum === null ? '' : (sc.ruralCurriculum ? 'نعم' : 'لا'));
       _setCell(ws6, 'U6', sc.dayType);
       _setCell(ws6, 'U7', sc.sharedWith);
 
@@ -7803,6 +8107,13 @@ async function exportStatementExcel() {
     a.download = `بيان_${safeName}_${MONTH_SHORT[snap.period.month]}_${snap.period.year}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
+
+    // الاقتطاع الصامت أخطر من الفشل: المدير يظنّ السطور وصلت وهي لم تصل.
+    if (overflow.length && errEl) {
+      errEl.textContent = 'صُدِّر الملف، لكن ورقة التعديلات لا تتّسع لكل السطور — '
+        + overflow.join('؛ ') + '. سلّم الفائض بورقة إضافية.';
+      errEl.hidden = false;
+    }
   } catch (err) {
     console.error('[Statement] exportExcel', err);
     if (errEl) { errEl.textContent = 'تعذّر تصدير Excel — ' + (err?.message || err); errEl.hidden = false; }
@@ -7863,7 +8174,7 @@ function printStatement() {
   المنطقة التعليمية: ${esc(sc.educationalZone || '—')} | القرية: ${esc(sc.village || '—')} |
   العنوان: ${esc(sc.address || '—')} | الهاتف: ${esc(sc.phone || '—')}<br>
   الحلقة: ${esc(sc.cycle || '—')} | الرقم الإحصائي: ${esc(sc.statisticalNumber || '—')} |
-  منهاج ريفي: ${sc.ruralCurriculum ? 'نعم' : 'لا'} | نوع الدوام: ${esc(sc.dayType || '—')} |
+  منهاج ريفي: ${sc.ruralCurriculum === null ? '—' : (sc.ruralCurriculum ? 'نعم' : 'لا')} | نوع الدوام: ${esc(sc.dayType || '—')} |
   مشترك مع: ${esc(sc.sharedWith || '—')}${sc.formerName ? ' | الاسم سابقاً: ' + esc(sc.formerName) : ''}
 </div>
 <h2>أعداد الطلاب والشعب</h2>
@@ -7873,7 +8184,7 @@ function printStatement() {
 <tbody>${stuRows}</tbody>
 <tfoot><tr><td>المجموع</td><td>${t.sections}</td><td>${t.enM}</td><td>${t.enF}</td>
 <td>${t.frM}</td><td>${t.frF}</td><td>${t.ruM}</td><td>${t.ruF}</td><td>${t.total}</td></tr></tfoot></table>
-<div class="meta">حلقة (١): ${snap.students.byCycle.cycle1} | حلقة (٢): ${snap.students.byCycle.cycle2} |
+<div class="meta">حلقة (1): ${snap.students.byCycle.cycle1} | حلقة (2): ${snap.students.byCycle.cycle2} |
 رياض: ${snap.students.byCycle.kinder} | ثانوي: ${snap.students.byCycle.secondary}</div>
 <h2>الجهاز الإداري</h2>
 <table><thead><tr><th>الوظيفة</th><th>العدد</th><th>كتابةً</th></tr></thead><tbody>${admRows}
@@ -7894,8 +8205,10 @@ function printStatement() {
 CustomSelect.enhance('stmt-month-sel');
 CustomSelect.enhance('stmt-edu-zone');
 CustomSelect.enhance('stmt-day-type');
+CustomSelect.enhance('stmt-rural');
 CustomSelect.enhance('stmt-b-ownership');
 CustomSelect.enhance('stmt-chg-group');
+CustomSelect.enhance('stmt-chg-staff');
 CustomSelect.enhance('stmt-chg-event');
 
 

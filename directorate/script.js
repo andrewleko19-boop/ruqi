@@ -571,13 +571,31 @@ function setupComplianceActions() {
   document.getElementById('remind-all-btn')?.addEventListener('click', remindAllSilent);
 }
 
+// الدالة تُرجع jsonb {sent, recipients, throttled}. الصيغة القديمة كانت عدداً
+// مجرّداً، والصفر فيها يعني ثلاثة أشياء مختلفة: أُرسل مؤخراً، أو لا حساب مدير
+// لهذه المدرسة أصلاً. كان المستخدم يرى «أُرسل مسبقاً» من أول ضغطة لمدرسة بلا مدير.
+function _remindOutcome(res) {
+  // الصيغة العددية القديمة (قبل تشغيل §21) لا تفرّق بين الحالتين، فلا ندّعي
+  // معرفةً لا نملكها: نبقي السلوك القديم («أُرسل مسبقاً») بدل اتّهام المدرسة
+  // بأنها بلا حساب مدير.
+  if (typeof res === 'number') return { sent: res, recipients: 1, throttled: res ? 0 : 1 };
+  return {
+    sent: Number(res?.sent) || 0,
+    recipients: Number(res?.recipients) || 0,
+    throttled: Number(res?.throttled) || 0,
+  };
+}
+
 async function handleRemind(schoolId, btn) {
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
   try {
-    const n = await sendAttendanceReminder(schoolId);
-    if (n > 0) {
-      showToast('تذكير مُرسَل', `أُرسل التذكير إلى ${n} مدير.`, 'success');
+    const r = _remindOutcome(await sendAttendanceReminder(schoolId));
+    if (r.sent > 0) {
+      showToast('تذكير مُرسَل', `أُرسل التذكير إلى ${r.sent} مدير.`, 'success');
       if (btn) { btn.textContent = 'تم ✓'; }
+    } else if (r.recipients === 0) {
+      showToast('لا حساب مدير', 'لا يوجد حساب مدير لهذه المدرسة — أنشئ الحساب من تبويب «المدارس والطاقم» أولاً.', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = 'تذكير'; }
     } else {
       showToast('تذكير مسبق', 'أُرسل تذكير إلى هذه المدرسة خلال آخر 30 دقيقة.', 'info');
       if (btn) { btn.disabled = false; btn.textContent = 'تذكير'; }
@@ -597,14 +615,18 @@ async function remindAllSilent() {
   }
   const btn = document.getElementById('remind-all-btn');
   if (btn) { btn.disabled = true; btn.textContent = '…جاري الإرسال'; }
-  let sent = 0;
+  let sent = 0, noAdmin = 0;
   for (const row of silent) {
     try {
-      const n = await sendAttendanceReminder(row.id);
-      if (n > 0) sent++;
+      const r = _remindOutcome(await sendAttendanceReminder(row.id));
+      if (r.sent > 0) sent++;
+      else if (r.recipients === 0) noAdmin++;
     } catch (_) { /* تجاهل — التالية */ }
   }
-  showToast('اكتمل التذكير', `أُرسل التذكير لـ ${sent} من ${silent.length} مدرسة.`, 'success');
+  // «لا حساب مدير» ليس نجاحاً صامتاً — المديرية تحتاج أن تعرف أنها لم تصل أحداً.
+  const tail = noAdmin ? ` — ${noAdmin} منها بلا حساب مدير.` : '';
+  showToast('اكتمل التذكير', `أُرسل التذكير لـ ${sent} من ${silent.length} مدرسة${tail}`,
+            sent ? 'success' : 'info');
   if (btn) { btn.disabled = false; btn.textContent = 'تذكير جميع المتأخرة'; }
 }
 
@@ -2770,6 +2792,8 @@ function openDirDeactivate(userId, name) {
 // credential means the plaintext is only ever one screenshot away; instead they
 // mint a fresh one, see it once, and pass it on.
 let _dirCredUserId = null;
+// صحيح أثناء انتظار نافذة تأكيد مفتوحة فوق نافذة كلمة المرور.
+let _dirCredBusy   = false;
 
 async function openDirCredModal(userId, name) {
   const modal    = document.getElementById('dir-cred-modal');
@@ -2803,22 +2827,41 @@ async function openDirCredModal(userId, name) {
 document.getElementById('dir-cred-reset')?.addEventListener('click', async () => {
   if (!_dirCredUserId) return;
   const name = document.getElementById('dir-cred-name')?.textContent || 'هذا الحساب';
-  const ok = await dirConfirm(
-    'إنشاء كلمة مرور جديدة',
-    `ستتوقّف كلمة المرور الحالية لـ«${name}» عن العمل فوراً، وتُعرَض الجديدة مرة واحدة فقط.`
-  );
+  // نمسك المعرّف قبل التأكيد: نافذة كلمة المرور قد تُغلق أثناء انتظار الجواب،
+  // وإغلاقها يصفّر _dirCredUserId.
+  const userId = _dirCredUserId;
+  _dirCredBusy = true;
+  let ok = false;
+  try {
+    ok = await dirConfirm(
+      'إنشاء كلمة مرور جديدة',
+      `ستتوقّف كلمة المرور الحالية لـ«${name}» عن العمل فوراً، وتُعرَض الجديدة مرة واحدة فقط.`
+    );
+  } finally {
+    _dirCredBusy = false;
+  }
   if (!ok) return;
 
   const btn    = document.getElementById('dir-cred-reset');
   const msgEl  = document.getElementById('dir-cred-msg');
   const box    = document.getElementById('dir-cred-reset-box');
   const passEl = document.getElementById('dir-cred-newpass');
+  // كل وجهات العرض داخل #dir-cred-modal: إن كانت مغلقة كُتبت النتيجة — وكذلك
+  // نصّ الخطأ — في شجرة مخفية، فيبدو الزرّ بلا أثر. نعيد فتحها قبل أي شيء.
+  document.getElementById('dir-cred-modal')?.classList.remove('hidden');
   if (btn) btn.disabled = true;
   if (msgEl) msgEl.hidden = true;
   try {
-    const res = await dirEdgeFetch('admin-create-user', { action: 'reset_password', userId: _dirCredUserId });
+    const res = await dirEdgeFetch('admin-create-user', { action: 'reset_password', userId });
     if (passEl) passEl.textContent = res.password;
     if (box) box.hidden = false;
+    // التحذير يعني أن كلمة المرور بُدِّلت لكن سجلّ الاعتماد لم يُحدَّث — إخفاؤه
+    // يترك المديرية تظنّ كل شيء تمّ.
+    if (res.warning && msgEl) {
+      msgEl.className   = 'dir-review-msg';
+      msgEl.textContent = res.warning;
+      msgEl.hidden      = false;
+    }
   } catch (e) {
     if (msgEl) {
       msgEl.className   = 'dir-review-msg';
@@ -2910,10 +2953,15 @@ function setupDirPrincipals() {
   });
 
   // مودال بيانات الحساب
-  const closeCredModal = () => document.getElementById('dir-cred-modal')?.classList.add('hidden');
+  const closeCredModal = () => {
+    document.getElementById('dir-cred-modal')?.classList.add('hidden');
+    _dirCredUserId = null;
+  };
   document.getElementById('dir-cred-modal-close')?.addEventListener('click', closeCredModal);
   document.getElementById('dir-cred-modal-ok')?.addEventListener('click',    closeCredModal);
   document.getElementById('dir-cred-modal')?.addEventListener('click', e => {
-    if (e.target.id === 'dir-cred-modal') closeCredModal();
+    // أثناء انتظار التأكيد لا تُغلق بالنقر على الخلفية: النقرة كانت تُقصَد
+    // لنافذة التأكيد فوقها، وإغلاق هذه يخفي وجهة عرض النتيجة والخطأ معاً.
+    if (e.target.id === 'dir-cred-modal' && !_dirCredBusy) closeCredModal();
   });
 }
