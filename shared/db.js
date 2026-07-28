@@ -1601,7 +1601,7 @@ function staffStatusForLate(lateMinutes) {
 async function getSchoolPersonnel(schoolId) {
   const { data, error } = await db
     .from('school_personnel')
-    .select('id, full_name, kind, national_id, is_active')
+    .select('id, full_name, kind, national_id, is_active, staff_record_id')
     .eq('school_id', schoolId)
     .order('kind', { ascending: true })
     .order('full_name', { ascending: true });
@@ -1609,6 +1609,7 @@ async function getSchoolPersonnel(schoolId) {
   return (data ?? []).map(p => ({
     id: p.id, fullName: p.full_name, kind: p.kind,
     nationalId: p.national_id ?? null, isActive: p.is_active !== false,
+    staffRecordId: p.staff_record_id ?? null,
   }));
 }
 
@@ -1636,6 +1637,66 @@ async function updatePersonnel(id, patch) {
 
 function setPersonnelActive(id, active) {
   return updatePersonnel(id, { isActive: active });
+}
+
+// ── مرآة سجلّ الكوادر في كشف الدوام ──────────────────────────────────────────
+// staff_records هو السجلّ الكامل (يقوم عليه البيان الشهري)، و school_personnel هو
+// هويّة الدوام (staff_attendance.personnel_id يشير إليه). كانا منفصلين تماماً،
+// فمن يُضاف في «الكوادر» لا يظهر في كشف الدوام إطلاقاً. هذه الدالة تُبقيهما
+// متطابقَين في اتجاه واحد: الكوادر ← الكادر.
+//
+// قيد kind في القاعدة ('admin','worker') يبقى كما هو — المهني والحارس والمستخدم
+// كلّهم 'worker' في الدوام، والتمييز بينهم يبقى في staff_records للبيان.
+const STAFF_TYPE_TO_PERSONNEL_KIND = {
+  admin: 'admin', professional: 'worker', worker: 'worker', guard: 'worker',
+};
+
+async function syncPersonnelFromStaffRecord({ staffRecordId, schoolId, fullName, staffType, nationalId = null }) {
+  if (!staffRecordId || !schoolId) return null;
+
+  // المعلّمون هويّتهم في users لا في school_personnel — فلا مرآة لهم. ولو تحوّل
+  // سجلّ من فئة أخرى إلى «تدريسي» تُلغى مرآته بدل أن تبقى شبحاً في كشف الدوام.
+  const kind = STAFF_TYPE_TO_PERSONNEL_KIND[staffType];
+  if (!kind) return deactivatePersonnelForStaffRecord(staffRecordId);
+
+  const { data: linked, error: findErr } = await db
+    .from('school_personnel').select('id').eq('staff_record_id', staffRecordId).maybeSingle();
+  if (findErr) throw findErr;
+  if (linked) {
+    await updatePersonnel(linked.id, { fullName, kind, nationalId, isActive: true });
+    return linked.id;
+  }
+
+  // تبنّي صفّ أُضيف سابقاً بالإضافة السريعة بالاسم نفسه، بدل تكرار الشخص مرّتين
+  // في كشف الدوام. الشرط: غير مربوط بعدُ، ونشط، ومطابق بالاسم في المدرسة نفسها.
+  const { data: orphan, error: orphanErr } = await db
+    .from('school_personnel').select('id')
+    .eq('school_id', schoolId).eq('full_name', fullName)
+    .is('staff_record_id', null).eq('is_active', true)
+    .limit(2);
+  if (orphanErr) throw orphanErr;
+  if (orphan?.length === 1) {
+    const { error } = await db.from('school_personnel')
+      .update({ kind, national_id: nationalId, staff_record_id: staffRecordId })
+      .eq('id', orphan[0].id);
+    if (error) throw error;
+    return orphan[0].id;
+  }
+
+  const { data, error } = await db.from('school_personnel')
+    .insert({ school_id: schoolId, full_name: fullName, kind,
+              national_id: nationalId, staff_record_id: staffRecordId })
+    .select('id').single();
+  if (error) throw error;
+  return data.id;
+}
+
+async function deactivatePersonnelForStaffRecord(staffRecordId) {
+  if (!staffRecordId) return null;
+  const { error } = await db.from('school_personnel')
+    .update({ is_active: false }).eq('staff_record_id', staffRecordId);
+  if (error) throw error;
+  return null;
 }
 
 // ── Teacher self check-in / out (offline-capable, mirrors student attendance) ──
@@ -3430,6 +3491,8 @@ window.NSAMS_DB = {
   // Staff attendance (دوام الموظفين)
   getSchoolPersonnel,
   addPersonnel,
+  syncPersonnelFromStaffRecord,
+  deactivatePersonnelForStaffRecord,
   updatePersonnel,
   setPersonnelActive,
   teacherCheckIn,

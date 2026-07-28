@@ -199,7 +199,8 @@ ul { list-style: none; }
   margin-bottom: 14px;
 }
 
-.field-group label {
+.field-group label,
+.field-group > .field-lbl {
   font-size: 0.83rem;
   font-weight: 600;
   color: var(--clr-text-1);
@@ -207,6 +208,35 @@ ul { list-style: none; }
   align-items: center;
   gap: 4px;
 }
+
+/* مُعدِّلات عرض الحقول — بوحدة ch فتتبع حجم الخطّ. الأساس width:100% يبقى،
+   فلا تفيض على الشاشات الضيّقة، والسقف يمنع امتداد حقل من ستّ خانات لعرض
+   الورقة كاملاً. */
+.field-input--num   { max-width: 12ch; }  /* القدم الوظيفي · عدد الساعات */
+.field-input--id    { max-width: 20ch; }  /* الرقم الذاتي · الوطني · الهواتف */
+.field-input--short { max-width: 16ch; }  /* الصف · الشعبة */
+.field-input--name  { max-width: 36ch; }  /* الاسم الثلاثي · اسم الأم */
+
+/* منتقٍ مقطعي بخيارين لا ثالث لهما (الجنس). زرّا اختيار حقيقيان، فتبقى حالة
+   «غير محدَّد» ممكنة قبل أول لمسة — بخلاف <select> منزوع الخيار الفارغ الذي
+   يحفظ أوّل خياره بصمت. */
+/* align-self لازم: ‎.field-group عمود مرن، و align-items: stretch الافتراضية
+   تمدّ المنتقي لعرض الورقة رغم inline-flex. */
+.seg-2 { display: inline-flex; gap: 6px; align-self: start; }
+.seg-2-opt {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 18px; border-radius: var(--r-pill, 999px);
+  border: 1.5px solid var(--clr-border); background: var(--clr-bg);
+  font-size: .84rem; font-weight: 600; color: var(--clr-text-1);
+  cursor: pointer; transition: border-color var(--dur), background var(--dur);
+}
+.seg-2-opt:has(input:checked) {
+  border-color: var(--clr-primary);
+  background: var(--clr-primary-dim);
+  font-weight: 700;
+}
+.seg-2-opt input { accent-color: var(--clr-primary); width: 15px; height: 15px; margin: 0; }
+.seg-2-opt:focus-within { outline: 2px solid var(--clr-primary); outline-offset: 2px; }
 
 .req      { color: var(--clr-danger); }
 .optional { font-weight: 400; color: var(--clr-text-3); font-size: .78rem; }
@@ -981,6 +1011,12 @@ select.field-input option:disabled { color: var(--clr-text-3); }
 }
 .staff-roster-item .sr-name { flex: 1; }
 .staff-roster-item .sr-kind { font-size: .72rem; color: var(--clr-text-3); }
+/* شارة الصفوف المرآة — مصدرها سجلّ الكوادر فتُحذف من هناك لا من هنا */
+.staff-roster-item .sr-src {
+  font-size: .68rem; font-weight: 700; white-space: nowrap;
+  padding: 2px 8px; border-radius: var(--r-pill, 999px);
+  background: rgba(99,102,241,.12); color: #6366F1;
+}
 .staff-roster-del {
   display: flex; align-items: center; padding: 3px;
   border-radius: var(--r-xs); color: var(--clr-danger);
@@ -1825,6 +1861,16 @@ select.csel-native {
 }
 .stmt-table thead th { background: #f1f6ff; font-weight: 800; font-size: 11px; color: var(--clr-text-2); }
 .stmt-table td:first-child, .stmt-table th:first-child { text-align: start; font-weight: 700; }
+
+/* عمود الصف مثبَّت: الجدول يتمرّر أفقياً على الجوّال، فلولا التثبيت لضاع اسم
+   الصف عن الأنظار وصار المستخدم يُدخل أرقاماً في سطر لا يعرفه. */
+.stmt-table--stick td:first-child,
+.stmt-table--stick th:first-child {
+  position: sticky; inset-inline-start: 0; z-index: 1;
+  background: var(--clr-surface, #fff);
+}
+.stmt-table--stick thead th:first-child { background: #f1f6ff; z-index: 2; }
+.stmt-table--stick tfoot td:first-child { background: #f8fafc; }
 .stmt-table tfoot td { background: #f8fafc; font-weight: 800; }
 .stmt-table .stmt-cell-in {
   width: 52px; border: 1px solid var(--clr-border); border-radius: 6px;
@@ -1832,20 +1878,8 @@ select.csel-native {
   font-variant-numeric: tabular-nums; background: #f8fbff;
 }
 
-/* بطاقات الصفوف — بديل الجدول على الجوّال */
-.stmt-gcards { display: flex; flex-direction: column; gap: 8px; }
-.stmt-gcard { border: 1px solid var(--clr-border-lt); border-radius: var(--r-md); background: #fff; overflow: hidden; }
-.stmt-gcard-h {
-  display: flex; align-items: center; gap: 9px; padding: 9px 11px;
-  width: 100%; text-align: start; background: none; border: none;
-  font: inherit; cursor: pointer;
-}
-.stmt-gcard-n { font-weight: 700; font-size: 13px; }
-.stmt-gcard-s { font-size: 11.5px; color: var(--clr-text-2); margin-inline-start: auto; font-variant-numeric: tabular-nums; }
-.stmt-gcard-b { border-top: 1px dashed var(--clr-border-lt); padding: 10px 11px; display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
-.stmt-gcard-f { display: flex; flex-direction: column; gap: 3px; }
-.stmt-gcard-f > label { font-size: 11px; color: var(--clr-text-2); font-weight: 600; }
-.stmt-gcard-f > input { border: 1px solid var(--clr-border); border-radius: 6px; padding: 5px 7px; font: inherit; font-size: 12.5px; text-align: center; font-variant-numeric: tabular-nums; }
+/* (حُذفت أنماط .stmt-gcard* — بطاقات الصفوف المطويّة التي كانت تحلّ محلّ الجدول
+   على الجوّال. الجدول يُعرض الآن على كل عرض شاشة.) */
 
 /* قوائم بسيطة (إجازات، تصنيف) */
 .stmt-plist { display: flex; flex-direction: column; gap: 7px; }

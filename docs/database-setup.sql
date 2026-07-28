@@ -4089,3 +4089,76 @@ select cron.schedule(
 -- كلمة مرور جديدة، لكن service_role مُنح insert وdelete فقط (§3) لا update،
 -- فيفشل التحديث ويعود الطلب بـ 200 مع warning لا تعرضه الواجهة.
 grant update on public.admin_credentials to service_role;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- §22  ربط سجلّ الكوادر بكشف الدوام
+-- ═══════════════════════════════════════════════════════════════════════════
+-- كان في النظام مساران للكادر غير التدريسي لا يتكلّمان:
+--
+--   school_personnel  — اسم و kind ∈ ('admin','worker') فقط، وهو **هويّة الدوام**
+--                       (staff_attendance.personnel_id يشير إليه).
+--   staff_records     — السجلّ الكامل الذي يقوم عليه البيان الشهري،
+--                       و staff_type ∈ (admin|teaching|professional|worker|guard).
+--
+-- فمن يُضاف في تبويب «الكوادر» لا يظهر في كشف الدوام إطلاقاً، ومن يُضاف بالإضافة
+-- السريعة في «الكادر» لا وجود له في البيان. §22 تربط الاتجاه الأول: الكوادر تُغذّي
+-- الكادر تلقائياً (shared/db.js → syncPersonnelFromStaffRecord)، وتبقى الإضافة
+-- السريعة لمن لا سجلّ كامل له.
+--
+-- قيد kind لا يُمسّ: المهني والحارس والمستخدم كلّهم 'worker' في الدوام، والتمييز
+-- بينهم يبقى في staff_records وحدها لأن البيان وحده يحتاجه.
+
+-- ٢٢.١  عمود الربط
+alter table public.school_personnel
+  add column if not exists staff_record_id uuid
+  references public.staff_records(id) on delete set null;
+
+-- سجلّ كادر واحد ← صفّ دوام واحد على الأكثر. جزئي لأن الصفوف غير المربوطة
+-- (الإضافة السريعة) تبقى كثيرة و staff_record_id فيها null.
+create unique index if not exists school_personnel_staff_record_uidx
+  on public.school_personnel (staff_record_id)
+  where staff_record_id is not null;
+
+create index if not exists school_personnel_school_active_idx
+  on public.school_personnel (school_id, is_active);
+
+-- ٢٢.٢  ردم الصفوف القائمة
+-- يُربط صفّ الدوام بسجلّ الكادر حين تكون المطابقة بالاسم داخل المدرسة **وحيدة
+-- لا لبس فيها** من الطرفين. أي تكرار في الاسم يُترك يدوياً — ربط الشخص الخطأ
+-- بكشف حضوره أسوأ من تركه غير مربوط.
+with cand as (
+  select sp.id as personnel_id, sr.id as staff_record_id
+  from public.school_personnel sp
+  join public.staff_records sr
+    on sr.school_id  = sp.school_id
+   and sr.full_name  = sp.full_name
+   and sr.staff_type in ('admin','professional','worker','guard')
+   and sr.active
+  where sp.staff_record_id is null
+    and sp.is_active
+),
+-- الوحدانية مطلوبة من الطرفين: صفّ دوام واحد يقابله سجلّ واحد، والعكس.
+uniq_personnel as (
+  select personnel_id from cand group by personnel_id having count(*) = 1
+),
+uniq_record as (
+  select staff_record_id from cand group by staff_record_id having count(*) = 1
+),
+final as (
+  select c.personnel_id, c.staff_record_id
+  from cand c
+  join uniq_personnel p on p.personnel_id    = c.personnel_id
+  join uniq_record    r on r.staff_record_id = c.staff_record_id
+)
+update public.school_personnel sp
+set staff_record_id = f.staff_record_id
+from final f
+where sp.id = f.personnel_id;
+
+-- تقرير الردم: كم صفّاً رُبط، وكم بقي يدوياً (تكرار في الأسماء).
+select
+  count(*) filter (where staff_record_id is not null) as "مربوط",
+  count(*) filter (where staff_record_id is null)     as "غير مربوط"
+from public.school_personnel
+where is_active;
