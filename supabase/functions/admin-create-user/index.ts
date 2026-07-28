@@ -54,11 +54,16 @@ Deno.serve(async (req) => {
     const { data: profile, error: profErr } = await userClient
       .from("users").select("role, directorate_id").eq("id", user.id).maybeSingle();
     if (profErr) return json({ error: `تعذّر التحقّق من الصلاحية: ${profErr.message}` }, 500);
-    const callerRole = profile?.role ?? "";
+    // A missing row is not an error for maybeSingle(), so an RLS policy that
+    // hides the caller's own row used to fall through to the generic role 403
+    // and look identical to "wrong role". Name it.
+    if (!profile)
+      return json({ error: "تعذّرت قراءة صلاحية حسابك (لا صفّ مرئي في users) — راجع مشرف الوزارة" }, 403);
+    const callerRole = profile.role ?? "";
     const isMinistry    = callerRole === "ministry_user";
     const isDirectorate = callerRole === "directorate_user";
     if (!isMinistry && !isDirectorate)
-      return json({ error: "هذا الإجراء مخصّص لمشرف الوزارة أو المديرية فقط" }, 403);
+      return json({ error: `هذا الإجراء مخصّص لمشرف الوزارة أو المديرية فقط (دورك: ${callerRole || 'غير محدّد'})` }, 403);
     const callerDirectorateId = profile?.directorate_id ?? null;
 
     // 3) Admin client (service-role) — only used for auth.admin.* and trusted DB writes.
@@ -180,16 +185,31 @@ Deno.serve(async (req) => {
 
       // A directorate may only reset accounts inside its own directorate —
       // either its schools' admins, or its own staff.
+      //
+      // Every failure here used to collapse into one 403 ("not in your
+      // directorate") because the schools lookup discarded its error: a query
+      // failure, a missing school row, and a genuine cross-directorate attempt
+      // were indistinguishable, so the operator had nothing to act on. Each
+      // branch now names itself.
       if (isDirectorate) {
-        let allowed = false;
+        if (!callerDirectorateId)
+          return json({ error: "حساب المديرية غير مرتبط بمديرية — راجع مشرف الوزارة" }, 403);
+
         if (target.school_id) {
-          const { data: school } = await admin.from("schools")
+          const { data: school, error: schoolErr } = await admin.from("schools")
             .select("directorate_id").eq("id", target.school_id).maybeSingle();
-          allowed = !!school && school.directorate_id === callerDirectorateId;
+          if (schoolErr)
+            return json({ error: `تعذّر التحقّق من مدرسة الحساب: ${schoolErr.message}` }, 500);
+          if (!school)
+            return json({ error: "مدرسة هذا الحساب غير موجودة في السجل" }, 404);
+          if (school.directorate_id !== callerDirectorateId)
+            return json({ error: "مدرسة هذا الحساب تتبع مديرية أخرى" }, 403);
         } else if (target.directorate_id) {
-          allowed = target.directorate_id === callerDirectorateId;
+          if (target.directorate_id !== callerDirectorateId)
+            return json({ error: "هذا الحساب يتبع مديرية أخرى" }, 403);
+        } else {
+          return json({ error: "هذا الحساب غير مرتبط بمدرسة ولا بمديرية" }, 403);
         }
-        if (!allowed) return json({ error: "هذا الحساب لا يتبع مديريتك" }, 403);
       }
 
       // 18 random bytes → base64url, so the value is unguessable rather than

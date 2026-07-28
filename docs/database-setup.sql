@@ -3901,3 +3901,191 @@ create policy stmt_rosters_dir_sel on public.monthly_statement_rosters
 
 grant select, insert, update on public.monthly_statement_rosters to authenticated;
 -- لا delete: السجل جزء من وثيقة رسمية مُسلَّمة.
+
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- §21 — إصلاحات ما بعد التشغيل: القدم الوظيفي، تذكير الحضور، صلاحية ناقصة
+-- ═════════════════════════════════════════════════════════════════════════════
+-- ثلاثة أعطال ظهرت عند تشغيل التبويبات على الجهاز. كلّها idempotent.
+-- ⚠ نفّذ هذا القسم **بعد** §20.
+
+-- ── ٢١.١  «القدم الوظيفي» سنةُ تعيين لا عددَ سنوات ──────────────────────────
+-- الورقة الرسمية تكتب في هذه الخانة سنةً (1931 / 2015 في عيّنة النموذج).
+-- العمود القديم seniority_years من نوع numeric(4,1) — ثلاث خانات صحيحة فقط،
+-- فلا يتّسع لـ 1978 أصلاً. لذلك عمود جديد بدل تغيير نوع القديم: القيم المخزَّنة
+-- فيه مُدَدٌ بالسنوات، وتحويلها إلى سنوات تعيين تخمينٌ لا نملك أساسه.
+alter table public.staff_records
+  add column if not exists seniority_year int;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'staff_records_seniority_year_chk') then
+    alter table public.staff_records add constraint staff_records_seniority_year_chk
+      check (seniority_year is null
+             or seniority_year between 1940 and (extract(year from now())::int + 1));
+  end if;
+end $$;
+
+comment on column public.staff_records.seniority_year  is 'القدم الوظيفي — سنة التعيين (مثال: 1978)';
+comment on column public.staff_records.seniority_years is 'مهجور: مدّة الخدمة بالسنوات. استُبدل بـ seniority_year. يبقى للسجلات القديمة.';
+
+-- الدالة تُرجع العمود، وتغيير نوع الإرجاع يستلزم drop قبل create.
+drop function if exists public.get_school_staff_for_directorate(uuid);
+
+create function public.get_school_staff_for_directorate(p_school_id uuid)
+returns table (
+  id               uuid,
+  staff_type       text,
+  full_name        text,
+  certificate      text,
+  higher_degree    text,
+  specialization   text,
+  subject_taught   text,
+  seniority_year   int,
+  job_title        text,
+  start_date       date,
+  educational_zone text,
+  roster_type      text,
+  ministerial_doc  text,
+  active           boolean
+)
+language plpgsql security definer
+set search_path = public
+as $$
+begin
+  if not exists (
+    select 1 from public.users u
+    join public.schools s on s.id = p_school_id
+    where u.id = auth.uid()
+      and u.role = 'directorate_user'
+      and u.directorate_id = s.directorate_id
+  ) then
+    raise exception 'access denied';
+  end if;
+
+  return query
+    select
+      sr.id, sr.staff_type, sr.full_name, sr.certificate, sr.higher_degree,
+      sr.specialization, sr.subject_taught, sr.seniority_year, sr.job_title,
+      sr.start_date, sr.educational_zone, sr.roster_type, sr.ministerial_doc, sr.active
+    from public.staff_records sr
+    where sr.school_id = p_school_id and sr.active = true
+    order by sr.staff_type, sr.job_title, sr.full_name;
+end;
+$$;
+
+revoke all on function public.get_school_staff_for_directorate(uuid) from public, anon;
+grant execute on function public.get_school_staff_for_directorate(uuid) to authenticated;
+
+
+-- ── ٢١.٢  تذكير الحضور: الصفر كان يعني ثلاثة أشياء ──────────────────────────
+-- كانت الدالة تُرجع عدداً مجرّداً، والواجهة تقرأ 0 على أنه «أُرسل خلال آخر ٣٠
+-- دقيقة». لكن 0 يعني أيضاً «لا حساب مدير لهذه المدرسة أصلاً» — فالحلقة لا
+-- تدور ولا يُحجب شيء. المديرية كانت ترى «أُرسل مسبقاً» من أول ضغطة على مدرسة
+-- بلا مدير، ولا تعرف أن التذكير لم يصل أحداً.
+--
+-- والحجب نفسه كان مقيَّداً بـ (recipient_id, type) فقط دون المدرسة، فتذكير
+-- pg_cron اليومي — أو ضغطة سابقة على «تذكير جميع المتأخرة» — يحجب التذكير
+-- اليدوي لمدرسة أخرى تماماً. أُضيف قيد entity_id.
+drop function if exists public.send_attendance_reminder(uuid);
+
+create function public.send_attendance_reminder(p_school_id uuid)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_dir         uuid;
+  v_school_name text;
+  v_school_dir  uuid;
+  v_sent        integer := 0;
+  v_recipients  integer := 0;
+  v_throttled   integer := 0;
+  r             record;
+begin
+  select u.directorate_id into v_dir
+  from public.users u
+  where u.id = auth.uid() and u.role = 'directorate_user';
+
+  if v_dir is null then
+    raise exception 'غير مصرّح: هذه الدالة لمستخدمي المديرية فقط';
+  end if;
+
+  select s.name, s.directorate_id into v_school_name, v_school_dir
+  from public.schools s where s.id = p_school_id;
+
+  if v_school_dir is null or v_school_dir is distinct from v_dir then
+    raise exception 'غير مصرّح: المدرسة ليست ضمن مديريتك';
+  end if;
+
+  for r in
+    select u.id
+    from public.users u
+    where u.role = 'school_admin'
+      and u.school_id = p_school_id
+  loop
+    v_recipients := v_recipients + 1;
+
+    if exists (
+      select 1 from public.notifications n
+      where n.recipient_id = r.id
+        and n.type = 'attendance_reminder'
+        and n.entity_id = p_school_id          -- الحجب لهذه المدرسة وحدها
+        and n.created_at > now() - interval '30 minutes'
+    ) then
+      v_throttled := v_throttled + 1;
+      continue;
+    end if;
+
+    perform public.notify_user(
+      r.id,
+      'attendance_reminder',
+      'تذكير من المديرية: لم يصل سجل حضور اليوم',
+      'يرجى إرسال سجل حضور مدرسة ' || coalesce(v_school_name, '') || ' لهذا اليوم.',
+      'school',
+      p_school_id
+    );
+    v_sent := v_sent + 1;
+  end loop;
+
+  return jsonb_build_object(
+    'sent',       v_sent,
+    'recipients', v_recipients,   -- 0 يعني: لا حساب مدير لهذه المدرسة
+    'throttled',  v_throttled
+  );
+end; $$;
+
+revoke all on function public.send_attendance_reminder(uuid) from public, anon;
+grant execute on function public.send_attendance_reminder(uuid) to authenticated;
+
+-- توحيد اختبار «المدرسة الصامتة»: لوحة الالتزام تقرأ daily_student_attendance
+-- بينما كان cron يفحص daily_attendance، فيختلف الجدولان على من تأخّر.
+select cron.unschedule('attendance-daily-reminder')
+where exists (select 1 from cron.job where jobname = 'attendance-daily-reminder');
+
+select cron.schedule(
+  'attendance-daily-reminder',
+  '30 6 * * *',
+  $CRON$
+  select public.notify_user(
+    u.id,
+    'attendance_reminder',
+    'تذكير: لم يُرسل سجل الحضور',
+    'يرجى إرسال سجل حضور اليوم قبل نهاية الدوام',
+    'school',
+    s.id
+  )
+  from public.schools s
+  join public.users u
+       on u.school_id = s.id and u.role = 'school_admin'
+  where not exists (
+    select 1 from public.daily_student_attendance dsa
+    where dsa.school_id = s.id and dsa.date = current_date
+  );
+  $CRON$
+);
+
+
+-- ── ٢١.٣  الصلاحية الناقصة التي تُسقط تحديث سجلّ الاعتماد بصمت ──────────────
+-- الدالة الطرفية admin-create-user تُصفّر admin_credentials.password بعد توليد
+-- كلمة مرور جديدة، لكن service_role مُنح insert وdelete فقط (§3) لا update،
+-- فيفشل التحديث ويعود الطلب بـ 200 مع warning لا تعرضه الواجهة.
+grant update on public.admin_credentials to service_role;

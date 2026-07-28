@@ -2027,8 +2027,9 @@
             </select>
           </div>
           <div class="field-group">
-            <label for="sr-seniority">القدم الوظيفي (سنوات)</label>
-            <input id="sr-seniority" class="field-input" type="number" min="0" max="50" step="0.5" />
+            <label for="sr-seniority">القدم الوظيفي <span class="optional">(سنة التعيين)</span></label>
+            <input id="sr-seniority" class="field-input" type="number" min="1940" max="2100" step="1"
+                   inputmode="numeric" placeholder="1978" />
           </div>
           <div class="field-group">
             <label>تاريخ المباشرة</label>
@@ -2040,19 +2041,13 @@
           </div>
 
           <p class="form-section-label">الأرقام الرسمية</p>
-          <div class="twin-fields">
-            <div class="field-group">
-              <label for="sr-self-number">الرقم الذاتي</label>
-              <div class="input-with-action">
-                <input id="sr-self-number" class="field-input" type="text" maxlength="40" inputmode="numeric" />
-                <button type="button" class="btn btn-outline btn-sm" id="btn-sr-reg-lookup" title="بحث في السجل الذاتي">
-                  <svg class="icon icon-sm"><use href="#ic-search"/></svg>
-                </button>
-              </div>
-            </div>
-            <div class="field-group">
-              <label for="sr-general-number">الرقم العام</label>
-              <input id="sr-general-number" class="field-input" type="text" maxlength="40" inputmode="numeric" />
+          <div class="field-group">
+            <label for="sr-self-number">الرقم الذاتي</label>
+            <div class="input-with-action">
+              <input id="sr-self-number" class="field-input" type="text" maxlength="40" inputmode="numeric" />
+              <button type="button" class="btn btn-outline btn-sm" id="btn-sr-reg-lookup" title="بحث في السجل الذاتي">
+                <svg class="icon icon-sm"><use href="#ic-search"/></svg>
+              </button>
             </div>
           </div>
           <div id="sr-reg-result" class="registry-result" hidden></div>
@@ -2235,7 +2230,7 @@
       <div class="stmt-prog" role="img" aria-label="نسبة اكتمال البيان">
         <div class="stmt-prog-fill" id="stmt-prog-fill"></div>
       </div>
-      <span class="stmt-prog-num" id="stmt-prog-num">٠٪</span>
+      <span class="stmt-prog-num" id="stmt-prog-num">0%</span>
       <button type="button" class="stmt-idx-btn" id="btn-stmt-index" aria-haspopup="dialog">
         <svg class="icon icon-sm"><use href="#ic-list"/></svg> الفهرس
       </button>
@@ -2247,11 +2242,11 @@
     <div id="stmt-error" class="msg msg-error" hidden></div>
     <div id="stmt-status-banner" class="stmt-status-banner" hidden></div>
 
-    <!-- ═══ القسم ١ — الترويسة والتسليم ═══════════════════════════════════ -->
+    <!-- ═══ القسم 1 — الترويسة والتسليم ═══════════════════════════════════ -->
     <section class="stmt-sec" data-sec="0" role="tabpanel" aria-label="الترويسة والتسليم">
       <p class="stmt-lead">ترويسة الورقة الرسمية: الفترة وتاريخ التسليم واسم الموظف المستلم.</p>
       <div class="card">
-        <div class="card-hdr"><span class="stmt-eyebrow">القسم ١</span><h2 class="card-title">الترويسة والتسليم</h2></div>
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم 1</span><h2 class="card-title">الترويسة والتسليم</h2></div>
         <div class="card-body">
           <div class="stmt-grid">
             <div class="stmt-f"><label for="stmt-hdr-month">بيان عن شهر <span class="stmt-tag-auto">تلقائي</span></label>
@@ -2274,11 +2269,11 @@
       <div class="stmt-pager" data-pager="0"></div>
     </section>
 
-    <!-- ═══ القسم ٢ — هوية المدرسة ═══════════════════════════════════════ -->
+    <!-- ═══ القسم 2 — هوية المدرسة ═══════════════════════════════════════ -->
     <section class="stmt-sec" data-sec="1" role="tabpanel" aria-label="هوية المدرسة" hidden>
       <p class="stmt-lead">حقائق ثابتة عن المدرسة — تُحفظ في قاعدة البيانات مرّة واحدة وتنطبق على كل الأشهر.</p>
       <div class="card">
-        <div class="card-hdr"><span class="stmt-eyebrow">القسم ٢</span><h2 class="card-title">هوية المدرسة</h2></div>
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم 2</span><h2 class="card-title">هوية المدرسة</h2></div>
         <div class="card-body">
           <div class="stmt-banner stmt-banner-info">
             <span>هذه البيانات كانت محفوظة على الجهاز فقط — صارت تُحفظ في النظام وتصل المديرية ضمن البيان.</span>
@@ -2288,12 +2283,14 @@
               <input id="stmt-school-name" class="stmt-fld" type="text" readonly></div>
             <div class="stmt-f"><label for="stmt-former-name">اسم المدرسة سابقاً</label>
               <input id="stmt-former-name" class="stmt-fld" type="text" maxlength="120" placeholder="إن تغيّر اسمها"></div>
-            <div class="stmt-f stmt-f-ro"><label for="stmt-cycle">الحلقة <span class="stmt-tag-auto">تلقائي</span></label>
-              <input id="stmt-cycle" class="stmt-fld" type="text" readonly></div>
-            <div class="stmt-f stmt-f-ro"><label for="stmt-statno">الرقم الاحصائي <span class="stmt-tag-auto">تلقائي</span></label>
-              <input id="stmt-statno" class="stmt-fld stmt-n" type="text" readonly></div>
-            <div class="stmt-f stmt-f-ro"><label for="stmt-rural">منهاج التعليم الريفي <span class="stmt-tag-auto">تلقائي</span></label>
-              <input id="stmt-rural" class="stmt-fld" type="text" readonly></div>
+            <div class="stmt-f"><label for="stmt-cycle">الحلقة</label>
+              <input id="stmt-cycle" class="stmt-fld" type="text" maxlength="20" placeholder="أولى / ثانية / أولى+ثانية"></div>
+            <div class="stmt-f"><label for="stmt-statno">الرقم الاحصائي</label>
+              <input id="stmt-statno" class="stmt-fld stmt-n" type="text" maxlength="20" inputmode="numeric"></div>
+            <div class="stmt-f"><label for="stmt-rural">منهاج التعليم الريفي</label>
+              <select id="stmt-rural" class="stmt-fld">
+                <option value="">—</option><option value="نعم">نعم</option><option value="لا">لا</option>
+              </select></div>
             <div class="stmt-f"><label for="stmt-edu-zone">المنطقة التعليمية</label>
               <select id="stmt-edu-zone" class="stmt-fld"><option value="">— اختر —</option></select></div>
             <div class="stmt-f"><label for="stmt-village">اسم القرية</label>
@@ -2316,11 +2313,11 @@
       <div class="stmt-pager" data-pager="1"></div>
     </section>
 
-    <!-- ═══ القسم ٣ — البناء المدرسي ═════════════════════════════════════ -->
+    <!-- ═══ القسم 3 — البناء المدرسي ═════════════════════════════════════ -->
     <section class="stmt-sec" data-sec="2" role="tabpanel" aria-label="البناء المدرسي" hidden>
       <p class="stmt-lead">البناء يتغيّر مرّة في السنة على الأكثر — يُحفظ في النظام وتؤكّده بضغطة.</p>
       <div class="card">
-        <div class="card-hdr"><span class="stmt-eyebrow">القسم ٣</span><h2 class="card-title">البناء المدرسي</h2></div>
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم 3</span><h2 class="card-title">البناء المدرسي</h2></div>
         <div class="card-body">
           <div class="stmt-banner stmt-banner-ok" id="stmt-building-banner" hidden>
             <span id="stmt-building-banner-txt">محفوظ من قبل — عدّل ما تغيّر فقط.</span>
@@ -2356,34 +2353,36 @@
             <div class="stmt-room"><label for="stmt-b-yard">ساحة</label><input id="stmt-b-yard" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
             <div class="stmt-room"><label for="stmt-b-other">قاعات أخرى</label><input id="stmt-b-other" class="stmt-fld stmt-n" type="number" min="0" inputmode="numeric" value="0"></div>
           </div>
-          <p class="stmt-hint">مجموع الغرف <span class="stmt-tag-calc">محسوب</span> — <b id="stmt-b-total">٠</b>.</p>
+          <p class="stmt-hint">مجموع الغرف <span class="stmt-tag-calc">محسوب</span> — <b id="stmt-b-total">0</b>.</p>
         </div>
       </div>
       <div class="stmt-pager" data-pager="2"></div>
     </section>
 
-    <!-- ═══ القسم ٤ — الطلاب والشعب ══════════════════════════════════════ -->
+    <!-- ═══ القسم 4 — الطلاب والشعب ══════════════════════════════════════ -->
     <section class="stmt-sec" data-sec="3" role="tabpanel" aria-label="الطلاب والشعب" hidden>
       <p class="stmt-lead">عدد الشعب وأعداد الطلاب حسب الصف والجنس ومسار اللغة الأجنبية.</p>
       <div class="card">
-        <div class="card-hdr"><span class="stmt-eyebrow">القسم ٤</span><h2 class="card-title">الطلاب والشعب</h2>
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم 4</span><h2 class="card-title">الطلاب والشعب</h2>
           <span class="stmt-badge stmt-badge-info" id="stmt-stu-badge">—</span></div>
         <div class="card-body">
           <div class="stmt-banner stmt-banner-info">
             <span>الشعب وأعداد الطلاب مُعبّآة من سجلّ الطلاب، وتوزيع اللغة من لغة الشعبة — عدّل ما يلزم.</span>
           </div>
           <div id="stmt-students-host"></div>
+          <p class="stmt-hint">«استعدوا» صفّ روضة لا صفّ ابتدائي: يتصدّر الجدول كما في الورقة
+            الرسمية، ويُحتسب ضمن «رياض» لا ضمن «حلقة (1)».</p>
           <div class="stmt-sum" id="stmt-stu-sum"></div>
         </div>
       </div>
       <div class="stmt-pager" data-pager="3"></div>
     </section>
 
-    <!-- ═══ القسم ٥ — الجهاز التدريسي ════════════════════════════════════ -->
+    <!-- ═══ القسم 5 — الجهاز التدريسي ════════════════════════════════════ -->
     <section class="stmt-sec" data-sec="4" role="tabpanel" aria-label="الجهاز التدريسي" hidden>
       <p class="stmt-lead">تصنيف الكادر التدريسي كما تطلبه الورقة: معلمون، مدرّسون حسب الاختصاص، مدرّسون مساعدون.</p>
       <div class="card">
-        <div class="card-hdr"><span class="stmt-eyebrow">القسم ٥</span><h2 class="card-title">الجهاز التدريسي</h2></div>
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم 5</span><h2 class="card-title">الجهاز التدريسي</h2></div>
         <div class="card-body">
           <div class="stmt-banner stmt-banner-warn" id="stmt-teach-warn" hidden>
             <span id="stmt-teach-warn-txt"></span>
@@ -2391,29 +2390,29 @@
           </div>
           <p class="stmt-eyebrow">المعلمون <span class="stmt-tag-auto">تلقائي من سجل الكوادر</span></p>
           <div class="stmt-rooms" id="stmt-teach-teachers"></div>
-          <div class="stmt-sbox"><span class="stmt-sbox-l">عدد المعلمين <span class="stmt-tag-calc">محسوب</span></span><b id="stmt-c-teachers">٠</b></div>
+          <div class="stmt-sbox"><span class="stmt-sbox-l">عدد المعلمين <span class="stmt-tag-calc">محسوب</span></span><b id="stmt-c-teachers">0</b></div>
 
           <p class="stmt-eyebrow stmt-eyebrow-mt">المدرّسون — حسب الاختصاص</p>
           <div class="stmt-rooms" id="stmt-teach-masters"></div>
-          <div class="stmt-sbox"><span class="stmt-sbox-l">عدد المدرسين <span class="stmt-tag-calc">محسوب</span></span><b id="stmt-c-masters">٠</b></div>
+          <div class="stmt-sbox"><span class="stmt-sbox-l">عدد المدرسين <span class="stmt-tag-calc">محسوب</span></span><b id="stmt-c-masters">0</b></div>
 
           <p class="stmt-eyebrow stmt-eyebrow-mt">المدرّسون المساعدون — حسب الاختصاص</p>
           <div class="stmt-rooms" id="stmt-teach-assist"></div>
-          <div class="stmt-sbox"><span class="stmt-sbox-l">عدد المدرسين المساعدين <span class="stmt-tag-calc">محسوب</span></span><b id="stmt-c-assist">٠</b></div>
+          <div class="stmt-sbox"><span class="stmt-sbox-l">عدد المدرسين المساعدين <span class="stmt-tag-calc">محسوب</span></span><b id="stmt-c-assist">0</b></div>
 
           <div class="stmt-sbox stmt-sbox-hi" id="stmt-unclass-box" hidden>
-            <span class="stmt-sbox-l">عدد الجهاز التدريسي غير المصنف</span><b id="stmt-c-unclass">٠</b></div>
+            <span class="stmt-sbox-l">عدد الجهاز التدريسي غير المصنف</span><b id="stmt-c-unclass">0</b></div>
           <p class="stmt-hint">التصنيف يُحسب مرّة من الشهادة والاختصاص ثم <b>يُحفظ</b> في سجل الكادر — لا يُعاد تخمينه كل شهر. ومَن لم يطابق لا يُسقَط ولا يُخمَّن: يذهب لخانة «غير المصنف» وهي خانة رسمية في النموذج نفسه.</p>
         </div>
       </div>
       <div class="stmt-pager" data-pager="4"></div>
     </section>
 
-    <!-- ═══ القسم ٦ — الجهاز الإداري ═════════════════════════════════════ -->
+    <!-- ═══ القسم 6 — الجهاز الإداري ═════════════════════════════════════ -->
     <section class="stmt-sec" data-sec="5" role="tabpanel" aria-label="الجهاز الإداري" hidden>
       <p class="stmt-lead">عدد شاغلي كل وظيفة إدارية، رقماً وكتابةً كما في الورقة.</p>
       <div class="card">
-        <div class="card-hdr"><span class="stmt-eyebrow">القسم ٦</span><h2 class="card-title">الجهاز الإداري</h2>
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم 6</span><h2 class="card-title">الجهاز الإداري</h2>
           <span class="stmt-badge stmt-badge-info" id="stmt-adm-badge">—</span></div>
         <div class="card-body">
           <div class="stmt-banner stmt-banner-warn" id="stmt-adm-warn" hidden><span id="stmt-adm-warn-txt"></span></div>
@@ -2429,11 +2428,11 @@
       <div class="stmt-pager" data-pager="5"></div>
     </section>
 
-    <!-- ═══ القسم ٧ — قوائم الكوادر (السير الذاتية) ══════════════════════ -->
+    <!-- ═══ القسم 7 — قوائم الكوادر (السير الذاتية) ══════════════════════ -->
     <section class="stmt-sec" data-sec="6" role="tabpanel" aria-label="قوائم الكوادر" hidden>
       <p class="stmt-lead">السير الذاتية الثلاث بكل حقل في الأوراق الرسمية — هذا ما تصل به المديرية. الكتابة تبقى في سجل الكوادر: مكان واحد فقط.</p>
       <div class="card">
-        <div class="card-hdr"><span class="stmt-eyebrow">القسم ٧</span><h2 class="card-title">قوائم الكوادر — السير الذاتية</h2>
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم 7</span><h2 class="card-title">قوائم الكوادر — السير الذاتية</h2>
           <span class="stmt-badge stmt-badge-warn" id="stmt-ros-badge">—</span></div>
         <div class="card-body">
           <div class="stmt-banner stmt-banner-info">
@@ -2459,11 +2458,11 @@
       <div class="stmt-pager" data-pager="6"></div>
     </section>
 
-    <!-- ═══ القسم ٨ — التعديلات الطارئة ══════════════════════════════════ -->
+    <!-- ═══ القسم 8 — التعديلات الطارئة ══════════════════════════════════ -->
     <section class="stmt-sec" data-sec="7" role="tabpanel" aria-label="التعديلات الطارئة" hidden>
       <p class="stmt-lead">ما استجدّ هذا الشهر: من باشر، من انفكّ، من نُقل، من تقاعد.</p>
       <div class="card">
-        <div class="card-hdr"><span class="stmt-eyebrow">القسم ٨</span><h2 class="card-title">التعديلات الطارئة</h2>
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم 8</span><h2 class="card-title">التعديلات الطارئة</h2>
           <span class="stmt-badge" id="stmt-chg-badge">—</span></div>
         <div class="card-body">
           <div class="stmt-banner" id="stmt-chg-banner"><span id="stmt-chg-banner-txt"></span></div>
@@ -2480,18 +2479,18 @@
           </div>
           <p class="stmt-hint">زرّ «لا يوجد تعديل» يكتب سطراً صريحاً في الورقة — كما ينصّ النموذج — فلا يبقى فراغاً غامضاً.</p>
 
-          <p class="stmt-eyebrow stmt-eyebrow-mt">إحصائية الشعب والطلاب <span class="stmt-tag-calc">محسوبة من القسم ٤</span></p>
+          <p class="stmt-eyebrow stmt-eyebrow-mt">إحصائية الشعب والطلاب <span class="stmt-tag-calc">محسوبة من القسم 4</span></p>
           <div class="stmt-tw"><table class="stmt-table" id="stmt-chg-stats"></table></div>
         </div>
       </div>
       <div class="stmt-pager" data-pager="7"></div>
     </section>
 
-    <!-- ═══ القسم ٩ — نتائج نهاية العام ══════════════════════════════════ -->
+    <!-- ═══ القسم 9 — نتائج نهاية العام ══════════════════════════════════ -->
     <section class="stmt-sec" data-sec="8" role="tabpanel" aria-label="نتائج نهاية العام" hidden>
       <p class="stmt-lead">ورقة موسمية — تُملأ مرّة واحدة في نهاية العام الدراسي بعد صدور نتائج الفصل الثاني.</p>
       <div class="card">
-        <div class="card-hdr"><span class="stmt-eyebrow">القسم ٩</span><h2 class="card-title">نتائج نهاية العام</h2>
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم 9</span><h2 class="card-title">نتائج نهاية العام</h2>
           <span class="stmt-badge" id="stmt-ye-badge">—</span></div>
         <div class="card-body">
           <div class="stmt-banner stmt-banner-info" id="stmt-ye-gate">
@@ -2500,7 +2499,16 @@
           </div>
           <div id="stmt-ye-wrap" hidden>
             <p class="stmt-eyebrow">أعداد التلاميذ والطلاب المتوقعة للعام الدراسي القادم</p>
+            <p class="stmt-hint">جدول تخطيطي: كم تلميذاً تتوقّع في كل صف <b>العام الدراسي القادم</b>؟
+              المديرية تبني عليه توزيع المعلمين والغرف، فهو تقدير لا رقم مقفل.
+              القاعدة العملية: طلاب كل صف ينتقلون إلى الصف الذي يليه، والصف الأول يأتي من
+              خرّيجي الروضة («استعدوا» والمستوى الرابع).</p>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-stmt-ye-suggest">
+              اقترح من أعداد هذا العام
+            </button>
             <div class="stmt-tw"><table class="stmt-table" id="stmt-ye-next"></table></div>
+            <p class="stmt-hint">«المستوى الأول» يبقى عليك وحدك — وافدون جدد لا مصدر لهم في
+              التطبيق. وكل خانة يملؤها الاقتراح تبقى قابلة للتعديل.</p>
 
             <p class="stmt-eyebrow stmt-eyebrow-mt">احصاءات للامتحانات النهائية</p>
             <div class="stmt-tw"><table class="stmt-table" id="stmt-ye-exam"></table></div>
@@ -2511,11 +2519,11 @@
       <div class="stmt-pager" data-pager="8"></div>
     </section>
 
-    <!-- ═══ القسم ١٠ — المراجعة والإرسال ═════════════════════════════════ -->
+    <!-- ═══ القسم 10 — المراجعة والإرسال ═════════════════════════════════ -->
     <section class="stmt-sec" data-sec="9" role="tabpanel" aria-label="المراجعة والإرسال" hidden>
       <p class="stmt-lead">ملخّص العاملين، ثم ما يمنع الإرسال وما يُنبّه فقط.</p>
       <div class="card">
-        <div class="card-hdr"><span class="stmt-eyebrow">القسم ١٠</span><h2 class="card-title">ملخّص العاملين</h2></div>
+        <div class="card-hdr"><span class="stmt-eyebrow">القسم 10</span><h2 class="card-title">ملخّص العاملين</h2></div>
         <div class="card-body">
           <div class="stmt-sum" id="stmt-workforce"></div>
           <p class="stmt-hint">«غير المصنّف» = الجهاز التدريسي الكامل − المصنّف حسب الاختصاصات. هو رقم المطابقة، وله خانة في الورقة الرسمية.</p>
@@ -2531,13 +2539,13 @@
         <div class="card-hdr"><span class="stmt-eyebrow">رسمي</span><h2 class="card-title">ملاحظات النموذج</h2></div>
         <div class="card-body">
           <ol class="stmt-notes">
-            <li>يتم تسليم البيان الشهري عن الشهر الذي انتهى من ١ لغاية ١٠ من كل شهر ورقياً، وفي بداية كل فصل دراسي إلكترونياً.</li>
-            <li>يرجى ختم جميع الأوراق وحذف أسماء من حصل على إجازة خاصة بلا أجر مدة /٩٠/ يوماً وما يزيد (مع ذكر الحالات المشار إليها آنفاً في ورقة التعديلات الطارئة عند وقوعها).</li>
+            <li>يتم تسليم البيان الشهري عن الشهر الذي انتهى من 1 لغاية 10 من كل شهر ورقياً، وفي بداية كل فصل دراسي إلكترونياً.</li>
+            <li>يرجى ختم جميع الأوراق وحذف أسماء من حصل على إجازة خاصة بلا أجر مدة /90/ يوماً وما يزيد (مع ذكر الحالات المشار إليها آنفاً في ورقة التعديلات الطارئة عند وقوعها).</li>
             <li>هذا البيان رسمي ومعتمد من قبل مديرية التربية والتعليم ولا يُقبل أي بيان أو صيغة أخرى.</li>
             <li>يتم تسليم نسختين أصليتين من البيان الشهري للمدارس الثانوية المشتركة مع مدارس مرحلة التعليم الأساسي (إدارة واحدة) لكل دائرة نسخة.</li>
             <li>يتم تسليم ثلاث نسخ أصلية من البيان للمدارس المسؤولة عليها إلى دائرة (الخاص — الثانوي — الأساسي).</li>
             <li>يتم تسليم جدول نتائج نهاية العام مرة واحدة في نهاية العام الدراسي فقط بعد صدور النتائج.</li>
-            <li>في حالة وجود دمج للشعب نكتب ٠ لأحد الشعب و١ بالشعبة الثانية.</li>
+            <li>في حالة وجود دمج للشعب نكتب 0 لأحد الشعب و1 بالشعبة الثانية.</li>
           </ol>
         </div>
       </div>
@@ -3177,7 +3185,7 @@
 
 <!-- ── نافذة: تعديل طارئ (إضافة يدوية أو تأكيد مقترح) ────────────────────── -->
 <div id="modal-stmt-change" class="overlay" hidden aria-modal="true" role="dialog" aria-label="تعديل طارئ">
-  <div class="sheet sheet-sm">
+  <div class="sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-hdr">
       <div class="sheet-title">
@@ -3189,10 +3197,9 @@
       </button>
     </div>
     <div class="sheet-body">
-      <div class="field-group">
-        <label for="stmt-chg-name">الاسم الثلاثي <span class="req">*</span></label>
-        <input id="stmt-chg-name" class="field-input" type="text" maxlength="120" />
-      </div>
+      <p class="mng-hint">كل خانة في ورقة «التعديلات الطارئة» الرسمية موجودة هنا. اختر الشخص من
+        سجلّ الكوادر لتُملأ الخانات، ثم عدّل أو امسح ما تشاء — لا خانة مقفلة.</p>
+
       <div class="field-group">
         <label for="stmt-chg-group">الفئة</label>
         <select id="stmt-chg-group" class="field-input">
@@ -3202,9 +3209,16 @@
         </select>
       </div>
       <div class="field-group">
-        <label for="stmt-chg-job">العمل المسند إليه</label>
-        <input id="stmt-chg-job" class="field-input" type="text" maxlength="80" />
+        <label for="stmt-chg-staff">تعبئة من سجلّ الكوادر</label>
+        <select id="stmt-chg-staff" class="field-input">
+          <option value="">— شخص خارج السجلّ (أدخل يدوياً) —</option>
+        </select>
       </div>
+
+      <p class="form-section-label">بيانات الورقة الرسمية</p>
+      <div id="stmt-chg-fields"></div>
+
+      <p class="form-section-label">الحدث</p>
       <div class="field-group">
         <label for="stmt-chg-event">نوع الحدث <span class="req">*</span></label>
         <select id="stmt-chg-event" class="field-input">
@@ -3229,6 +3243,7 @@
         <label for="stmt-chg-reason">السبب / ملاحظات</label>
         <textarea id="stmt-chg-reason" class="field-input" rows="2" maxlength="400"></textarea>
       </div>
+
       <div id="stmt-chg-error" class="msg msg-error" hidden></div>
       <button type="button" class="btn btn-primary btn-full" id="btn-save-stmt-change">
         حفظ التعديل

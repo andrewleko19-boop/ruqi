@@ -1389,6 +1389,11 @@ tr.row-flash {
 .modal-overlay.hidden,
 .modal-overlay[hidden] { display: none; }
 
+/* التأكيد يُفتح فوق نافذة أخرى مفتوحة (مثل نافذة كلمة المرور). بالطبقة نفسها
+   كان ترتيب الـ DOM يحسم الأمر — و#dir-confirm-modal مكتوب قبلها في الصفحة —
+   فتُدفن نافذة التأكيد خلف خلفية النافذة الأولى ولا تظهر إلا بإغلاقها. */
+#dir-confirm-modal { z-index: 9900; }
+
 .modal-box {
   background: var(--bg-card);
   border: 1px solid var(--border);
