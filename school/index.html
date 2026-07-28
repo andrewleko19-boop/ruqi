@@ -13,6 +13,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>رُقِيّ – سجل الحضور</title>
   <link rel="stylesheet" href="./style.css" />
+  <!-- طبقة الكمبيوتر واللابتوب — محتواها كلّه داخل @media (min-width:1024px)،
+       فلا يُطبَّق منها شيء على الجوّال. اقرأ رأس الملفّ قبل تعديله. -->
+  <link rel="stylesheet" href="./desktop.css" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" />
   <link rel="icon" href="../icons/favicon.ico" sizes="any" />
   <link rel="icon" type="image/png" sizes="32x32" href="../icons/favicon-32.png" />
@@ -769,12 +772,12 @@
       </div>
     </section>
 
-    <!-- سجل الإداريين والعمال -->
+    <!-- سجل الإداريين والمستخدمين -->
     <section class="section-card">
       <div class="section-card-header">
         <div class="section-card-icon"><svg class="icon icon-sm"><use href="#ic-users"/></svg></div>
         <div>
-          <div class="section-card-title">سجل الإداريين والعمال</div>
+          <div class="section-card-title">سجل الإداريين والمستخدمين</div>
           <div class="section-card-desc">إضافة وتتبع الكادر غير التعليمي</div>
         </div>
       </div>
@@ -1337,19 +1340,13 @@
         <div class="twin-fields">
           <div class="field-group">
             <label for="stu-natid">الرقم الوطني</label>
-            <div class="input-with-action">
-              <input id="stu-natid" class="field-input" type="text" inputmode="numeric" maxlength="11" />
-              <button type="button" class="btn btn-outline btn-sm" id="btn-stu-reg-lookup" title="بحث في السجل الوطني">
-                <svg class="icon icon-sm"><use href="#ic-search"/></svg>
-              </button>
-            </div>
+            <input id="stu-natid" class="field-input" type="text" inputmode="numeric" maxlength="11" />
           </div>
           <div class="field-group">
             <label for="stu-card">رقم السجل العام</label>
             <input id="stu-card" class="field-input" type="text" inputmode="numeric" maxlength="30" />
           </div>
         </div>
-        <div id="stu-reg-result" class="registry-result" hidden></div>
 
         <details class="stu-optional">
           <summary>بيانات اختيارية (الأهل، السكن)</summary>
@@ -1804,7 +1801,7 @@
         <div class="reg-seg-bar" role="group" aria-label="نوع الجهاز">
           <button class="reg-seg-btn is-active" data-seg="admin">الجهاز الإداري</button>
           <button class="reg-seg-btn" data-seg="teaching">الجهاز التدريسي</button>
-          <button class="reg-seg-btn" data-seg="support">مهنيون وعمال وحراس</button>
+          <button class="reg-seg-btn" data-seg="support">مهنيون ومستخدمون وحراس</button>
         </div>
 
         <div id="reg-loading" class="loading-row" hidden>
@@ -1951,7 +1948,7 @@
           <p class="form-section-label">البيانات الوظيفية</p>
           <div class="field-group">
             <label for="sr-full-name">الاسم الثلاثي <span class="req">*</span></label>
-            <input id="sr-full-name" class="field-input" type="text" maxlength="120" />
+            <input id="sr-full-name" class="field-input field-input--name" type="text" maxlength="120" />
           </div>
           <div class="field-group">
             <label for="sr-job-title">العمل المسند</label>
@@ -1970,15 +1967,6 @@
             <input id="sr-subject" class="field-input" type="text" maxlength="80" />
           </div>
           <div id="sr-teach-extra" hidden>
-            <div class="field-group">
-              <label for="sr-teaching-rank">رتبة التدريس <span class="optional">(خانة النموذج)</span></label>
-              <select id="sr-teaching-rank" class="field-input">
-                <option value="">— تُستنتج تلقائياً —</option>
-                <option value="معلم">معلم</option>
-                <option value="مدرس">مدرس</option>
-                <option value="مدرس مساعد">مدرس مساعد</option>
-              </select>
-            </div>
             <div class="twin-fields">
               <div class="field-group">
                 <label for="sr-teaching-hours">عدد الساعات</label>
@@ -2028,8 +2016,8 @@
           </div>
           <div class="field-group">
             <label for="sr-seniority">القدم الوظيفي <span class="optional">(سنة التعيين)</span></label>
-            <input id="sr-seniority" class="field-input" type="number" min="1940" max="2100" step="1"
-                   inputmode="numeric" placeholder="1978" />
+            <input id="sr-seniority" class="field-input field-input--num" type="number"
+                   min="1940" max="2100" step="1" inputmode="numeric" />
           </div>
           <div class="field-group">
             <label>تاريخ المباشرة</label>
@@ -2043,32 +2031,33 @@
           <p class="form-section-label">الأرقام الرسمية</p>
           <div class="field-group">
             <label for="sr-self-number">الرقم الذاتي</label>
-            <div class="input-with-action">
-              <input id="sr-self-number" class="field-input" type="text" maxlength="40" inputmode="numeric" />
-              <button type="button" class="btn btn-outline btn-sm" id="btn-sr-reg-lookup" title="بحث في السجل الذاتي">
-                <svg class="icon icon-sm"><use href="#ic-search"/></svg>
-              </button>
-            </div>
+            <input id="sr-self-number" class="field-input field-input--id" type="text"
+                   maxlength="40" inputmode="numeric" />
           </div>
           <div id="sr-reg-result" class="registry-result" hidden></div>
 
           <p class="form-section-label">البيانات الشخصية</p>
           <div class="field-group">
-            <label for="sr-gender">الجنس</label>
-            <select id="sr-gender" class="field-input">
-              <option value="">—</option>
-              <option value="male">ذكر</option>
-              <option value="female">أنثى</option>
-            </select>
+            <span class="field-lbl">الجنس</span>
+            <div class="seg-2" role="radiogroup" aria-label="الجنس">
+              <label class="seg-2-opt">
+                <input type="radio" name="sr-gender" value="male" />
+                <span>ذكر</span>
+              </label>
+              <label class="seg-2-opt">
+                <input type="radio" name="sr-gender" value="female" />
+                <span>أنثى</span>
+              </label>
+            </div>
           </div>
           <div class="field-group">
             <label for="sr-national-id">الرقم الوطني</label>
-            <input id="sr-national-id" class="field-input" type="text" maxlength="11"
+            <input id="sr-national-id" class="field-input field-input--id" type="text" maxlength="11"
                    inputmode="numeric" />
           </div>
           <div class="field-group">
             <label for="sr-mother-name">اسم الأم</label>
-            <input id="sr-mother-name" class="field-input" type="text" maxlength="80" />
+            <input id="sr-mother-name" class="field-input field-input--name" type="text" maxlength="80" />
           </div>
           <div class="field-group">
             <label>تاريخ الولادة</label>
@@ -2480,7 +2469,7 @@
           <p class="stmt-hint">زرّ «لا يوجد تعديل» يكتب سطراً صريحاً في الورقة — كما ينصّ النموذج — فلا يبقى فراغاً غامضاً.</p>
 
           <p class="stmt-eyebrow stmt-eyebrow-mt">إحصائية الشعب والطلاب <span class="stmt-tag-calc">محسوبة من القسم 4</span></p>
-          <div class="stmt-tw"><table class="stmt-table" id="stmt-chg-stats"></table></div>
+          <div class="stmt-tw"><table class="stmt-table stmt-table--stick" id="stmt-chg-stats"></table></div>
         </div>
       </div>
       <div class="stmt-pager" data-pager="7"></div>
@@ -2506,12 +2495,12 @@
             <button type="button" class="btn btn-outline btn-sm" id="btn-stmt-ye-suggest">
               اقترح من أعداد هذا العام
             </button>
-            <div class="stmt-tw"><table class="stmt-table" id="stmt-ye-next"></table></div>
+            <div class="stmt-tw"><table class="stmt-table stmt-table--stick" id="stmt-ye-next"></table></div>
             <p class="stmt-hint">«المستوى الأول» يبقى عليك وحدك — وافدون جدد لا مصدر لهم في
               التطبيق. وكل خانة يملؤها الاقتراح تبقى قابلة للتعديل.</p>
 
             <p class="stmt-eyebrow stmt-eyebrow-mt">احصاءات للامتحانات النهائية</p>
-            <div class="stmt-tw"><table class="stmt-table" id="stmt-ye-exam"></table></div>
+            <div class="stmt-tw"><table class="stmt-table stmt-table--stick" id="stmt-ye-exam"></table></div>
             <p class="stmt-hint">«المتقدّم» <span class="stmt-tag-calc">محسوب</span> = العدد الكلي − المتسرّب. و«الناجح + المكمل + الراسب» يجب أن يساوي المتقدّم.</p>
           </div>
         </div>
@@ -3026,6 +3015,9 @@
 .subj-meta, .rep-meta { font-size: .75rem; color: #94A3B8; margin-top: 2px; }
 .subj-actions, .rep-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .subj-tag {
+  /* inline-block يقطع مقطع التشكيل العربي عند حدّ العنصر، فلا يتّصل آخر حرف من
+     اسم المادة بأوّل حرف في الشارة (انظر التعليق في buildSubjectRow). */
+  display: inline-block; vertical-align: middle;
   font-size: .68rem; font-weight: 800;
   background: rgba(99,102,241,.12); color: #6366F1;
   border-radius: 999px; padding: 2px 8px; margin-inline-start: 6px;

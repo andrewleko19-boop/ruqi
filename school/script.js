@@ -2173,9 +2173,14 @@ function refreshAssignSubjectsPicker() {
 function buildSubjectRow(sub) {
   const li = document.createElement('li');
   li.className = 'subj-row';
-  const tag = (sub.is_core_arabic ? '<span class="subj-tag">عربي</span>' : '')
-            + (sub.is_core_math ? '<span class="subj-tag">رياضيات</span>' : '')
-            + (sub.allow_full_marks ? '<span class="subj-tag">نشاط</span>' : '');
+  // ⚠ فاصل ZWNJ قبل كل شارة. Blink يُشكّل النصّ العربي عبر حدود العناصر السطرية،
+  // فيصير «رياضيات» + شارة «رياضيات» مقطعَ تشكيل واحداً وتتّصل التاء بالراء بعدها
+  // (ثم يُطبَّق الهامش بعد التشكيل، فتظهر الحروف موصولة وبينها فجوة). والفاصل
+  // لازم بين شارة وأخرى كذلك: «عربي» تليها «رياضيات» تتّصل ياؤها براء التالية.
+  // الطبقة الثانية: .subj-tag { display: inline-block } في style.css.
+  const tag = (sub.is_core_arabic ? '&zwnj;<span class="subj-tag">عربي</span>' : '')
+            + (sub.is_core_math ? '&zwnj;<span class="subj-tag">رياضيات</span>' : '')
+            + (sub.allow_full_marks ? '&zwnj;<span class="subj-tag">نشاط</span>' : '');
   li.innerHTML = `
     <div class="subj-info">
       <div class="subj-name">${escapeHtml(sub.name)}${tag}</div>
@@ -3541,7 +3546,7 @@ async function initStaffTab() {
 }
 
 // ── Roster card (الكوادر المدرسية) ─────────────────────────────────────────
-const ROSTER_KIND_AR = { teacher: 'معلم', admin: 'إداري', worker: 'عامل' };
+const ROSTER_KIND_AR = { teacher: 'معلم', admin: 'إداري', worker: 'مستخدم' };
 
 async function loadRosterCard() {
   if (!S.school?.id) return;
@@ -3577,7 +3582,7 @@ function renderRoster(query) {
     const t = _rosterAll.filter(m => m.kind === 'teacher').length;
     const a = _rosterAll.filter(m => m.kind === 'admin').length;
     const w = _rosterAll.filter(m => m.kind === 'worker').length;
-    rosterCounts.textContent = `${t} معلم · ${a} إداري · ${w} عامل`;
+    rosterCounts.textContent = `${t} معلم · ${a} إداري · ${w} مستخدم`;
   }
 
   const buildGroup = (label, list) => {
@@ -3596,7 +3601,7 @@ function renderRoster(query) {
 
   const html = buildGroup('المعلمون', teachers) +
                buildGroup('الإداريون', admins) +
-               buildGroup('العمال', workers);
+               buildGroup('المستخدمون', workers);
 
   if (rosterListEl) {
     rosterListEl.innerHTML = html ||
@@ -3743,8 +3748,12 @@ async function loadPersonnelRoster() {
       `<li class="staff-roster-item" data-id="${p.id}">` +
         `<span class="sr-name">${escapeHtml(p.fullName)}</span>` +
         `<span class="sr-kind">${PERSONNEL_KIND_AR[p.kind] || ''}</span>` +
-        `<button class="staff-roster-del" data-act="del-personnel" aria-label="إزالة">` +
-          `<svg class="icon icon-sm"><use href="#ic-x"/></svg></button>` +
+        // المرآة تُحذف من مصدرها في «الكوادر» لا من هنا، وإلا عاد الانفصال بين
+        // الجدولين من الباب الخلفي: يختفي من الدوام ويبقى في السجلّ والبيان.
+        (p.staffRecordId
+          ? `<span class="sr-src" title="مصدره سجلّ الكوادر — يُحذف من هناك">من الكوادر</span>`
+          : `<button class="staff-roster-del" data-act="del-personnel" aria-label="إزالة">` +
+              `<svg class="icon icon-sm"><use href="#ic-x"/></svg></button>`) +
       `</li>`
     ).join('');
   } catch (err) {
@@ -4191,15 +4200,6 @@ el('btn-save-student').addEventListener('click', async () => {
       ...input, id: _stuEditId || undefined,
       schoolId: schoolId(), classId: _stuClassId, actorId: actorId(),
     });
-    // If a registry lookup was done, link the student to the national registry.
-    if (_stuRegistryData && res.id && res.synced) {
-      try {
-        await NDB.linkStudentToRegistry(res.id, _stuRegistryData.national_id);
-      } catch (linkErr) {
-        console.warn('[NSAMS] linkStudentToRegistry (non-fatal)', linkErr);
-      }
-    }
-    _stuRegistryData = null;
     closeStudentForm();
     toast(res.synced ? (_stuEditId ? 'تم تحديث الطالب' : 'تمت إضافة الطالب')
                      : 'حُفظ محلياً وسيُزامن عند الاتصال', res.synced ? 'success' : 'warning');
@@ -4214,75 +4214,10 @@ el('btn-save-student').addEventListener('click', async () => {
 
 el('btn-add-student').addEventListener('click', () => openStudentForm(null));
 
-// ── Student registry lookup (السجل الوطني للطالب) ────────────────────────────
-let _stuRegistryData = null;
-const stuRegResult    = el('stu-reg-result');
-const btnStuRegLookup = el('btn-stu-reg-lookup');
-
-function openStudentFormOrig() {}  // placeholder — real fn defined above as openStudentForm
-
-// Reset registry state when form opens (patch the existing openStudentForm)
-const _origOpenStudentForm = openStudentForm;
-// @ts-ignore — wrapping the existing function
-window._openStudentForm = (student) => {
-  _stuRegistryData = null;
-  if (stuRegResult) stuRegResult.hidden = true;
-  _origOpenStudentForm(student);
-};
-
-btnStuRegLookup?.addEventListener('click', async () => {
-  const natId = el('stu-natid')?.value.trim();
-  if (!natId) {
-    if (stuRegResult) { _showRegResult(stuRegResult, 'أدخل الرقم الوطني (11 رقماً) أولاً.', 'error'); } return;
-  }
-  if (!/^\d{11}$/.test(natId)) {
-    if (stuRegResult) { _showRegResult(stuRegResult, `الرقم الوطني يجب أن يكون ١١ رقماً — أدخلت ${natId.length}.`, 'error'); }
-    return;
-  }
-  btnStuRegLookup.disabled = true;
-  _showRegResult(stuRegResult, 'جارٍ البحث…', 'info');
-  try {
-    const res = await NDB.lookupNationalStudent(natId);
-    if (!res.ok || !res.data) {
-      _showRegResult(stuRegResult, 'لم يُعثر على الطالب في السجل الوطني.', 'error');
-      _stuRegistryData = null; return;
-    }
-    const d = res.data;
-    _stuRegistryData = d;
-    // Fill personal fields from registry
-    const firstEl  = el('stu-first');
-    const fatherEl = el('stu-father');
-    const familyEl = el('stu-family');
-    const genderEl = el('stu-gender');
-    if (firstEl)  firstEl.value  = d.first_name   || '';
-    if (fatherEl) fatherEl.value = d.father_name  || '';
-    if (familyEl) familyEl.value = d.family_name  || '';
-    if (genderEl) { genderEl.value = d.gender || ''; CustomSelect.refresh(genderEl); }
-    const motherEl    = el('stu-mother');
-    const motherFamEl = el('stu-mother-family');
-    const grandEl     = el('stu-grandfather');
-    const bpEl        = el('stu-birthplace');
-    const cardEl      = el('stu-card');
-    if (motherEl)    motherEl.value    = d.mother_name    || '';
-    if (motherFamEl) motherFamEl.value = d.mother_family  || '';
-    if (grandEl)     grandEl.value     = d.grandfather_name || '';
-    if (bpEl)        bpEl.value        = d.birth_place    || '';
-    if (cardEl)      cardEl.value      = d.card_number    || '';
-    if (d.birth_date) {
-      const [y, m, dd] = d.birth_date.split('-');
-      const dobY = el('stu-dob-year'); const dobM = el('stu-dob-month'); const dobD = el('stu-dob-day');
-      if (dobY) dobY.value = y;
-      if (dobM) dobM.value = String(Number(m));
-      if (dobD) dobD.value = String(Number(dd));
-    }
-    _showRegResult(stuRegResult, `السجل الوطني: ${escapeHtml(d.full_name)} — سيُربط الطالب بالسجل عند الحفظ`, 'success');
-  } catch (err) {
-    _showRegResult(stuRegResult, `تعذّر البحث: ${err.message}`, 'error');
-    _stuRegistryData = null;
-  } finally {
-    btnStuRegLookup.disabled = false;
-  }
-});
+// ملاحظة: زرّ «البحث في السجل الوطني» للطالب حُذف — الجدول المركزي
+// national_students_registry بلا صلاحية للدور authenticated فيسقط الاستدعاء بـ
+// «permission denied»، وهو فارغ أصلاً إذ لا شاشة في التطبيق تملؤه. يعود الزرّ
+// في دفعة الاستيراد حين تُملأ السجلّات المركزية فعلاً. المعادل للكادر حُذف معه.
 
 // ── Transfer ────────────────────────────────────────────────────────────────
 const modalTransfer = el('modal-transfer');
@@ -4978,9 +4913,11 @@ const srStartDay      = el('sr-start-day');
 const srStartMonth    = el('sr-start-month');
 const srStartYear     = el('sr-start-year');
 const srSelfNumber    = el('sr-self-number');
-const srGender        = el('sr-gender');
 const srRegResult     = el('sr-reg-result');
-const btnSrRegLookup  = el('btn-sr-reg-lookup');
+// الجنس منتقٍ مقطعي بزرَّي اختيار لا <select>، فتبقى «غير محدَّد» ممكنة.
+const srGenderRadios  = () => document.querySelectorAll('input[name="sr-gender"]');
+const _getGender      = () => document.querySelector('input[name="sr-gender"]:checked')?.value || '';
+const _setGender      = (v) => srGenderRadios().forEach(r => { r.checked = r.value === v; });
 const srNationalId    = el('sr-national-id');
 const srMotherName    = el('sr-mother-name');
 const srDobDay        = el('sr-dob-day');
@@ -4989,7 +4926,6 @@ const srDobYear       = el('sr-dob-year');
 const srPhone         = el('sr-phone');
 const srLandline      = el('sr-landline');
 const srTeachExtra    = el('sr-teach-extra');
-const srTeachRank     = el('sr-teaching-rank');
 const srTeachHours    = el('sr-teaching-hours');
 const srAsgGrade      = el('sr-assigned-grade');
 const srAsgSection    = el('sr-assigned-section');
@@ -5003,7 +4939,6 @@ const srError         = el('sr-error');
 const srSaveSpinner   = el('sr-save-spinner');
 const btnSaveStaffRec = el('btn-save-staff-rec');
 
-let _srRegistryData = null;   // كائن بيانات السجل الذاتي عند وجود ربط ناجح
 const modalLeaves     = el('modal-staff-leaves');
 const btnCloseLeaves  = el('btn-close-staff-leaves');
 const leavesStaffName = el('leaves-staff-name');
@@ -5135,7 +5070,6 @@ btnRefreshReg?.addEventListener('click',  loadRegistryRecords);
 // ── Staff Record Modal ────────────────────────────────────────────────────────
 async function openStaffRecModal(rec) {
   _regEditId = rec?.id ?? null;
-  _srRegistryData = null;
   if (staffRecTitle) staffRecTitle.textContent = rec ? 'تعديل بيانات كادر' : 'إضافة كادر جديد';
 
   const jobTitles = _regSegment === 'admin'
@@ -5202,11 +5136,9 @@ async function openStaffRecModal(rec) {
     srEduZone.value     = rec.educational_zone || '';
     srRosterType.value  = rec.roster_type      || 'inside';
     srMinDoc.value      = rec.ministerial_doc  || '';
-    if (srTeachRank) srTeachRank.value = rec.teaching_rank || '';
-    srGender && (srGender.value = rec.gender   || '');
-    [srJobTitle, srSpec, srCertificate, srHigherDegree, srEduZone, srRosterType, srMinDoc, srTeachRank]
+    _setGender(rec.gender || '');
+    [srJobTitle, srSpec, srCertificate, srHigherDegree, srEduZone, srRosterType, srMinDoc]
       .forEach(s => CustomSelect.refresh(s));
-    if (srGender) CustomSelect.refresh(srGender);
 
     const isLinked = !!rec.registry_self_number;
     _lockStaffPersonalFields(isLinked);
@@ -5219,8 +5151,8 @@ async function openStaffRecModal(rec) {
     textInputs.forEach(i => { if (i) i.value = ''; });
     numInputs.forEach(i => { if (i) i.value = ''; });
     srRosterType.value = 'inside';
-    if (srGender) { srGender.value = ''; CustomSelect.refresh(srGender); }
-    [srJobTitle, srSpec, srCertificate, srHigherDegree, srEduZone, srMinDoc, srTeachRank]
+    _setGender('');
+    [srJobTitle, srSpec, srCertificate, srHigherDegree, srEduZone, srMinDoc]
       .forEach(s => { if (s) { s.value = ''; CustomSelect.refresh(s); } });
     CustomSelect.refresh(srRosterType);
     _lockStaffPersonalFields(false);
@@ -5234,13 +5166,14 @@ async function openStaffRecModal(rec) {
 }
 
 function _lockStaffPersonalFields(locked) {
-  [srFullName, srNationalId, srMotherName, srDobDay, srDobMonth, srDobYear,
-   srGender].forEach(el => {
+  [srFullName, srNationalId, srMotherName, srDobDay, srDobMonth, srDobYear].forEach(el => {
     if (!el) return;
     el.readOnly = locked;
-    el.disabled = locked && el.tagName === 'SELECT';
     el.classList.toggle('field-locked', locked);
   });
+  // أزرار الاختيار لا تحترم readOnly، فتُعطَّل صراحةً.
+  srGenderRadios().forEach(r => { r.disabled = locked; });
+  document.querySelectorAll('.seg-2-opt').forEach(o => o.classList.toggle('field-locked', locked));
 }
 
 function _showRegResult(container, msg, type = 'info') {
@@ -5258,41 +5191,10 @@ function closeStaffRecModal() {
 btnCloseStaffRec?.addEventListener('click', closeStaffRecModal);
 modalStaffRec?.addEventListener('click', e => { if (e.target === modalStaffRec) closeStaffRecModal(); });
 
-// ── Registry lookup: staff (الرقم الذاتي) ────────────────────────────────────
-btnSrRegLookup?.addEventListener('click', async () => {
-  const selfNum = srSelfNumber?.value.trim();
-  if (!selfNum) {
-    _showRegResult(srRegResult, 'أدخل الرقم الذاتي أولاً.', 'error'); return;
-  }
-  btnSrRegLookup.disabled = true;
-  _showRegResult(srRegResult, 'جارٍ البحث…', 'info');
-  try {
-    const res = await NDB.lookupNationalStaff(selfNum);
-    if (!res.ok || !res.data) {
-      _showRegResult(srRegResult, 'لم يُعثر على سجل بهذا الرقم الذاتي.', 'error');
-      _srRegistryData = null; _lockStaffPersonalFields(false); return;
-    }
-    const d = res.data;
-    _srRegistryData = d;
-    srFullName.value      = d.full_name      || '';
-    srNationalId.value    = d.national_id    || '';
-    srMotherName.value    = d.mother_name    || '';
-    if (srGender) { srGender.value = d.gender || ''; CustomSelect.refresh(srGender); }
-    if (d.birth_date) {
-      const [y, m, dd] = d.birth_date.split('-');
-      if (srDobYear)  srDobYear.value  = y;
-      if (srDobMonth) srDobMonth.value = String(Number(m));
-      if (srDobDay)   srDobDay.value   = String(Number(dd));
-    }
-    _lockStaffPersonalFields(true);
-    _showRegResult(srRegResult, `تمّ العثور على السجل: ${escapeHtml(d.full_name)}`, 'success');
-  } catch (err) {
-    _showRegResult(srRegResult, `تعذّر البحث: ${err.message}`, 'error');
-    _srRegistryData = null; _lockStaffPersonalFields(false);
-  } finally {
-    btnSrRegLookup.disabled = false;
-  }
-});
+// ملاحظة: زرّ «البحث في السجل الذاتي» حُذف — national_staff_registry بلا صلاحية
+// للدور authenticated فيسقط بـ «permission denied»، وهو فارغ إذ لا شاشة تملؤه.
+// يبقى srRegResult و_lockStaffPersonalFields: openStaffRecModal يستعملهما لعرض
+// «مرتبط بالسجل المركزي» وقفل الحقول للسجلّات المرتبطة سلفاً، وهو مسار مستقلّ.
 
 btnSaveStaffRec?.addEventListener('click', async () => {
   const fullName = srFullName?.value.trim();
@@ -5319,7 +5221,7 @@ btnSaveStaffRec?.addEventListener('click', async () => {
     national_id:      srNationalId?.value.trim() || null,
     mother_name:      srMotherName?.value.trim() || null,
     birth_date,
-    gender:           srGender?.value || null,
+    gender:           _getGender() || null,
     self_number:      srSelfNumber?.value.trim() || null,
     job_title:        jt,
     specialization:   srSpec?.value || null,
@@ -5343,7 +5245,9 @@ btnSaveStaffRec?.addEventListener('click', async () => {
   // حقول ورقة الجهاز التدريسي وحدها — تبقى null لغيرهم فلا تتسرّب بيانات
   // تدريس إلى سجلّ إداري أو مهني.
   if (_regSegment === 'teaching') {
-    payload.teaching_rank         = srTeachRank?.value || null;
+    // teaching_rank لا يُدخَل هنا: يُستنتج مرّةً في _stmtTeachRank ويُخزَّن، ويُحرَّر
+    // عند اللزوم من جدول القسم ٦ في البيان. حقل «رتبة التدريس» كان مكرّراً مع
+    // «العمل المسند» فحُذف من هذا النموذج.
     payload.teaching_hours        = srTeachHours?.value ? parseInt(srTeachHours.value, 10) : null;
     payload.assigned_grade        = srAsgGrade?.value.trim() || null;
     payload.assigned_section      = srAsgSection?.value.trim() || null;
@@ -5362,14 +5266,19 @@ btnSaveStaffRec?.addEventListener('click', async () => {
       const row = await NDB.createStaffRecord(payload);
       savedId = row.id;
     }
-    // If a registry lookup was done in this session, establish the formal link.
-    if (_srRegistryData && savedId) {
-      try {
-        await NDB.linkStaffToRegistry(savedId, _srRegistryData.self_number);
-      } catch (linkErr) {
-        console.warn('[NSAMS] linkStaffToRegistry (non-fatal)', linkErr);
-      }
+    // مرآة كشف الدوام: من يُضاف هنا (إداري/مهني/مستخدم/حارس) يظهر فوراً في تبويب
+    // «الكادر» بلا إعادة تحميل. فشلها لا يُسقط الحفظ — السجلّ نفسه محفوظ.
+    try {
+      await NDB.syncPersonnelFromStaffRecord({
+        staffRecordId: savedId, schoolId: S.school.id,
+        fullName: payload.full_name, staffType: payload.staff_type,
+        nationalId: payload.national_id,
+      });
+      await Promise.all([loadPersonnelRoster(), loadRosterCard(), loadStaffAttendance()]);
+    } catch (mirrorErr) {
+      console.warn('[NSAMS] syncPersonnelFromStaffRecord (non-fatal)', mirrorErr);
     }
+
     toast(_regEditId ? 'تم تحديث البيانات' : 'تمت الإضافة إلى السجل', 'success');
     closeStaffRecModal();
     await loadRegistryRecords();
@@ -5492,6 +5401,14 @@ btnConfirmDel?.addEventListener('click', async () => {
   if (spinner) spinner.hidden = false;
   try {
     await NDB.softDeleteStaffRecord(_delStaffId);
+    // المرآة تتبع مصدرها: حذف السجلّ يُخرج صاحبه من كشف الدوام كذلك، وإلا بقي
+    // شبحاً يُطالَب بحضوره كل صباح.
+    try {
+      await NDB.deactivatePersonnelForStaffRecord(_delStaffId);
+      await Promise.all([loadPersonnelRoster(), loadRosterCard(), loadStaffAttendance()]);
+    } catch (mirrorErr) {
+      console.warn('[NSAMS] deactivatePersonnelForStaffRecord (non-fatal)', mirrorErr);
+    }
     toast('تم حذف الكادر من السجل', 'success');
     closeDelStaffModal();
     await loadRegistryRecords();
@@ -5505,7 +5422,6 @@ btnConfirmDel?.addEventListener('click', async () => {
 });
 
 // Registry tab selects (populated dynamically — enhance once, refresh on populate)
-CustomSelect.enhance('sr-gender');
 CustomSelect.enhance('sr-job-title');
 CustomSelect.enhance('sr-specialization');
 CustomSelect.enhance('sr-roster-type');
@@ -5513,7 +5429,6 @@ CustomSelect.enhance('sr-certificate');
 CustomSelect.enhance('sr-higher-degree');
 CustomSelect.enhance('sr-edu-zone');
 CustomSelect.enhance('sr-min-doc');
-CustomSelect.enhance('sr-teaching-rank');
 CustomSelect.enhance('leave-type-sel');
 CustomSelect.enhance('leaves-month-sel');
 CustomSelect.enhance('status-new');
@@ -6449,56 +6364,42 @@ function renderStmtBuildingTotal() {
 }
 
 // ── القسم ٤: الطلاب ──────────────────────────────────────────────────────────
-// تمثيل واحد فقط في الشجرة: بطاقات على الجوّال، جدول رسمي على الشاشة العريضة.
-// وجود التمثيلين معاً يعني حقلَي إدخال لنفس الرقم — وهذا مصدر تعارض مضمون.
+// تمثيل واحد فقط في الشجرة — الجدول الرسمي، على كل عرض شاشة. وجود تمثيلين معاً
+// يعني حقلَي إدخال لنفس الرقم، وهذا مصدر تعارض مضمون.
+//
+// ⚠ كان هنا تفرّعٌ على matchMedia('(min-width: 760px)') يعرض بطاقاتٍ مطويّةً على
+// الجوّال بدل الجدول: لا أعمدة ولا مجاميع، وكل صفّ يحتاج نقرةً ليُفتح. فاضطرّ
+// المستخدم إلى «وضع مصمّم للكمبيوتر» في المتصفّح ليرى بيانات مدرسته. الجدول نفسه
+// يعمل على الهاتف تماماً ما دامت حاويته `.stmt-tw` تتمرّر أفقياً (style.css)،
+// والعمود الأول مثبَّت فيبقى اسم الصف ظاهراً أثناء التمرير. فلا تُعِد التفرّع.
 const STMT_STU_COLS = [
   ['sections','الشعب'], ['enM','انكليزي ذكور'], ['enF','انكليزي إناث'],
   ['frM','فرنسي ذكور'], ['frF','فرنسي إناث'], ['ruM','روسي ذكور'], ['ruF','روسي إناث'],
 ];
-
-function _stmtWide() { return window.matchMedia('(min-width: 760px)').matches; }
 
 function renderStmtStudentsSec() {
   const host = el('stmt-students-host');
   if (!host) return;
   const t = _stmtStudentTotals();
 
-  if (_stmtWide()) {
-    host.innerHTML = `<div class="stmt-tw"><table class="stmt-table">
-      <thead>
-        <tr><th rowspan="2">الصف</th><th rowspan="2">الشعب</th><th colspan="2">انكليزي</th>
-            <th colspan="2">فرنسي</th><th colspan="2">روسي</th><th rowspan="2">المجموع</th></tr>
-        <tr><th>ذكور</th><th>إناث</th><th>ذكور</th><th>إناث</th><th>ذكور</th><th>إناث</th></tr>
-      </thead>
-      <tbody>${GRADE_KEYS.map(k => {
-        const r = t.byKey[k];
-        return `<tr><td>${escapeHtml(GRADE_LABELS[k])}</td>` +
-          STMT_STU_COLS.map(([c]) =>
-            `<td><input class="stmt-cell-in" type="number" min="0" inputmode="numeric"
-                 data-stu="${k}" data-col="${c}" value="${r[c]}"></td>`).join('') +
-          `<td>${stmtNum(r.total)}</td></tr>`;
-      }).join('')}</tbody>
-      <tfoot><tr><td>المجموع</td><td>${stmtNum(t.sections)}</td><td>${stmtNum(t.enM)}</td>
-        <td>${stmtNum(t.enF)}</td><td>${stmtNum(t.frM)}</td><td>${stmtNum(t.frF)}</td>
-        <td>${stmtNum(t.ruM)}</td><td>${stmtNum(t.ruF)}</td><td>${stmtNum(t.total)}</td></tr></tfoot>
-    </table></div>`;
-  } else {
-    host.innerHTML = `<div class="stmt-gcards">${GRADE_KEYS.map(k => {
+  host.innerHTML = `<div class="stmt-tw"><table class="stmt-table stmt-table--stick">
+    <thead>
+      <tr><th rowspan="2">الصف</th><th rowspan="2">الشعب</th><th colspan="2">انكليزي</th>
+          <th colspan="2">فرنسي</th><th colspan="2">روسي</th><th rowspan="2">المجموع</th></tr>
+      <tr><th>ذكور</th><th>إناث</th><th>ذكور</th><th>إناث</th><th>ذكور</th><th>إناث</th></tr>
+    </thead>
+    <tbody>${GRADE_KEYS.map(k => {
       const r = t.byKey[k];
-      const open = STMT.stuOpen === k;
-      return `<div class="stmt-gcard" data-open="${open ? 1 : 0}">
-        <button type="button" class="stmt-gcard-h" data-stu-open="${k}">
-          <span class="stmt-gcard-n">${escapeHtml(GRADE_LABELS[k])}</span>
-          <span class="stmt-gcard-s">${stmtNum(r.sections)} شعبة · ${stmtNum(r.total)} طالب</span>
-        </button>
-        <div class="stmt-gcard-b"${open ? '' : ' hidden'}>
-          ${STMT_STU_COLS.map(([c, lab]) => `<div class="stmt-gcard-f">
-            <label for="stu-${k}-${c}">${escapeHtml(lab)}</label>
-            <input id="stu-${k}-${c}" type="number" min="0" inputmode="numeric"
-                   data-stu="${k}" data-col="${c}" value="${r[c]}"></div>`).join('')}
-        </div></div>`;
-    }).join('')}</div>`;
-  }
+      return `<tr><td>${escapeHtml(GRADE_LABELS[k])}</td>` +
+        STMT_STU_COLS.map(([c]) =>
+          `<td><input class="stmt-cell-in" type="number" min="0" inputmode="numeric"
+               data-stu="${k}" data-col="${c}" value="${r[c]}"></td>`).join('') +
+        `<td>${stmtNum(r.total)}</td></tr>`;
+    }).join('')}</tbody>
+    <tfoot><tr><td>المجموع</td><td>${stmtNum(t.sections)}</td><td>${stmtNum(t.enM)}</td>
+      <td>${stmtNum(t.enF)}</td><td>${stmtNum(t.frM)}</td><td>${stmtNum(t.frF)}</td>
+      <td>${stmtNum(t.ruM)}</td><td>${stmtNum(t.ruF)}</td><td>${stmtNum(t.total)}</td></tr></tfoot>
+  </table></div>`;
 
   const badge = el('stmt-stu-badge');
   if (badge) badge.textContent = `${stmtNum(t.sections)} شعبة · ${stmtNum(t.total)} طالب`;
@@ -7288,12 +7189,6 @@ function _stmtWire() {
     if (e.target.dataset?.adm) renderStmtAdminSec();
     if (e.target.dataset?.yeNext || e.target.dataset?.yeExam) renderStmtYearEndSec();
   });
-  window.addEventListener('resize', () => {
-    const wide = _stmtWide();
-    if (wide !== STMT._wasWide) { STMT._wasWide = wide; renderStmtStudentsSec(); }
-  });
-  STMT._wasWide = _stmtWide();
-
   // القسم ٥: تصنيف غير المصنّفين
   el('btn-stmt-classify')?.addEventListener('click', openStmtClassify);
   el('btn-close-stmt-classify')?.addEventListener('click', () => {
@@ -7376,11 +7271,23 @@ function _stmtWire() {
   window.addEventListener('pagehide', () => { if (STMT.saveTimer) stmtSaveNow(); });
 }
 
-// تحديث الأرقام المشتقّة داخل بطاقة الصف دون إعادة رسم الحقل الذي يُحرَّر
+// تحديث الأرقام المشتقّة في جدول الطلاب دون إعادة رسم الحقل الذي يُحرَّر
+// (إعادة الرسم تسحب التركيز من الخانة وتقطع الكتابة).
 function _stmtUpdateStudentEcho(key) {
   const t = _stmtStudentTotals();
-  const card = document.querySelector(`[data-stu-open="${key}"] .stmt-gcard-s`);
-  if (card) card.textContent = `${stmtNum(t.byKey[key].sections)} شعبة · ${stmtNum(t.byKey[key].total)} طالب`;
+
+  // مجموع سطر الصف المُحرَّر — آخر خلية في صفّه
+  const row = document.querySelector(`.stmt-table [data-stu="${key}"]`)?.closest('tr');
+  const rowTotal = row?.lastElementChild;
+  if (rowTotal) rowTotal.textContent = stmtNum(t.byKey[key].total);
+
+  // سطر المجاميع في تذييل الجدول
+  const foot = document.querySelector('.stmt-table tfoot tr');
+  if (foot) {
+    [t.sections, t.enM, t.enF, t.frM, t.frF, t.ruM, t.ruF, t.total]
+      .forEach((v, i) => { const c = foot.children[i + 1]; if (c) c.textContent = stmtNum(v); });
+  }
+
   const badge = el('stmt-stu-badge');
   if (badge) badge.textContent = `${stmtNum(t.sections)} شعبة · ${stmtNum(t.total)} طالب`;
 }

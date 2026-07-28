@@ -1,0 +1,122 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   لوحة المدرسة — طبقة الكمبيوتر واللابتوب
+   ═══════════════════════════════════════════════════════════════════════════
+
+   ⚠ اقرأ هذا قبل أي تعديل:
+
+   كل قاعدة في هذا الملفّ **داخل @media (min-width: 1024px) الواحدة أدناه**، بلا
+   استثناء. هذا هو ما يجعل نسخة الكمبيوتر ونسخة الجوّال لا تختلطان أبداً: تحت
+   ١٠٢٤px لا يُطبَّق من هذا الملفّ حرف واحد، فتبقى style.css وحدها هي النسخة
+   المحمولة كما كانت. ولا تُضِف قاعدة خارج الكتلة ولو بدت عامّة — تلك أول خطوة
+   في تسرّب تخطيط الكمبيوتر إلى الهاتف.
+
+   الإشارة الوحيدة هي عرض النافذة — لا استنشاق User-Agent ولا كشف جهاز. فمن
+   يُفعّل «وضع مصمّم للكمبيوتر» في متصفّح هاتفه يحصل على تخطيط الكمبيوتر، وهو
+   المتوقَّع تماماً.
+
+   لماذا وُجد هذا الملفّ: كانت --page-max مثبَّتة على 560px لكل عرض شاشة، فتُعرض
+   اللوحة على شاشة ٢٤ بوصة عمودَ هاتف في وسطها، وتُقصّ جداول البيان أفقياً وإن
+   كان حولها ألف بكسل فارغ.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (min-width: 1024px) {
+
+  /* ── ١. عرض الصفحة ──────────────────────────────────────────────────────── */
+  :root {
+    --page-max: 1180px;
+    --page-px: 28px;
+  }
+
+  /* ترويسة الشاشة تتبع عرض المحتوى، وإلا امتدّ اسم المدرسة وأزرارها إلى حافتَي
+     شاشة عريضة بينما الصفحة تحتها عمود مركزي — وهو أسوأ من الاثنين. */
+  .header-inner,
+  .header-actions {
+    max-width: var(--page-max);
+    margin-inline: auto;
+    width: 100%;
+  }
+  .header-inner  { padding: 22px 0 10px; }
+  .header-actions { padding: 4px 0 16px; }
+
+  .setup-banner,
+  .pending-bar {
+    max-width: var(--page-max);
+    margin-inline: auto;
+  }
+
+  /* ── ٢. شريط التبويبات ─────────────────────────────────────────────────── */
+  /* على الجوّال يتمرّر الشريط أفقياً لأن أحد عشر تبويباً لا تتّسع لها ٣٩٠px.
+     هنا تتّسع كلّها، فيُلغى التمرير ويُوسَّط الشريط: التبويب المطلوب مرئي دائماً
+     بلا سحب ولا تخمين. */
+  .tabbar {
+    overflow-x: visible;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px 0;
+  }
+  .tabbar > * { max-width: var(--page-max); }
+  .tab-btn {
+    min-width: 84px;
+    padding: 9px 14px;
+    border-radius: var(--r-sm, 10px);
+    transition: background var(--dur, .18s), color var(--dur, .18s);
+  }
+  .tab-btn:hover { background: rgba(255,255,255,.10); color: #fff; }
+
+  /* ── ٣. النوافذ: حوار مركزي لا ورقة تنزلق من الأسفل ────────────────────── */
+  /* الورقة السفلية لغة هاتف — يصلها الإبهام. على الكمبيوتر تُقرأ كنافذة مبتورة
+     في أسفل شاشة فارغة، والمؤشّر يصل إلى المركز بلا كلفة. */
+  .overlay { align-items: center; justify-content: center; }
+  .sheet {
+    max-width: 760px;
+    max-height: 88dvh;
+    border-radius: var(--r-xl);
+    box-shadow: 0 24px 64px rgba(2, 8, 20, .28);
+  }
+  .sheet-sm { max-height: 78dvh; }
+  .sheet-handle { display: none; }          /* مقبض السحب لا معنى له بلا لمس */
+  .sheet-hdr { padding: 16px 22px; }
+  .sheet-body { padding-inline: 22px; }
+
+  /* في نافذة بعرض ٧٦٠px يبدو حقلٌ ممتدّ من الحافّة إلى الحافّة مبعثراً بجانب
+     الحقول المقيَّدة (--num و--id). سقفٌ عامّ يجعل العمود متّسقاً، ولا يلغي
+     السقوف الأضيق لأنها أصغر منه. */
+  .sheet .field-input { max-width: 34rem; }
+
+  @keyframes sheetIn {
+    from { transform: translateY(14px) scale(.985); opacity: 0; }
+    to   { transform: none; opacity: 1; }
+  }
+
+  /* ── ٤. الجداول ────────────────────────────────────────────────────────── */
+  /* جدول البيان تسع خانات؛ في ١١٨٠px يظهر كاملاً بلا تمرير أفقي إطلاقاً.
+     .stmt-tw تبقى overflow-x: auto كشبكة أمان لا كحالة معتادة. */
+  .stmt-table { font-size: 13px; }
+  .stmt-table th,
+  .stmt-table td { padding: 7px 10px; }
+  .stmt-table thead th { font-size: 12px; }
+  .stmt-table .stmt-cell-in { width: 64px; padding: 5px 7px; }
+  .stmt-table tbody tr:hover td { background: rgba(37, 99, 235, .04); }
+  .stmt-table--stick tbody tr:hover td:first-child { background: #f4f8ff; }
+
+  /* ── ٥. الشبكات ────────────────────────────────────────────────────────── */
+  .stmt-grid { grid-template-columns: repeat(4, 1fr); }
+  .stmt-sum  { grid-template-columns: repeat(5, 1fr); }
+  .stmt-cvb  { grid-template-columns: repeat(4, 1fr); }
+
+  /* ── ٦. مؤشّر الفأرة ───────────────────────────────────────────────────── */
+  /* الجوّال بلا مؤشّر، فلا حالات hover فيه. هنا تُميَّز العناصر القابلة للنقر. */
+  .section-card { transition: box-shadow var(--dur, .18s); }
+  .section-card:hover { box-shadow: var(--sh-md, 0 6px 20px rgba(15, 23, 42, .09)); }
+  .subj-row:hover,
+  .rep-row:hover,
+  .staff-roster-item:hover { background: rgba(37, 99, 235, .035); }
+  .icon-btn-sm:hover { background: #eef4ff; border-color: var(--clr-primary); }
+
+  /* شريط إجراءات البيان يتبع --page-max تلقائياً، ويكسب حافّة علوية مستديرة
+     ليُقرأ لوحَ أدوات لا حافّة شاشة. */
+  .stmt-actions-bar {
+    border-radius: var(--r-md) var(--r-md) 0 0;
+    padding-inline: 18px;
+  }
+}
