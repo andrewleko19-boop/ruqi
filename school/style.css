@@ -230,7 +230,10 @@ ul { list-style: none; }
   font-size: .84rem; font-weight: 600; color: var(--clr-text-1);
   cursor: pointer; transition: border-color var(--dur), background var(--dur);
 }
-.seg-2-opt:has(input:checked) {
+/* .is-selected مُبدَّلة يدوياً (JS) — إفادة بصرية مضمونة على كل متصفّح، لا تتّكل
+   على دعم :has() وحده. القاعدتان متطابقتان عمداً فلا تتعارضان. */
+.seg-2-opt:has(input:checked),
+.seg-2-opt.is-selected {
   border-color: var(--clr-primary);
   background: var(--clr-primary-dim);
   font-weight: 700;

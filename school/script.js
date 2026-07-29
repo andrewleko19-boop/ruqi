@@ -4176,6 +4176,10 @@ el('btn-save-student').addEventListener('click', async () => {
   if (!input.firstName || !input.fatherName || !input.familyName) {
     stuFormError.textContent = 'الاسم واسم الأب والكنية حقول إلزامية.'; show(stuFormError); return;
   }
+  // إلزامي كي لا يُحفظ طالب بلا نقطة جنس في القائمة.
+  if (!input.gender) {
+    stuFormError.textContent = 'الجنس حقل إلزامي.'; show(stuFormError); return;
+  }
 
   if (input.nationalId && !/^\d{11}$/.test(input.nationalId)) {
     stuFormError.textContent = input.nationalId.length < 11
@@ -4917,7 +4921,17 @@ const srRegResult     = el('sr-reg-result');
 // الجنس منتقٍ مقطعي بزرَّي اختيار لا <select>، فتبقى «غير محدَّد» ممكنة.
 const srGenderRadios  = () => document.querySelectorAll('input[name="sr-gender"]');
 const _getGender      = () => document.querySelector('input[name="sr-gender"]:checked')?.value || '';
-const _setGender      = (v) => srGenderRadios().forEach(r => { r.checked = r.value === v; });
+const _setGender      = (v) => {
+  srGenderRadios().forEach(r => {
+    r.checked = r.value === v;
+    r.closest('.seg-2-opt')?.classList.toggle('is-selected', r.checked);
+  });
+};
+// إفادة بصرية عند النقر لا تتّكل على دعم :has() في CSS وحده — طبقة إضافية
+// تُبدّل صفّاً يدوياً فور تغيّر الاختيار، لتبقى محسوسة على كل متصفّح.
+srGenderRadios().forEach(r => r.addEventListener('change', () => {
+  srGenderRadios().forEach(x => x.closest('.seg-2-opt')?.classList.toggle('is-selected', x.checked));
+}));
 const srNationalId    = el('sr-national-id');
 const srMotherName    = el('sr-mother-name');
 const srDobDay        = el('sr-dob-day');
@@ -5199,6 +5213,9 @@ modalStaffRec?.addEventListener('click', e => { if (e.target === modalStaffRec) 
 btnSaveStaffRec?.addEventListener('click', async () => {
   const fullName = srFullName?.value.trim();
   if (!fullName) { if (srError) { srError.textContent = 'الاسم الثلاثي مطلوب'; show(srError); } return; }
+  // إلزامي كي لا يُحفظ سجلّ بلا نقطة جنس في القائمة — أياً كان سبب إفلات
+  // الاختيار سابقاً، هذا الفحص يمنع تكرّره.
+  if (!_getGender()) { if (srError) { srError.textContent = 'الجنس حقل إلزامي'; show(srError); } return; }
   if (!navigator.onLine) { if (srError) { srError.textContent = 'الحفظ يحتاج اتصالاً بالإنترنت'; show(srError); } return; }
 
   let birth_date = null;
