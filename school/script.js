@@ -1605,6 +1605,14 @@ const tabNoc          = el('tab-noc');
 const viewNoc         = el('view-noc');
 const fabReport       = el('btn-open-report');
 
+// منتقي الأقسام — فقاعة تعرض القسم الحالي + شبكة الفقاعات (بدل الشريط الأفقي)
+const secbarWrap       = el('secbar-wrap') ?? document.querySelector('.secbar-wrap');
+const btnOpenSections  = el('btn-open-sections');
+const secbarPillUse    = el('secbar-pill-use');
+const secbarPillLabel  = el('secbar-pill-label');
+const modalSections    = el('modal-sections');
+const btnCloseSections = el('btn-close-sections');
+
 const mngClassSelect    = el('mng-class-select');
 const mngAssignedWrap   = el('mng-assigned-wrap');
 const mngAssignedLoading= el('mng-assigned-loading');
@@ -1627,6 +1635,23 @@ const btnRefreshManage  = el('btn-refresh-manage');
 
 let _manageLoaded = false;   // classes dropdown loaded once per session
 let _mngBusy      = false;
+
+// أيقونة ونصّ كل قسم — لتحديث فقاعة المنتقي بعد كل تبديل، مطابقة لما في شبكة
+// الفقاعات حرفياً.
+const TAB_META = {
+  attendance:        { icon: 'ic-home',         label: 'الرئيسية' },
+  absence:           { icon: 'ic-x-circle',     label: 'الغياب' },
+  'summary-reports': { icon: 'ic-bar-chart',    label: 'التقارير' },
+  manage:            { icon: 'ic-users',        label: 'الصفوف' },
+  students:          { icon: 'ic-user',         label: 'الطلاب' },
+  personnel:         { icon: 'ic-receipt',      label: 'الكادر' },
+  staff:             { icon: 'ic-settings',     label: 'إعدادات المدرسة' },
+  subjects:          { icon: 'ic-inbox',        label: 'الطلبات' },
+  reports:           { icon: 'ic-award',        label: 'الشهادات' },
+  registry:          { icon: 'ic-user-group',   label: 'الكوادر' },
+  statement:         { icon: 'ic-file-text',    label: 'البيان' },
+  noc:               { icon: 'ic-send',         label: 'وثائق لا مانع' },
+};
 
 const TABS = {
   absence:           { tab: tabAbsence,        view: viewAbsence },
@@ -1656,6 +1681,14 @@ function switchTab(tab, fromHistory = false) {
   if (btnMore) btnMore.classList.toggle('is-active', tab !== 'attendance');
   closeMoreMenu();
 
+  // فقاعة المنتقي تعكس القسم النشط، وتُغلَق الشبكة تلقائياً بعد الاختيار —
+  // نقرة الفقاعة داخل الشبكة تستدعي هذه الدالة عبر مستمعاتها الفردية، فهذا
+  // المكان الوحيد الكافي لإغلاقها بلا تكرار عند كل زرّ.
+  const meta = TAB_META[tab];
+  if (meta && secbarPillUse)   secbarPillUse.setAttribute('href', '#' + meta.icon);
+  if (meta && secbarPillLabel) secbarPillLabel.textContent = meta.label;
+  closeSectionsSheet();
+
   if (!fromHistory) pushTabHistory(tab);
 
   if (tab === 'absence')         loadAbsenceView();
@@ -1683,6 +1716,25 @@ tabRegistry?.addEventListener('click',   () => switchTab('registry'));
 tabStatement?.addEventListener('click',  () => switchTab('statement'));
 tabPersonnel?.addEventListener('click',  () => switchTab('personnel'));
 tabNoc?.addEventListener('click',        () => switchTab('noc'));
+
+// ── منتقي الأقسام: فتح/إغلاق شبكة الفقاعات ─────────────────────────────────
+function openSectionsSheet() {
+  if (!modalSections) return;
+  show(modalSections);
+  secbarWrap?.setAttribute('data-open', '1');
+  btnOpenSections?.setAttribute('aria-expanded', 'true');
+  document.body.style.overflow = 'hidden';
+}
+function closeSectionsSheet() {
+  if (!modalSections || modalSections.hidden) return;
+  hide(modalSections);
+  secbarWrap?.setAttribute('data-open', '0');
+  btnOpenSections?.setAttribute('aria-expanded', 'false');
+  document.body.style.overflow = '';
+}
+btnOpenSections?.addEventListener('click', openSectionsSheet);
+btnCloseSections?.addEventListener('click', closeSectionsSheet);
+modalSections?.addEventListener('click', e => { if (e.target === modalSections) closeSectionsSheet(); });
 
 // «المزيد» sections menu (bottom sheet)
 const btnMore   = el('btn-more');
@@ -7119,8 +7171,8 @@ async function initStatementTab() {
 }
 
 function _stmtSyncStickyOffsets() {
-  // الغلاف لا الشريط: هو المُثبَّت، وارتفاعه يشمل الحدّ السفلي.
-  const bar = document.querySelector('.tabbar-wrap');
+  // منتقي الأقسام (الفقاعة) هو المُثبَّت الآن، لا الشريط الأفقي القديم.
+  const bar = document.querySelector('.secbar-wrap');
   const period = el('stmt-period');
   const root = document.documentElement;
   if (bar) root.style.setProperty('--stmt-top', bar.offsetHeight + 'px');

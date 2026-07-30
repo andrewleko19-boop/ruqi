@@ -335,76 +335,101 @@
     <span id="pending-text">سجلات في انتظار المزامنة</span>
   </div>
 
-  <!-- Tab bar (school admin) — 6 tabs, horizontally scrollable -->
-  <!-- الغلاف يحمل التثبيت والتدرّج والظلّ، والشريط الداخلي يمرّر أفقياً فقط.
-       اجتماع الثلاثة على عنصر واحد يُنتج عطب رسم على أندرويد — انظر style.css. -->
-  <div class="tabbar-wrap">
-  <nav class="tabbar" role="tablist" aria-label="أقسام لوحة المدير">
+  <!-- منتقي الأقسام: فقاعة تعرض القسم الحالي وتفتح شبكة الفقاعات.
+       لا تمرير أفقي هنا إطلاقاً — كان شريطاً أفقياً مُثبَّتاً، وهو تركيب
+       معروف بعطل رسم على بعض معالجات أندرويد (طبقة تمرير أفقي متداخلة
+       داخل عنصر مُثبَّت). الفقاعة لا تحمل أي طبقة تمرير فتخرج من فئة
+       العطل من جذورها، بصرف النظر عن التشخيص الدقيق. -->
+  <div class="secbar-wrap">
     <button class="tab-back-btn" id="btn-back-nav" hidden title="رجوع" aria-label="رجوع">
       <svg class="icon icon-sm"><use href="#ic-arrow-right"/></svg>
     </button>
-    <button class="tab-btn is-active" id="tab-attendance" role="tab"
-            aria-selected="true" data-tab="attendance">
-      <svg class="icon"><use href="#ic-home"/></svg>
-      الرئيسية
+    <button class="secbar-pill" id="btn-open-sections" aria-haspopup="dialog" aria-expanded="false">
+      <span class="secbar-pill-ic"><svg class="icon icon-sm"><use href="#ic-home" id="secbar-pill-use"/></svg></span>
+      <span class="secbar-pill-label" id="secbar-pill-label">الرئيسية</span>
+      <svg class="secbar-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
     </button>
-    <button class="tab-btn" id="tab-absence" role="tab"
-            aria-selected="false" data-tab="absence">
-      <svg class="icon"><use href="#ic-x-circle"/></svg>
-      الغياب
-    </button>
-    <button class="tab-btn" id="tab-summary-reports" role="tab"
-            aria-selected="false" data-tab="summary-reports">
-      <svg class="icon"><use href="#ic-bar-chart"/></svg>
-      التقارير
-    </button>
-    <button class="tab-btn" id="tab-manage" role="tab"
-            aria-selected="false" data-tab="manage">
-      <svg class="icon"><use href="#ic-users"/></svg>
-      الصفوف
-    </button>
-    <button class="tab-btn" id="tab-students" role="tab"
-            aria-selected="false" data-tab="students">
-      <svg class="icon"><use href="#ic-user"/></svg>
-      الطلاب
-    </button>
-    <button class="tab-btn" id="tab-personnel" role="tab"
-            aria-selected="false" data-tab="personnel">
-      <svg class="icon"><use href="#ic-receipt"/></svg>
-      الكادر
-    </button>
-    <button class="tab-btn" id="tab-staff" role="tab"
-            aria-selected="false" data-tab="staff">
-      <svg class="icon"><use href="#ic-settings"/></svg>
-      إعدادات المدرسة
-    </button>
-    <button class="tab-btn" id="tab-subjects" role="tab"
-            aria-selected="false" data-tab="subjects">
-      <svg class="icon"><use href="#ic-inbox"/></svg>
-      الطلبات
-    </button>
-    <button class="tab-btn" id="tab-reports" role="tab"
-            aria-selected="false" data-tab="reports">
-      <svg class="icon"><use href="#ic-award"/></svg>
-      الشهادات
-    </button>
-    <button class="tab-btn" id="tab-registry" role="tab"
-            aria-selected="false" data-tab="registry">
-      <svg class="icon"><use href="#ic-user-group"/></svg>
-      الكوادر
-    </button>
-    <button class="tab-btn" id="tab-statement" role="tab"
-            aria-selected="false" data-tab="statement">
-      <svg class="icon"><use href="#ic-file-text"/></svg>
-      البيان
-    </button>
-    <button class="tab-btn" id="tab-noc" role="tab"
-            aria-selected="false" data-tab="noc">
-      <svg class="icon"><use href="#ic-send"/></svg>
-      وثائق لا مانع
-    </button>
-  </nav>
-  </div><!-- /tabbar-wrap -->
+  </div>
+
+  <!-- ═══ شبكة الأقسام (تحلّ محلّ الشريط الأفقي القديم) ═══════════════════════ -->
+  <div id="modal-sections" class="overlay" hidden aria-modal="true" role="dialog" aria-label="الأقسام">
+    <div class="sheet sections-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-hdr">
+        <div class="sheet-title sections-title">
+          <svg class="icon"><use href="#ic-home"/></svg>
+          <span>الأقسام</span>
+        </div>
+        <button class="icon-btn" id="btn-close-sections" aria-label="إغلاق">
+          <svg class="icon"><use href="#ic-x"/></svg>
+        </button>
+      </div>
+      <div class="sheet-body">
+        <nav class="bubble-grid" role="tablist" aria-label="أقسام لوحة المدير">
+          <button class="bubble-tab is-active" id="tab-attendance" role="tab"
+                  aria-selected="true" data-tab="attendance">
+            <svg class="icon"><use href="#ic-home"/></svg>
+            <span>الرئيسية</span>
+          </button>
+          <button class="bubble-tab" id="tab-absence" role="tab"
+                  aria-selected="false" data-tab="absence">
+            <svg class="icon"><use href="#ic-x-circle"/></svg>
+            <span>الغياب</span>
+          </button>
+          <button class="bubble-tab" id="tab-summary-reports" role="tab"
+                  aria-selected="false" data-tab="summary-reports">
+            <svg class="icon"><use href="#ic-bar-chart"/></svg>
+            <span>التقارير</span>
+          </button>
+          <button class="bubble-tab" id="tab-manage" role="tab"
+                  aria-selected="false" data-tab="manage">
+            <svg class="icon"><use href="#ic-users"/></svg>
+            <span>الصفوف</span>
+          </button>
+          <button class="bubble-tab" id="tab-students" role="tab"
+                  aria-selected="false" data-tab="students">
+            <svg class="icon"><use href="#ic-user"/></svg>
+            <span>الطلاب</span>
+          </button>
+          <button class="bubble-tab" id="tab-personnel" role="tab"
+                  aria-selected="false" data-tab="personnel">
+            <svg class="icon"><use href="#ic-receipt"/></svg>
+            <span>الكادر</span>
+          </button>
+          <button class="bubble-tab" id="tab-staff" role="tab"
+                  aria-selected="false" data-tab="staff">
+            <svg class="icon"><use href="#ic-settings"/></svg>
+            <span>إعدادات المدرسة</span>
+          </button>
+          <button class="bubble-tab" id="tab-subjects" role="tab"
+                  aria-selected="false" data-tab="subjects">
+            <svg class="icon"><use href="#ic-inbox"/></svg>
+            <span>الطلبات</span>
+          </button>
+          <button class="bubble-tab" id="tab-reports" role="tab"
+                  aria-selected="false" data-tab="reports">
+            <svg class="icon"><use href="#ic-award"/></svg>
+            <span>الشهادات</span>
+          </button>
+          <button class="bubble-tab" id="tab-registry" role="tab"
+                  aria-selected="false" data-tab="registry">
+            <svg class="icon"><use href="#ic-user-group"/></svg>
+            <span>الكوادر</span>
+          </button>
+          <button class="bubble-tab" id="tab-statement" role="tab"
+                  aria-selected="false" data-tab="statement">
+            <svg class="icon"><use href="#ic-file-text"/></svg>
+            <span>البيان</span>
+          </button>
+          <button class="bubble-tab" id="tab-noc" role="tab"
+                  aria-selected="false" data-tab="noc">
+            <svg class="icon"><use href="#ic-send"/></svg>
+            <span>وثائق لا مانع</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+  </div>
 
   <!-- Wave transition: gradient header → light page content -->
   <div class="header-wave" aria-hidden="true">
