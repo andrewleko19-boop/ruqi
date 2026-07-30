@@ -1340,7 +1340,6 @@ select.field-input option:disabled { color: var(--clr-text-3); }
   background: transparent;
   overflow-x: auto;
   scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
 }
 .tabbar::-webkit-scrollbar { display: none; }
 
