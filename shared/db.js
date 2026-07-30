@@ -3652,6 +3652,9 @@ window.NSAMS_DB = {
   migrateQueuesFromLS,
   pullAllDelta,
 
+  // تنظيف مخابئ المستأجِر عند الخروج
+  purgeTenantCaches,
+
   // وثائق «لا مانع» — §23
   lookupStudentForTransfer,
   issueTransferDocument,
@@ -4175,4 +4178,33 @@ async function getTransferDocuments() {
     .limit(300);
   if (error) throw error;
   return data ?? [];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// تنظيف مخابئ المستأجِر عند الخروج
+// ─────────────────────────────────────────────────────────────────────────────
+// الجهاز الواحد يتناوب عليه مديرو مدارس مختلفة، فما بقي من مخبأ المدرسة
+// السابقة على القرص تسريبٌ لبياناتها. يُمسح ما يخصّ المدرسة (الطلاب، ملف
+// المدرسة، مخبأ الدلتا) ويُترك ما لا يخصّها:
+//   • outbox — كتابات لم تُزامَن بعد؛ مسحها فقدانُ عمل المستخدم لا حمايةٌ له.
+//   • nsams_device_id — معرّف الجهاز، لا بيانات فيه.
+async function purgeTenantCaches() {
+  try {
+    for (const k of Object.keys(localStorage)) {
+      if (k.startsWith(STUDENTS_CACHE_PFX) || k.startsWith('nsams_school_')) {
+        localStorage.removeItem(k);
+      }
+    }
+  } catch { /* غير قاتل */ }
+
+  try {
+    const idb = await openIDB();
+    await new Promise((resolve) => {
+      const tx = idb.transaction('delta_cache', 'readwrite');
+      tx.objectStore('delta_cache').clear();
+      tx.oncomplete = resolve;
+      tx.onerror    = resolve;   // التنظيف أفضل جهد — لا يمنع الخروج
+      tx.onabort    = resolve;
+    });
+  } catch { /* غير قاتل */ }
 }

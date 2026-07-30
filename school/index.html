@@ -336,6 +336,9 @@
   </div>
 
   <!-- Tab bar (school admin) — 6 tabs, horizontally scrollable -->
+  <!-- الغلاف يحمل التثبيت والتدرّج والظلّ، والشريط الداخلي يمرّر أفقياً فقط.
+       اجتماع الثلاثة على عنصر واحد يُنتج عطب رسم على أندرويد — انظر style.css. -->
+  <div class="tabbar-wrap">
   <nav class="tabbar" role="tablist" aria-label="أقسام لوحة المدير">
     <button class="tab-back-btn" id="btn-back-nav" hidden title="رجوع" aria-label="رجوع">
       <svg class="icon icon-sm"><use href="#ic-arrow-right"/></svg>
@@ -401,6 +404,7 @@
       وثائق لا مانع
     </button>
   </nav>
+  </div><!-- /tabbar-wrap -->
 
   <!-- Wave transition: gradient header → light page content -->
   <div class="header-wave" aria-hidden="true">

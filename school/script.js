@@ -780,11 +780,19 @@ modalConfirmLogout.addEventListener('click', e => {
 btnLogoutOk.addEventListener('click', async () => {
   modalConfirmLogout.hidden = true;
   try { await logout(); } catch { /* ignore */ }
-  S.user           = null;
-  S.school         = null;
-  S.absentTeachers = [];
-  S.attSubmitted   = false;
-  showScreen('login');
+
+  // إعادة تحميل كاملة — لا تنظيف يدوي للحالة.
+  //
+  // مسحُ حقول S وحدها كان يُبقي البوابة محمّلة: أعلام _xxxLoaded تبقى true،
+  // والقوائم المرسومة تبقى في الـDOM، فيتخطّى switchTab إعادةَ التحميل ويرى
+  // مديرُ المدرسة التالية طلابَ سابقتها حتى يُحدِّث الصفحة يدوياً.
+  //
+  // والتعداد اليدوي لكل مخبأ حلٌّ هشّ: البوابة تحمل عشرات المخابئ على مستوى
+  // الوحدة، وأيّ ميزة جديدة تضيف واحداً تُعيد التسريب صامتاً. الجهاز يتناوب
+  // عليه مديرو مدارس مختلفة فعلياً، فالضمان الوحيد أن تبدأ الجلسة التالية من
+  // صفحة نظيفة — وهو ما تفعله بوابة المديرية أصلاً.
+  try { await NDB.purgeTenantCaches(); } catch { /* غير قاتل */ }
+  location.reload();
 });
 
 // ── In-app confirm ────────────────────────────────────────────────────────────
@@ -7111,7 +7119,8 @@ async function initStatementTab() {
 }
 
 function _stmtSyncStickyOffsets() {
-  const bar = document.querySelector('.tabbar');
+  // الغلاف لا الشريط: هو المُثبَّت، وارتفاعه يشمل الحدّ السفلي.
+  const bar = document.querySelector('.tabbar-wrap');
   const period = el('stmt-period');
   const root = document.documentElement;
   if (bar) root.style.setProperty('--stmt-top', bar.offsetHeight + 'px');
