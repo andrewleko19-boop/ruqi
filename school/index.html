@@ -395,6 +395,11 @@
       <svg class="icon"><use href="#ic-file-text"/></svg>
       البيان
     </button>
+    <button class="tab-btn" id="tab-noc" role="tab"
+            aria-selected="false" data-tab="noc">
+      <svg class="icon"><use href="#ic-send"/></svg>
+      وثائق لا مانع
+    </button>
   </nav>
 
   <!-- Wave transition: gradient header → light page content -->
@@ -1320,7 +1325,7 @@
             <input id="stu-family" class="field-input" type="text" maxlength="40" />
           </div>
           <div class="field-group">
-            <label for="stu-gender">الجنس</label>
+            <label for="stu-gender">الجنس <span class="req">*</span></label>
             <select id="stu-gender" class="field-input">
               <option value="">—</option>
               <option value="male">ذكر</option>
@@ -2038,7 +2043,7 @@
 
           <p class="form-section-label">البيانات الشخصية</p>
           <div class="field-group">
-            <span class="field-lbl">الجنس</span>
+            <span class="field-lbl">الجنس <span class="req">*</span></span>
             <div class="seg-2" role="radiogroup" aria-label="الجنس">
               <label class="seg-2-opt">
                 <input type="radio" name="sr-gender" value="male" />
@@ -2572,6 +2577,219 @@
     </div>
 
   </main><!-- /page (statement) -->
+
+  <!-- ═══ وثائق لا مانع — نقل الطالب بين مدرستين (§23) ═══════════════════════ -->
+  <main class="page" id="view-noc" role="tabpanel" aria-labelledby="tab-noc" hidden>
+
+    <section class="card">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-send"/></svg>
+        <span>وثائق لا مانع</span>
+        <button class="hdr-btn" id="btn-refresh-noc" aria-label="تحديث"
+                style="margin-inline-start:auto">
+          <svg class="icon icon-sm" id="noc-refresh-icon"><use href="#ic-refresh"/></svg>
+        </button>
+      </div>
+      <div class="card-body">
+
+        <!-- المقطعان يُسمَّيان باتجاه الطالب لا بمن أنشأ السجلّ: «صادر/وارد»
+             تعني عكس ما يظنّه المدير هنا، لأن المدرسة المستقبِلة هي من تبدأ. -->
+        <div class="reg-seg-bar" role="group" aria-label="اتجاه طلب النقل">
+          <button class="reg-seg-btn is-active" data-noc-seg="incoming">طلبات النقل الوافدة</button>
+          <button class="reg-seg-btn" data-noc-seg="outgoing">طلبات النقل المغادرة<span
+                  class="noc-seg-count" id="noc-out-count" hidden></span></button>
+        </div>
+        <p class="form-hint" id="noc-seg-hint">طلاب قادمون إلى مدرستك من مدارس أخرى.</p>
+
+        <div id="noc-loading" class="loading-row" hidden><span class="spinner"></span></div>
+        <div id="noc-error" class="msg msg-error" hidden>تعذّر تحميل الوثائق. تحقق من الاتصال وحاول مجدداً.</div>
+        <div id="noc-list" class="noc-list"></div>
+        <p id="noc-empty" class="mng-empty" hidden>لا توجد وثائق في هذا القسم.</p>
+
+        <div class="noc-actions">
+          <button type="button" class="btn btn-primary btn-sm" id="btn-noc-new">
+            <svg class="icon icon-sm"><use href="#ic-plus"/></svg>
+            إصدار وثيقة لا مانع
+          </button>
+          <span class="btn-sub">يبقى الطالب في صفّه الحالي</span>
+
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-noc-new-exc">
+            <svg class="icon icon-sm"><use href="#ic-plus"/></svg>
+            إصدار وثيقة استثنائية
+          </button>
+          <span class="btn-sub">لوضعه في صفّ مختلف عن صفّه الحالي</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── نافذة الإصدار ─────────────────────────────────────────────────── -->
+    <div id="modal-noc-issue" class="overlay" hidden aria-modal="true" role="dialog"
+         aria-label="إصدار وثيقة لا مانع">
+      <div class="sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-hdr">
+          <div class="sheet-title">
+            <svg class="icon"><use href="#ic-send"/></svg>
+            <span id="noc-issue-title">إصدار وثيقة لا مانع</span>
+          </div>
+          <button class="icon-btn" id="btn-close-noc-issue" aria-label="إغلاق">
+            <svg class="icon"><use href="#ic-x"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body">
+
+          <p class="form-hint" id="noc-issue-intro">
+            أنت مدير المدرسة المستقبِلة. أدخل رقم الطالب واسمه بدقّة ثم اضغط «تحقق»
+            لمطابقتهما مع السجلات، ثم اختر الصف الذي سيستقبله في مدرستك.
+          </p>
+
+          <p class="form-section-label">هوية الطالب</p>
+          <div class="field-group">
+            <label for="noc-national-id">الرقم التعريفي للطالب <span class="req">*</span></label>
+            <input id="noc-national-id" class="field-input field-input--id" type="text"
+                   inputmode="numeric" maxlength="20" autocomplete="off" />
+          </div>
+          <div class="twin-fields">
+            <div class="field-group">
+              <label for="noc-first-name">الاسم <span class="req">*</span></label>
+              <input id="noc-first-name" class="field-input" type="text" maxlength="60" />
+            </div>
+            <div class="field-group">
+              <label for="noc-father-name">اسم الأب <span class="req">*</span></label>
+              <input id="noc-father-name" class="field-input" type="text" maxlength="60" />
+            </div>
+          </div>
+          <div class="field-group">
+            <label for="noc-family-name">الكنية <span class="req">*</span></label>
+            <input id="noc-family-name" class="field-input" type="text" maxlength="60" />
+          </div>
+
+          <button type="button" class="btn btn-ghost btn-full" id="btn-noc-verify">
+            <svg class="icon icon-sm"><use href="#ic-search"/></svg>
+            تحقق من بيانات الطالب
+            <span class="spinner" id="noc-verify-spinner" hidden></span>
+          </button>
+
+          <div class="msg msg-warn" id="noc-verify-hint">
+            اضغط «تحقق» أولاً لجلب شعب الطالب المتاحة في مدرستك.
+          </div>
+
+          <!-- المرحلة الثانية — لا تنكشف إلا بعد تحقّق ناجح -->
+          <div id="noc-stage2" hidden>
+            <p class="form-section-label">الوجهة في مدرستك</p>
+
+            <div class="field-group" id="noc-grade-wrap" hidden>
+              <label for="noc-grade-sel">الصف الاستثنائي <span class="req">*</span></label>
+              <select id="noc-grade-sel" class="field-input"></select>
+            </div>
+
+            <div class="field-group">
+              <label for="noc-section-sel" id="noc-section-lbl">الشعبة المستقبِلة في مدرستك <span class="req">*</span></label>
+              <select id="noc-section-sel" class="field-input"></select>
+            </div>
+
+            <div class="field-group">
+              <label for="noc-reason-sel">سبب النقل <span class="optional">(اختياري)</span></label>
+              <select id="noc-reason-sel" class="field-input"></select>
+            </div>
+
+            <div class="field-group">
+              <label for="noc-notes">ملاحظات <span class="optional">(اختياري)</span></label>
+              <input id="noc-notes" class="field-input" type="text" maxlength="200" />
+            </div>
+          </div>
+
+          <div id="noc-issue-error" class="msg msg-error" hidden></div>
+
+          <button type="button" class="btn btn-primary btn-full" id="btn-noc-submit" disabled>
+            إصدار الوثيقة
+            <span class="spinner" id="noc-submit-spinner" hidden></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── نافذة نتيجة التحقّق ───────────────────────────────────────────── -->
+    <div id="modal-noc-verify" class="overlay" hidden aria-modal="true" role="dialog"
+         aria-label="التحقق من بيانات الطالب">
+      <div class="sheet sheet-sm">
+        <div class="sheet-handle"></div>
+        <div class="sheet-hdr">
+          <div class="sheet-title">
+            <svg class="icon"><use href="#ic-check-circle"/></svg>
+            <span>التحقق من بيانات الطالب</span>
+          </div>
+          <button class="icon-btn" id="btn-close-noc-verify" aria-label="إغلاق">
+            <svg class="icon"><use href="#ic-x"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body">
+          <p class="noc-v-name" id="noc-v-name">—</p>
+          <p class="noc-v-sub"><span id="noc-v-natid">—</span> · <span id="noc-v-dob">—</span></p>
+
+          <div class="msg msg-warn noc-warn">
+            تأكّد أن المدرسة والصف الحاليين يطابقان الطالب المقصود قبل إصدار الوثيقة.
+          </div>
+
+          <p class="form-section-label">الوضع الحالي للطالب</p>
+          <dl class="noc-kv">
+            <div><dt>المدرسة الحالية</dt><dd id="noc-v-school">—</dd></div>
+            <div><dt>الصف الحالي</dt><dd id="noc-v-grade">—</dd></div>
+            <div><dt>الشعبة الحالية</dt><dd id="noc-v-section">—</dd></div>
+          </dl>
+
+          <button type="button" class="btn btn-primary btn-full" id="btn-noc-v-ok">
+            <svg class="icon icon-sm"><use href="#ic-check"/></svg>
+            البيانات صحيحة، متابعة
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── نافذة البتّ (المدرسة الحالية) ──────────────────────────────────── -->
+    <div id="modal-noc-review" class="overlay" hidden aria-modal="true" role="dialog"
+         aria-label="البتّ في طلب النقل">
+      <div class="sheet sheet-sm">
+        <div class="sheet-handle"></div>
+        <div class="sheet-hdr">
+          <div class="sheet-title">
+            <svg class="icon"><use href="#ic-clipboard"/></svg>
+            <span>البتّ في طلب النقل</span>
+          </div>
+          <button class="icon-btn" id="btn-close-noc-review" aria-label="إغلاق">
+            <svg class="icon"><use href="#ic-x"/></svg>
+          </button>
+        </div>
+        <div class="sheet-body">
+          <p class="noc-v-name" id="noc-r-name">—</p>
+          <p class="noc-v-sub" id="noc-r-route">—</p>
+
+          <div class="msg msg-warn noc-warn">
+            الموافقة تنقل الطالب فوراً إلى المدرسة الطالبة ولا يمكن التراجع عنها.
+            يبقى سجلّ حضوره وعلاماته عندك كما هو.
+          </div>
+
+          <div class="field-group">
+            <label for="noc-r-reason">سبب الرفض <span class="optional">(عند الرفض)</span></label>
+            <input id="noc-r-reason" class="field-input" type="text" maxlength="200" />
+          </div>
+
+          <div id="noc-review-error" class="msg msg-error" hidden></div>
+
+          <button type="button" class="btn btn-primary btn-full" id="btn-noc-approve">
+            <svg class="icon icon-sm"><use href="#ic-check"/></svg>
+            موافقة ونقل الطالب
+            <span class="spinner" id="noc-approve-spinner" hidden></span>
+          </button>
+          <button type="button" class="btn btn-ghost btn-full" id="btn-noc-reject">
+            <svg class="icon icon-sm"><use href="#ic-x-circle"/></svg>
+            رفض الطلب
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main><!-- /page (noc) -->
 
   <!-- FAB: Emergency Report -->
   <button class="fab" id="btn-open-report" aria-label="فتح نموذج البلاغ الطارئ">

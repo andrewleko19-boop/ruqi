@@ -230,7 +230,10 @@ ul { list-style: none; }
   font-size: .84rem; font-weight: 600; color: var(--clr-text-1);
   cursor: pointer; transition: border-color var(--dur), background var(--dur);
 }
-.seg-2-opt:has(input:checked) {
+/* .is-selected مُبدَّلة يدوياً (JS) — إفادة بصرية مضمونة على كل متصفّح، لا تتّكل
+   على دعم :has() وحده. القاعدتان متطابقتان عمداً فلا تتعارضان. */
+.seg-2-opt:has(input:checked),
+.seg-2-opt.is-selected {
   border-color: var(--clr-primary);
   background: var(--clr-primary-dim);
   font-weight: 700;
@@ -2213,3 +2216,92 @@ select.csel-native {
 .confirm-modal-sub   { font-size: .9rem; color: var(--clr-text-3, #666); margin: 0 0 8px; }
 .confirm-modal-actions { display: flex; gap: 10px; margin-top: 4px; }
 .confirm-modal-actions .btn { flex: 1; }
+
+/* ─── وثائق لا مانع (§23) ─────────────────────────────────────────────────── */
+/* البوابة المدرسية بهويّة فاتحة واحدة (لا :root داكن في هذا الملف)، فكل ما
+   يلي يبني على متغيّرات --clr-* القائمة ولا يُعرّف ألواناً داكنة مستقلّة. */
+
+/* التسميتان أطول من نظيراتهما في سجلّ الكوادر، و.reg-seg-btn فيه
+   white-space:nowrap فيُقصّ النصّ على الشاشات الضيّقة. */
+#view-noc .reg-seg-btn {
+  white-space: normal;
+  line-height: 1.35;
+  padding: 7px 8px;
+}
+.noc-seg-count {
+  display: inline-grid; place-items: center;
+  min-width: 17px; height: 17px; padding: 0 4px; margin-inline-start: 5px;
+  border-radius: 999px; background: #dc2626; color: #fff;
+  font-size: .68rem; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+
+.noc-list { display: flex; flex-direction: column; gap: 10px; }
+
+.noc-card {
+  border: 1px solid var(--clr-border-lt, #E2E8F0);
+  border-radius: var(--r-md, 10px);
+  background: var(--clr-surface, #fff);
+  overflow: hidden;
+}
+.noc-card-hdr {
+  width: 100%; display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 11px; background: none; border: 0; cursor: pointer;
+  text-align: start; font: inherit; color: inherit;
+}
+.noc-hd-main { flex: 1; min-width: 0; }
+.noc-hd-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+.noc-name {
+  display: block; font-weight: 700; font-size: 13.5px; margin-bottom: 6px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.noc-route {
+  display: flex; flex-direction: column; gap: 3px;
+  border: 1px dashed var(--clr-border, #CBD5E1);
+  border-radius: var(--r-sm, 8px); padding: 6px 8px;
+}
+.noc-route-line {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: 12px; min-width: 0;
+}
+.noc-route-line span.noc-sch { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.noc-role-tag {
+  flex-shrink: 0; font-size: 10.5px; font-weight: 700;
+  padding: 1px 6px; border-radius: var(--r-sm, 6px);
+  background: var(--clr-bg, #eef4ff); color: var(--clr-text-2, #475569);
+}
+.noc-role-note { font-size: 10.5px; color: var(--clr-text-3, #94A3B8); flex-shrink: 0; }
+.noc-chev {
+  width: 14px; height: 14px; stroke: var(--clr-text-3, #94A3B8);
+  fill: none; stroke-width: 2.4; transition: transform .18s;
+}
+.noc-card[data-open="1"] .noc-chev { transform: rotate(180deg); }
+
+.req-status--cancelled { background: #e2e8f0; color: #475569; }
+
+.noc-card-body {
+  border-top: 1px dashed var(--clr-border-lt, #E2E8F0);
+  padding: 9px 11px 11px;
+}
+.noc-kv { margin: 0; display: grid; grid-template-columns: 1fr; column-gap: 18px; }
+@media (min-width: 560px) { .noc-kv { grid-template-columns: 1fr 1fr; } }
+.noc-kv > div {
+  display: flex; gap: 8px; align-items: baseline;
+  padding: 6px 1px; border-bottom: 1px solid #f1f5f9; font-size: 12.5px;
+}
+.noc-kv dt { color: var(--clr-text-2, #475569); flex: 1; min-width: 0; margin: 0; }
+.noc-kv dd { font-weight: 700; text-align: end; max-width: 62%; word-break: break-word; margin: 0; }
+
+.noc-card-acts { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 10px; }
+.noc-card-acts .btn { flex: 1 1 auto; }
+
+.noc-actions { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
+.noc-actions .btn { align-self: flex-start; }
+.btn-sub {
+  font-size: .72rem; color: var(--clr-text-3, #94A3B8);
+  margin: 0 2px 8px; display: block;
+}
+
+.noc-warn { margin: 10px 0; }
+.noc-v-name { font-size: 1rem; font-weight: 800; margin: 0 0 2px; }
+.noc-v-sub  { font-size: .78rem; color: var(--clr-text-3, #94A3B8); margin: 0 0 4px;
+              font-variant-numeric: tabular-nums; }
