@@ -409,14 +409,12 @@ modalConfirmLogout.addEventListener('click', e => {
 btnLogoutOk.addEventListener('click', async () => {
   modalConfirmLogout.hidden = true;
   try { await logout(); } catch { /* ignore */ }
-  S.user        = null;
-  S.classes     = [];
-  S.activeClass = null;
-  S.students    = [];
-  S.attendance  = {};
-  S.submission  = null;
-  S.isDirty     = false;
-  showScreen('login');
+
+  // إعادة تحميل كاملة بدل مسح حقول S وحدها: المعلّم التالي على الجهاز نفسه
+  // يجب ألّا يرى صفّاً واحداً من طلاب سابقه. نفس علّة بوابة المدرسة —
+  // الحالة والقوائم المرسومة تنجو من تبديل الشاشة وحده.
+  try { await window.NSAMS_DB.purgeTenantCaches(); } catch { /* غير قاتل */ }
+  location.reload();
 });
 
 // ── App Init ──────────────────────────────────────────────────────────────────
