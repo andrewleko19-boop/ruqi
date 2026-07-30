@@ -4162,3 +4162,531 @@ select
   count(*) filter (where staff_record_id is null)     as "غير مربوط"
 from public.school_personnel
 where is_active;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- §23  وثائق «لا مانع» — نقل الطالب بين مدرستين
+-- ═══════════════════════════════════════════════════════════════════════════
+-- أول تدفّق في النظام يعبر حدود المدرسة الواحدة. كل ما سبقه (البيان، الجلاء،
+-- الطلبات) مدرسة ↔ مديرية، أي علاقة **احتواء** تحلّها schools.directorate_id.
+-- هنا الطرفان مدرستان لا يحتوي أحدهما الآخر، فالتصميم مختلف بالضرورة:
+--
+--   • المُبادِر هو المدرسة **المستقبِلة** لا المُرسِلة. نصّ الورقة الرسمية يحسم
+--     ذلك: «لا مانع لدينا من قبول الطالبة … في مدرستنا — يرجى موافاتنا بوثيقة
+--     الانتقال مصدقة أصولاً»، ويوقّعها مدير المدرسة المستقبِلة.
+--   • المدرسة الحالية تملك قرار الموافقة/الرفض — بدونه تستطيع أي مدرسة سحب
+--     طالب من مدرسة أخرى بلا علمها. الموافقة هي البديل الرقمي لـ«وثيقة الانتقال».
+--   • لا سياسة insert/update على الجدول إطلاقاً: كل كتابة تمرّ بدالة
+--     security definer تتحقّق من الدور والنطاق والحالة، على نمط
+--     review_result_sheet و review_monthly_statement.
+--
+-- نوعا الوثيقة ليسا «عادي/فئة ب» بل **تجاوز الصف**:
+--   regular     — الطالب يبقى في صفّه الحالي، وتُختار شعبته في المدرسة الجديدة.
+--   exceptional — المدير يضع الطالب في صفّ مختلف عن صفّه الحالي.
+--
+-- ولأن مديرية اللاذقية دمجت المستويات الثلاثة في الصفوف النظامية (المستوى ١ →
+-- الأول، ٢ → الرابع، ٣ → الخامس) فلا جدول صفوف استثنائية هنا: الشعبة تبقى في
+-- classes داخل صفّها النظامي، ويحفظ classes.level_track رقم مستواها. أي بناء
+-- موازٍ كان سيضاعف منطق الحضور والتقارير وبطاقات الطلاب بلا مقابل.
+--
+-- ⚠️ الوثيقة تُطبع ورقةً رسمية تُوقَّع وتُختم يدوياً، فكل حقل يظهر على الورقة
+-- يُخزَّن **لقطةً** وقت الإصدار (اسم المدرسة، المجمع، المديرية، الصف، اللغة،
+-- جنس الطالب). سببان: الطرف المُرسِل لا يملك صلاحية قراءة classes/schools عند
+-- الطرف الآخر فتظهر له بطاقة ناقصة؛ والوثيقة الرسمية يجب أن تُطبع بعد سنة كما
+-- طُبعت يوم صدورها لا كما صارت الحال.
+
+-- ٢٣.١  عَلَم المستوى على الشعبة
+alter table public.classes
+  add column if not exists level_track smallint;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'classes_level_track_chk') then
+    alter table public.classes add constraint classes_level_track_chk
+      check (level_track is null or level_track between 1 and 3);
+  end if;
+end $$;
+
+comment on column public.classes.level_track is
+  'رقم المستوى (1/2/3) للشعبة الحاملة منهاج المستوى بعد دمج المديرية؛ null = شعبة نظامية';
+
+
+-- ٢٣.٢  جدول الوثائق
+create table if not exists public.transfer_documents (
+  id                   uuid        primary key default gen_random_uuid(),
+  doc_type             text        not null default 'regular'
+                       check (doc_type in ('regular','exceptional')),
+  -- ── لقطة الطالب
+  student_id           uuid        references public.students(id) on delete set null,
+  student_national_id  text        not null,
+  student_full_name    text        not null,
+  first_name           text,
+  father_name          text,
+  grandfather_name     text,
+  family_name          text,
+  mother_name          text,
+  birth_date           date,
+  student_gender       text        check (student_gender is null
+                                          or student_gender in ('male','female')),
+  -- ── المدرسة الحالية (المُرسِلة — صاحبة قرار الموافقة)
+  from_school_id       uuid        not null references public.schools(id) on delete cascade,
+  from_school_name     text,
+  from_grade_label     text,
+  from_section_label   text,
+  -- ── المدرسة المستقبِلة (المُصدِرة للوثيقة والورقة)
+  to_school_id         uuid        not null references public.schools(id) on delete cascade,
+  to_school_name       text,
+  to_class_id          uuid        references public.classes(id) on delete set null,
+  to_grade_label       text,
+  to_section_label     text,
+  to_level_track       smallint,
+  to_foreign_language  text,       -- «اللغة: الإنكليزية» على الورقة
+  to_complex_name      text,       -- «المجمع التربوي في: …»
+  to_directorate_name  text,       -- «مديرية التربية والتعليم في: …»
+  -- ── ترقيم الصادر (سجلّ الصادر الورقي لكل مدرسة في كل عام)
+  academic_year        text        not null,
+  outgoing_number      int         not null,
+  -- ── الحالة
+  status               text        not null default 'pending'
+                       check (status in ('pending','executed','rejected','cancelled')),
+  transfer_reason      text,
+  notes                text,
+  reject_reason        text,
+  -- ── التتبّع
+  issued_by            uuid        not null references auth.users(id),
+  issued_by_name       text,
+  issued_at            timestamptz not null default now(),
+  processed_by         uuid        references auth.users(id),
+  processed_by_name    text,
+  processed_at         timestamptz,
+  created_at           timestamptz not null default now(),
+  constraint transfer_docs_diff_schools check (from_school_id <> to_school_id)
+);
+
+create index if not exists transfer_docs_to_school_idx
+  on public.transfer_documents (to_school_id, issued_at desc);
+
+create index if not exists transfer_docs_from_school_idx
+  on public.transfer_documents (from_school_id, issued_at desc);
+
+-- رقم صادر لا يتكرّر داخل المدرسة في العام الواحد. الرقم المسحوب لا يُعاد
+-- استعماله — كما في الدفتر الورقي تماماً.
+create unique index if not exists transfer_docs_outgoing_uidx
+  on public.transfer_documents (to_school_id, academic_year, outgoing_number);
+
+-- وثيقة معلّقة واحدة لكل طالب: تمنع تسابق مدرستين عليه، وتمنع الإصدار المكرّر
+-- بالنقر المزدوج.
+create unique index if not exists transfer_docs_pending_uidx
+  on public.transfer_documents (student_national_id)
+  where status = 'pending';
+
+
+-- ٢٣.٣  RLS — قراءة فقط
+alter table public.transfer_documents enable row level security;
+
+drop policy if exists tdoc_parties_select on public.transfer_documents;
+drop policy if exists tdoc_dir_select     on public.transfer_documents;
+
+-- طرفا الوثيقة وحدهما. لا سابقة لهذا الشرط في النظام: كل ما سبق كان احتواء
+-- مديرية، وهنا مدرستان متكافئتان.
+create policy tdoc_parties_select on public.transfer_documents
+  for select to authenticated
+  using (
+    public.current_user_role() = 'school_admin'::public.user_role
+    and (from_school_id = public.current_user_school_id()
+      or to_school_id   = public.current_user_school_id())
+  );
+
+-- المديرية: كل نقل يمسّ إحدى مدارسها
+create policy tdoc_dir_select on public.transfer_documents
+  for select to authenticated
+  using (
+    public.current_user_role() = 'directorate_user'::public.user_role
+    and (public.school_in_my_directorate(from_school_id)
+      or public.school_in_my_directorate(to_school_id))
+  );
+
+-- عمداً: لا insert/update/delete. كل كتابة عبر دوال §٢٣.٤ وحدها.
+grant select on public.transfer_documents to authenticated;
+
+
+-- ٢٣.٤  الدوال — كل كتابة على transfer_documents تمرّ من هنا حصراً
+
+-- تطبيع عربي خفيف للمطابقة بالاسم: همزات الألف ألفاً، الألف المقصورة ياءً،
+-- التاء المربوطة هاءً، وتوحيد المسافات. بدونه يفشل «إبراهيم» أمام «ابراهيم»
+-- وهو أشيع خطأ إدخال في الأسماء العربية.
+create or replace function public.ar_norm(p text)
+returns text language sql immutable set search_path = public as $$
+  select btrim(regexp_replace(
+           translate(coalesce(p, ''), 'أإآٱىة', 'اااايه'),
+           '\s+', ' ', 'g'))
+$$;
+
+revoke all on function public.ar_norm(text) from public, anon;
+grant execute on function public.ar_norm(text) to authenticated;
+
+
+-- ── ٢٣.٤.١  «تحقّق من بيانات الطالب»
+-- قراءة عابرة للمدارس بأضيق إسقاط ممكن. اشتراط الاسم الثلاثي **مع** الرقم
+-- التعريفي هو الدفاع ضد تعداد الطلاب برقم مُخمَّن: الرقم وحده لا يُخرج شيئاً،
+-- ورسالة فشل المطابقة لا تكشف الاسم الحقيقي.
+create or replace function public.lookup_student_for_transfer(
+  p_national_id text,
+  p_first_name  text,
+  p_father_name text,
+  p_family_name text
+) returns table (
+  student_id       uuid,
+  full_name        text,
+  first_name       text,
+  father_name      text,
+  grandfather_name text,
+  family_name      text,
+  mother_name      text,
+  birth_date       date,
+  gender           text,
+  national_id      text,
+  school_id        uuid,
+  school_name      text,
+  class_id         uuid,
+  grade_label      text,
+  section_label    text,
+  level_track      smallint
+) language plpgsql security definer set search_path = public as $$
+declare
+  v_my_school uuid;
+  v_stu_id    uuid;
+  v_composite text;
+begin
+  if public.current_user_role() is distinct from 'school_admin'::public.user_role then
+    raise exception 'غير مصرّح: هذه الدالة لمدراء المدارس فقط';
+  end if;
+
+  v_my_school := public.current_user_school_id();
+  if v_my_school is null then
+    raise exception 'حسابك غير مرتبط بمدرسة';
+  end if;
+
+  if coalesce(btrim(p_national_id), '') = '' then
+    raise exception 'الرقم التعريفي للطالب مطلوب';
+  end if;
+
+  select s.id into v_stu_id
+  from public.students s
+  where s.national_id = btrim(p_national_id) and s.is_active
+  limit 1;
+
+  if v_stu_id is null then
+    raise exception 'لم يُعثر على طالب بهذا الرقم في رُقِيّ';
+  end if;
+
+  -- الطالب عندي أصلاً: لا معنى لوثيقة نقل إلى مدرسته نفسها
+  if exists (select 1 from public.students s
+             where s.id = v_stu_id and s.school_id = v_my_school) then
+    raise exception 'الطالب مسجَّل في مدرستك أصلاً';
+  end if;
+
+  select public.ar_norm(
+           coalesce(s.full_name, '')   || ' ' || coalesce(s.first_name, '')       || ' ' ||
+           coalesce(s.father_name, '') || ' ' || coalesce(s.grandfather_name, '') || ' ' ||
+           coalesce(s.family_name, ''))
+    into v_composite
+  from public.students s where s.id = v_stu_id;
+
+  if position(public.ar_norm(p_first_name)  in v_composite) = 0
+     or position(public.ar_norm(p_father_name) in v_composite) = 0
+     or position(public.ar_norm(p_family_name) in v_composite) = 0 then
+    raise exception 'الاسم لا يطابق الرقم التعريفي — تأكّد من الاسم واسم الأب والكنية';
+  end if;
+
+  if exists (select 1 from public.transfer_documents td
+             where td.student_national_id = btrim(p_national_id)
+               and td.status = 'pending') then
+    raise exception 'للطالب وثيقة لا مانع معلّقة بالفعل — لا يمكن إصدار وثيقة ثانية قبل البتّ فيها';
+  end if;
+
+  return query
+  select s.id, s.full_name, s.first_name, s.father_name, s.grandfather_name,
+         s.family_name, s.mother_name, s.birth_date, s.gender, s.national_id,
+         s.school_id, sc.name, s.class_id, c.grade::text, c.section, c.level_track
+  from public.students s
+  join public.schools sc on sc.id = s.school_id
+  left join public.classes c on c.id = s.class_id
+  where s.id = v_stu_id;
+end; $$;
+
+revoke all on function public.lookup_student_for_transfer(text, text, text, text) from public, anon;
+grant execute on function public.lookup_student_for_transfer(text, text, text, text) to authenticated;
+
+
+-- ── ٢٣.٤.٢  إصدار الوثيقة (المدرسة المستقبِلة هي المُصدِرة)
+-- كل حقل هويّة يُعاد اشتقاقه على الخادم؛ ما يرسله العميل من أسماء لا يُوثَق به
+-- إلا كمُدخل للمطابقة.
+create or replace function public.issue_transfer_document(p jsonb)
+returns public.transfer_documents
+language plpgsql security definer set search_path = public as $$
+declare
+  v_my_school uuid;
+  v_my_name   text;
+  v_doc_type  text := coalesce(p->>'doc_type', 'regular');
+  v_stu       record;
+  v_to_class  public.classes;
+  v_sch       record;
+  v_year      text;
+  v_outgoing  int;
+  v_out       public.transfer_documents;
+begin
+  if public.current_user_role() is distinct from 'school_admin'::public.user_role then
+    raise exception 'غير مصرّح: إصدار الوثائق لمدراء المدارس فقط';
+  end if;
+
+  v_my_school := public.current_user_school_id();
+  if v_my_school is null then
+    raise exception 'حسابك غير مرتبط بمدرسة';
+  end if;
+
+  if v_doc_type not in ('regular', 'exceptional') then
+    raise exception 'نوع الوثيقة غير صالح';
+  end if;
+
+  -- إعادة التحقّق كاملاً على الخادم (نفس الحُرّاس ونفس الرسائل)
+  select * into v_stu from public.lookup_student_for_transfer(
+    p->>'national_id', p->>'first_name', p->>'father_name', p->>'family_name');
+  if v_stu.student_id is null then
+    raise exception 'تعذّر التحقّق من بيانات الطالب';
+  end if;
+
+  -- الشعبة المستقبِلة يجب أن تكون في مدرسة المُصدِر
+  select c.* into v_to_class
+  from public.classes c
+  where c.id = (p->>'to_class_id')::uuid and c.school_id = v_my_school;
+  if not found then
+    raise exception 'الشعبة المستقبِلة غير موجودة في مدرستك';
+  end if;
+
+  -- فرق النوعين: العادية تُبقي الصف، والاستثنائية وحدها تُغيّره
+  if v_doc_type = 'regular' then
+    if v_stu.grade_label is null then
+      raise exception 'الطالب غير مُسند إلى صفّ في مدرسته الحالية — استخدم الوثيقة الاستثنائية';
+    end if;
+    if public.ar_norm(v_to_class.grade::text) is distinct from public.ar_norm(v_stu.grade_label) then
+      raise exception 'الوثيقة العادية تُبقي الطالب في صفّه الحالي — استخدم الوثيقة الاستثنائية لتغيير الصف';
+    end if;
+  end if;
+
+  -- الورقة تقول «مديرية التربية والتعليم في: ‹اللاذقية›» — أي المحافظة، لا اسم
+  -- المديرية. استعمال d.name يُخرج «… في: مديرية تربية اللاذقية» وهو تكرار.
+  select s.name, s.complex_name, coalesce(d.governorate, d.name) as dir_name
+    into v_sch
+  from public.schools s
+  left join public.directorates d on d.id = s.directorate_id
+  where s.id = v_my_school;
+
+  select u.full_name into v_my_name from public.users u where u.id = auth.uid();
+
+  -- رقم الصادر: عدّاد لكل مدرسة في كل عام دراسي، كسجلّ الصادر الورقي.
+  -- القفل الاستشاري يمنع نافذتين متزامنتين من حجز الرقم نفسه (والفهرس الفريد
+  -- شبكة أمان ثانية لو فشل القفل).
+  v_year := coalesce(
+    nullif(btrim(coalesce(v_to_class.academic_year, '')), ''),
+    case when extract(month from now())::int >= 9
+         then (extract(year from now())::int)::text || '-' || (extract(year from now())::int + 1)::text
+         else (extract(year from now())::int - 1)::text || '-' || (extract(year from now())::int)::text
+    end);
+
+  perform pg_advisory_xact_lock(hashtext(v_my_school::text || ':' || v_year));
+
+  select coalesce(max(td.outgoing_number), 0) + 1 into v_outgoing
+  from public.transfer_documents td
+  where td.to_school_id = v_my_school and td.academic_year = v_year;
+
+  insert into public.transfer_documents (
+    doc_type, student_id, student_national_id, student_full_name,
+    first_name, father_name, grandfather_name, family_name, mother_name,
+    birth_date, student_gender,
+    from_school_id, from_school_name, from_grade_label, from_section_label,
+    to_school_id, to_school_name, to_class_id, to_grade_label, to_section_label,
+    to_level_track, to_foreign_language, to_complex_name, to_directorate_name,
+    academic_year, outgoing_number,
+    transfer_reason, notes, issued_by, issued_by_name
+  ) values (
+    v_doc_type, v_stu.student_id, v_stu.national_id, v_stu.full_name,
+    v_stu.first_name, v_stu.father_name, v_stu.grandfather_name, v_stu.family_name,
+    v_stu.mother_name, v_stu.birth_date, v_stu.gender,
+    v_stu.school_id, v_stu.school_name, v_stu.grade_label, v_stu.section_label,
+    v_my_school, v_sch.name, v_to_class.id, v_to_class.grade::text, v_to_class.section,
+    v_to_class.level_track, v_to_class.foreign_language, v_sch.complex_name, v_sch.dir_name,
+    v_year, v_outgoing,
+    nullif(btrim(coalesce(p->>'transfer_reason', '')), ''),
+    nullif(btrim(coalesce(p->>'notes', '')), ''),
+    auth.uid(), v_my_name
+  ) returning * into v_out;
+
+  -- إشعار مدراء المدرسة الحالية — القرار عندهم.
+  -- الإشعار هنا لا في trigger: كل إدراج يمرّ بهذه الدالة حتماً (لا سياسة insert
+  -- على الجدول)، فالـtrigger كان سيُكرّر الإشعار لا أكثر.
+  perform public.notify_user(
+    u.id, 'transfer_doc_new', 'طلب نقل وارد — وثيقة لا مانع',
+    coalesce(v_sch.name, 'مدرسة') || ' تطلب نقل الطالب ' ||
+      coalesce(v_out.student_full_name, ''),
+    'transfer_documents', v_out.id
+  )
+  from public.users u
+  where u.school_id = v_stu.school_id and u.role = 'school_admin';
+
+  return v_out;
+end; $$;
+
+revoke all on function public.issue_transfer_document(jsonb) from public, anon;
+grant execute on function public.issue_transfer_document(jsonb) to authenticated;
+
+
+-- ── ٢٣.٤.٣  البتّ في الوثيقة (المدرسة الحالية تُوافق أو ترفض)
+-- الموافقة هي البديل الرقمي لـ«وثيقة الانتقال مصدقة أصولاً» التي تطلبها الورقة.
+create or replace function public.review_transfer_document(
+  p_doc_id uuid,
+  p_action text,
+  p_reason text default null
+) returns public.transfer_documents
+language plpgsql security definer set search_path = public as $$
+declare
+  v_my_school uuid;
+  v_my_name   text;
+  v_doc       public.transfer_documents;
+  v_stu       public.students;
+  v_new_id    uuid;
+  v_out       public.transfer_documents;
+begin
+  if public.current_user_role() is distinct from 'school_admin'::public.user_role then
+    raise exception 'غير مصرّح: البتّ في الوثائق لمدراء المدارس فقط';
+  end if;
+
+  v_my_school := public.current_user_school_id();
+  if p_action not in ('approve', 'reject') then
+    raise exception 'قيمة القرار غير صالحة';
+  end if;
+
+  -- الوثيقة لمدرستي بصفتها **المدرسة الحالية** ولم يُبتّ فيها بعد
+  select td.* into v_doc
+  from public.transfer_documents td
+  where td.id = p_doc_id
+    and td.from_school_id = v_my_school
+    and td.status = 'pending';
+  if not found then
+    raise exception 'الوثيقة غير موجودة أو خارج نطاق صلاحيتك أو بُتَّ فيها سابقاً';
+  end if;
+
+  select u.full_name into v_my_name from public.users u where u.id = auth.uid();
+
+  if p_action = 'reject' then
+    update public.transfer_documents set
+      status            = 'rejected',
+      reject_reason     = nullif(btrim(coalesce(p_reason, '')), ''),
+      processed_by      = auth.uid(),
+      processed_by_name = v_my_name,
+      processed_at      = now()
+    where id = p_doc_id
+    returning * into v_out;
+
+  else
+    -- الطالب ما زال عندي ونشطاً؟ (قد يكون نُقل بمسار آخر بين الإصدار والبتّ)
+    select s.* into v_stu
+    from public.students s
+    where s.id = v_doc.student_id and s.school_id = v_my_school and s.is_active;
+    if not found then
+      raise exception 'الطالب لم يعد مسجّلاً ونشطاً في مدرستك — لا يمكن تنفيذ النقل';
+    end if;
+
+    -- ١) الصفّ القديم: وسمٌ لا حذف. سجلّ المدرسة القديمة (حضور/علامات/جلاءات)
+    --    يشير إلى student_id فيبقى سليماً وقابلاً للقراءة عندها.
+    --    is_active يُشتقّ آلياً بـ t_sync_student_is_active — لا يُكتب هنا.
+    update public.students set
+      status        = 'transferred'::public.student_status,
+      status_reason = 'نقل إلى ' || coalesce(v_doc.to_school_name, 'مدرسة أخرى'),
+      updated_at    = now()
+    where id = v_doc.student_id;
+
+    -- ٢) صفٌّ جديد في المدرسة المستقبِلة بنفس الهوية.
+    --    بلا seat_number — المقعد تُسنده المدرسة الجديدة في شعبتها.
+    insert into public.students (
+      school_id, class_id, full_name, first_name, father_name, family_name,
+      grandfather_name, mother_name, mother_family, birth_date, birth_place,
+      card_number, national_id, registry_national_id, gender, parent_phone,
+      contact_phone, res_governorate, res_region, res_subdistrict, res_town,
+      res_sector, res_block, res_record, status
+    ) values (
+      v_doc.to_school_id, v_doc.to_class_id, v_stu.full_name, v_stu.first_name,
+      v_stu.father_name, v_stu.family_name, v_stu.grandfather_name, v_stu.mother_name,
+      v_stu.mother_family, v_stu.birth_date, v_stu.birth_place, v_stu.card_number,
+      v_stu.national_id, v_stu.registry_national_id, v_stu.gender, v_stu.parent_phone,
+      v_stu.contact_phone, v_stu.res_governorate, v_stu.res_region, v_stu.res_subdistrict,
+      v_stu.res_town, v_stu.res_sector, v_stu.res_block, v_stu.res_record, 'active'
+    ) returning id into v_new_id;
+
+    update public.transfer_documents set
+      status            = 'executed',
+      processed_by      = auth.uid(),
+      processed_by_name = v_my_name,
+      processed_at      = now()
+    where id = p_doc_id
+    returning * into v_out;
+
+    -- أثرٌ في سجلّ كل مدرسة على حدة (audit_log مُقسَّم بـ school_id)
+    insert into public.audit_log (school_id, actor_id, entity, entity_id, action, reason)
+    values
+      (v_doc.from_school_id, auth.uid(), 'students', v_doc.student_id, 'transfer_out',
+       'وثيقة لا مانع رقم ' || v_doc.outgoing_number || ' — إلى ' || coalesce(v_doc.to_school_name, '')),
+      (v_doc.to_school_id,   auth.uid(), 'students', v_new_id,        'transfer_in',
+       'وثيقة لا مانع رقم ' || v_doc.outgoing_number || ' — من ' || coalesce(v_doc.from_school_name, ''));
+  end if;
+
+  -- إشعار المدرسة المُصدِرة بالنتيجة
+  perform public.notify_user(
+    u.id,
+    case p_action when 'approve' then 'transfer_doc_executed' else 'transfer_doc_rejected' end,
+    case p_action when 'approve' then 'نُفِّذ طلب النقل ✓'      else 'رُفض طلب النقل' end,
+    coalesce(v_out.student_full_name, '') || ' — ' ||
+      coalesce(v_out.from_school_name, 'المدرسة الحالية') ||
+      coalesce(' · ' || nullif(btrim(coalesce(p_reason, '')), ''), ''),
+    'transfer_documents', v_out.id
+  )
+  from public.users u
+  where u.school_id = v_doc.to_school_id and u.role = 'school_admin';
+
+  return v_out;
+end; $$;
+
+revoke all on function public.review_transfer_document(uuid, text, text) from public, anon;
+grant execute on function public.review_transfer_document(uuid, text, text) to authenticated;
+
+
+-- ── ٢٣.٤.٤  سحب الوثيقة (المدرسة المُصدِرة قبل البتّ)
+-- رقم الصادر لا يُعاد استعماله بعد السحب — كما في الدفتر الورقي، الرقم المشطوب
+-- يبقى محجوزاً ليظلّ تسلسل السجلّ صادقاً.
+create or replace function public.cancel_transfer_document(p_doc_id uuid)
+returns public.transfer_documents
+language plpgsql security definer set search_path = public as $$
+declare
+  v_out public.transfer_documents;
+begin
+  if public.current_user_role() is distinct from 'school_admin'::public.user_role then
+    raise exception 'غير مصرّح: سحب الوثائق لمدراء المدارس فقط';
+  end if;
+
+  update public.transfer_documents set
+    status       = 'cancelled',
+    processed_at = now()
+  where id = p_doc_id
+    and to_school_id = public.current_user_school_id()
+    and status = 'pending'
+  returning * into v_out;
+
+  if not found then
+    raise exception 'الوثيقة غير موجودة أو ليست من إصدار مدرستك أو بُتَّ فيها سابقاً';
+  end if;
+
+  return v_out;
+end; $$;
+
+revoke all on function public.cancel_transfer_document(uuid) from public, anon;
+grant execute on function public.cancel_transfer_document(uuid) to authenticated;

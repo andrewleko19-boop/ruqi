@@ -1593,6 +1593,8 @@ const tabAbsence        = el('tab-absence');
 const viewAbsence       = el('view-absence');
 const tabSummaryReports = el('tab-summary-reports');
 const viewSummaryReports= el('view-summary-reports');
+const tabNoc          = el('tab-noc');
+const viewNoc         = el('view-noc');
 const fabReport       = el('btn-open-report');
 
 const mngClassSelect    = el('mng-class-select');
@@ -1630,6 +1632,7 @@ const TABS = {
   registry:   { tab: tabRegistry,   view: viewRegistry },
   statement:  { tab: tabStatement,  view: viewStatement },
   personnel:  { tab: tabPersonnel,  view: viewPersonnel },
+  noc:        { tab: tabNoc,        view: viewNoc },
 };
 
 function switchTab(tab, fromHistory = false) {
@@ -1657,6 +1660,7 @@ function switchTab(tab, fromHistory = false) {
   if (tab === 'reports'   && !_reportsLoaded)   initReportsTab();
   if (tab === 'registry'  && !_registryLoaded)  initRegistryTab();
   if (tab === 'statement' && !_statementLoaded) initStatementTab();
+  if (tab === 'noc'       && !_nocLoaded)       initNocTab();
 }
 
 tabAbsence?.addEventListener('click',        () => switchTab('absence'));
@@ -1670,6 +1674,7 @@ tabReports.addEventListener('click',    () => switchTab('reports'));
 tabRegistry?.addEventListener('click',   () => switchTab('registry'));
 tabStatement?.addEventListener('click',  () => switchTab('statement'));
 tabPersonnel?.addEventListener('click',  () => switchTab('personnel'));
+tabNoc?.addEventListener('click',        () => switchTab('noc'));
 
 // «المزيد» sections menu (bottom sheet)
 const btnMore   = el('btn-more');
@@ -8134,6 +8139,598 @@ CustomSelect.enhance('stmt-b-ownership');
 CustomSelect.enhance('stmt-chg-group');
 CustomSelect.enhance('stmt-chg-staff');
 CustomSelect.enhance('stmt-chg-event');
+
+
+// ════════════════════════════════════════════════════════════════════════════
+//  وثائق «لا مانع» — نقل الطالب بين مدرستين (§23)
+// ════════════════════════════════════════════════════════════════════════════
+// المُبادِر هو المدرسة **المستقبِلة**: هي التي تُصدر «لا مانع لدينا من قبول
+// الطالب … في مدرستنا»، والمدرسة الحالية هي التي توافق أو ترفض.
+//
+// ولذلك لا تُستعمل «صادر/وارد» في الواجهة إطلاقاً: تطبيق الوزارة يسمّي التبويب
+// بمن أنشأ السجلّ، بينما المدير يفكّر باتجاه الطالب — والاتجاهان متعاكسان هنا،
+// وهو ما يوقع القارئ في العكس. المقطعان يُسمَّيان باتجاه الطالب وحده.
+
+const nocList        = el('noc-list');
+const nocLoading     = el('noc-loading');
+const nocError       = el('noc-error');
+const nocEmpty       = el('noc-empty');
+const nocOutCount    = el('noc-out-count');
+const nocSegHint     = el('noc-seg-hint');
+const btnRefreshNoc  = el('btn-refresh-noc');
+const btnNocNew      = el('btn-noc-new');
+const btnNocNewExc   = el('btn-noc-new-exc');
+
+const modalNocIssue  = el('modal-noc-issue');
+const nocIssueTitle  = el('noc-issue-title');
+const nocNatId       = el('noc-national-id');
+const nocFirstName   = el('noc-first-name');
+const nocFatherName  = el('noc-father-name');
+const nocFamilyName  = el('noc-family-name');
+const btnNocVerify   = el('btn-noc-verify');
+const nocVerifySpin  = el('noc-verify-spinner');
+const nocVerifyHint  = el('noc-verify-hint');
+const nocStage2      = el('noc-stage2');
+const nocGradeWrap   = el('noc-grade-wrap');
+const nocGradeSel    = el('noc-grade-sel');
+const nocSectionSel  = el('noc-section-sel');
+const nocSectionLbl  = el('noc-section-lbl');
+const nocReasonSel   = el('noc-reason-sel');
+const nocNotes       = el('noc-notes');
+const nocIssueError  = el('noc-issue-error');
+const btnNocSubmit   = el('btn-noc-submit');
+const nocSubmitSpin  = el('noc-submit-spinner');
+
+const modalNocVerify = el('modal-noc-verify');
+const btnNocVOk      = el('btn-noc-v-ok');
+
+const modalNocReview = el('modal-noc-review');
+const nocRReason     = el('noc-r-reason');
+const nocReviewError = el('noc-review-error');
+const btnNocApprove  = el('btn-noc-approve');
+const nocApproveSpin = el('noc-approve-spinner');
+const btnNocReject   = el('btn-noc-reject');
+
+let _nocLoaded   = false;
+let _nocDocs     = [];
+let _nocSeg      = 'incoming';
+let _nocMyClasses= [];
+let _nocDocType  = 'regular';
+let _nocVerified = null;   // نتيجة lookup — بدونها لا إصدار
+let _nocReviewId = null;
+let _nocBusy     = false;
+
+const NOC_REASONS = ['نقل سكن', 'نقل طالب', 'أسباب صحية', 'أسباب أخرى'];
+
+// المقطعان يُفرَزان باتجاه الطالب لا بمن أنشأ السجلّ.
+const NOC_SEG = {
+  incoming: {
+    hint:  'طلاب قادمون إلى مدرستك من مدارس أخرى — مدرستك هي من أصدرت الطلب.',
+    match: (d, myId) => d.to_school_id === myId,
+  },
+  outgoing: {
+    hint:  'طلاب من مدرستك تطلبهم مدارس أخرى — القرار عندك.',
+    match: (d, myId) => d.from_school_id === myId,
+  },
+};
+
+// «معلّق» تحمل معنيين متعاكسين حسب المقطع: بانتظارهم أو بانتظاري. الحالة في
+// القاعدة واحدة، والنصّ يختلف — وإلا بقي المدير يخمّن هل الدور عليه.
+const NOC_STATUS_TEXT = {
+  incoming: {
+    pending:   'بانتظار موافقة المدرسة الحالية',
+    executed:  'نُفِّذ — التحق الطالب بمدرستنا',
+    rejected:  'رُفض من المدرسة الحالية',
+    cancelled: 'مسحوبة',
+  },
+  outgoing: {
+    pending:   'بانتظار قرارك',
+    executed:  'نُفِّذ — غادر الطالب',
+    rejected:  'رُفض',
+    cancelled: 'سحبتها المدرسة الطالبة',
+  },
+};
+const NOC_STATUS_CLASS = {
+  pending:   'req-status--pending',
+  executed:  'req-status--approved',
+  rejected:  'req-status--rejected',
+  cancelled: 'req-status--cancelled',
+};
+
+const nocSectionLabel = (c) =>
+  `${c.section || '—'}${c.level_track ? ` (مستوى ${['','أول','ثانٍ','ثالث'][c.level_track] || c.level_track})` : ''}`;
+
+// ── التحميل والعرض ────────────────────────────────────────────────────────
+async function loadNocDocs() {
+  if (nocLoading) show(nocLoading);
+  if (nocError)   hide(nocError);
+  try {
+    _nocDocs = await NDB.getTransferDocuments();
+    renderNocList();
+  } catch (err) {
+    console.error('[NSAMS] loadNocDocs', err);
+    if (nocError) show(nocError);
+  } finally {
+    if (nocLoading) hide(nocLoading);
+  }
+}
+
+function renderNocList() {
+  const myId = S.user?.schoolId;
+  const seg  = NOC_SEG[_nocSeg];
+  const rows = _nocDocs.filter(d => seg.match(d, myId));
+
+  // الشارة على «المغادرة» وحدها — هي التي تنتظر قراراً من هذا المدير.
+  const waiting = _nocDocs.filter(
+    d => d.status === 'pending' && NOC_SEG.outgoing.match(d, myId)).length;
+  if (nocOutCount) {
+    nocOutCount.textContent = waiting > 0 ? String(waiting) : '';
+    nocOutCount.hidden = waiting === 0;
+  }
+  if (nocSegHint) nocSegHint.textContent = seg.hint;
+
+  if (!rows.length) {
+    if (nocEmpty) show(nocEmpty);
+    if (nocList)  nocList.innerHTML = '';
+    return;
+  }
+  if (nocEmpty) hide(nocEmpty);
+
+  if (nocList) nocList.innerHTML = rows.map(d => {
+    const statusTxt = NOC_STATUS_TEXT[_nocSeg][d.status] || d.status;
+    const statusCls = NOC_STATUS_CLASS[d.status] || 'req-status--pending';
+    const canReview = _nocSeg === 'outgoing' && d.status === 'pending';
+    const canCancel = _nocSeg === 'incoming' && d.status === 'pending';
+    const kv = [
+      ['اسم الأم',                d.mother_name],
+      ['تاريخ الميلاد',           d.birth_date],
+      ['الصف في المدرسة الجديدة', d.to_grade_label],
+      ['الشعبة في المدرسة الجديدة', d.to_section_label],
+      ['اللغة',                   d.to_foreign_language],
+      ['سبب النقل',               d.transfer_reason],
+      ['ملاحظات',                 d.notes],
+      ['رقم الصادر',              d.outgoing_number],
+      ['مُصدِر الوثيقة',           d.issued_by_name],
+      ['معالِج الوثيقة',           d.processed_by_name],
+      ['تاريخ المعالجة',          d.processed_at ? String(d.processed_at).slice(0, 10) : null],
+      ['سبب الرفض',               d.reject_reason],
+    ].filter(([, v]) => v !== null && v !== undefined && v !== '')
+     .map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(String(v))}</dd></div>`)
+     .join('');
+
+    return `<div class="noc-card" data-open="0" data-id="${escapeHtml(d.id)}">
+      <button type="button" class="noc-card-hdr" data-noc-toggle>
+        <span class="noc-hd-main">
+          <span class="noc-name">${escapeHtml(d.student_full_name || '—')}</span>
+          <span class="noc-route">
+            <span class="noc-route-line">
+              <span class="noc-role-tag">من</span>
+              <span class="noc-sch">${escapeHtml(d.from_school_name || '—')}</span>
+              <span class="noc-role-note">المدرسة الحالية</span>
+            </span>
+            <span class="noc-route-line">
+              <span class="noc-role-tag">إلى</span>
+              <span class="noc-sch">${escapeHtml(d.to_school_name || '—')}</span>
+              <span class="noc-role-note">المستقبِلة</span>
+            </span>
+          </span>
+        </span>
+        <span class="noc-hd-side">
+          <span class="req-status ${statusCls}">${escapeHtml(statusTxt)}</span>
+          <span class="req-date">${escapeHtml(String(d.issued_at || '').slice(0, 10))}</span>
+          <svg class="noc-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+        </span>
+      </button>
+      <div class="noc-card-body" hidden>
+        <dl class="noc-kv">${kv}</dl>
+        <div class="noc-card-acts">
+          <button type="button" class="btn btn-ghost btn-sm" data-act="print">
+            <svg class="icon icon-sm"><use href="#ic-printer"/></svg> طباعة الورقة
+          </button>
+          ${canReview ? `<button type="button" class="btn btn-primary btn-sm" data-act="review">
+            <svg class="icon icon-sm"><use href="#ic-clipboard"/></svg> البتّ في الطلب
+          </button>` : ''}
+          ${canCancel ? `<button type="button" class="btn btn-ghost btn-sm" data-act="cancel">
+            <svg class="icon icon-sm"><use href="#ic-x-circle"/></svg> سحب الوثيقة
+          </button>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── نموذج الإصدار ─────────────────────────────────────────────────────────
+function openNocIssue(docType) {
+  _nocDocType  = docType;
+  _nocVerified = null;
+  if (nocIssueTitle) nocIssueTitle.textContent =
+    docType === 'exceptional' ? 'إصدار وثيقة لا مانع استثنائية' : 'إصدار وثيقة لا مانع';
+  [nocNatId, nocFirstName, nocFatherName, nocFamilyName, nocNotes].forEach(i => {
+    if (!i) return;
+    i.value = '';
+    i.readOnly = false;
+    i.classList.remove('field-locked');
+  });
+  if (nocStage2)     nocStage2.hidden = true;
+  if (nocGradeWrap)  nocGradeWrap.hidden = docType !== 'exceptional';
+  if (nocSectionLbl) nocSectionLbl.innerHTML = docType === 'exceptional'
+    ? 'الشعبة الاستثنائية <span class="req">*</span>'
+    : 'الشعبة المستقبِلة في مدرستك <span class="req">*</span>';
+  if (nocVerifyHint) show(nocVerifyHint);
+  if (nocIssueError) hide(nocIssueError);
+  if (btnNocSubmit)  btnNocSubmit.disabled = true;
+  fillSel(nocReasonSel, NOC_REASONS, '— بلا سبب —');
+  show(modalNocIssue);
+  modalNocIssue.querySelector('.sheet-body').scrollTop = 0;
+  document.body.style.overflow = 'hidden';
+}
+
+function closeNocIssue() {
+  hide(modalNocIssue);
+  document.body.style.overflow = '';
+  _nocVerified = null;
+}
+
+// بعد التحقّق تُقفَل حقول الهوية: ما وُثِّق لا يُعدَّل بعده يدوياً.
+function _lockNocIdentityFields(locked) {
+  [nocNatId, nocFirstName, nocFatherName, nocFamilyName].forEach(i => {
+    if (!i) return;
+    i.readOnly = locked;
+    i.classList.toggle('field-locked', locked);
+  });
+}
+
+async function verifyNocStudent() {
+  if (_nocBusy) return;
+  const natId  = nocNatId?.value.trim()      || '';
+  const first  = nocFirstName?.value.trim()  || '';
+  const father = nocFatherName?.value.trim() || '';
+  const family = nocFamilyName?.value.trim() || '';
+  if (!natId)  { nocIssueError.textContent = 'الرقم التعريفي للطالب مطلوب'; show(nocIssueError); return; }
+  if (!first || !father || !family) {
+    nocIssueError.textContent = 'الاسم واسم الأب والكنية مطلوبة جميعاً للمطابقة';
+    show(nocIssueError); return;
+  }
+  hide(nocIssueError);
+  _nocBusy = true;
+  if (btnNocVerify) btnNocVerify.disabled = true;
+  if (nocVerifySpin) nocVerifySpin.hidden = false;
+  try {
+    const r = await NDB.lookupStudentForTransfer({
+      nationalId: natId, firstName: first, fatherName: father, familyName: family });
+    if (!r) throw new Error('لم يُعثر على طالب بهذا الرقم في رُقِيّ');
+    _nocVerified = r;
+    el('noc-v-name').textContent    = r.full_name || '—';
+    el('noc-v-natid').textContent   = r.national_id || '—';
+    el('noc-v-dob').textContent     = r.birth_date || '—';
+    el('noc-v-school').textContent  = r.school_name || '—';
+    el('noc-v-grade').textContent   = r.grade_label || '—';
+    el('noc-v-section').textContent = r.section_label || '—';
+    show(modalNocVerify);
+  } catch (err) {
+    _nocVerified = null;
+    nocIssueError.textContent = err?.message || 'تعذّر التحقّق من بيانات الطالب.';
+    show(nocIssueError);
+  } finally {
+    _nocBusy = false;
+    if (btnNocVerify) btnNocVerify.disabled = false;
+    if (nocVerifySpin) nocVerifySpin.hidden = true;
+  }
+}
+
+// «البيانات صحيحة، متابعة» — يكشف المرحلة الثانية ويملأ الشعب المتاحة.
+function acceptNocVerify() {
+  hide(modalNocVerify);
+  if (!_nocVerified) return;
+  _lockNocIdentityFields(true);
+  if (nocVerifyHint) hide(nocVerifyHint);
+  if (nocStage2)     nocStage2.hidden = false;
+  if (btnNocSubmit)  btnNocSubmit.disabled = false;
+
+  if (_nocDocType === 'exceptional') {
+    const grades = [...new Set(_nocMyClasses.map(c => c.grade).filter(Boolean))];
+    fillSel(nocGradeSel, grades);
+    nocGradeSel.value = '';
+    CustomSelect.refresh(nocGradeSel);
+    fillSel(nocSectionSel, []);
+  } else {
+    fillNocSections(_nocVerified.grade_label);
+  }
+}
+
+// الشعب المتاحة في صفّ بعينه من مدرستي. القيمة معرّف الشعبة والنصّ اسمها.
+function fillNocSections(grade) {
+  const opts = _nocMyClasses.filter(c => c.grade === grade);
+  if (!nocSectionSel) return;
+  nocSectionSel.innerHTML = '<option value="">— اختر —</option>' +
+    opts.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(nocSectionLabel(c))}</option>`).join('');
+  CustomSelect.refresh(nocSectionSel);
+  if (!opts.length && nocIssueError) {
+    nocIssueError.textContent =
+      `لا توجد شعبة في الصف «${grade || '—'}» في مدرستك — استخدم الوثيقة الاستثنائية لوضعه في صفّ آخر.`;
+    show(nocIssueError);
+  }
+}
+
+async function submitNocDocument() {
+  if (_nocBusy) return;
+  if (!_nocVerified) {
+    nocIssueError.textContent = 'اضغط «تحقق من بيانات الطالب» أولاً.';
+    show(nocIssueError); return;
+  }
+  const toClassId = nocSectionSel?.value || '';
+  if (!toClassId) {
+    nocIssueError.textContent = 'اختر الشعبة التي ستستقبل الطالب في مدرستك.';
+    show(nocIssueError); return;
+  }
+  hide(nocIssueError);
+  _nocBusy = true;
+  if (btnNocSubmit) btnNocSubmit.disabled = true;
+  if (nocSubmitSpin) nocSubmitSpin.hidden = false;
+  try {
+    const doc = await NDB.issueTransferDocument({
+      docType:        _nocDocType,
+      nationalId:     nocNatId.value.trim(),
+      firstName:      nocFirstName.value.trim(),
+      fatherName:     nocFatherName.value.trim(),
+      familyName:     nocFamilyName.value.trim(),
+      toClassId,
+      transferReason: nocReasonSel?.value || null,
+      notes:          nocNotes?.value.trim() || null,
+    });
+    closeNocIssue();
+    toast(`صدرت الوثيقة برقم صادر ${doc.outgoing_number}`, 'success');
+    _nocSeg = 'incoming';
+    document.querySelectorAll('[data-noc-seg]').forEach(b =>
+      b.classList.toggle('is-active', b.dataset.nocSeg === 'incoming'));
+    await loadNocDocs();
+    printNocDocument(doc);
+  } catch (err) {
+    nocIssueError.textContent = err?.message || 'تعذّر إصدار الوثيقة.';
+    show(nocIssueError);
+  } finally {
+    _nocBusy = false;
+    if (btnNocSubmit) btnNocSubmit.disabled = false;
+    if (nocSubmitSpin) nocSubmitSpin.hidden = true;
+  }
+}
+
+// ── البتّ (المدرسة الحالية) ────────────────────────────────────────────────
+function openNocReview(doc) {
+  _nocReviewId = doc.id;
+  el('noc-r-name').textContent  = doc.student_full_name || '—';
+  el('noc-r-route').textContent =
+    `${doc.from_school_name || '—'} ← ${doc.to_school_name || '—'} · ` +
+    `الصف ${doc.to_grade_label || '—'} · الشعبة ${doc.to_section_label || '—'}`;
+  if (nocRReason) nocRReason.value = '';
+  if (nocReviewError) hide(nocReviewError);
+  show(modalNocReview);
+  document.body.style.overflow = 'hidden';
+}
+
+function closeNocReview() {
+  hide(modalNocReview);
+  document.body.style.overflow = '';
+  _nocReviewId = null;
+}
+
+async function reviewNoc(action) {
+  if (_nocBusy || !_nocReviewId) return;
+  const reason = nocRReason?.value.trim() || null;
+  if (action === 'reject' && !reason) {
+    nocReviewError.textContent = 'اذكر سبب الرفض — يصل إلى المدرسة الطالبة.';
+    show(nocReviewError); return;
+  }
+  const ok = await askConfirm(
+    action === 'approve'
+      ? 'الموافقة تنقل الطالب فوراً ولا يمكن التراجع عنها. متابعة؟'
+      : 'سيُرفض طلب النقل ويُبلَّغ المُصدِر بالسبب. متابعة؟',
+    action === 'approve' ? 'موافقة ونقل' : 'رفض');
+  if (!ok) return;
+  hide(nocReviewError);
+  _nocBusy = true;
+  if (btnNocApprove) btnNocApprove.disabled = true;
+  if (btnNocReject)  btnNocReject.disabled  = true;
+  if (nocApproveSpin && action === 'approve') nocApproveSpin.hidden = false;
+  try {
+    await NDB.reviewTransferDocument(_nocReviewId, action, reason);
+    closeNocReview();
+    toast(action === 'approve' ? 'نُفِّذ النقل — غادر الطالب مدرستك' : 'رُفض طلب النقل', 'success');
+    await loadNocDocs();
+    // قوائم الطلاب تغيّرت فعلياً: أعِد تحميلها في زيارتها القادمة.
+    _studentsLoaded = false;
+  } catch (err) {
+    nocReviewError.textContent = err?.message || 'تعذّر تنفيذ القرار.';
+    show(nocReviewError);
+  } finally {
+    _nocBusy = false;
+    if (btnNocApprove) btnNocApprove.disabled = false;
+    if (btnNocReject)  btnNocReject.disabled  = false;
+    if (nocApproveSpin) nocApproveSpin.hidden = true;
+  }
+}
+
+async function cancelNoc(doc) {
+  const ok = await askConfirm(
+    `سحب الوثيقة رقم ${doc.outgoing_number}؟ الرقم يبقى محجوزاً في سجلّ الصادر ولا يُعاد استعماله.`,
+    'سحب');
+  if (!ok) return;
+  try {
+    await NDB.cancelTransferDocument(doc.id);
+    toast('سُحبت الوثيقة', 'success');
+    await loadNocDocs();
+  } catch (err) {
+    toast(err?.message || 'تعذّر سحب الوثيقة', 'error');
+  }
+}
+
+// ── التهيئة والأسلاك ──────────────────────────────────────────────────────
+async function initNocTab() {
+  _nocLoaded = true;
+  try {
+    _nocMyClasses = await NDB.getSchoolClasses(S.user.schoolId);
+  } catch (err) {
+    console.warn('[NSAMS] initNocTab: classes', err);
+    _nocMyClasses = [];
+  }
+  await loadNocDocs();
+}
+
+document.querySelectorAll('[data-noc-seg]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    _nocSeg = btn.dataset.nocSeg;
+    document.querySelectorAll('[data-noc-seg]').forEach(b =>
+      b.classList.toggle('is-active', b === btn));
+    renderNocList();
+  });
+});
+
+btnRefreshNoc?.addEventListener('click', loadNocDocs);
+btnNocNew?.addEventListener('click',     () => openNocIssue('regular'));
+btnNocNewExc?.addEventListener('click',  () => openNocIssue('exceptional'));
+
+el('btn-close-noc-issue')?.addEventListener('click', closeNocIssue);
+modalNocIssue?.addEventListener('click', e => { if (e.target === modalNocIssue) closeNocIssue(); });
+btnNocVerify?.addEventListener('click', verifyNocStudent);
+btnNocSubmit?.addEventListener('click', submitNocDocument);
+
+el('btn-close-noc-verify')?.addEventListener('click', () => hide(modalNocVerify));
+modalNocVerify?.addEventListener('click', e => { if (e.target === modalNocVerify) hide(modalNocVerify); });
+btnNocVOk?.addEventListener('click', acceptNocVerify);
+
+el('btn-close-noc-review')?.addEventListener('click', closeNocReview);
+modalNocReview?.addEventListener('click', e => { if (e.target === modalNocReview) closeNocReview(); });
+btnNocApprove?.addEventListener('click', () => reviewNoc('approve'));
+btnNocReject?.addEventListener('click',  () => reviewNoc('reject'));
+
+nocGradeSel?.addEventListener('change', () => fillNocSections(nocGradeSel.value));
+
+// تفويض واحد على الحاوية بدل مستمع لكل بطاقة
+nocList?.addEventListener('click', (e) => {
+  const toggle = e.target.closest('[data-noc-toggle]');
+  if (toggle) {
+    const card = toggle.closest('.noc-card');
+    const open = card.dataset.open === '1';
+    card.dataset.open = open ? '0' : '1';
+    card.querySelector('.noc-card-body').hidden = open;
+    return;
+  }
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  const doc = _nocDocs.find(d => d.id === btn.closest('.noc-card')?.dataset.id);
+  if (!doc) return;
+  if      (btn.dataset.act === 'print')  printNocDocument(doc);
+  else if (btn.dataset.act === 'review') openNocReview(doc);
+  else if (btn.dataset.act === 'cancel') cancelNoc(doc);
+});
+
+CustomSelect.enhance('noc-grade-sel');
+CustomSelect.enhance('noc-section-sel');
+CustomSelect.enhance('noc-reason-sel');
+
+// ── طباعة «ورقة لا مانع» ──────────────────────────────────────────────────
+// نافذة طباعة كبقية مطبوعات البوابة (كشف الحضور، البيان) لا مكتبة PDF: المدير
+// سيوقّع ويختم بيده على أي حال، وحوار الطباعة يعطي «حفظ كـPDF» مجاناً.
+//
+// كل حقل من لقطة الوثيقة لا من قراءة حيّة — الورقة تُطبع بعد سنة كما صدرت.
+
+const NOC_LANG_AR = { 'انكليزي': 'الإنكليزية', 'فرنسي': 'الفرنسية', 'روسي': 'الروسية' };
+
+async function printNocDocument(doc) {
+  const win = window.open('', '_blank');
+  if (!win) { toast('امنع حاصر النوافذ المنبثقة لطباعة الورقة', 'error'); return; }
+
+  const logo = await eagleDataUri();
+  const esc  = escapeHtml;
+
+  // صياغة تتبع جنس الطالب — «الطالبة / التلميذة … ابنة السيد» مقابل المذكّر.
+  const isF   = doc.student_gender === 'female';
+  const who   = isF ? 'الطالبة / التلميذة' : 'الطالب / التلميذ';
+  const child = isF ? 'ابنة السيد'          : 'ابن السيد';
+
+  // «شام باسم الاسماعيل» = الاسم + الأب + الكنية (بلا الجد، كما في الورقة).
+  const name = [doc.first_name, doc.father_name, doc.family_name]
+    .filter(Boolean).join(' ') || doc.student_full_name || '—';
+
+  const d    = new Date(doc.issued_at || Date.now());
+  const dd   = String(d.getDate()).padStart(2, '0');
+  const mm   = String(d.getMonth() + 1).padStart(2, '0');
+  const date = `${dd} / ${mm} / ${d.getFullYear()} م`;
+  const lang = NOC_LANG_AR[doc.to_foreign_language] || doc.to_foreign_language || '—';
+
+  win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<title>ورقة لا مانع — ${esc(name)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 18mm; }
+  body { font-family:'Cairo',Arial,sans-serif; color:#0f172a; margin:0; font-size:13px; line-height:1.9; }
+  .pg { border:1px solid #cbd5e1; padding:18px 20px; }
+  .pgno { font-size:11px; color:#64748b; }
+  .hd { display:flex; align-items:flex-start; gap:12px; }
+  .hd-t { flex:1; text-align:center; font-size:19px; font-weight:900; margin-top:6px; }
+  .logo { width:64px; height:64px; object-fit:contain; }
+  .meta { display:flex; justify-content:space-between; gap:24px; margin-top:10px; }
+  .meta div { flex:1; }
+  .meta b { font-weight:700; }
+  .dots { letter-spacing:2px; color:#475569; }
+  .body { margin:26px 0 8px; }
+  .body .ln { margin-bottom:10px; }
+  .req { text-align:center; font-weight:700; margin:18px 0 26px; }
+  .dates { display:flex; justify-content:space-between; gap:24px; margin-top:30px; }
+  .sig { margin-top:26px; display:flex; justify-content:space-between; align-items:flex-start; gap:24px; }
+  .sig-c { text-align:center; flex:1; }
+  .sig-c .ttl { font-weight:700; margin-bottom:10px; }
+  .sig-c .fld { text-align:start; display:inline-block; }
+  .stamp { width:120px; text-align:center; color:#475569; }
+</style></head><body>
+<div class="pg">
+  <div class="pgno">رقم الصفحة ١</div>
+  <div class="hd">
+    <div class="hd-t">ورقة لا مانع</div>
+    ${logo ? `<img class="logo" src="${logo}" alt="">` : ''}
+  </div>
+
+  <div class="meta">
+    <div>
+      <div>مديرية التربية والتعليم في: <b>${esc(doc.to_directorate_name || '—')}</b></div>
+      <div>المجمع التربوي في: <b>${esc(doc.to_complex_name || '—')}</b></div>
+      <div>المدرسة: <b>${esc(doc.to_school_name || '—')}</b></div>
+    </div>
+    <div>
+      <div>كود المدرسة: <span class="dots">............</span></div>
+      <div>رقم الصادر: <b>${esc(String(doc.outgoing_number ?? '—'))}</b></div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="ln">لا مانع لدينا من قبول ${who}: <b>${esc(name)}</b>
+      ${child}: <b>${esc(doc.father_name || '—')}</b></div>
+    <div class="ln">في الصف: <b>${esc(doc.to_grade_label || '—')}</b>
+      &nbsp;&nbsp; اللغة: <b>${esc(lang)}</b> &nbsp;&nbsp; في مدرستنا</div>
+  </div>
+  <div class="req">يرجى موافاتنا بوثيقة الانتقال مصدقة أصولاً</div>
+
+  <div class="dates">
+    <div>الموافق لـ: <span class="dots">.. / .. / ....</span> هـ</div>
+    <div>الواقع في: <b>${esc(date)}</b></div>
+  </div>
+
+  <div class="sig">
+    <div class="stamp">الخاتم</div>
+    <div class="sig-c">
+      <div class="ttl">مدير المدرسة</div>
+      <div class="fld">
+        <div>الاسم: <b>${esc(doc.issued_by_name || '—')}</b></div>
+        <div>التوقيع:</div>
+      </div>
+    </div>
+    <div class="stamp"></div>
+  </div>
+</div>
+<scr${''}ipt>window.onload=function(){setTimeout(function(){window.print()},400)}</scr${''}ipt>
+</body></html>`);
+  win.document.close();
+}
 
 
 // ── Start the app (after all declarations are initialized) ──

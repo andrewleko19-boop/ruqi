@@ -3651,6 +3651,13 @@ window.NSAMS_DB = {
   getDeviceId,
   migrateQueuesFromLS,
   pullAllDelta,
+
+  // وثائق «لا مانع» — §23
+  lookupStudentForTransfer,
+  issueTransferDocument,
+  reviewTransferDocument,
+  cancelTransferDocument,
+  getTransferDocuments,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4097,4 +4104,75 @@ async function changePassword(email, currentPassword, newPassword) {
   const { error: upErr } = await db.auth.updateUser({ password: newPassword });
   if (upErr) return { error: upErr.message };
   return { ok: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §23 — وثائق «لا مانع»: نقل الطالب بين مدرستين
+// ─────────────────────────────────────────────────────────────────────────────
+// كل الكتابة عبر دوال security definer في القاعدة — لا كتابة مباشرة على
+// transfer_documents (لا سياسة insert/update عليه أصلاً). وكلّها متّصلة حصراً
+// كبقية العمليات العابرة للمدارس (upsertStaffAssignment، bulkImportStudents):
+// طابور الـ offline مخصّص لكتابات المدرسة على بياناتها هي.
+
+// «تحقّق من بيانات الطالب» — يُرجع صفّاً واحداً أو يرمي رسالة عربية من القاعدة.
+async function lookupStudentForTransfer({ nationalId, firstName, fatherName, familyName }) {
+  if (!isOnline()) throw new Error('التحقّق من بيانات الطالب يتطلّب اتصالاً بالإنترنت.');
+  const { data, error } = await db.rpc('lookup_student_for_transfer', {
+    p_national_id: (nationalId  ?? '').trim(),
+    p_first_name:  (firstName   ?? '').trim(),
+    p_father_name: (fatherName  ?? '').trim(),
+    p_family_name: (familyName  ?? '').trim(),
+  });
+  if (error) throw error;
+  return data?.[0] ?? null;
+}
+
+// إصدار الوثيقة. payload: { docType, nationalId, firstName, fatherName,
+// familyName, toClassId, transferReason, notes }
+async function issueTransferDocument(payload) {
+  if (!isOnline()) throw new Error('إصدار وثيقة لا مانع يتطلّب اتصالاً بالإنترنت.');
+  const { data, error } = await db.rpc('issue_transfer_document', {
+    p: {
+      doc_type:        payload.docType === 'exceptional' ? 'exceptional' : 'regular',
+      national_id:     (payload.nationalId ?? '').trim(),
+      first_name:      (payload.firstName  ?? '').trim(),
+      father_name:     (payload.fatherName ?? '').trim(),
+      family_name:     (payload.familyName ?? '').trim(),
+      to_class_id:     payload.toClassId,
+      transfer_reason: payload.transferReason ?? null,
+      notes:           payload.notes ?? null,
+    },
+  });
+  if (error) throw error;
+  return data;
+}
+
+// البتّ في وثيقة واردة (المدرسة الحالية وحدها). action: 'approve' | 'reject'
+async function reviewTransferDocument(docId, action, reason = null) {
+  if (!isOnline()) throw new Error('البتّ في وثيقة لا مانع يتطلّب اتصالاً بالإنترنت.');
+  const { data, error } = await db.rpc('review_transfer_document', {
+    p_doc_id: docId, p_action: action, p_reason: reason,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// سحب وثيقة معلّقة (المدرسة المُصدِرة وحدها). رقم الصادر يبقى محجوزاً.
+async function cancelTransferDocument(docId) {
+  if (!isOnline()) throw new Error('سحب وثيقة لا مانع يتطلّب اتصالاً بالإنترنت.');
+  const { data, error } = await db.rpc('cancel_transfer_document', { p_doc_id: docId });
+  if (error) throw error;
+  return data;
+}
+
+// كل وثائق مدرستي بالاتجاهين — RLS يُرشِّح (tdoc_parties_select) فلا حاجة
+// لتصفية بـ school_id هنا؛ الفرز بين «الوافدة» و«المغادرة» يتم في الواجهة
+// بمقارنة to_school_id / from_school_id بمدرسة المستخدم.
+async function getTransferDocuments() {
+  const { data, error } = await db.from('transfer_documents')
+    .select('*')
+    .order('issued_at', { ascending: false })
+    .limit(300);
+  if (error) throw error;
+  return data ?? [];
 }

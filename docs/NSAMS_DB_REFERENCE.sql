@@ -61,6 +61,10 @@
 --   section       text   (الشعبة)
 --   created_at    timestamptz
 --   academic_year text   (صيغة: '2025-2026')
+--   foreign_language text  default 'انكليزي' — check ('انكليزي','فرنسي','روسي')
+--   level_track   smallint NULL  (§23) — رقم المستوى 1/2/3 للشعبة الحاملة منهاج
+--                 المستوى بعد دمج المديرية؛ null = شعبة نظامية. الشعبة تبقى داخل
+--                 صفّها النظامي — لا جدول صفوف استثنائية.
 --   ⚠️ لا يوجد عمود teacher_id — الإسناد يتم عبر جدول class_teacher
 
 -- ── class_teacher (إسناد المعلمين للصفوف) ─────────────────────────────────────
@@ -156,6 +160,51 @@
 --   status        text     (حالة الدوام)
 --   late_minutes  smallint
 --   notes         text     NULL
+
+-- ── transfer_documents (§23 — وثائق «لا مانع»: نقل طالب بين مدرستين) ──────────
+--   ⚠️ أول جدول في النظام طرفاه مدرستان لا مدرسة ومديرية. لا سياسة insert/update
+--      عليه إطلاقاً: كل كتابة عبر دوال §23.4 (security definer).
+--   id                  uuid        (PK)
+--   doc_type            text        NOT NULL default 'regular'
+--                                   check ('regular','exceptional')
+--                                   regular = يبقى الطالب في صفّه · exceptional = صفّ مختلف
+--   ── لقطة الطالب وقت الإصدار (لا تتغيّر بعدها) ──
+--   student_id          uuid        NULL → students.id  on delete set null
+--   student_national_id text        NOT NULL
+--   student_full_name   text        NOT NULL
+--   first_name, father_name, grandfather_name, family_name, mother_name  text
+--   birth_date          date
+--   student_gender      text        check (null | 'male' | 'female')
+--                                   → صياغة الورقة: «الطالبة/التلميذة … ابنة السيد»
+--   ── المدرسة الحالية (المُرسِلة — صاحبة قرار الموافقة) ──
+--   from_school_id      uuid        NOT NULL → schools.id
+--   from_school_name, from_grade_label, from_section_label   text (لقطات)
+--   ── المدرسة المستقبِلة (المُصدِرة للوثيقة والورقة) ──
+--   to_school_id        uuid        NOT NULL → schools.id
+--   to_school_name      text
+--   to_class_id         uuid        NULL → classes.id  on delete set null
+--   to_grade_label, to_section_label  text
+--   to_level_track      smallint
+--   to_foreign_language text        ← «اللغة: الإنكليزية» على الورقة
+--   to_complex_name     text        ← «المجمع التربوي في: …»
+--   to_directorate_name text        ← «مديرية التربية والتعليم في: …»
+--   ── ترقيم الصادر ──
+--   academic_year       text        NOT NULL  (صيغة '2025-2026')
+--   outgoing_number     int         NOT NULL  ← «رقم الصادر» على الورقة
+--   ── الحالة والتتبّع ──
+--   status              text        NOT NULL default 'pending'
+--                                   check ('pending','executed','rejected','cancelled')
+--   transfer_reason, notes, reject_reason                    text
+--   issued_by  uuid NOT NULL → auth.users · issued_by_name  text · issued_at  timestamptz
+--   processed_by uuid → auth.users · processed_by_name text · processed_at timestamptz
+--   created_at          timestamptz NOT NULL default now()
+--   constraint transfer_docs_diff_schools  check (from_school_id <> to_school_id)
+--
+--   الفهارس:
+--     transfer_docs_to_school_idx    (to_school_id, issued_at desc)
+--     transfer_docs_from_school_idx  (from_school_id, issued_at desc)
+--     transfer_docs_outgoing_uidx    UNIQUE (to_school_id, academic_year, outgoing_number)
+--     transfer_docs_pending_uidx     UNIQUE (student_national_id) where status='pending'
 
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -391,6 +440,17 @@ alter table public.teacher_daily_attendance enable row level security;
 --   tda_teacher_write (ALL):    teacher_id = auth.uid() (المعلم على دوامه فقط)
 --   tda_read          (SELECT): teacher_id=auth.uid() | school_admin(مدرسته) |
 --                               directorate(مدارسها) | ministry
+
+-- ── transfer_documents (§23 — وثائق «لا مانع») ───────────────────────────────
+alter table public.transfer_documents enable row level security;
+--   tdoc_parties_select (SELECT): school_admin AND (from_school_id = مدرستي
+--                                 OR to_school_id = مدرستي)
+--                                 ⚠️ الشرط الوحيد من نوعه في النظام: طرفان
+--                                 مدرستان متكافئتان، لا احتواء مديرية.
+--   tdoc_dir_select     (SELECT): directorate_user AND school_in_my_directorate
+--                                 على أيٍّ من الطرفين
+--   ⚠️ لا سياسة INSERT/UPDATE/DELETE عمداً، و grant select وحده. كل كتابة تمرّ
+--      بدوال §23.4 (security definer) التي تتحقّق من الدور والنطاق والحالة.
 
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -697,6 +757,54 @@ end$$;
 --    (link_staff_to_registry / link_student_to_registry) تبقى كما هي في
 --    tools/add-national-registry.sql — الزرّان يعودان في دفعة الاستيراد.
 --
+-- ════════════════════════════════════════════════════════════════════════════
+--  ٩د. §23 — وثائق «لا مانع»: نقل الطالب بين مدرستين
+-- ════════════════════════════════════════════════════════════════════════════
+--  الدوال الخمس (كلّها security definer + set search_path = public، وكلّها
+--  revoke from public, anon ثم grant execute to authenticated):
+--
+--    ar_norm(text) → text                        تطبيع عربي: أإآٱ→ا، ى→ي، ة→ه
+--    lookup_student_for_transfer(id, first, father, family) → table
+--    issue_transfer_document(jsonb)              → transfer_documents
+--    review_transfer_document(uuid, text, text)  → transfer_documents
+--    cancel_transfer_document(uuid)              → transfer_documents
+--
+--  ⚠ **التنفيذ صفّان لا تحريك صفّ** — لا يُبسَّط لاحقاً بحسن نيّة.
+--    عند الموافقة يُوسَم صفّ الطالب في المدرسة القديمة status='transferred'
+--    (فيُشتقّ is_active=false بـ t_sync_student_is_active) ويُدرَج **صفّ جديد**
+--    في المدرسة المستقبِلة بنفس الهوية. السبب: daily_student_attendance
+--    والعلامات والجلاءات كلّها تشير إلى student_id — فتحريك school_id على
+--    الصفّ نفسه يجعل سجلّ المدرسة القديمة يشير إلى طالب لم تعد تملك صلاحية
+--    قراءته. والفهرس students_natid_school جزئي على is_active فلا يتعارض.
+--    ولا يخالف ذلك t_lock_student_registry_mirrors: school_id/class_id/status
+--    خارج حقول القفل. والمقعد (seat_number) لا يُنقل — تُسنده المدرسة الجديدة.
+--
+--  ⚠ **رقم الصادر المسحوب لا يُعاد استعماله**. العدّاد max(outgoing_number)+1
+--    لكل (to_school_id, academic_year) تحت pg_advisory_xact_lock، والفهرس
+--    الفريد شبكة أمان ثانية. وثيقة ملغاة (cancelled) تُبقي رقمها محجوزاً — كما
+--    في دفتر الصادر الورقي، حيث يبقى تسلسل السجلّ صادقاً ولو شُطب سطر.
+--
+--  ⚠ **الإشعار داخل الدالة لا في trigger**. لا سياسة insert على الجدول، فكل
+--    إدراج يمرّ بـ issue_transfer_document حتماً؛ إضافة trigger كانت ستُكرّر
+--    الإشعار لا أكثر.
+--
+--  ⚠ **لقطات الورقة لا تُقرأ حيّة**. from_*/to_* من أسماء ومجمّع ومديرية ولغة
+--    وجنس كلّها مخزّنة وقت الإصدار، لسببين: الطرف المُرسِل لا يملك صلاحية قراءة
+--    classes/schools عند الطرف الآخر؛ والوثيقة الرسمية تُطبع بعد سنة كما صدرت
+--    لا كما صارت الحال.
+--
+--  ⚠ الفرق بين نوعَي doc_type هو **تجاوز الصف** لا منهاج «الفئة ب»: regular
+--    تُبقي الطالب في صفّه (يُفرض خادمياً بمقارنة ar_norm للصفّين)، و
+--    exceptional وحدها تُغيّره. أثر دمج المستويات الوحيد هنا هو
+--    classes.level_track على الشعبة.
+--
+--  ⚠ المُبادِر هو المدرسة **المستقبِلة**، والمدرسة الحالية تملك الموافقة/الرفض.
+--    وهذا مصدر لبس متكرّر: تطبيق الوزارة يسمّي التبويب بمن أنشأ السجلّ
+--    («صادر»)، بينما المستخدم يفكّر باتجاه الطالب — والاتجاهان متعاكسان هنا.
+--    لذلك واجهة رُقِيّ تُسمّي بالاتجاه: «طلبات النقل الوافدة» (to_school_id =
+--    مدرستي) و«المغادرة» (from_school_id = مدرستي)، ولا تستعمل «صادر/وارد»
+--    إلا على الورقة المطبوعة حيث «رقم الصادر» صحيح فعلاً.
+
 -- ════════════════════════════════════════════════════════════════════════════
 --  ١٠. قوالب إدراج جاهزة (طلاب / موجهين)
 -- ════════════════════════════════════════════════════════════════════════════
