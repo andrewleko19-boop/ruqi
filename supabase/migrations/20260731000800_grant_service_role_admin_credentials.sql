@@ -1,0 +1,21 @@
+-- ════════════════════════════════════════════════════════════════════════════
+--  Grant service_role full CRUD on admin_credentials (audit — reset_password bug).
+--
+--  After migration …000700 fixed the `schools` grant, resetting a principal's
+--  password from the directorate portal now generates the new password, but the
+--  final step — admin-create-user's reset_password doing
+--      admin.from("admin_credentials").update({ password: null, updated_at })
+--  — failed with 500 "permission denied for table admin_credentials".
+--
+--  admin_credentials was created granting service_role only `insert, delete`
+--  (docs/database-setup.sql:302). A later section (…:4091) adds the `update`
+--  grant, but that statement is not present in the live database (migration
+--  drift), so the service-role UPDATE is denied even though it bypasses RLS
+--  (grants are separate from RLS).
+--
+--  Re-assert the full set idempotently so create (insert), reset (update) and any
+--  cleanup (delete) all work regardless of drift. Reads by human roles stay
+--  governed by the existing RLS policies, not by this service_role grant.
+-- ════════════════════════════════════════════════════════════════════════════
+
+grant select, insert, update, delete on public.admin_credentials to service_role;

@@ -1104,6 +1104,10 @@ async function openCredModal(userId, name) {
   credNotFound.classList.add('hidden');
   document.getElementById('cred-reset-box')?.classList.add('hidden');
   document.getElementById('cred-msg')?.classList.add('hidden');
+  // Restore the regenerate button on every open — the reset handler hides it once
+  // a password is minted so a second click can't replace the copied one.
+  const credResetBtn = document.getElementById('cred-reset');
+  if (credResetBtn) { credResetBtn.hidden = false; credResetBtn.disabled = false; }
   show(credModal);
 
   // Only the address is selected — the password column is deliberately not read.
@@ -1129,22 +1133,30 @@ document.getElementById('cred-reset')?.addEventListener('click', async () => {
   const passEl = document.getElementById('cred-newpass');
   btn.disabled = true;
   msgEl?.classList.add('hidden');
+  let minted = false;
   try {
     const res = await edgeFetch('admin-create-user', { action: 'reset_password', userId: credUserId });
     if (passEl) passEl.textContent = res.password;
     box?.classList.remove('hidden');
+    minted = true;
     if (res.warning && msgEl) { msgEl.textContent = res.warning; msgEl.classList.remove('hidden'); }
   } catch (e) {
     if (msgEl) { msgEl.textContent = e.message || 'تعذّرت إعادة التعيين'; msgEl.classList.remove('hidden'); }
   } finally {
-    btn.disabled = false;
+    // Once a password is minted, HIDE the regenerate button so a second click can't
+    // mint a new password and silently invalidate the one just copied; re-enable
+    // only on failure. Reopening the modal restores the button.
+    if (minted) { btn.hidden = true; } else { btn.disabled = false; }
   }
 });
 
 document.getElementById('cred-copy')?.addEventListener('click', async () => {
   const txt = document.getElementById('cred-newpass')?.textContent ?? '';
   if (!txt || txt === '—') return;
-  try { await navigator.clipboard.writeText(txt); } catch { /* المتصفّح منع النسخ — النصّ محدَّد يدوياً */ }
+  try {
+    await navigator.clipboard.writeText(txt);
+    closeCredModal();   // copied → close cleanly (hoisted below)
+  } catch { /* المتصفّح منع النسخ — النصّ محدَّد يدوياً */ }
 });
 
 function closeCredModal() { hide(credModal); }

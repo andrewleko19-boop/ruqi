@@ -2808,8 +2808,12 @@ async function openDirCredModal(userId, name) {
   if (nfEl)    nfEl.hidden = true;
   const resetBox = document.getElementById('dir-cred-reset-box');
   const msgBox   = document.getElementById('dir-cred-msg');
+  const resetBtn = document.getElementById('dir-cred-reset');
   if (resetBox) resetBox.hidden = true;
   if (msgBox)   msgBox.hidden   = true;
+  // Restore the regenerate button on every open — the reset handler hides it once
+  // a password is minted (so an accidental second click can't replace it).
+  if (resetBtn) { resetBtn.hidden = false; resetBtn.disabled = false; }
   modal.classList.remove('hidden');
 
   // Only the address is read — the password column is deliberately not selected.
@@ -2851,10 +2855,12 @@ document.getElementById('dir-cred-reset')?.addEventListener('click', async () =>
   document.getElementById('dir-cred-modal')?.classList.remove('hidden');
   if (btn) btn.disabled = true;
   if (msgEl) msgEl.hidden = true;
+  let minted = false;
   try {
     const res = await dirEdgeFetch('admin-create-user', { action: 'reset_password', userId });
     if (passEl) passEl.textContent = res.password;
     if (box) box.hidden = false;
+    minted = true;
     // التحذير يعني أن كلمة المرور بُدِّلت لكن سجلّ الاعتماد لم يُحدَّث — إخفاؤه
     // يترك المديرية تظنّ كل شيء تمّ.
     if (res.warning && msgEl) {
@@ -2869,7 +2875,11 @@ document.getElementById('dir-cred-reset')?.addEventListener('click', async () =>
       msgEl.hidden      = false;
     }
   } finally {
-    if (btn) btn.disabled = false;
+    // Once a password is minted, HIDE the regenerate button: a second click would
+    // mint a NEW password and silently invalidate the one the operator just copied
+    // (the cause of the "بيانات الدخول غير صحيحة" lockout). Re-enable only on
+    // failure so a genuine retry is still possible. Reopening restores the button.
+    if (btn) { if (minted) { btn.hidden = true; } else { btn.disabled = false; } }
   }
 });
 
@@ -2879,6 +2889,11 @@ document.getElementById('dir-cred-copy')?.addEventListener('click', async () => 
   try {
     await navigator.clipboard.writeText(txt);
     showToast('نُسخت كلمة المرور', '', 'success');
+    // Copied → close the modal so the flow ends cleanly. The operator now has the
+    // password and there is nothing left to do; this also prevents lingering on a
+    // screen whose only other action would mint a different password.
+    document.getElementById('dir-cred-modal')?.classList.add('hidden');
+    _dirCredUserId = null;
   } catch {
     showToast('تعذّر النسخ', 'حدّد النصّ وانسخه يدوياً.', 'info');
   }
