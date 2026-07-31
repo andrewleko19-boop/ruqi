@@ -108,8 +108,12 @@ Deno.serve(async (req) => {
         return json({ error: `تعذّر إنشاء الملف الشخصي: ${uErr.message}` }, 500);
       }
 
+      // Do NOT persist the plaintext password. The principal set it here (and so
+      // knows it now); recovery is via a reset (update action), which sets a new
+      // password. Storing it made every teacher's cleartext readable by the
+      // school_admin and materialisable in the DOM.
       const { error: cErr } = await admin.from("staff_credentials").insert({
-        school_id: schoolId, user_id: newId, username, password, created_by: user.id,
+        school_id: schoolId, user_id: newId, username, created_by: user.id,
       });
       if (cErr) {
         await admin.from("users").delete().eq("id", newId);
@@ -137,8 +141,11 @@ Deno.serve(async (req) => {
         const { error } = await admin.auth.admin.updateUserById(userId, { password });
         if (error) return json({ error: error.message }, 400);
       }
+      // On a password reset, actively CLEAR any previously-stored plaintext rather
+      // than replacing it — the new password is known to the principal who just
+      // set it and is never persisted.
       const credPatch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-      if (password) credPatch.password = password;
+      if (password) credPatch.password = null;
       await admin.from("staff_credentials").update(credPatch).eq("user_id", userId);
       if (fullName) await admin.from("users").update({ full_name: fullName }).eq("id", userId);
       return json({ ok: true });

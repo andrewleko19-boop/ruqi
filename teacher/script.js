@@ -1492,17 +1492,22 @@ async function loadGradesForCurrent() {
 
   try {
     const existing = await getClassGrades(G.class.id, sub.id, G.semester);
+    // Snapshot which cells arrived with a saved mark, so save() can tell a
+    // genuinely-cleared cell (needs deletion) from one that was always empty.
+    G.loaded = new Set();
     for (const stu of G.students) {
       const row = existing[stu.id] || {};
       G.marks[stu.id] = {};
       for (const comp of sub.components) {
         const v = row[comp.id];
         G.marks[stu.id][comp.id] = (v == null) ? null : Number(v);
+        if (v != null) G.loaded.add(`${stu.id}:${comp.id}`);
       }
     }
   } catch (err) {
     console.error('[NSAMS-T] getClassGrades', err);
     toast(gradesErr(err, 'تعذّر تحميل الدرجات'), 'error');
+    G.loaded = new Set();
     for (const stu of G.students) {
       G.marks[stu.id] = {};
       for (const comp of sub.components) G.marks[stu.id][comp.id] = null;
@@ -1786,9 +1791,14 @@ btnSaveGrades.addEventListener('click', async () => {
   const records = [];
   for (const stu of G.students) {
     for (const comp of sub.components) {
-      const v = G.marks[stu.id]?.[comp.id];
+      const v   = G.marks[stu.id]?.[comp.id];
+      const key = `${stu.id}:${comp.id}`;
       if (v != null && Number.isFinite(v)) {
         records.push({ studentId: stu.id, componentId: comp.id, mark: v });
+      } else if (G.loaded?.has(key)) {
+        // Was saved before, now blanked → send a null mark so the sync deletes it
+        // instead of silently leaving the old value in the database.
+        records.push({ studentId: stu.id, componentId: comp.id, mark: null });
       }
     }
   }
@@ -1851,9 +1861,13 @@ async function openConductView(cls) {
     hide(conductLoading);
     if (C.students.length === 0) { hide(conductFooter); show(conductEmpty); return; }
     conductList.innerHTML = '';
+    // Snapshot students who arrived with a saved conduct mark, so a cleared cell
+    // can be told apart from one that was never filled (see save handler).
+    C.loaded = new Set();
     C.students.forEach((stu, i) => {
       const v = existing[stu.id];
       C.marks[stu.id] = (v == null) ? null : Number(v);
+      if (v != null) C.loaded.add(stu.id);
       conductList.appendChild(buildConductRow(stu, i + 1));
     });
     show(conductList);
@@ -1903,9 +1917,12 @@ conductList.addEventListener('input', (e) => {
 
 btnSaveConduct.addEventListener('click', async () => {
   if (!C.class) return;
-  const records = C.students
-    .filter(stu => C.marks[stu.id] != null)
-    .map(stu => ({ studentId: stu.id, mark: C.marks[stu.id] }));
+  const records = [];
+  for (const stu of C.students) {
+    const v = C.marks[stu.id];
+    if (v != null) records.push({ studentId: stu.id, mark: v });
+    else if (C.loaded?.has(stu.id)) records.push({ studentId: stu.id, mark: null }); // cleared → delete
+  }
   if (records.length === 0) { toast('أدخل درجة سلوك واحدة على الأقل', 'warning'); return; }
 
   btnSaveConduct.disabled = true;

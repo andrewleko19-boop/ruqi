@@ -1,0 +1,26 @@
+-- ════════════════════════════════════════════════════════════════════════════
+--  Stop persisting plaintext staff passwords (audit C1).
+--
+--  admin_credentials.password was already made nullable (§19) and reset_password
+--  nulls it, but staff_credentials.password was still `text not null`, so the
+--  admin-create-staff Edge Function had to store every teacher's cleartext — which
+--  the school portal then read and embedded into the DOM for the whole list.
+--
+--  This makes staff_credentials.password nullable so the Edge Function can stop
+--  writing it (deploy the updated function alongside this migration). Going
+--  forward no new plaintext is stored; a reset clears any existing value.
+--
+--  Existing rows are intentionally NOT mass-wiped here: a school may still be
+--  relying on the stored password to hand a not-yet-delivered login to a teacher,
+--  and wiping every row at once would strand those. Once you have confirmed all
+--  teachers have their credentials, run the wipe below to destroy the historical
+--  plaintext (this is an operator decision, hence commented out):
+--
+--     update public.staff_credentials set password = null;
+--     update public.admin_credentials set password = null;
+--
+--  After wiping, recovery for any account is via the "reset password" flow, which
+--  mints a new password shown exactly once and never stored.
+-- ════════════════════════════════════════════════════════════════════════════
+
+alter table public.staff_credentials alter column password drop not null;

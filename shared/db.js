@@ -397,6 +397,13 @@ async function login(identifier, password) {
 }
 
 async function logout() {
+  // Purge tenant caches (student rosters, school profile, delta cache) so the next
+  // user on a shared device can't read the previous account's student PII. Every
+  // portal routes through here, so this closes the gap for the portals that don't
+  // call purgeTenantCaches() themselves. Unsynced outbox writes are deliberately
+  // preserved; best-effort, never blocks logout. Runs before signOut while the
+  // IndexedDB/localStorage context is still valid.
+  try { await purgeTenantCaches(); } catch { /* non-fatal */ }
   const { error } = await db.auth.signOut();
   if (error) throw error;
 }
@@ -2362,27 +2369,45 @@ function markStudentGradesSynced(localId) {
 async function syncStudentGradesRecord(payload) {
   const { records, classId, schoolId, subjectId, semester, academicYear, teacherId } = payload;
 
-  const rows = records.map(r => ({
-    student_id:    r.studentId,
-    class_id:      classId,
-    school_id:     schoolId,
-    subject_id:    subjectId,
-    component_id:  r.componentId,
-    semester,
-    academic_year: academicYear,
-    mark:          r.mark,
-    recorded_by:   teacherId,
-    recorded_at:   new Date().toISOString(),
-  }));
-  if (rows.length === 0) return true;
+  // A record with mark == null means the teacher blanked a previously-saved cell.
+  // Upsert alone would leave the stale value behind (silent grade-correction loss),
+  // so entered marks are upserted and cleared marks are deleted by the same
+  // conflict key. Both halves are idempotent, so queue replay is safe.
+  const entered = records.filter(r => r.mark != null);
+  const cleared = records.filter(r => r.mark == null);
 
-  const { error } = await db
-    .from('student_grades')
-    .upsert(rows, {
-      onConflict: 'student_id,component_id,semester,academic_year',
-      ignoreDuplicates: false,
-    });
-  if (error) throw error;
+  if (entered.length) {
+    const rows = entered.map(r => ({
+      student_id:    r.studentId,
+      class_id:      classId,
+      school_id:     schoolId,
+      subject_id:    subjectId,
+      component_id:  r.componentId,
+      semester,
+      academic_year: academicYear,
+      mark:          r.mark,
+      recorded_by:   teacherId,
+      recorded_at:   new Date().toISOString(),
+    }));
+    const { error } = await db
+      .from('student_grades')
+      .upsert(rows, {
+        onConflict: 'student_id,component_id,semester,academic_year',
+        ignoreDuplicates: false,
+      });
+    if (error) throw error;
+  }
+
+  for (const r of cleared) {
+    const { error } = await db
+      .from('student_grades')
+      .delete()
+      .eq('student_id',    r.studentId)
+      .eq('component_id',  r.componentId)
+      .eq('semester',      semester)
+      .eq('academic_year', academicYear);
+    if (error) throw error;
+  }
   return true;
 }
 
@@ -2436,20 +2461,36 @@ function markStudentConductSynced(localId) {
 
 async function syncStudentConductRecord(payload) {
   const { records, classId, schoolId, academicYear, teacherId } = payload;
-  const rows = records.map(r => ({
-    student_id:    r.studentId,
-    class_id:      classId,
-    school_id:     schoolId,
-    academic_year: academicYear,
-    mark:          r.mark,
-    recorded_by:   teacherId,
-    recorded_at:   new Date().toISOString(),
-  }));
-  if (rows.length === 0) return true;
-  const { error } = await db
-    .from('student_conduct')
-    .upsert(rows, { onConflict: 'student_id,academic_year', ignoreDuplicates: false });
-  if (error) throw error;
+
+  // Same delete-on-clear contract as grades: a null mark means a previously-saved
+  // conduct score was blanked and must be removed, not silently left in place.
+  const entered = records.filter(r => r.mark != null);
+  const cleared = records.filter(r => r.mark == null);
+
+  if (entered.length) {
+    const rows = entered.map(r => ({
+      student_id:    r.studentId,
+      class_id:      classId,
+      school_id:     schoolId,
+      academic_year: academicYear,
+      mark:          r.mark,
+      recorded_by:   teacherId,
+      recorded_at:   new Date().toISOString(),
+    }));
+    const { error } = await db
+      .from('student_conduct')
+      .upsert(rows, { onConflict: 'student_id,academic_year', ignoreDuplicates: false });
+    if (error) throw error;
+  }
+
+  for (const r of cleared) {
+    const { error } = await db
+      .from('student_conduct')
+      .delete()
+      .eq('student_id',    r.studentId)
+      .eq('academic_year', academicYear);
+    if (error) throw error;
+  }
   return true;
 }
 

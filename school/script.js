@@ -578,6 +578,10 @@ function openReportModal() {
 function closeReportModal() {
   hide(modalReport);
   document.body.style.overflow = '';
+  // Always clear the form on close (X, backdrop, or post-submit) so the next
+  // report never opens pre-filled with the previous incident's type, description,
+  // severity or attached photo — which would misattribute evidence between cases.
+  resetReportForm();
 }
 
 btnOpenReport.addEventListener('click', openReportModal);
@@ -4631,16 +4635,17 @@ function renderCredentials() {
   hide(el('cred-empty'));
   credListEl.innerHTML = _credList.map(c => {
     const name = _teacherNames[c.userId] || '—';
+    // Passwords are no longer stored in cleartext, so there is nothing to reveal
+    // or copy. To hand a teacher a working password, use «تغيير كلمة المرور»
+    // (reset) and read the new value once from that dialog.
     return (
       `<li class="cred-row" data-uid="${escapeHtml(c.userId)}">` +
         `<div class="cred-main">` +
           `<div class="cred-name">${escapeHtml(name)}</div>` +
           `<div class="cred-line">اسم المستخدم: <code>${escapeHtml(c.username)}</code></div>` +
-          `<div class="cred-line">كلمة المرور: <code class="cred-pw" data-pw="${escapeHtml(c.password)}">••••••••</code></div>` +
+          `<div class="cred-line cred-pw-hint">كلمة المرور غير مخزَّنة — استخدم «تغيير كلمة المرور» لتعيين كلمة جديدة</div>` +
         `</div>` +
         `<div class="cred-acts">` +
-          `<button class="icon-btn-sm" data-act="reveal" title="إظهار/إخفاء"><svg class="icon icon-sm"><use href="#ic-eye"/></svg></button>` +
-          `<button class="icon-btn-sm" data-act="copy" title="نسخ"><svg class="icon icon-sm"><use href="#ic-clipboard"/></svg></button>` +
           `<button class="icon-btn-sm" data-act="reset" title="تغيير كلمة المرور"><svg class="icon icon-sm"><use href="#ic-edit"/></svg></button>` +
           `<button class="icon-btn-sm danger" data-act="delete" title="حذف الحساب"><svg class="icon icon-sm"><use href="#ic-trash"/></svg></button>` +
         `</div>` +
@@ -4653,15 +4658,7 @@ credListEl.addEventListener('click', async (e) => {
   const btn = e.target.closest('button[data-act]'); if (!btn) return;
   const row = btn.closest('.cred-row'); const uid = row?.dataset.uid;
   const cred = _credList.find(c => c.userId === uid); if (!cred) return;
-  const pwNode = row.querySelector('.cred-pw');
-  if (btn.dataset.act === 'reveal') {
-    const shown = pwNode.dataset.shown === '1';
-    pwNode.textContent = shown ? '••••••••' : pwNode.dataset.pw;
-    pwNode.dataset.shown = shown ? '0' : '1';
-  } else if (btn.dataset.act === 'copy') {
-    try { await navigator.clipboard.writeText(cred.password); toast('تم نسخ كلمة المرور', 'success'); }
-    catch { toast('تعذّر النسخ', 'error'); }
-  } else if (btn.dataset.act === 'reset') {
+  if (btn.dataset.act === 'reset') {
     openTeacherModal(cred);
   } else if (btn.dataset.act === 'delete') {
     openDeleteTeacherModal(cred);
