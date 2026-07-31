@@ -655,9 +655,10 @@
     <!-- ═════ المدارس والطاقم الإداري ═════ -->
     <div id="dir-tab-schools" class="dir-tab-panel">
     <div class="main-content">
-      <div class="dir-seg" role="tablist" aria-label="عرض المدارس أو المدراء">
+      <div class="dir-seg" id="dir-schools-seg" role="tablist" aria-label="عرض المدارس أو المدراء أو الاستيراد">
         <button class="dir-seg-btn is-active" data-seg="schools" role="tab" aria-selected="true">المدارس</button>
         <button class="dir-seg-btn" data-seg="principals" role="tab" aria-selected="false">المدراء</button>
+        <button class="dir-seg-btn" data-seg="import" role="tab" aria-selected="false">استيراد البيانات</button>
       </div>
       <div id="dir-seg-schools">
         <div class="dir-section-card">
@@ -724,6 +725,175 @@
         </div>
         <div id="dir-principals-empty" class="dir-table-empty hidden">لا يوجد مدراء بعد.</div>
       </div>
+      </div>
+
+      <!-- ═════ استيراد بيانات مدرسة ═════ -->
+      <div id="dir-seg-import" hidden>
+        <div class="dir-section-card">
+          <div class="dir-section-header">
+            <h2>استيراد بيانات مدرسة</h2>
+          </div>
+
+          <p class="imp-intro">
+            انقل سجلّات مدرسةٍ منضمّة حديثاً إلى رُقِيّ من ملفّ Excel أو CSV.
+            مدرسة واحدة في كل مرّة، والملفّ يُقرأ كما هو — لا حاجة لإعادة تنسيقه.
+          </p>
+
+          <!-- ── الخطوة ١: المدرسة والملفّ ── -->
+          <section class="imp-step">
+            <div class="imp-step-head">
+              <span class="imp-step-num">١</span>
+              <h3>المدرسة والملفّ</h3>
+            </div>
+
+            <div class="imp-grid">
+              <div class="form-group">
+                <label for="imp-school">المدرسة المستهدفة</label>
+                <select id="imp-school">
+                  <option value="">— اختر مدرسة —</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label id="imp-kind-label">نوع البيانات</label>
+                <div class="dir-seg imp-kind" role="tablist" aria-labelledby="imp-kind-label">
+                  <button type="button" class="imp-kind-btn is-active" data-kind="students"
+                          role="tab" aria-selected="true">طلاب</button>
+                  <button type="button" class="imp-kind-btn" data-kind="staff"
+                          role="tab" aria-selected="false">كادر</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="imp-grid">
+              <div class="form-group">
+                <label for="imp-file">ملفّ البيانات (‎.xlsx‎ أو ‎.csv‎)</label>
+                <input id="imp-file" type="file" accept=".csv,.xlsx,.xls" />
+              </div>
+              <div class="form-group">
+                <label>قالب جاهز</label>
+                <button type="button" class="btn btn-outline btn-sm" id="imp-template-btn">
+                  تنزيل قالب فارغ بالأعمدة المطلوبة
+                </button>
+              </div>
+            </div>
+
+            <p class="imp-hint" id="imp-hint-fields"></p>
+            <p class="imp-hint">
+              الصفّ الأوّل في الملفّ يجب أن يكون صفّ العناوين. من ملفّات Excel
+              تُقرأ <b>الورقة الأولى فقط</b>.
+            </p>
+          </section>
+
+          <!-- ── الخطوة ٢: مطابقة الأعمدة ── -->
+          <section class="imp-step" id="imp-step-map" hidden>
+            <div class="imp-step-head">
+              <span class="imp-step-num">٢</span>
+              <h3>مطابقة الأعمدة</h3>
+            </div>
+            <p class="imp-hint">
+              طابَقت الأداة أعمدة ملفّك تلقائياً. راجِعها وصحّح ما يلزم — الاقتراحات
+              التقريبية <b>لا تُعتمَد</b> قبل تأكيدك.
+            </p>
+            <div class="table-wrapper">
+              <table class="data-table imp-map-table">
+                <thead>
+                  <tr>
+                    <th>الحقل في رُقِيّ</th>
+                    <th>العمود في ملفّك</th>
+                    <th>عيّنة من الملفّ</th>
+                  </tr>
+                </thead>
+                <tbody id="imp-map-tbody"></tbody>
+              </table>
+            </div>
+            <p class="imp-alert imp-alert--bad" id="imp-map-msg" hidden></p>
+            <div class="imp-actions">
+              <button type="button" class="btn btn-primary btn-sm" id="imp-map-next">تابِع إلى المعاينة</button>
+            </div>
+          </section>
+
+          <!-- ── الخطوة ٣: المعاينة ── -->
+          <section class="imp-step" id="imp-step-preview" hidden>
+            <div class="imp-step-head">
+              <span class="imp-step-num">٣</span>
+              <h3>المعاينة قبل التنفيذ</h3>
+            </div>
+
+            <div class="imp-stats" id="imp-stats"></div>
+
+            <!-- توزيع الصفوف — للطلاب فقط -->
+            <div id="imp-classes-wrap" hidden>
+              <h4 class="imp-sub">توزيع الأسطر على صفوف المدرسة</h4>
+              <div class="table-wrapper">
+                <table class="data-table imp-classes-table">
+                  <thead>
+                    <tr>
+                      <th>الصف/الشعبة في الملفّ</th>
+                      <th>عدد الأسطر</th>
+                      <th>الصفّ المطابِق في رُقِيّ</th>
+                    </tr>
+                  </thead>
+                  <tbody id="imp-classes-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- أسطر بها مشاكل — كلّها بلا قصّ -->
+            <div id="imp-issues-wrap" hidden>
+              <h4 class="imp-sub">أسطر لن تُستورَد (<span id="imp-issues-count">0</span>)</h4>
+              <div class="table-wrapper imp-issues-scroll">
+                <table class="data-table">
+                  <thead>
+                    <tr><th>السطر</th><th>الاسم</th><th>السبب</th></tr>
+                  </thead>
+                  <tbody id="imp-issues-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <h4 class="imp-sub">عيّنة من الأسطر الجاهزة</h4>
+            <div class="table-wrapper">
+              <table class="data-table imp-sample-table">
+                <thead id="imp-sample-thead"></thead>
+                <tbody id="imp-sample-tbody"></tbody>
+              </table>
+            </div>
+
+            <p class="imp-alert imp-alert--bad" id="imp-preview-msg" hidden></p>
+            <div class="imp-actions">
+              <button type="button" class="btn btn-ghost btn-sm" id="imp-back-map">رجوع للمطابقة</button>
+              <button type="button" class="btn btn-primary btn-sm" id="imp-run-btn">
+                <span id="imp-run-label">تنفيذ الاستيراد</span>
+                <span class="spinner" id="imp-run-spinner" hidden></span>
+              </button>
+            </div>
+          </section>
+
+          <!-- ── الملخّص النهائي ── -->
+          <section class="imp-step" id="imp-step-done" hidden>
+            <div class="imp-step-head">
+              <span class="imp-step-num">✓</span>
+              <h3>نتيجة الاستيراد</h3>
+            </div>
+            <div class="imp-stats" id="imp-done-stats"></div>
+            <div id="imp-done-issues-wrap" hidden>
+              <h4 class="imp-sub">أسطر لم تُستورَد (<span id="imp-done-issues-count">0</span>)</h4>
+              <div class="table-wrapper imp-issues-scroll">
+                <table class="data-table">
+                  <thead>
+                    <tr><th>السطر</th><th>الاسم</th><th>السبب</th></tr>
+                  </thead>
+                  <tbody id="imp-done-issues-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="imp-actions">
+              <button type="button" class="btn btn-outline btn-sm" id="imp-restart">استيراد ملفّ آخر</button>
+            </div>
+          </section>
+
+          <p class="imp-alert imp-alert--bad" id="imp-error" hidden></p>
+        </div>
       </div>
     </div>
     </div><!-- /dir-tab-schools -->
@@ -1028,6 +1198,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../shared/import-parser.js"></script>
   <script type="module" src="../shared/db.js"></script>  <script type="module" src="script.js"></script>
 </body>
 </html>

@@ -3655,6 +3655,11 @@ window.NSAMS_DB = {
   // تنظيف مخابئ المستأجِر عند الخروج
   purgeTenantCaches,
 
+  // الاستيراد الجماعي من لوحة المديرية — §24
+  getSchoolClassesForDirectorate,
+  directorateBulkImportStudents,
+  directorateBulkImportStaff,
+
   // وثائق «لا مانع» — §23
   lookupStudentForTransfer,
   issueTransferDocument,
@@ -4207,4 +4212,43 @@ async function purgeTenantCaches() {
       tx.onabort    = resolve;
     });
   } catch { /* غير قاتل */ }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §24 — الاستيراد الجماعي من لوحة المديرية
+// ─────────────────────────────────────────────────────────────────────────────
+// كل الكتابة عبر دوال security definer في القاعدة: المديرية لا تملك — ولا
+// يجوز أن تُمنَح — صلاحية RLS مباشرة على students أو staff_records أو classes.
+// ومتّصلة حصراً كبقية العمليات العابرة للمدارس؛ طابور الـ offline مخصّص
+// لكتابات المدرسة على بياناتها هي.
+
+// صفوف مدرسة داخل مديريتي — تلزم لمعاينة الاستيراد قبل الإرسال.
+async function getSchoolClassesForDirectorate(schoolId) {
+  const { data, error } = await db.rpc('get_school_classes_for_directorate', {
+    p_school_id: schoolId,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
+// rows: [{ first_name, father_name, family_name, gender, birth_date, national_id }]
+// تُستدعى مرّة لكل شعبة — الواجهة تُجمّع سطور الملفّ حسب الشعبة المُحلَّلة.
+async function directorateBulkImportStudents({ schoolId, classId, rows }) {
+  if (!isOnline()) throw new Error('الاستيراد الجماعي يتطلّب اتصالاً بالإنترنت.');
+  const { data, error } = await db.rpc('directorate_bulk_import_students', {
+    p_school_id: schoolId, p_class_id: classId, p_rows: rows,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// rows: [{ full_name, staff_type, gender, ...حقول اختيارية }]
+// مزامنة school_personnel تجري داخل الدالة نفسها، لا بخطوة تالية هنا.
+async function directorateBulkImportStaff({ schoolId, rows }) {
+  if (!isOnline()) throw new Error('الاستيراد الجماعي يتطلّب اتصالاً بالإنترنت.');
+  const { data, error } = await db.rpc('directorate_bulk_import_staff', {
+    p_school_id: schoolId, p_rows: rows,
+  });
+  if (error) throw error;
+  return data;
 }

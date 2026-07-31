@@ -21,6 +21,9 @@ const {
   getDirectorateResultSheets,
   reviewResultSheet,
   resolveReportPhotos,
+  getSchoolClassesForDirectorate,
+  directorateBulkImportStudents,
+  directorateBulkImportStaff,
   localDateISO,
 } = window.NSAMS_DB;
 
@@ -176,6 +179,7 @@ function showApp(session) {
   setupDirPrincipals();
   setupRsBulk();
   setupAcademicTerm();
+  setupImport();
 }
 
 // ══════════════════════════════════════════════
@@ -2478,21 +2482,30 @@ function _dirActivateTab(tabName) {
   if (tabName === 'academic') setTimeout(() => renderAcademic(), 0);
 }
 
-// Segmented control inside the "schools" section (schools ⇄ principals).
+// Segmented control inside the "schools" section (schools ⇄ principals ⇄ import).
+// Scoped to #dir-schools-seg: the academic panel reuses .dir-seg-btn for its own
+// term switch, so an unscoped query would make a term click retoggle these panels.
 function setupDirSeg() {
-  document.querySelectorAll('.dir-seg-btn').forEach(btn => {
+  const seg = document.getElementById('dir-schools-seg');
+  if (!seg) return;
+  const panels = {
+    schools:    document.getElementById('dir-seg-schools'),
+    principals: document.getElementById('dir-seg-principals'),
+    import:     document.getElementById('dir-seg-import'),
+  };
+  seg.querySelectorAll('.dir-seg-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.dir-seg-btn').forEach(b => {
+      seg.querySelectorAll('.dir-seg-btn').forEach(b => {
         b.classList.remove('is-active');
         b.setAttribute('aria-selected', 'false');
       });
       btn.classList.add('is-active');
       btn.setAttribute('aria-selected', 'true');
-      const showPrincipals = btn.dataset.seg === 'principals';
-      const s = document.getElementById('dir-seg-schools');
-      const p = document.getElementById('dir-seg-principals');
-      if (s) s.hidden = showPrincipals;
-      if (p) p.hidden = !showPrincipals;
+      const which = btn.dataset.seg;
+      for (const [key, el] of Object.entries(panels)) {
+        if (el) el.hidden = key !== which;
+      }
+      if (which === 'import') fillImportSchools();
     });
   });
 }
@@ -2568,6 +2581,9 @@ async function loadDirSchools() {
     _dirAllSchools.forEach(s => pmSchoolEl.add(new Option(s.name, s.id)));
     CustomSelect.refresh('dir-pm-school');
   }
+  // ونفس القائمة في قسم الاستيراد — يُملأ من هنا لا من نقرة المبدّل وحدها،
+  // فالنقرة قد تسبق انتهاء هذا الجلب.
+  fillImportSchools();
 
   if (_dirAllSchools.length === 0) { emptyEl?.classList.remove('hidden'); return; }
 
@@ -2979,4 +2995,675 @@ function setupDirPrincipals() {
     // لنافذة التأكيد فوقها، وإغلاق هذه يخفي وجهة عرض النتيجة والخطأ معاً.
     if (e.target.id === 'dir-cred-modal' && !_dirCredBusy) closeCredModal();
   });
+}
+
+// ══════════════════════════════════════════════
+//  استيراد بيانات مدرسة (§24)
+// ══════════════════════════════════════════════
+// كل الكتابة تمرّ بدالتَي security definer في القاعدة — لا تملك المديرية أي
+// صلاحية RLS مباشرة على students أو staff_records، ولا يجوز أن تُمنَح.
+// القراءة والتحقّق هنا تكرار مقصود لما تفعله الدالة في الخادم: المعاينة قبل
+// الإرسال حاجة عملية (الموظّف يُصحّح ملفّه لا يكتشف الخطأ بعد الكتابة)،
+// والخادم يبقى المرجع الأخير.
+
+const IMP = window.NSAMS_ImportParser;
+
+const STUDENT_IMPORT_SCHEMA = [
+  { key: 'firstName',  label: 'الاسم الأول',    required: true,
+    aliases: ['الاسم الأول', 'الاسم', 'الإسم', 'اسم الطالب', 'الطالب', 'first name'] },
+  { key: 'fatherName', label: 'اسم الأب',       required: true,
+    aliases: ['اسم الأب', 'الأب', 'اسم الوالد', 'father name'] },
+  { key: 'familyName', label: 'الكنية',          required: true,
+    aliases: ['الكنية', 'النسبة', 'اسم العائلة', 'العائلة', 'last name', 'family name'] },
+  { key: 'gender',     label: 'الجنس',           required: true,
+    aliases: ['الجنس', 'النوع', 'gender', 'sex'] },
+  // ⚠️ «الفصل» ليست مرادفاً للشعبة هنا — تصادم مع «الفصل الدراسي» في البيان.
+  { key: 'grade',      label: 'الصف',            required: true,
+    aliases: ['الصف', 'الصف الدراسي', 'المرحلة', 'grade'] },
+  { key: 'section',    label: 'الشعبة',          required: true,
+    aliases: ['الشعبة', 'شعبة', 'section'] },
+  { key: 'birthDate',  label: 'تاريخ الميلاد',   required: false,
+    aliases: ['تاريخ الميلاد', 'تاريخ الولادة', 'المواليد', 'مواليد', 'birth date', 'dob'] },
+  { key: 'nationalId', label: 'الرقم الوطني',    required: false,
+    aliases: ['الرقم الوطني', 'رقم وطني', 'رقم الهوية', 'الهوية', 'national id'] },
+];
+
+const STAFF_IMPORT_SCHEMA = [
+  { key: 'fullName',        label: 'الاسم الكامل',      required: true,
+    aliases: ['الاسم الكامل', 'الاسم', 'الإسم', 'الاسم الثلاثي', 'اسم الموظف', 'full name'] },
+  // ⚠️ فئة الكادر عمود صريح في الملفّ — لا تُستنتَج من المسمّى الوظيفي كما في
+  //    النموذج الفردي بلوحة المدرسة. الاستنتاج الصامت خطِر في استيراد جماعي.
+  { key: 'staffType',       label: 'فئة الكادر',        required: true,
+    aliases: ['فئة الكادر', 'الفئة', 'نوع الكادر', 'التصنيف', 'staff type'] },
+  { key: 'gender',          label: 'الجنس',             required: true,
+    aliases: ['الجنس', 'النوع', 'gender', 'sex'] },
+  { key: 'nationalId',      label: 'الرقم الوطني',      required: false,
+    aliases: ['الرقم الوطني', 'رقم وطني', 'رقم الهوية', 'الهوية', 'national id'] },
+  { key: 'motherName',      label: 'اسم الأم',          required: false,
+    aliases: ['اسم الأم', 'الأم', 'اسم الوالدة', 'mother name'] },
+  { key: 'birthDate',       label: 'تاريخ الميلاد',     required: false,
+    aliases: ['تاريخ الميلاد', 'تاريخ الولادة', 'المواليد', 'مواليد', 'birth date'] },
+  { key: 'jobTitle',        label: 'المسمّى الوظيفي',   required: false,
+    aliases: ['المسمى الوظيفي', 'الوظيفة', 'المهنة', 'job title'] },
+  { key: 'specialization',  label: 'الاختصاص',          required: false,
+    aliases: ['الاختصاص', 'التخصص', 'الإختصاص'] },
+  { key: 'subjectTaught',   label: 'المادة المُدرَّسة',  required: false,
+    aliases: ['المادة', 'مادة التدريس', 'المادة المدرسة', 'subject'] },
+  { key: 'certificate',     label: 'الشهادة',           required: false,
+    aliases: ['الشهادة', 'المؤهل', 'المؤهل العلمي'] },
+  { key: 'higherDegree',    label: 'الدراسات العليا',   required: false,
+    aliases: ['الدراسات العليا', 'شهادة عليا', 'الدرجة العلمية'] },
+  { key: 'seniorityYear',   label: 'سنة القدم',         required: false,
+    aliases: ['سنة القدم', 'القدم', 'سنة التعيين', 'التعيين'] },
+  { key: 'phone',           label: 'الهاتف',            required: false,
+    aliases: ['الهاتف', 'رقم الهاتف', 'الموبايل', 'الجوال', 'phone'] },
+  { key: 'residentialZone', label: 'المنطقة السكنية',   required: false,
+    aliases: ['المنطقة السكنية', 'منطقة السكن', 'السكن'] },
+  { key: 'educationalZone', label: 'المنطقة التعليمية', required: false,
+    aliases: ['المنطقة التعليمية', 'المنطقة التربوية'] },
+  { key: 'rosterType',      label: 'نوع الملاك',        required: false,
+    aliases: ['نوع الملاك', 'الملاك'] },
+  { key: 'notes',           label: 'ملاحظات',           required: false,
+    aliases: ['ملاحظات', 'ملاحظة', 'notes'] },
+];
+
+const STAFF_TYPE_WORDS = {
+  'اداري': 'admin', 'ادارة': 'admin', 'اداره': 'admin', 'admin': 'admin',
+  'تدريسي': 'teaching', 'معلم': 'teaching', 'مدرس': 'teaching', 'تعليمي': 'teaching',
+  'مدرسه': 'teaching', 'معلمه': 'teaching', 'teaching': 'teaching',
+  'مهني': 'professional', 'فني': 'professional', 'professional': 'professional',
+  'مستخدم': 'worker', 'عامل': 'worker', 'خدمات': 'worker', 'عامله': 'worker', 'worker': 'worker',
+  'حارس': 'guard', 'حراسه': 'guard', 'ناطور': 'guard', 'guard': 'guard',
+};
+const STAFF_TYPE_LABELS = {
+  admin: 'إداري', teaching: 'تدريسي', professional: 'مهني',
+  worker: 'مستخدم', guard: 'حارس',
+};
+const ROSTER_TYPE_WORDS = {
+  'داخل': 'inside', 'داخل الملاك': 'inside', 'inside': 'inside', 'مثبت': 'inside',
+  'خارج': 'outside', 'خارج الملاك': 'outside', 'outside': 'outside',
+  'عقد': 'contract', 'متعاقد': 'contract', 'contract': 'contract',
+};
+
+// أعمدة العيّنة المعروضة في المعاينة — لا كل الحقول، فالجدول يبقى مقروءاً.
+const IMP_SAMPLE_COLS = {
+  students: [
+    { key: 'first_name',  label: 'الاسم' },
+    { key: 'father_name', label: 'الأب' },
+    { key: 'family_name', label: 'الكنية' },
+    { key: 'gender',      label: 'الجنس', fmt: g => (g === 'male' ? 'ذكر' : g === 'female' ? 'أنثى' : '—') },
+    { key: 'birth_date',  label: 'الميلاد' },
+    { key: 'national_id', label: 'الرقم الوطني' },
+  ],
+  staff: [
+    { key: 'full_name',   label: 'الاسم' },
+    { key: 'staff_type',  label: 'الفئة', fmt: t => STAFF_TYPE_LABELS[t] || t || '—' },
+    { key: 'gender',      label: 'الجنس', fmt: g => (g === 'male' ? 'ذكر' : g === 'female' ? 'أنثى' : '—') },
+    { key: 'job_title',   label: 'المسمّى' },
+    { key: 'national_id', label: 'الرقم الوطني' },
+  ],
+};
+
+let _impKind     = 'students';
+let _impHeaders  = [];
+let _impRows     = [];
+let _impMapping  = {};
+let _impConf     = {};
+let _impClasses  = [];   // صفوف المدرسة المختارة (للطلاب)
+let _impPrepared = null; // { ok, issues, groups }
+let _impBusy     = false;
+
+function impSchema() {
+  return _impKind === 'students' ? STUDENT_IMPORT_SCHEMA : STAFF_IMPORT_SCHEMA;
+}
+function impEl(id) { return document.getElementById(id); }
+
+function impShowError(msg) {
+  const el = impEl('imp-error');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.hidden = !msg;
+}
+
+// تُصفَّر الخطوتان ٢ و٣ عند أي تغيير في المدخلات: معاينة مبنيّة على ملفّ سابق
+// أو مدرسة سابقة أخطر من غياب معاينة.
+function impResetFrom(step) {
+  if (step <= 2) {
+    _impHeaders = []; _impRows = []; _impMapping = {}; _impConf = {};
+    impEl('imp-step-map').hidden = true;
+    impEl('imp-map-msg').hidden = true;
+  }
+  if (step <= 3) {
+    _impPrepared = null;
+    impEl('imp-step-preview').hidden = true;
+    impEl('imp-preview-msg').hidden = true;
+  }
+  impEl('imp-step-done').hidden = true;
+  impShowError('');
+}
+
+function setupImport() {
+  const fileEl = impEl('imp-file');
+  if (!fileEl) return;
+
+  impEl('imp-school')?.addEventListener('change', () => {
+    impResetFrom(2);
+    if (fileEl) fileEl.value = '';
+    loadImportClasses();
+  });
+
+  document.querySelectorAll('.imp-kind-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.classList.contains('is-active')) return;
+      document.querySelectorAll('.imp-kind-btn').forEach(b => {
+        b.classList.remove('is-active');
+        b.setAttribute('aria-selected', 'false');
+      });
+      btn.classList.add('is-active');
+      btn.setAttribute('aria-selected', 'true');
+      _impKind = btn.dataset.kind;
+      impResetFrom(2);
+      fileEl.value = '';
+      renderImportHint();
+    });
+  });
+
+  fileEl.addEventListener('change', () => handleImportFile(fileEl.files?.[0]));
+  impEl('imp-template-btn')?.addEventListener('click', downloadImportTemplate);
+  impEl('imp-map-next')?.addEventListener('click', buildImportPreview);
+  impEl('imp-back-map')?.addEventListener('click', () => {
+    impResetFrom(3);
+    impEl('imp-step-map').hidden = false;
+  });
+  impEl('imp-run-btn')?.addEventListener('click', runImport);
+  impEl('imp-restart')?.addEventListener('click', () => {
+    impResetFrom(2);
+    fileEl.value = '';
+  });
+
+  CustomSelect.enhance('imp-school');
+  renderImportHint();
+}
+
+function renderImportHint() {
+  const el = impEl('imp-hint-fields');
+  if (!el) return;
+  const req = impSchema().filter(f => f.required).map(f => f.label).join('، ');
+  const opt = impSchema().filter(f => !f.required).map(f => f.label).join('، ');
+  el.innerHTML = `<b>أعمدة إلزامية:</b> ${dirEsc(req)}.<br><b>اختيارية:</b> ${dirEsc(opt)}.`;
+}
+
+function fillImportSchools() {
+  const sel = impEl('imp-school');
+  if (!sel) return;
+  const keep = sel.value;
+  while (sel.options.length > 1) sel.remove(1);
+  _dirAllSchools.forEach(s => sel.add(new Option(s.name, s.id)));
+  if (keep && _dirAllSchools.some(s => s.id === keep)) sel.value = keep;
+  CustomSelect.refresh('imp-school');
+}
+
+async function loadImportClasses() {
+  _impClasses = [];
+  const schoolId = impEl('imp-school')?.value;
+  if (!schoolId || _impKind !== 'students') return;
+  try {
+    _impClasses = await getSchoolClassesForDirectorate(schoolId);
+  } catch (e) {
+    impShowError(`تعذّر جلب صفوف المدرسة: ${e.message || e}`);
+  }
+}
+
+// ── الخطوة ١ → ٢: قراءة الملفّ ومطابقة الأعمدة ───────────────────────────
+async function handleImportFile(file) {
+  impResetFrom(2);
+  if (!file) return;
+
+  const schoolId = impEl('imp-school')?.value;
+  if (!schoolId) {
+    impShowError('اختر المدرسة أوّلاً ثم ارفع الملفّ.');
+    impEl('imp-file').value = '';
+    return;
+  }
+
+  try {
+    const { headers, rows } = await IMP.readFile(file);
+    _impHeaders = headers;
+    _impRows    = rows;
+    if (_impKind === 'students' && !_impClasses.length) await loadImportClasses();
+
+    const m = IMP.matchHeaders(headers, impSchema());
+    _impMapping = m.mapping;
+    _impConf    = m.confidence;
+    renderImportMapping(m);
+    impEl('imp-step-map').hidden = false;
+    impEl('imp-step-map').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (e) {
+    impShowError(e.message || 'تعذّرت قراءة الملفّ.');
+  }
+}
+
+function impSampleFor(colIndex) {
+  if (colIndex == null) return '';
+  for (const r of _impRows.slice(0, 20)) {
+    const v = String(r[colIndex] ?? '').trim();
+    if (v) return v;
+  }
+  return '';
+}
+
+const IMP_CONF_LABEL = {
+  exact:    'تطابق تام',
+  contains: 'مُرجَّح',
+  fuzzy:    'تقريبي — راجِعه',
+};
+
+function renderImportMapping(m) {
+  const tbody = impEl('imp-map-tbody');
+  if (!tbody) return;
+
+  tbody.innerHTML = impSchema().map(f => {
+    const col  = _impMapping[f.key];
+    const conf = _impConf[f.key];
+    const cls  = conf ? `imp-conf--${conf}` : 'imp-conf--none';
+    const lbl  = conf ? IMP_CONF_LABEL[conf] : 'لم يُطابَق';
+    // التقريبي معروض في القائمة ليراه المستخدم، ولا يُحتسَب مقبولاً إلا بتأشيرة
+    // صريحة: مطابقة خاطئة صامتة أسوأ بكثير من نقرة تأكيد.
+    const confirmBox = conf === 'fuzzy'
+      ? `<label class="imp-confirm">
+           <input type="checkbox" data-confirm="${f.key}" /> أُؤكّد هذا الاقتراح
+         </label>`
+      : '';
+    return `
+      <tr class="${f.required && col == null ? 'imp-map-row--missing' : ''}">
+        <td>
+          <span class="imp-map-field">
+            ${dirEsc(f.label)}${f.required ? '<span class="imp-req">*</span>' : ''}
+            <span class="imp-conf ${cls}">${lbl}</span>
+          </span>
+        </td>
+        <td>
+          <select data-field="${f.key}"></select>
+          ${confirmBox}
+        </td>
+        <td class="imp-map-sample" data-sample="${f.key}">${dirEsc(impSampleFor(col))}</td>
+      </tr>`;
+  }).join('');
+
+  // الخيارات والقيم تُضبط بعد الحقن لا داخل نصّ HTML: عناوين الملفّ نصّ خارجي،
+  // وبناؤها كعُقَد يُغني عن أي هروب يدوي في سمة value.
+  tbody.querySelectorAll('select[data-field]').forEach(sel => {
+    const key = sel.dataset.field;
+    sel.add(new Option('— لا يوجد —', ''));
+    _impHeaders.forEach((h, i) => sel.add(new Option(h || `العمود ${i + 1}`, String(i))));
+    sel.value = _impMapping[key] == null ? '' : String(_impMapping[key]);
+
+    sel.addEventListener('change', () => {
+      const v = sel.value === '' ? null : Number(sel.value);
+      _impMapping[key] = v;
+      _impConf[key]    = v == null ? null : 'manual';
+      const cell = tbody.querySelector(`[data-sample="${key}"]`);
+      if (cell) cell.textContent = impSampleFor(v);
+      const badge = sel.closest('tr')?.querySelector('.imp-conf');
+      if (badge) {
+        badge.className = `imp-conf ${v == null ? 'imp-conf--none' : 'imp-conf--exact'}`;
+        badge.textContent = v == null ? 'لم يُطابَق' : 'اختيار يدوي';
+      }
+      // اختيار يدوي يُلغي حاجة التأكيد: القرار صار للمستخدم أصلاً.
+      sel.closest('tr')?.querySelector('.imp-confirm')?.remove();
+      sel.closest('tr')?.classList.remove('imp-map-row--missing');
+      impEl('imp-map-msg').hidden = true;
+    });
+  });
+
+  tbody.querySelectorAll('input[data-confirm]').forEach(cb => {
+    cb.addEventListener('change', () => { impEl('imp-map-msg').hidden = true; });
+  });
+
+  // ملاحظة مبكّرة قبل الضغط على «تابِع» — نفس الفحص يتكرّر عند الضغط.
+  const msg = impEl('imp-map-msg');
+  const missing = impSchema().filter(f => f.required && _impMapping[f.key] == null);
+  if (missing.length) {
+    msg.textContent = `حدِّد عمود ملفّك لهذه الحقول قبل المتابعة: ${
+      missing.map(f => f.label).join('، ')}.`;
+    msg.hidden = false;
+  } else {
+    // الحقول التقريبية مستثناة: شارتها ومربّع تأكيدها يقولان ذلك بوضوح أكبر،
+    // وتكرار التحذير هنا يُغرِق التنبيه الحقيقي (عمودان صالحان لحقل واحد).
+    const trulyAmbiguous = (m.ambiguous ?? []).filter(k => _impConf[k] !== 'fuzzy');
+    if (trulyAmbiguous.length) {
+      msg.textContent = 'بعض الحقول احتملت أكثر من عمود — تأكّد من الاختيارات أعلاه.';
+      msg.hidden = false;
+    }
+  }
+}
+
+// الحقول التي طوبقت تقريبياً ولم يؤكّدها المستخدم بعد.
+function impUnconfirmedFuzzy() {
+  return impSchema().filter(f =>
+    _impConf[f.key] === 'fuzzy' &&
+    !document.querySelector(`input[data-confirm="${f.key}"]`)?.checked);
+}
+
+// ── الخطوة ٢ → ٣: التحقّق وبناء المعاينة ─────────────────────────────────
+function impGradeNumber(raw) {
+  const s = IMP.normalizeArabicDigits(String(raw ?? '')).trim();
+  if (!s) return null;
+  const digits = s.match(/\d{1,2}/);
+  if (digits) {
+    const n = Number(digits[0]);
+    if (n >= 1 && n <= 12) return n;
+  }
+  const w = IMP.ordinalWordToNumber(s);
+  return (w != null && w >= 1 && w <= 12) ? w : null;
+}
+
+function impResolveClass(gradeRaw, sectionRaw) {
+  const g = impGradeNumber(gradeRaw);
+  if (g == null) return { classId: null, error: `الصف غير مفهوم: «${String(gradeRaw || '').trim() || '—'}»` };
+
+  const secNorm = IMP.normalizeArabicText(IMP.normalizeArabicDigits(sectionRaw));
+  if (!secNorm) return { classId: null, error: 'الشعبة مطلوبة' };
+
+  const sameGrade = _impClasses.filter(c => Number(c.grade) === g);
+  if (!sameGrade.length) return { classId: null, error: `لا يوجد صفّ ${g} في هذه المدرسة` };
+
+  const hit = sameGrade.find(c => IMP.normalizeArabicText(IMP.normalizeArabicDigits(c.section)) === secNorm);
+  if (hit) return { classId: hit.id, error: null };
+
+  return { classId: null, error: `لا توجد شعبة «${String(sectionRaw).trim()}» في الصف ${g}` };
+}
+
+function buildImportPreview() {
+  impShowError('');
+  const msg = impEl('imp-map-msg');
+
+  const missing = impSchema().filter(f => f.required && _impMapping[f.key] == null);
+  if (missing.length) {
+    msg.textContent = `حدِّد عمود ملفّك لهذه الحقول قبل المتابعة: ${missing.map(f => f.label).join('، ')}.`;
+    msg.hidden = false;
+    return;
+  }
+
+  const unconfirmed = impUnconfirmedFuzzy();
+  if (unconfirmed.length) {
+    msg.textContent = `طوبقت هذه الحقول تقريبياً — أكّدها أو اختر العمود بنفسك: ${
+      unconfirmed.map(f => f.label).join('، ')}.`;
+    msg.hidden = false;
+    return;
+  }
+
+  const mapped = IMP.applyMapping(_impHeaders, _impRows, _impMapping);
+  const ok = [], issues = [];
+
+  mapped.forEach((r, i) => {
+    const line = i + 2;   // +1 لصفّ العناوين و+1 لأنّ الترقيم يبدأ من واحد
+    const built = _impKind === 'students' ? impBuildStudent(r) : impBuildStaff(r);
+    if (built.error) issues.push({ line, name: built.name || '—', error: built.error });
+    else ok.push({ line, ...built.row, __classId: built.classId, __rawClass: built.rawClass });
+  });
+
+  _impPrepared = { ok, issues };
+  renderImportPreview();
+  impEl('imp-step-map').hidden = true;
+  impEl('imp-step-preview').hidden = false;
+  impEl('imp-step-preview').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function impBuildStudent(r) {
+  const first  = String(r.firstName  ?? '').trim();
+  const father = String(r.fatherName ?? '').trim();
+  const family = String(r.familyName ?? '').trim();
+  const name   = [first, father, family].filter(Boolean).join(' ');
+
+  if (!first)  return { name, error: 'الاسم الأول مفقود' };
+  if (!father) return { name, error: 'اسم الأب مفقود' };
+  if (!family) return { name, error: 'الكنية مفقودة' };
+
+  const gender = IMP.normGender(r.gender);
+  if (!gender) return { name, error: `الجنس غير مفهوم: «${String(r.gender ?? '').trim() || '—'}»` };
+
+  const { value: birth, error: birthErr } = IMP.parseTolerantDate(r.birthDate);
+  if (birthErr) return { name, error: birthErr };
+
+  const { classId, error: clsErr } = impResolveClass(r.grade, r.section);
+  if (clsErr) return { name, error: clsErr };
+
+  return {
+    name, classId,
+    rawClass: `${String(r.grade ?? '').trim()} / ${String(r.section ?? '').trim()}`,
+    row: {
+      first_name:  first,
+      father_name: father,
+      family_name: family,
+      gender,
+      birth_date:  birth || '',
+      national_id: IMP.normalizeArabicDigits(String(r.nationalId ?? '')).trim(),
+    },
+  };
+}
+
+function impBuildStaff(r) {
+  const name = String(r.fullName ?? '').trim();
+  if (!name) return { name: '', error: 'الاسم مفقود' };
+
+  const typeRaw  = String(r.staffType ?? '').trim();
+  const typeNorm = IMP.normalizeArabicText(typeRaw);
+  const staffType = STAFF_TYPE_WORDS[typeNorm];
+  if (!staffType) {
+    return { name, error: `فئة الكادر غير مفهومة: «${typeRaw || '—'}» — المقبول: ${
+      Object.values(STAFF_TYPE_LABELS).join('، ')}` };
+  }
+
+  const gender = IMP.normGender(r.gender);
+  if (!gender) return { name, error: `الجنس غير مفهوم: «${String(r.gender ?? '').trim() || '—'}»` };
+
+  const { value: birth, error: birthErr } = IMP.parseTolerantDate(r.birthDate);
+  if (birthErr) return { name, error: birthErr };
+
+  let seniority = '';
+  const senRaw = IMP.normalizeArabicDigits(String(r.seniorityYear ?? '')).trim();
+  if (senRaw) {
+    const m = senRaw.match(/\d{4}/);
+    if (!m) return { name, error: `سنة القدم غير مفهومة: «${senRaw}»` };
+    seniority = m[0];
+  }
+
+  const rosterRaw = IMP.normalizeArabicText(String(r.rosterType ?? '').trim());
+  const roster = rosterRaw ? ROSTER_TYPE_WORDS[rosterRaw] : 'inside';
+  if (rosterRaw && !roster) {
+    return { name, error: `نوع الملاك غير مفهوم: «${String(r.rosterType).trim()}» — المقبول: داخل، خارج، عقد` };
+  }
+
+  const txt = v => String(v ?? '').trim();
+  return {
+    name, classId: null,
+    row: {
+      full_name:        name,
+      staff_type:       staffType,
+      gender,
+      national_id:      IMP.normalizeArabicDigits(txt(r.nationalId)),
+      mother_name:      txt(r.motherName),
+      birth_date:       birth || '',
+      job_title:        txt(r.jobTitle),
+      specialization:   txt(r.specialization),
+      // المادة المُدرَّسة تخصّ التدريسيين فقط؛ الدالة في الخادم تُفرغها لغيرهم
+      // أيضاً، والتفريغ هنا يجعل المعاينة صادقة لا مضلِّلة.
+      subject_taught:   staffType === 'teaching' ? txt(r.subjectTaught) : '',
+      certificate:      txt(r.certificate),
+      higher_degree:    txt(r.higherDegree),
+      seniority_year:   seniority,
+      phone:            IMP.normalizeArabicDigits(txt(r.phone)),
+      residential_zone: txt(r.residentialZone),
+      educational_zone: txt(r.educationalZone),
+      roster_type:      roster,
+      notes:            txt(r.notes),
+    },
+  };
+}
+
+function impStat(num, label, tone) {
+  return `<div class="imp-stat${tone ? ` imp-stat--${tone}` : ''}">
+    <span class="imp-stat-num">${num}</span>
+    <span class="imp-stat-lbl">${dirEsc(label)}</span>
+  </div>`;
+}
+
+function renderImportPreview() {
+  const { ok, issues } = _impPrepared;
+  const schoolName = impEl('imp-school')?.selectedOptions?.[0]?.textContent || '';
+
+  impEl('imp-stats').innerHTML = [
+    impStat(ok.length + issues.length, 'أسطر في الملفّ'),
+    impStat(ok.length, 'جاهزة للاستيراد', ok.length ? 'good' : 'bad'),
+    impStat(issues.length, 'بها مشكلة', issues.length ? 'bad' : ''),
+    // اسم المدرسة نصّ لا رقم: خطّ الأرقام أحادي العرض يُشوّه العربية.
+    `<div class="imp-stat"><span class="imp-stat-lbl">الوجهة</span>
+       <span class="imp-stat-dest">${dirEsc(schoolName)}</span></div>`,
+  ].join('');
+
+  // توزيع الصفوف — للطلاب فقط. الأسطر التي لم يُحسَم صفّها انتقلت إلى قائمة
+  // المشاكل أصلاً، فكل مجموعة هنا صفّ موجود فعلاً في المدرسة المختارة.
+  const clsWrap = impEl('imp-classes-wrap');
+  if (_impKind === 'students' && ok.length) {
+    const groups = new Map();
+    ok.forEach(r => {
+      const key = `${r.__rawClass}→${r.__classId}`;
+      const g = groups.get(key) || { n: 0, raw: r.__rawClass, cid: r.__classId };
+      g.n += 1;
+      groups.set(key, g);
+    });
+    impEl('imp-classes-tbody').innerHTML = [...groups.values()].map(g => {
+      const c = _impClasses.find(x => x.id === g.cid);
+      const label = c ? (c.name || `الصف ${c.grade} / ${c.section}`) : '—';
+      return `<tr><td>${dirEsc(g.raw)}</td><td>${g.n}</td>
+              <td class="imp-match">${dirEsc(label)}</td></tr>`;
+    }).join('');
+    clsWrap.hidden = false;
+  } else {
+    clsWrap.hidden = true;
+  }
+
+  impRenderIssues(issues, 'imp-issues-wrap', 'imp-issues-tbody', 'imp-issues-count');
+
+  const cols = IMP_SAMPLE_COLS[_impKind];
+  impEl('imp-sample-thead').innerHTML =
+    `<tr><th>#</th>${cols.map(c => `<th>${dirEsc(c.label)}</th>`).join('')}</tr>`;
+  impEl('imp-sample-tbody').innerHTML = ok.slice(0, 10).map(r =>
+    `<tr><td class="muted">${r.line}</td>${
+      cols.map(c => `<td>${dirEsc(c.fmt ? c.fmt(r[c.key]) : (r[c.key] || '—'))}</td>`).join('')
+    }</tr>`).join('') || `<tr><td colspan="${cols.length + 1}" class="empty-state">لا سطر جاهز.</td></tr>`;
+
+  const runBtn = impEl('imp-run-btn');
+  if (runBtn) runBtn.disabled = ok.length === 0;
+  const msg = impEl('imp-preview-msg');
+  if (ok.length === 0) {
+    msg.textContent = 'لا يوجد سطر صالح — صحّح الملفّ أو المطابقة ثم أعِد المحاولة.';
+    msg.hidden = false;
+  } else {
+    msg.hidden = true;
+  }
+}
+
+function impRenderIssues(list, wrapId, tbodyId, countId) {
+  const wrap = impEl(wrapId);
+  if (!wrap) return;
+  if (!list.length) { wrap.hidden = true; return; }
+  impEl(countId).textContent = list.length;
+  // بلا قصّ: الحاوية تُمرَّر بالـCSS. قصّ القائمة يُخفي أخطاءً على المستخدم
+  // أن يُصلحها في ملفّه.
+  impEl(tbodyId).innerHTML = list.map(f =>
+    `<tr><td class="muted">${f.line ?? '—'}</td><td>${dirEsc(f.name || '—')}</td>
+     <td>${dirEsc(f.error || '—')}</td></tr>`).join('');
+  wrap.hidden = false;
+}
+
+// ── الخطوة ٣: التنفيذ ────────────────────────────────────────────────────
+async function runImport() {
+  if (_impBusy || !_impPrepared?.ok.length) return;
+  const schoolId = impEl('imp-school')?.value;
+  if (!schoolId) { impShowError('اختر المدرسة أوّلاً.'); return; }
+
+  _impBusy = true;
+  const btn = impEl('imp-run-btn');
+  btn.disabled = true;
+  impEl('imp-run-label').textContent = 'جارٍ الاستيراد…';
+  impEl('imp-run-spinner').hidden = false;
+  impShowError('');
+
+  try {
+    const total = { inserted: 0, duplicate: 0, failed: [] };
+
+    if (_impKind === 'students') {
+      // استدعاء لكل شعبة: p_class_id وسيط للدالة كلّها لا حقل في السطر، وسجلّ
+      // التدقيق يصير صفّاً لكل شعبة وهي الدقّة المطلوبة.
+      const byClass = new Map();
+      _impPrepared.ok.forEach(r => {
+        const { line, __classId, __rawClass, ...row } = r;
+        if (!byClass.has(__classId)) byClass.set(__classId, { lines: [], rows: [] });
+        const b = byClass.get(__classId);
+        b.lines.push(line);
+        b.rows.push(row);
+      });
+      for (const [classId, b] of byClass) {
+        const res = await directorateBulkImportStudents({ schoolId, classId, rows: b.rows });
+        impMergeSummary(total, res, b.lines);
+      }
+    } else {
+      const lines = _impPrepared.ok.map(r => r.line);
+      const rows  = _impPrepared.ok.map(({ line, __classId, __rawClass, ...row }) => row);
+      const res   = await directorateBulkImportStaff({ schoolId, rows });
+      impMergeSummary(total, res, lines);
+    }
+
+    renderImportDone(total);
+    impEl('imp-step-preview').hidden = true;
+    impEl('imp-step-done').hidden = false;
+    impEl('imp-step-done').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    loadDirSchools().catch(() => {});   // أعداد الطلاب/المعلمين في جدول المدارس
+  } catch (e) {
+    impShowError(e.message || 'فشل الاستيراد.');
+  } finally {
+    _impBusy = false;
+    btn.disabled = false;
+    impEl('imp-run-label').textContent = 'تنفيذ الاستيراد';
+    impEl('imp-run-spinner').hidden = true;
+  }
+}
+
+// الخادم يُرقّم الأسطر داخل دفعته هو (١، ٢، …) — تُترجَم إلى رقم السطر في
+// الملفّ كي يجد المستخدم السطر الذي عليه إصلاحه.
+function impMergeSummary(total, res, lines) {
+  total.inserted  += res?.inserted  ?? 0;
+  total.duplicate += res?.duplicate ?? 0;
+  (res?.failed ?? []).forEach(f => {
+    total.failed.push({ ...f, line: lines[(f.line ?? 0) - 1] ?? f.line });
+  });
+}
+
+function renderImportDone(sum) {
+  impEl('imp-done-stats').innerHTML = [
+    impStat(sum.inserted, 'سجلّ أُضيف', sum.inserted ? 'good' : ''),
+    impStat(sum.duplicate, 'مكرّر تُخطّي', sum.duplicate ? 'warn' : ''),
+    impStat(sum.failed.length, 'فشل', sum.failed.length ? 'bad' : ''),
+  ].join('');
+  impRenderIssues(sum.failed, 'imp-done-issues-wrap', 'imp-done-issues-tbody', 'imp-done-issues-count');
+}
+
+// ── قالب فارغ ────────────────────────────────────────────────────────────
+// CSV لا XLSX: يُفتَح في Excel كما في أي محرّر، ولا يحتاج تحميل مكتبة.
+// BOM في المقدّمة كي لا يعرض Excel العربية محارف مشوّهة.
+function downloadImportTemplate() {
+  const header = impSchema().map(f => f.label).join(',');
+  const sample = _impKind === 'students'
+    ? 'محمد,أحمد,العلي,ذكر,7,أ,2011-03-14,01010101010'
+    : `ليلى الحسن,${STAFF_TYPE_LABELS.teaching},أنثى,02020202020,سميرة,1985-06-01,مدرّسة,رياضيات,الرياضيات,إجازة,,2010,0999000000,,,داخل,`;
+  const blob = new Blob(['﻿' + header + '\n' + sample + '\n'],
+                        { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = _impKind === 'students' ? 'قالب-الطلاب.csv' : 'قالب-الكادر.csv';
+  a.click();
+  URL.revokeObjectURL(url);
 }
