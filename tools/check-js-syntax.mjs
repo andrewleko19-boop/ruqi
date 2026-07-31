@@ -29,6 +29,7 @@ const RESET = '\x1b[0m';
 // Standalone JS modules the app loads directly.
 const JS_FILES = [
   'shared/db.js',
+  'shared/import-parser.js',
   'school/script.js',
   'directorate/script.js',
   'directorate/school.js',

@@ -8,7 +8,7 @@
  *
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'nsams-v118';
+const CACHE = 'nsams-v119';
 
 const PRECACHE = [
   './',
@@ -17,6 +17,7 @@ const PRECACHE = [
   './shared/db.js',
   './shared/csel.js',
   './shared/qr.js',
+  './shared/import-parser.js',
   // قالب البيان الشهري — التصدير يجلبه بـ fetch، فبدون تخزينه
   // مسبقاً لا يعمل «تصدير Excel» دون اتصال.
   './shared/statement_template.xlsx',

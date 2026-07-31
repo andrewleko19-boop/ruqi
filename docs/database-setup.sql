@@ -4690,3 +4690,339 @@ end; $$;
 
 revoke all on function public.cancel_transfer_document(uuid) from public, anon;
 grant execute on function public.cancel_transfer_document(uuid) to authenticated;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- §24  الاستيراد الجماعي من لوحة المديرية
+-- ═══════════════════════════════════════════════════════════════════════════
+-- عند انضمام مدرسة إلى التجربة، تنتقل سجلّاتها (طلاب وكادر) من الورق أو من
+-- جداول Excel غير موحّدة إلى رُقِيّ. الجهة التي تُنفّذ النقل هي **المديرية**
+-- لا المدرسة: مديرو المدارس لم يُدرَّبوا بعد، والمديرية هي من يملك الملفّات.
+--
+-- ⚠️ لماذا دوال security definer لا صلاحيات RLS مباشرة:
+--   لا تملك directorate_user اليوم أي صلاحية كتابة على students أو
+--   staff_records أو classes — ولا يجوز أن تُمنَح. منحُ insert مباشر يفتح
+--   سطح صلاحيات دائماً لكل ميزة مستقبلية في لوحة المديرية، بينما الدالة
+--   تحصر الكتابة بعملية الاستيراد وحدها وتتحقّق من النطاق في جسمها.
+--   هذا نفس نمط get_school_staff_for_directorate (قراءة منقّحة عبر دالة)
+--   ونفس نمط §23 (كل كتابة عابرة للمدارس عبر دالة تتحقّق من الدور والنطاق).
+--
+-- الحارس في الدوال الثلاث واحد حرفياً: المستخدم directorate_user، والمدرسة
+-- المستهدفة ضمن مديريته هو. أي إخلال يرفع 'access denied' كما في الدالة
+-- القائمة، فلا يتغيّر شكل الخطأ الذي تعرفه الواجهة.
+
+-- ٢٤.١  قراءة صفوف مدرسة من لوحة المديرية
+-- تلزم لمعاينة الاستيراد قبل الإرسال: الواجهة تُطابق نصّ «الصف/الشعبة» في
+-- الملفّ مع صفوف المدرسة الفعلية وتُظهر ما لا يُطابَق قبل أي كتابة. لا حقول
+-- حسّاسة في classes فلا تنقيح هنا، بخلاف نظيرتها في الكادر.
+create or replace function public.get_school_classes_for_directorate(p_school_id uuid)
+returns table (
+  id               uuid,
+  grade            text,
+  section          text,
+  name             text,
+  academic_year    text,
+  foreign_language text,
+  level_track      smallint
+)
+language plpgsql security definer
+set search_path = public
+as $$
+begin
+  if not exists (
+    select 1 from public.users u
+    join public.schools s on s.id = p_school_id
+    where u.id = auth.uid()
+      and u.role = 'directorate_user'
+      and u.directorate_id = s.directorate_id
+  ) then
+    raise exception 'access denied';
+  end if;
+
+  return query
+    select c.id, c.grade::text, c.section, c.name,
+           c.academic_year, c.foreign_language, c.level_track
+    from public.classes c
+    where c.school_id = p_school_id
+    order by c.grade, c.section;
+end;
+$$;
+
+revoke all on function public.get_school_classes_for_directorate(uuid) from public, anon;
+grant execute on function public.get_school_classes_for_directorate(uuid) to authenticated;
+
+
+-- ٢٤.٢  استيراد طلاب صفٍّ واحد
+-- p_rows مصفوفة jsonb، كل عنصر:
+--   { "first_name", "father_name", "family_name", "gender", "birth_date",
+--     "national_id" }
+-- والصفّ يأتي من p_class_id لا من داخل الصفوف: الواجهة تُجمّع سطور الملفّ
+-- حسب الشعبة المُحلَّلة وتستدعي الدالة مرّة لكل شعبة، فيبقى سجلّ التدقيق
+-- صفّاً واحداً لكل شعبة وهي الدقّة المطلوبة.
+create or replace function public.directorate_bulk_import_students(
+  p_school_id uuid,
+  p_class_id  uuid,
+  p_rows      jsonb
+) returns jsonb
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  v_row        jsonb;
+  v_i          int  := 0;
+  v_inserted   int  := 0;
+  v_duplicate  int  := 0;
+  v_failed     jsonb := '[]'::jsonb;
+  v_first      text;
+  v_father     text;
+  v_family     text;
+  v_full       text;
+  v_natid      text;
+  v_gender     text;
+  v_birth      date;
+begin
+  if not exists (
+    select 1 from public.users u
+    join public.schools s on s.id = p_school_id
+    where u.id = auth.uid()
+      and u.role = 'directorate_user'
+      and u.directorate_id = s.directorate_id
+  ) then
+    raise exception 'access denied';
+  end if;
+
+  -- الشعبة تخصّ المدرسة المستهدفة فعلاً — يمنع كتابة طلاب في شعبة مدرسة أخرى
+  -- لو أُرسل معرّف شعبة خاطئ من الواجهة.
+  if not exists (
+    select 1 from public.classes c
+    where c.id = p_class_id and c.school_id = p_school_id
+  ) then
+    raise exception 'الشعبة المحدّدة لا تنتمي إلى هذه المدرسة';
+  end if;
+
+  if jsonb_typeof(p_rows) is distinct from 'array' then
+    raise exception 'صيغة البيانات غير صالحة';
+  end if;
+
+  for v_row in select * from jsonb_array_elements(p_rows) loop
+    v_i := v_i + 1;
+    begin
+      v_first  := nullif(btrim(coalesce(v_row->>'first_name',  '')), '');
+      v_father := nullif(btrim(coalesce(v_row->>'father_name', '')), '');
+      v_family := nullif(btrim(coalesce(v_row->>'family_name', '')), '');
+      v_natid  := nullif(btrim(coalesce(v_row->>'national_id', '')), '');
+      v_gender := nullif(btrim(coalesce(v_row->>'gender',      '')), '');
+
+      v_full := btrim(concat_ws(' ', v_first, v_father, v_family));
+      if v_full = '' then
+        raise exception 'الاسم مطلوب';
+      end if;
+      if v_gender is not null and v_gender not in ('male', 'female') then
+        raise exception 'قيمة الجنس غير صالحة';
+      end if;
+
+      v_birth := nullif(btrim(coalesce(v_row->>'birth_date', '')), '')::date;
+
+      -- تخطٍّ لا فشل: التكرار حالة متوقّعة عند إعادة رفع ملفّ مُصحَّح.
+      if v_natid is not null and exists (
+        select 1 from public.students s
+        where s.school_id = p_school_id and s.national_id = v_natid and s.is_active
+      ) then
+        v_duplicate := v_duplicate + 1;
+        continue;
+      end if;
+
+      -- is_active مشتقّ بمُشغِّل t_sync_student_is_active من status — لا يُكتب.
+      insert into public.students (
+        id, school_id, class_id, first_name, father_name, family_name,
+        full_name, gender, birth_date, national_id, status
+      ) values (
+        gen_random_uuid(), p_school_id, p_class_id, v_first, v_father, v_family,
+        v_full, v_gender, v_birth, v_natid, 'active'
+      );
+      v_inserted := v_inserted + 1;
+
+    exception when others then
+      v_failed := v_failed || jsonb_build_object(
+        'line',  v_i,
+        'name',  coalesce(nullif(v_full, ''), v_first, '—'),
+        'error', sqlerrm
+      );
+    end;
+  end loop;
+
+  if v_inserted > 0 then
+    insert into public.audit_log (school_id, actor_id, entity, entity_id, action, changes)
+    values (p_school_id, auth.uid(), 'students', null, 'directorate_bulk_import',
+            jsonb_build_object('class_id', p_class_id, 'count', v_inserted));
+  end if;
+
+  return jsonb_build_object(
+    'inserted', v_inserted, 'duplicate', v_duplicate, 'failed', v_failed);
+end;
+$$;
+
+revoke all on function public.directorate_bulk_import_students(uuid, uuid, jsonb) from public, anon;
+grant execute on function public.directorate_bulk_import_students(uuid, uuid, jsonb) to authenticated;
+
+
+-- ٢٤.٣  استيراد كادر مدرسة
+-- p_rows مصفوفة jsonb، كل عنصر يحمل full_name و staff_type و gender إلزاماً،
+-- وبقيّة الحقول اختيارية نصّاً حرّاً (لا قيد CHECK عليها في القاعدة سوى
+-- staff_type و roster_type).
+--
+-- ⚠️ staff_type يأتي **صريحاً** من عمود في الملفّ، لا استنتاجاً من job_title.
+--   النموذج الفردي في لوحة المدرسة يستنتجه بتطابق نصّي حرفي
+--   (job_title='مستخدم' → worker وهكذا، school/script.js:5295-5297) — وهو
+--   منطق هشّ مقبول في واجهة تفاعلية يراها إنسان، وخطِر في استيراد جماعي
+--   صامت. الانحراف هنا مقصود.
+--
+-- ⚠️ مزامنة school_personnel تجري **داخل الدالة** لا بخطوة عميل تالية: كي لا
+--   تُمنَح المديرية صلاحية كتابة منفصلة على جدول ثانٍ، ولتبقى العملية معاملة
+--   واحدة — فشلُ المرآة يُسقط السجلّ كلّه بدل ترك حالة نصف مكتوبة.
+create or replace function public.directorate_bulk_import_staff(
+  p_school_id uuid,
+  p_rows      jsonb
+) returns jsonb
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  v_row       jsonb;
+  v_i         int  := 0;
+  v_inserted  int  := 0;
+  v_duplicate int  := 0;
+  v_failed    jsonb := '[]'::jsonb;
+  v_name      text;
+  v_type      text;
+  v_gender    text;
+  v_natid     text;
+  v_kind      text;
+  v_staff_id  uuid;
+  v_orphan    uuid;
+  v_orphan_n  int;
+begin
+  if not exists (
+    select 1 from public.users u
+    join public.schools s on s.id = p_school_id
+    where u.id = auth.uid()
+      and u.role = 'directorate_user'
+      and u.directorate_id = s.directorate_id
+  ) then
+    raise exception 'access denied';
+  end if;
+
+  if jsonb_typeof(p_rows) is distinct from 'array' then
+    raise exception 'صيغة البيانات غير صالحة';
+  end if;
+
+  for v_row in select * from jsonb_array_elements(p_rows) loop
+    v_i := v_i + 1;
+    begin
+      v_name   := nullif(btrim(coalesce(v_row->>'full_name',   '')), '');
+      v_type   := nullif(btrim(coalesce(v_row->>'staff_type',  '')), '');
+      v_gender := nullif(btrim(coalesce(v_row->>'gender',      '')), '');
+      v_natid  := nullif(btrim(coalesce(v_row->>'national_id', '')), '');
+
+      if v_name is null then
+        raise exception 'الاسم مطلوب';
+      end if;
+      if v_type is null or v_type not in ('admin','teaching','professional','worker','guard') then
+        raise exception 'فئة الكادر غير صالحة';
+      end if;
+      if v_gender is null or v_gender not in ('male','female') then
+        raise exception 'الجنس مطلوب';
+      end if;
+
+      if v_natid is not null and exists (
+        select 1 from public.staff_records sr
+        where sr.school_id = p_school_id and sr.national_id = v_natid and sr.active
+      ) then
+        v_duplicate := v_duplicate + 1;
+        continue;
+      end if;
+
+      insert into public.staff_records (
+        school_id, staff_type, full_name, national_id, mother_name, birth_date,
+        gender, job_title, specialization, subject_taught, certificate,
+        higher_degree, seniority_year, phone, residential_zone, educational_zone,
+        roster_type, notes, active
+      ) values (
+        p_school_id, v_type, v_name, v_natid,
+        nullif(btrim(coalesce(v_row->>'mother_name', '')), ''),
+        nullif(btrim(coalesce(v_row->>'birth_date', '')), '')::date,
+        v_gender,
+        nullif(btrim(coalesce(v_row->>'job_title',       '')), ''),
+        nullif(btrim(coalesce(v_row->>'specialization',  '')), ''),
+        case when v_type = 'teaching'
+             then nullif(btrim(coalesce(v_row->>'subject_taught', '')), '') end,
+        nullif(btrim(coalesce(v_row->>'certificate',      '')), ''),
+        nullif(btrim(coalesce(v_row->>'higher_degree',    '')), ''),
+        nullif(btrim(coalesce(v_row->>'seniority_year',   '')), '')::int,
+        nullif(btrim(coalesce(v_row->>'phone',            '')), ''),
+        nullif(btrim(coalesce(v_row->>'residential_zone', '')), ''),
+        nullif(btrim(coalesce(v_row->>'educational_zone', '')), ''),
+        coalesce(nullif(btrim(coalesce(v_row->>'roster_type', '')), ''), 'inside'),
+        nullif(btrim(coalesce(v_row->>'notes',            '')), ''),
+        true
+      ) returning id into v_staff_id;
+
+      -- مرآة الدوام: المعلّمون هويّتهم في users لا في school_personnel، فلا
+      -- مرآة لهم. الترتيب مطابق لـ syncPersonnelFromStaffRecord في db.js:
+      -- تبنّي صفٍّ يتيم بنفس الاسم إن كان **وحيداً** لا لبس فيه، وإلا إنشاء
+      -- صفّ جديد — ربطُ الشخص الخطأ بكشف حضوره أسوأ من تركه غير مربوط.
+      if v_type <> 'teaching' then
+        v_kind := case when v_type = 'admin' then 'admin' else 'worker' end;
+
+        -- min(uuid) غير موجودة في Postgres — العدّ والمعرّف يُجلبان منفصلَين.
+        select count(*) into v_orphan_n
+        from public.school_personnel sp
+        where sp.school_id = p_school_id
+          and sp.staff_record_id is null
+          and sp.is_active
+          and sp.full_name = v_name;
+
+        if v_orphan_n = 1 then
+          select sp.id into v_orphan
+          from public.school_personnel sp
+          where sp.school_id = p_school_id
+            and sp.staff_record_id is null
+            and sp.is_active
+            and sp.full_name = v_name
+          limit 1;
+        end if;
+
+        if v_orphan_n = 1 then
+          update public.school_personnel
+             set staff_record_id = v_staff_id,
+                 kind            = v_kind,
+                 national_id     = coalesce(national_id, v_natid)
+           where id = v_orphan;
+        else
+          insert into public.school_personnel
+            (school_id, full_name, kind, national_id, is_active, staff_record_id)
+          values (p_school_id, v_name, v_kind, v_natid, true, v_staff_id);
+        end if;
+      end if;
+
+      v_inserted := v_inserted + 1;
+
+    exception when others then
+      v_failed := v_failed || jsonb_build_object(
+        'line', v_i, 'name', coalesce(v_name, '—'), 'error', sqlerrm);
+    end;
+  end loop;
+
+  if v_inserted > 0 then
+    insert into public.audit_log (school_id, actor_id, entity, entity_id, action, changes)
+    values (p_school_id, auth.uid(), 'staff_records', null, 'directorate_bulk_import',
+            jsonb_build_object('count', v_inserted));
+  end if;
+
+  return jsonb_build_object(
+    'inserted', v_inserted, 'duplicate', v_duplicate, 'failed', v_failed);
+end;
+$$;
+
+revoke all on function public.directorate_bulk_import_staff(uuid, jsonb) from public, anon;
+grant execute on function public.directorate_bulk_import_staff(uuid, jsonb) to authenticated;

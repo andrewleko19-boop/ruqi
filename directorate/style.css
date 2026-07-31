@@ -1853,3 +1853,210 @@ input[type="search"].input-sm {
   user-select: all;
 }
 .cred-warn { margin-top: 8px; font-size: 0.72rem; color: var(--warn); font-weight: 600; }
+
+/* ══════════════════════════════════════════════
+   استيراد بيانات مدرسة (§24)
+   ثلاث خطوات متتالية داخل بطاقة واحدة لا نافذة منبثقة: العملية طويلة
+   (رفع → مطابقة → معاينة) ويحتاج المستخدم أن يرى ما فوقها وهو يُصحّح.
+══════════════════════════════════════════════ */
+.imp-intro {
+  padding: 14px 20px 0;
+  font-size: 0.86rem;
+  line-height: 1.75;
+  color: var(--text-secondary);
+}
+.imp-step {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.imp-step:last-of-type { border-bottom: none; }
+.imp-step[hidden] { display: none; }
+
+.imp-step-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.imp-step-num {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.imp-step-head h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.imp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-bottom: 12px;
+}
+.imp-grid .form-group { justify-content: flex-start; }
+/* الزرّ لا يتمدّد على عرض العمود كما يفعل الحقل النصّي بجانبه. */
+.imp-grid .form-group > .btn { align-self: flex-start; }
+
+/* مبدّل طلاب/كادر — نفس شكل .dir-seg بلا معالِج .dir-seg-btn العام. */
+.imp-kind { align-self: flex-start; }
+.imp-kind-btn {
+  padding: 6px 18px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+.imp-kind-btn.is-active { background: var(--text-primary); color: var(--bg-card); }
+
+.imp-hint {
+  font-size: 0.78rem;
+  line-height: 1.7;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.imp-hint b { color: var(--text-secondary); font-weight: 700; }
+
+.imp-sub {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 16px 0 8px;
+}
+
+.imp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* ── جدول المطابقة ── */
+.imp-map-table td { vertical-align: middle; }
+.imp-map-table select { min-width: 180px; }
+.imp-map-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.imp-req {
+  color: var(--bad);
+  font-weight: 700;
+}
+.imp-conf {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.imp-conf--exact    { background: var(--good-tint); color: var(--good); }
+.imp-conf--contains { background: var(--accent-tint); color: var(--accent); }
+/* التقريبي أصفر عمداً: اقتراح يحتاج عيناً بشرية، لا مطابقة مقبولة. */
+.imp-conf--fuzzy    { background: var(--warn-tint); color: var(--warn); }
+.imp-conf--none     { background: var(--bad-tint); color: var(--bad); }
+.imp-map-sample {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.imp-map-row--missing { background: var(--bad-tint); }
+.imp-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--warn);
+  cursor: pointer;
+}
+.imp-confirm input { width: auto; accent-color: var(--warn); }
+
+/* ── إحصاءات المعاينة والملخّص ── */
+.imp-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.imp-stat {
+  flex: 1 1 130px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+}
+.imp-stat-num {
+  display: block;
+  font-family: var(--font-num);
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+.imp-stat-lbl {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+.imp-stat-dest {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+.imp-stat--good .imp-stat-num { color: var(--good); }
+.imp-stat--warn .imp-stat-num { color: var(--warn); }
+.imp-stat--bad  .imp-stat-num { color: var(--bad);  }
+
+/* كل الأخطاء تُعرض بلا قصّ — التمرير داخل الحاوية لا اقتطاع القائمة. */
+.imp-issues-scroll { max-height: 320px; overflow-y: auto; }
+
+.imp-classes-table .imp-nomatch { color: var(--bad); font-weight: 700; }
+.imp-classes-table .imp-match    { color: var(--good); font-weight: 600; }
+
+.imp-sample-table td, .imp-sample-table th { white-space: nowrap; }
+
+.imp-alert {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.83rem;
+  line-height: 1.7;
+}
+.imp-alert[hidden] { display: none; }
+.imp-alert--bad {
+  background: var(--bad-tint);
+  color: var(--bad);
+  border: 1px solid color-mix(in srgb, var(--bad) 35%, transparent);
+}
+.imp-alert--good {
+  background: var(--good-tint);
+  color: var(--good);
+  border: 1px solid color-mix(in srgb, var(--good) 35%, transparent);
+}
+
+@media (max-width: 640px) {
+  .imp-step { padding: 14px 12px; }
+  .imp-intro { padding: 12px 12px 0; }
+  .imp-map-sample { max-width: 120px; }
+}
