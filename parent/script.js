@@ -727,9 +727,12 @@ modalConfirmLogout.addEventListener('click', e => {
 btnConfirmLogoutOk.addEventListener('click', async () => {
   modalConfirmLogout.hidden = true;
   try { await parentLogout(); } catch { /* ignore */ }
-  S.students = []; S.activeStudent = null; S.phone = '';
-  inpPhone.value = '';
-  showScreen('login');
+  try { await window.NSAMS_DB.purgeTenantCaches(); } catch { /* ignore */ }
+  // ⚠️ إعادة تحميل لا showScreen: الأخيرة تقلب hidden فقط، فتبقى أسماء أبناء
+  // الأهل السابق ودرجاتهم وتقويم غيابهم واسم مدرستهم **في الـDOM** مخفيّةً،
+  // وتعود للظهور لحظة دخول أهلٍ آخرين قبل أن تصل بياناتهم. نفس العلّة أُصلحت
+  // في بوابتَي المدرسة والمعلّم بإعادة التحميل، ولم تُصلَح هنا.
+  location.reload();
 });
 
 // ── Excuse from More Tab ──────────────────────────────────────────────────

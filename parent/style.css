@@ -66,10 +66,28 @@ input, textarea, select { font-family: inherit; }
   box-shadow: var(--shadow-md);
   position: relative;
 }
+/* النسر مؤطَّر كما في بوابتَي المدرسة والمعلّم — كانت هذه البوابة تعرض دائرة
+   زرقاء عامّة مرسومة يدوياً، فلا يعرف فاتحها أنّه في تطبيق رُقِيّ. */
 .login-logo {
-  display: flex; justify-content: center; margin-bottom: 16px;
+  display: flex; justify-content: center; margin-bottom: 14px;
+}
+.login-logo img {
+  width: 64px; height: 64px; padding: 10px;
+  border-radius: var(--radius-lg);
+  background: var(--clr-primary);
+  box-shadow: 0 4px 16px rgba(37, 99, 235, .35);
+  object-fit: contain; display: block;
 }
 .login-logo svg { width: 64px; height: 64px; }
+.login-role {
+  text-align: center; font-size: .8rem; font-weight: 600;
+  color: var(--clr-muted); margin: -2px 0 4px;
+}
+/* شعار رُقِيّ — كانت هذه البوابة الوحيدة بلا شعار إطلاقاً. */
+.brand-lockup { display: inline-flex; align-items: baseline; white-space: nowrap; }
+.brand-latin  { font-weight: 600; letter-spacing: -.01em; }
+.brand-sep    { opacity: .45; margin: 0 .3em; font-weight: 300; }
+.brand-ar     { font-weight: 800; }
 .login-title {
   font-size: 1.4rem; font-weight: 700; text-align: center;
   color: var(--clr-primary); margin-bottom: 6px;

@@ -85,10 +85,18 @@ body {
 }
 
 .login-logo {
-  color: var(--accent);
   display: flex;
   justify-content: center;
-  margin-bottom: 4px;
+  margin-bottom: 10px;
+}
+/* انظر التعليق نفسه في directorate/style.css — color بلا أثر على PNG. */
+.login-logo img {
+  width: 60px; height: 60px; padding: 9px;
+  border-radius: var(--radius-lg);
+  background: var(--accent-tint);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  object-fit: contain;
+  display: block;
 }
 
 .login-card h1 {

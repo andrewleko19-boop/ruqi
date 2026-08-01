@@ -214,7 +214,10 @@ async function checkSession() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return;
   const ok = await verifyRole(session.user.id);
-  if (ok) showDashboard(session.user.email);
+  if (ok) { showDashboard(session.user.email); return; }
+  // ⚠️ كان هذا الفرع غائباً: جلسة بدور غير ministry_user تبقى في التخزين إلى
+  // الأبد وتُعرض شاشة الدخول فوقها، فيظنّ المستخدم أنه خرج وهو لم يخرج.
+  try { await window.NSAMS_DB.logout(); } catch { /* ignore */ }
 }
 
 async function verifyRole(userId) {
@@ -233,7 +236,7 @@ async function doLogin() {
     if (error) throw error;
     const ok = await verifyRole(data.user.id);
     if (!ok) {
-      await supabase.auth.signOut();
+      await window.NSAMS_DB.logout().catch(() => {});
       showError(loginError, 'هذه البوابة مخصصة لمشرف النظام فقط.');
       return;
     }
@@ -279,7 +282,8 @@ modalConfirmLogout.addEventListener('click', e => {
 });
 btnLogoutOk.addEventListener('click', async () => {
   modalConfirmLogout.hidden = true;
-  await supabase.auth.signOut();
+  try { await window.NSAMS_DB.logout(); } catch { /* لا يُوقف الخروج */ }
+  try { await window.NSAMS_DB.purgeTenantCaches(); } catch { /* ignore */ }
   location.reload();
 });
 

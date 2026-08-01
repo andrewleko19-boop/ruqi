@@ -21,6 +21,7 @@ const {
   getDirectorateResultSheets,
   reviewResultSheet,
   resolveReportPhotos,
+  purgeTenantCaches,
   getSchoolClassesForDirectorate,
   directorateBulkImportStudents,
   directorateBulkImportStaff,
@@ -199,7 +200,8 @@ function setupLogout() {
   btnLogoutOk.addEventListener('click', async () => {
     modalConfirmLogout.hidden = true;
     clearAutoRefresh();
-    await logout();
+    try { await logout(); } catch { /* لا يُوقف الخروج */ }
+    try { await purgeTenantCaches(); } catch { /* ignore */ }
     location.reload();
   });
 }

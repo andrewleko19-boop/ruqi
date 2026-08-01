@@ -30,6 +30,7 @@ const RESET = '\x1b[0m';
 const JS_FILES = [
   'shared/db.js',
   'shared/import-parser.js',
+  'shared/sw-register.js',
   'school/script.js',
   'directorate/script.js',
   'directorate/school.js',
