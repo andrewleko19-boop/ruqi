@@ -108,7 +108,14 @@ function setupLogout() {
 // ══════════════════════════════════════════════
 //  Identity
 // ══════════════════════════════════════════════
-const SCHOOL_TYPE_AR = { primary: 'ابتدائي', middle_high: 'إعدادي / ثانوي' };
+// المفتاح القديم middle_high مُبقًى عمداً: لو لم تُشغَّل §25 بعد على قاعدة ما،
+// تظهر التسمية الصحيحة بدل السلسلة الإنكليزية الخام.
+const SCHOOL_TYPE_AR = {
+  primary:     'ابتدائي',
+  preparatory: 'إعدادي',
+  secondary:   'ثانوي',
+  middle_high: 'إعدادي / ثانوي',
+};
 const SHIFT_AR       = { morning: 'صباحي', evening: 'مسائي' };
 
 function renderIdentity() {

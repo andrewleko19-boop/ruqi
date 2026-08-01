@@ -42,7 +42,10 @@ const S = {
 let RW = roleWords(false);
 
 // ── School data cache helpers ─────────────────────────────────────────────────
-const SCHOOL_CACHE_PREFIX = 'nsams_school_';
+// v2 بعد §25: النسخ المخبّأة قبلها تحمل type='middle_high' وهي قيمة لم تعد
+// موجودة، فتُخدَم على المسار دون اتصال وتُظهر تسميات خاطئة. رفع البادئة يُهمل
+// النسخ القديمة بلا حاجة إلى شيفرة ترحيل.
+const SCHOOL_CACHE_PREFIX = 'nsams_school2_';
 
 function cacheSchool(schoolId, data) {
   try {
@@ -74,7 +77,8 @@ function normaliseSchool(row) {
     directorate_id: row.directorate_id ?? null,
     totalTeachers:  row.total_teachers ?? null,
     totalStudents:  row.total_students ?? null,
-    // 'primary' (ابتدائي) | 'middle_high' (إعدادي/ثانوي). Drives معلم↔موجه labels.
+    // 'primary' (ابتدائي) | 'preparatory' (إعدادي) | 'secondary' (ثانوي) — §25.
+    // الإعدادي والثانوي كلاهما موجّه؛ الفصل للتسمية والتقارير فقط.
     // Falls back to 'primary' if the column is missing (e.g. migration not run yet).
     type:          row.school_type ?? 'primary',
     // Minimum yearly attendance % required to pass (grades 5+). Editable.
@@ -160,7 +164,7 @@ function roleWords(secondary) {
  * Called once per app entry, right after the school row is loaded.
  */
 function applyRoleLabels() {
-  RW = roleWords(S.school?.type === 'middle_high');
+  RW = roleWords(usesSupervisors());
   const set = (id, txt) => { const n = el(id); if (n) n.textContent = txt; };
   set('subs-card-title',   RW.subsTitle);
   set('auto-count-note',   RW.autoNote);
@@ -172,9 +176,10 @@ function applyRoleLabels() {
   // The teacher-assignment section always uses معلم vocabulary (HTML defaults);
   // the موجه section is separate and only shown for إعدادي/ثانوي schools.
   const supSection = el('mng-sup-section');
-  if (supSection) supSection.hidden = !isMiddleHigh();
-  // Role choices depend on the school type, not the grade number (إعدادي/ثانوي
-  // classes are numbered الأول/الثاني/الثالث which stageForGrade would misread).
+  if (supSection) supSection.hidden = !usesSupervisors();
+  // Role choices depend on the school type, not the grade number: إعدادي/ثانوي
+  // classes are numbered ١/٢/٣ locally, which stageForGrade (db.js) reads as
+  // 'primary'. Same three words, different meaning — never swap one for the other.
   populateRoleOptions();
 }
 
@@ -1787,8 +1792,11 @@ const ROLE_LABELS = {
   subject:    'أستاذ مادة (درجات فقط)',
 };
 
-function isMiddleHigh() {
-  return S.school?.type === 'middle_high';
+// §25 فصلت الإعدادي عن الثانوي، لكنّ السلوك واحد: كلاهما يعمل بموجّه. الشرط
+// «ليس ابتدائياً» لا قائمة قيم صريحة — فأي مرحلة تُضاف مستقبلاً تعمل بلا تعديل،
+// والاسم يصف السلوك المقصود لا القيمة المخزَّنة.
+function usesSupervisors() {
+  return !!S.school?.type && S.school.type !== 'primary';
 }
 
 function selectedClassGrade() {
@@ -1799,10 +1807,10 @@ function selectedClassGrade() {
 
 // Role choices for the teacher (معلم) section depend on the SCHOOL type:
 // • primary (ابتدائي): معلم الصف (حضور + درجات) or أستاذ مادة (درجات فقط).
-// • middle_high (إعدادي/ثانوي): أستاذ مادة only — attendance is handled by the
-//   separate موجه section.
+// • preparatory/secondary (إعدادي/ثانوي): أستاذ مادة only — attendance is handled
+//   by the separate موجه section.
 function populateRoleOptions() {
-  const roles = isMiddleHigh() ? ['subject'] : ['homeroom', 'subject'];
+  const roles = usesSupervisors() ? ['subject'] : ['homeroom', 'subject'];
   mngRoleSelect.innerHTML = '';
   for (const r of roles) {
     const opt = document.createElement('option');
@@ -1926,7 +1934,7 @@ async function loadAssignableTeachers(classId) {
     const teachers = await NDB.getTeachersBySchool(S.school.id, classId);
     fillAssignableSelect(mngTeacherSelect, teachers, '— اختر معلماً —',
       'لا يوجد معلمون متاحون للإسناد');
-    if (isMiddleHigh()) {
+    if (usesSupervisors()) {
       fillAssignableSelect(mngSupSelect, teachers, '— اختر موجهاً —',
         'لا يوجد موجهون متاحون للإسناد');
     }
@@ -4501,7 +4509,7 @@ function populateIdentityCard() {
   const s = S.school; if (!s) return;
   if (el('sch-complex'))        el('sch-complex').value        = s.complex_name   ?? '';
   if (el('sch-classification')) el('sch-classification').value = s.classification ?? '';
-  if (el('sch-edutype'))        el('sch-edutype').value        = s.education_type ?? '';
+  if (el('sch-edutype'))      { el('sch-edutype').value        = s.education_type ?? ''; CustomSelect.refresh(el('sch-edutype')); }
   if (el('sch-shift'))        { el('sch-shift').value          = s.shift ?? ''; CustomSelect.refresh(el('sch-shift')); }
   if (el('sch-studenttype'))    el('sch-studenttype').value    = s.student_type   ?? '';
   if (el('sch-lat'))            el('sch-lat').value            = s.lat ?? '';
@@ -4539,6 +4547,13 @@ el('btn-save-identity')?.addEventListener('click', async () => {
   };
   if ((latRaw && Number.isNaN(patch.lat)) || (lngRaw && Number.isNaN(patch.lng))) {
     msg.className = 'msg msg-error'; msg.textContent = 'إحداثيات GPS غير صحيحة.'; show(msg); return;
+  }
+  // المجمّع يُطبَع في ترويسة بطاقة العلامات وورقة «لا مانع». وهذا النموذج يرسل
+  // المفتاح دائماً، فحفظُه فارغاً كان **يمحو** قيمةً ضبطتها المديرية.
+  if (!patch.complexName) {
+    msg.className = 'msg msg-error';
+    msg.textContent = 'المجمّع التربوي مطلوب — يظهر في ترويسة الوثائق المطبوعة.';
+    show(msg); return;
   }
   const btn = el('btn-save-identity'); btn.disabled = true;
   try {
@@ -4931,6 +4946,7 @@ CustomSelect.enhance('stu-gender');
 CustomSelect.enhance('stu-gov');
 CustomSelect.enhance('transfer-class');
 CustomSelect.enhance('sch-shift');
+CustomSelect.enhance('sch-edutype');
 CustomSelect.enhance('staff-status');
 CustomSelect.enhance('in-personnel-kind');
 CustomSelect.enhance('mng-class-select');

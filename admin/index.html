@@ -346,12 +346,24 @@
       </div>
       <div id="school-modal-error" class="error-msg hidden"></div>
       <div class="form-group">
-        <label>اسم المدرسة *</label>
-        <input type="text" id="sm-name" placeholder="مدرسة …" />
+        <label for="sm-name">اسم المدرسة *</label>
+        <input type="text" id="sm-name" />
       </div>
       <div class="form-group">
-        <label>المديرية *</label>
+        <label for="sm-directorate">المديرية *</label>
         <select id="sm-directorate"><option value="">— اختر —</option></select>
+      </div>
+      <div class="form-group">
+        <label for="sm-complex-name">اسم المجمع المدرسي *</label>
+        <input type="text" id="sm-complex-name" />
+      </div>
+      <div class="form-group">
+        <label for="sm-school-type">نوع المدرسة *</label>
+        <select id="sm-school-type">
+          <option value="primary">ابتدائي</option>
+          <option value="preparatory">إعدادي</option>
+          <option value="secondary">ثانوي</option>
+        </select>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -372,12 +384,13 @@
           </select>
         </div>
         <div class="form-group">
-          <label>نوع التعليم</label>
+          <label for="sm-education-type">نوع التعليم</label>
           <select id="sm-education-type">
             <option value="">—</option>
             <option value="عام">عام</option>
+            <option value="خاص">خاص</option>
             <option value="مهني">مهني</option>
-            <option value="ديني">ديني</option>
+            <option value="شرعي">شرعي</option>
           </select>
         </div>
       </div>
@@ -409,10 +422,6 @@
           <label>عدد المعلمين</label>
           <input type="number" id="sm-total-teachers" min="0" placeholder="0" />
         </div>
-      </div>
-      <div class="form-group">
-        <label>اسم المجمع المدرسي</label>
-        <input type="text" id="sm-complex-name" placeholder="اختياري" />
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" id="school-modal-cancel">إلغاء</button>

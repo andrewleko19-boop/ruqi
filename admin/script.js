@@ -95,6 +95,7 @@ const schoolModalCancel = document.getElementById('school-modal-cancel');
 const schoolModalSave   = document.getElementById('school-modal-save');
 const smName            = document.getElementById('sm-name');
 const smDirectorate     = document.getElementById('sm-directorate');
+const smSchoolType      = document.getElementById('sm-school-type');
 const smLat             = document.getElementById('sm-lat');
 const smLng             = document.getElementById('sm-lng');
 const smClassification  = document.getElementById('sm-classification');
@@ -140,6 +141,7 @@ const deactivateConfirm = document.getElementById('deactivate-modal-confirm');
 CustomSelect.enhance('users-role-filter');
 CustomSelect.enhance('audit-school-filter');
 CustomSelect.enhance('sm-directorate');
+CustomSelect.enhance('sm-school-type');
 CustomSelect.enhance('sm-classification');
 CustomSelect.enhance('sm-education-type');
 CustomSelect.enhance('sm-shift');
@@ -345,7 +347,7 @@ async function loadSchools() {
 
   const { data, error } = await supabase
     .from('schools')
-    .select('id, name, directorate_id, directorates(name, governorate), classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name')
+    .select('id, name, directorate_id, directorates(name, governorate), school_type, classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name, archived_at')
     .order('name');
 
   hide(schoolsLoading);
@@ -393,11 +395,13 @@ function openAddSchool() {
   schoolModalTitle.textContent = 'إضافة مدرسة';
   [smName, smLat, smLng, smTotalStudents, smTotalTeachers, smComplexName].forEach(el => el.value = '');
   smDirectorate.value = '';
+  // ابتدائي افتراضاً — نفس default القاعدة، فلا يمرّ خيار فارغ إلى قيد CHECK.
+  smSchoolType.value = 'primary';
   smClassification.value = '';
   smEducationType.value = '';
   smShift.value = '';
   smStudentType.value = '';
-  [smDirectorate, smClassification, smEducationType, smShift, smStudentType].forEach(s => CustomSelect.refresh(s));
+  [smDirectorate, smSchoolType, smClassification, smEducationType, smShift, smStudentType].forEach(s => CustomSelect.refresh(s));
   clearError(schoolModalError);
   show(schoolModal);
   smName.focus();
@@ -412,6 +416,7 @@ function openEditSchool(schoolId) {
   smDirectorate.value     = s.directorate_id ?? '';
   smLat.value             = s.lat ?? '';
   smLng.value             = s.lng ?? '';
+  smSchoolType.value      = s.school_type ?? 'primary';
   smClassification.value  = s.classification ?? '';
   smEducationType.value   = s.education_type ?? '';
   smShift.value           = s.shift ?? '';
@@ -419,7 +424,7 @@ function openEditSchool(schoolId) {
   smTotalStudents.value   = s.total_students ?? '';
   smTotalTeachers.value   = s.total_teachers ?? '';
   smComplexName.value     = s.complex_name ?? '';
-  [smDirectorate, smClassification, smEducationType, smShift, smStudentType].forEach(s => CustomSelect.refresh(s));
+  [smDirectorate, smSchoolType, smClassification, smEducationType, smShift, smStudentType].forEach(s => CustomSelect.refresh(s));
   clearError(schoolModalError);
   show(schoolModal);
   smName.focus();
@@ -434,8 +439,13 @@ schoolModalSave.addEventListener('click', async () => {
   clearError(schoolModalError);
   const name = smName.value.trim();
   const dirId = smDirectorate.value;
-  if (!name)  { showError(schoolModalError, 'اسم المدرسة مطلوب.'); return; }
-  if (!dirId) { showError(schoolModalError, 'يجب اختيار المديرية.'); return; }
+  const complex = smComplexName.value.trim();
+  if (!name)    { showError(schoolModalError, 'اسم المدرسة مطلوب.'); return; }
+  if (!dirId)   { showError(schoolModalError, 'يجب اختيار المديرية.'); return; }
+  // المجمّع يُطبَع في ترويسة بطاقة العلامات وورقة «لا مانع»، فغيابه يُخرِج
+  // وثيقة رسمية ناقصة — لذلك صار إجبارياً هنا لا اختيارياً.
+  if (!complex) { showError(schoolModalError, 'اسم المجمع المدرسي مطلوب — يظهر في ترويسة الوثائق المطبوعة.'); return; }
+  if (!smSchoolType.value) { showError(schoolModalError, 'يجب اختيار نوع المدرسة.'); return; }
 
   schoolModalSave.disabled = true;
   try {
@@ -444,13 +454,14 @@ schoolModalSave.addEventListener('click', async () => {
       directorate_id: dirId,
       lat:             smLat.value       ? parseFloat(smLat.value)  : null,
       lng:             smLng.value       ? parseFloat(smLng.value)  : null,
+      school_type:     smSchoolType.value,
       classification:  smClassification.value  || null,
       education_type:  smEducationType.value   || null,
       shift:           smShift.value           || null,
       student_type:    smStudentType.value      || null,
       total_students:  smTotalStudents.value !== '' ? parseInt(smTotalStudents.value, 10) : null,
       total_teachers:  smTotalTeachers.value !== '' ? parseInt(smTotalTeachers.value, 10) : null,
-      complex_name:    smComplexName.value.trim() || null,
+      complex_name:    complex,
     };
 
     let err;

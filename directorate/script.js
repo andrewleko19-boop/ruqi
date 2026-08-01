@@ -951,6 +951,7 @@ function setupFilters() {
   CustomSelect.enhance('filter-status');
   CustomSelect.enhance('filter-type');
   CustomSelect.enhance('filter-severity');
+  CustomSelect.enhance('dir-sm-school-type');
   CustomSelect.enhance('dir-sm-classification');
   CustomSelect.enhance('dir-sm-education-type');
   CustomSelect.enhance('dir-sm-shift');
@@ -2565,7 +2566,7 @@ async function loadDirSchools() {
   emptyEl?.classList.add('hidden');
 
   const { data, error } = await _sb.from('schools')
-    .select('id, name, classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name, directorate_id')
+    .select('id, name, school_type, classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name, directorate_id, archived_at')
     .eq('directorate_id', currentUser.directorateId)
     .order('name');
 
@@ -2636,6 +2637,11 @@ function openAddDirSchool() {
   ['dir-sm-classification','dir-sm-education-type','dir-sm-shift','dir-sm-student-type'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
+  // ابتدائي افتراضاً — نفس default القاعدة، فلا يمرّ خيار فارغ إلى قيد CHECK.
+  const stAdd = document.getElementById('dir-sm-school-type');
+  if (stAdd) stAdd.value = 'primary';
+  ['dir-sm-school-type','dir-sm-classification','dir-sm-education-type','dir-sm-shift','dir-sm-student-type']
+    .forEach(id => CustomSelect.refresh(id));
   const errEl = document.getElementById('dir-school-modal-error');
   if (errEl) { errEl.textContent = ''; errEl.hidden = true; }
   document.getElementById('dir-school-modal')?.classList.remove('hidden');
@@ -2652,6 +2658,7 @@ function openEditDirSchool(schoolId) {
   set('dir-sm-name', s.name);
   set('dir-sm-lat', s.lat);
   set('dir-sm-lng', s.lng);
+  set('dir-sm-school-type', s.school_type ?? 'primary');
   set('dir-sm-classification', s.classification);
   set('dir-sm-education-type', s.education_type);
   set('dir-sm-shift', s.shift);
@@ -2659,6 +2666,10 @@ function openEditDirSchool(schoolId) {
   set('dir-sm-total-students', s.total_students);
   set('dir-sm-total-teachers', s.total_teachers);
   set('dir-sm-complex-name', s.complex_name);
+  // كانت القوائم المخصّصة لا تُحدَّث بعد ضبط القيم برمجياً، فتبقى معروضة على
+  // اختيار المدرسة السابقة رغم أنّ <select> الأصلي تغيّر.
+  ['dir-sm-school-type','dir-sm-classification','dir-sm-education-type','dir-sm-shift','dir-sm-student-type']
+    .forEach(id => CustomSelect.refresh(id));
   const errEl = document.getElementById('dir-school-modal-error');
   if (errEl) { errEl.textContent = ''; errEl.hidden = true; }
   document.getElementById('dir-school-modal')?.classList.remove('hidden');
@@ -2678,10 +2689,14 @@ function setupDirSchools() {
     const name = document.getElementById('dir-sm-name')?.value.trim() ?? '';
     const errEl = document.getElementById('dir-school-modal-error');
     const saveBtn = document.getElementById('dir-school-modal-save');
-    if (!name) {
-      if (errEl) { errEl.textContent = 'اسم المدرسة مطلوب.'; errEl.hidden = false; }
-      return;
-    }
+    const complex = document.getElementById('dir-sm-complex-name')?.value.trim() ?? '';
+    const stype   = document.getElementById('dir-sm-school-type')?.value ?? '';
+    const fail = (m) => { if (errEl) { errEl.textContent = m; errEl.hidden = false; } };
+    if (!name) { fail('اسم المدرسة مطلوب.'); return; }
+    // المجمّع يُطبَع في ترويسة بطاقة العلامات وورقة «لا مانع» — غيابه يُخرِج
+    // وثيقة رسمية ناقصة.
+    if (!complex) { fail('اسم المجمع المدرسي مطلوب — يظهر في ترويسة الوثائق المطبوعة.'); return; }
+    if (!stype)   { fail('يجب اختيار نوع المدرسة.'); return; }
     if (errEl) { errEl.textContent = ''; errEl.hidden = true; }
     if (saveBtn) saveBtn.disabled = true;
 
@@ -2694,13 +2709,14 @@ function setupDirSchools() {
       directorate_id:  currentUser.directorateId,
       lat:             getNum('dir-sm-lat'),
       lng:             getNum('dir-sm-lng'),
+      school_type:     getVal('dir-sm-school-type'),
       classification:  getVal('dir-sm-classification')   || null,
       education_type:  getVal('dir-sm-education-type')   || null,
       shift:           getVal('dir-sm-shift')            || null,
       student_type:    getVal('dir-sm-student-type')     || null,
       total_students:  getInt('dir-sm-total-students'),
       total_teachers:  getInt('dir-sm-total-teachers'),
-      complex_name:    getVal('dir-sm-complex-name').trim() || null,
+      complex_name:    complex,
     };
 
     try {

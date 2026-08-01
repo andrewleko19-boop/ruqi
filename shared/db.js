@@ -480,6 +480,7 @@ async function updateSchool(schoolId, patch) {
   if (patch.minAttendancePct !== undefined) row.min_attendance_pct = patch.minAttendancePct;
   if (patch.workStartTime    !== undefined) row.work_start_time     = patch.workStartTime || null;
   // School identity (هوية المدرسة) + GPS — reuses the existing lat/lng columns.
+  if (patch.schoolType    !== undefined) row.school_type    = patch.schoolType;
   if (patch.complexName   !== undefined) row.complex_name   = patch.complexName   || null;
   if (patch.classification!== undefined) row.classification = patch.classification|| null;
   if (patch.educationType !== undefined) row.education_type = patch.educationType || null;
@@ -2611,6 +2612,9 @@ function computeYearResult(ctx) {
   return ok ? 'ناجح' : 'راسب';
 }
 
+// ⚠️ مرحلة مشتقّة من **رقم الصف** لبطاقات العلامات — ليست schools.school_type.
+//    الكلمات الثلاث نفسها والدلالة مختلفة: مدرسة ثانوية ترقّم صفوفها ١/٢/٣
+//    محلياً، فتُرجِع هذه الدالة 'primary' لصفوفها. لا تستبدل إحداهما بالأخرى.
 function stageForGrade(grade) {
   if (grade <= 6)  return 'primary';     // ابتدائي
   if (grade <= 9)  return 'preparatory'; // إعدادي
@@ -3174,7 +3178,7 @@ async function getAdminDirectorates() {
 async function getAdminSchools() {
   const { data, error } = await db
     .from('schools')
-    .select('id, name, directorate_id, directorates(name, governorate), classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name')
+    .select('id, name, directorate_id, directorates(name, governorate), school_type, classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name, archived_at')
     .order('name');
   if (error) throw error;
   return data ?? [];
