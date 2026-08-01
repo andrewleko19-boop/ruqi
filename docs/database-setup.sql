@@ -5026,3 +5026,63 @@ $$;
 
 revoke all on function public.directorate_bulk_import_staff(uuid, jsonb) from public, anon;
 grant execute on function public.directorate_bulk_import_staff(uuid, jsonb) to authenticated;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- §25  نوع المدرسة بثلاث مراحل · نوع التعليم · أرشفة المدارس
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ثلاثة تغييرات على جدول schools، كلّها idempotent وتُشغَّل مرّة واحدة.
+--
+-- ⚠️ لماذا هذا القسم هنا لا في NSAMS_DB_REFERENCE.sql:
+--   عمود school_type كان معرَّفاً في الملفّ المرجعي وحده — وهو ملفّ **للقراءة
+--   لا يُشغَّل**. فعلى أي نشرٍ جديد لم يكن العمود موجوداً أصلاً، وكانت الواجهة
+--   تسقط بصمت إلى 'primary' (school/script.js: row.school_type ?? 'primary').
+--   موضعه الصحيح هذا الملفّ.
+
+-- ٢٥.١  school_type: فصل الإعدادي عن الثانوي
+-- كان القيد يسمح بـ('primary','middle_high') فتجمع القيمة الثانية المرحلتين.
+-- الفصل مطلوب للتسمية والتقارير؛ أمّا سلوك معلّم-صف ↔ موجّه فلا يتغيّر
+-- إطلاقاً: الإعدادي والثانوي كلاهما يعمل بموجّه، والشرط في الواجهة صار
+-- «ليس ابتدائياً» بدل «يساوي middle_high».
+alter table public.schools
+  add column if not exists school_type text not null default 'primary';
+
+-- ⚠️ الحارس القديم كان يفحص **اسم** القيد (conname)، فإعادة تشغيله بعد توسيع
+--   القيم لا تستبدل القيد بل تتخطّاه. الحذف الصريح أوّلاً هو ما يجعل هذا
+--   القسم idempotent فعلاً لا ظاهرياً.
+alter table public.schools drop constraint if exists schools_school_type_chk;
+
+-- التحويل قبل القيد لا بعده: القيد الجديد يرفض 'middle_high' فيفشل الإنشاء
+-- لو بقي صفّ واحد يحملها. تُحوَّل إلى 'preparatory' ويصحّحها المشرف يدوياً من
+-- لوحته — لا سبيل لاستنتاج الإعدادي من الثانوي من بيانات موجودة.
+update public.schools set school_type = 'preparatory' where school_type = 'middle_high';
+
+alter table public.schools
+  add constraint schools_school_type_chk
+  check (school_type in ('primary', 'preparatory', 'secondary'));
+
+comment on column public.schools.school_type is
+  'primary=ابتدائي (معلّم صف) | preparatory=إعدادي | secondary=ثانوي (كلاهما موجّه). '
+  'لا يُشتقّ من رقم الصف: صفوف الإعدادي والثانوي مرقّمة ١-٢-٣ محلياً.';
+
+-- ٢٥.٢  education_type: إضافة «خاص» وتغيير «ديني» إلى «شرعي»
+-- يبقى text بلا قيد عمداً: القيمة وصفية بحتة ولا يتفرّع عليها أي منطق في
+-- المشروع، والقيد كان سيمنع أي تسمية وزارية جديدة بلا مكسب.
+-- التحويل ضروري: صفّ يحمل 'ديني' لن يطابق أي خيار في القائمة الجديدة،
+-- فتظهر القائمة فارغة عند التحرير ويُمحى النوع بأول حفظ.
+update public.schools set education_type = 'شرعي' where education_type = 'ديني';
+
+-- ٢٥.٣  أرشفة المدرسة
+-- طابع زمني لا boolean: نعرف **متى** أُرشفت، ومن سجلّ التدقيق **مَن** أرشفها.
+-- ولا حذف: سجلّات الطلاب والحضور والبيانات الشهرية ووثائق «لا مانع» مرتبطة
+-- بالمدرسة، وحذفها يكسر السجلّ التاريخي كلّه.
+alter table public.schools
+  add column if not exists archived_at timestamptz;
+
+comment on column public.schools.archived_at is
+  'غير فارغ = مؤرشفة: تُخفى من قوائم المدارس التشغيلية (المديرية والوزارة '
+  'ومنتقي الاستيراد) وتبقى مرئية في لوحة المشرف تحت مرشّح صريح.';
+
+create index if not exists schools_active_idx
+  on public.schools (directorate_id)
+  where archived_at is null;

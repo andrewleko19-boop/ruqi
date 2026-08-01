@@ -33,6 +33,47 @@
     <symbol id="icon-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M5 12h14M12 5l7 7-7 7"/>
     </symbol>
+    <symbol id="icon-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+      <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+    </symbol>
+    <symbol id="icon-school" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+      <path d="M3 21h18M5 21V9l7-5 7 5v12"/><path d="M10 21v-5h4v5"/>
+    </symbol>
+    <symbol id="icon-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+      <circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/>
+      <path d="M16.5 6.2a3 3 0 0 1 0 5.6M18 19.8c0-2.6-1-4.3-2.5-5.2"/>
+    </symbol>
+    <symbol id="icon-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+      <path d="M4 4.5A2 2 0 0 1 6 3h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 17.5h15"/>
+    </symbol>
+    <symbol id="icon-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>
+    </symbol>
+    <symbol id="icon-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+      <rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>
+    </symbol>
+    <symbol id="icon-ledger" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+      <path d="M5 3h11l4 4v14H5z"/><path d="M16 3v4h4M9 12h6M9 16h6"/>
+    </symbol>
+    <symbol id="icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+    </symbol>
+    <symbol id="icon-export" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 17v3h16v-3"/>
+    </symbol>
+    <symbol id="icon-archive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/>
+    </symbol>
+    <symbol id="icon-undo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 9h10a5 5 0 0 1 0 10h-4"/><path d="m7.5 5.5-3.5 3.5 3.5 3.5"/>
+    </symbol>
+    <symbol id="icon-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+      <path d="M12 4 2.5 20h19z"/><path d="M12 10v4M12 17h.01"/>
+    </symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m4 12.5 5 5L20 6.5"/>
+    </symbol>
   </svg>
 
   <link rel="icon" href="../icons/favicon.ico" sizes="any" />
@@ -40,7 +81,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="../icons/favicon-16.png" />
   <link rel="apple-touch-icon" href="../icons/apple-touch-icon-180.png" />
   <link rel="manifest" href="../manifest.json" />
-  <meta name="theme-color" content="#0c1e35" />
+  <meta name="theme-color" content="#16181d" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;600;700&family=Tajawal:wght@500;700;800&display=swap" rel="stylesheet">
 </head>
@@ -79,6 +120,9 @@
         </div>
       </div>
       <div class="topbar-right">
+        <span class="perm-chip">
+          <svg><use href="#icon-shield"/></svg><span>صلاحيات كاملة</span>
+        </span>
         <span id="user-email" class="user-email"></span>
         <button id="logout-btn" class="btn btn-icon" title="تسجيل الخروج">
           <svg width="18" height="18"><use href="#icon-logout"/></svg>
@@ -86,32 +130,112 @@
       </div>
     </header>
 
+    <div class="shell">
+
+    <!-- الشريط الجانبي — مجمَّع بالغرض: المدارس والمستخدمون كيانات، والمواد
+         والقوائم والعطل بيانات مرجعية، والتدقيق سجلّ. ليست ستّة أنداد. -->
+    <nav class="rail" role="tablist" aria-label="أقسام لوحة المشرف">
+      <button class="tab-btn is-active" data-tab="overview" role="tab" aria-selected="true" aria-controls="tab-overview">
+        <svg><use href="#icon-grid"/></svg><span class="rail-label">نظرة عامة</span>
+      </button>
+
+      <div class="rail-group">إدارة</div>
+      <button class="tab-btn" data-tab="schools" role="tab" aria-selected="false" aria-controls="tab-schools">
+        <svg><use href="#icon-school"/></svg><span class="rail-label">المدارس</span>
+      </button>
+      <button class="tab-btn" data-tab="users" role="tab" aria-selected="false" aria-controls="tab-users">
+        <svg><use href="#icon-users"/></svg><span class="rail-label">المستخدمون</span>
+      </button>
+
+      <div class="rail-group">مرجعيات</div>
+      <button class="tab-btn" data-tab="subjects" role="tab" aria-selected="false" aria-controls="tab-subjects">
+        <svg><use href="#icon-book"/></svg><span class="rail-label">المواد</span>
+      </button>
+      <button class="tab-btn" data-tab="lookups" role="tab" aria-selected="false" aria-controls="tab-lookups">
+        <svg><use href="#icon-list"/></svg><span class="rail-label">القوائم المرجعية</span>
+      </button>
+      <button class="tab-btn" data-tab="holidays" role="tab" aria-selected="false" aria-controls="tab-holidays">
+        <svg><use href="#icon-calendar"/></svg><span class="rail-label">تقويم العطل</span>
+      </button>
+
+      <div class="rail-group">سجلّات</div>
+      <button class="tab-btn" data-tab="audit" role="tab" aria-selected="false" aria-controls="tab-audit">
+        <svg><use href="#icon-ledger"/></svg><span class="rail-label">سجل التدقيق</span>
+      </button>
+    </nav>
+
     <main class="main-content">
 
-      <!-- تبويبات -->
-      <div class="tab-bar">
-        <button class="tab-back-btn" id="btn-back-nav" hidden title="رجوع" aria-label="رجوع">
-          <svg width="16" height="16"><use href="#icon-arrow-right"/></svg>
-        </button>
-        <button class="tab-btn is-active" data-tab="schools">المدارس</button>
-        <button class="tab-btn" data-tab="users">المستخدمون</button>
-        <button class="tab-btn" data-tab="audit">سجل التدقيق</button>
-        <button class="tab-btn" data-tab="holidays">تقويم العطل</button>
-        <button class="tab-btn" data-tab="lookups">القوائم المرجعية</button>
-        <button class="tab-btn" data-tab="subjects">المواد</button>
+      <!-- ══════════════════════════════════════════════
+           تبويب 0: نظرة عامة
+      ══════════════════════════════════════════════ -->
+      <div id="tab-overview" class="tab-panel is-active" role="tabpanel">
+        <div class="stats" style="margin-bottom:20px">
+          <div class="stat">
+            <span class="stat-num" id="ov-schools">—</span>
+            <span class="stat-lbl">مدرسة</span>
+            <div class="stat-sub" id="ov-schools-sub">&nbsp;</div>
+          </div>
+          <div class="stat">
+            <span class="stat-num" id="ov-users">—</span>
+            <span class="stat-lbl">مستخدم</span>
+            <div class="stat-sub" id="ov-users-sub">&nbsp;</div>
+          </div>
+          <div class="stat">
+            <span class="stat-num" id="ov-subjects">—</span>
+            <span class="stat-lbl">مادة في الفهرس</span>
+            <div class="stat-sub" id="ov-subjects-sub">&nbsp;</div>
+          </div>
+          <div class="stat">
+            <span class="stat-num" id="ov-holidays">—</span>
+            <span class="stat-lbl">عطلة رسمية</span>
+            <div class="stat-sub">&nbsp;</div>
+          </div>
+        </div>
+
+        <div class="section-card" style="margin-bottom:20px">
+          <div class="section-header"><h2>يحتاج تدخّلاً</h2></div>
+          <div id="ov-alerts"></div>
+        </div>
+
+        <div class="section-card ledger">
+          <div class="section-header">
+            <h2>آخر ما جرى</h2>
+            <button class="btn btn-ghost btn-sm" data-goto-tab="audit">السجلّ الكامل</button>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>الوقت</th><th>الإجراء</th><th>المُنفِّذ</th></tr></thead>
+              <tbody id="ov-audit-tbody"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <!-- ══════════════════════════════════════════════
            تبويب 1: إدارة المدارس
       ══════════════════════════════════════════════ -->
-      <div id="tab-schools" class="tab-panel is-active">
+      <div id="tab-schools" class="tab-panel" role="tabpanel">
         <div class="section-card">
           <div class="section-header">
             <h2>المدارس (<span id="schools-count">—</span>)</h2>
-            <button id="add-school-btn" class="btn btn-primary btn-sm">
-              <svg width="14" height="14"><use href="#icon-plus"/></svg>
-              إضافة مدرسة
-            </button>
+            <div class="section-header-actions">
+              <div class="searchbar">
+                <svg><use href="#icon-search"/></svg>
+                <input id="schools-search" type="search" placeholder="ابحث بالاسم أو المديرية أو المجمّع…" aria-label="بحث في المدارس" />
+              </div>
+              <label class="filter-hint" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="schools-show-archived" /> إظهار المؤرشفة
+              </label>
+              <button id="schools-export" class="btn btn-ghost btn-sm">
+                <svg width="14" height="14"><use href="#icon-export"/></svg>
+                تصدير
+              </button>
+              <button id="add-school-btn" class="btn btn-primary btn-sm">
+                <svg width="14" height="14"><use href="#icon-plus"/></svg>
+                إضافة مدرسة
+              </button>
+            </div>
           </div>
           <div id="schools-loading" class="table-loading">
             <div class="spinner"></div><span>جارٍ تحميل المدارس…</span>
@@ -122,6 +246,7 @@
                 <tr>
                   <th>#</th>
                   <th>اسم المدرسة</th>
+                  <th>النوع</th>
                   <th>المديرية</th>
                   <th>المحافظة</th>
                   <th>التصنيف</th>
@@ -134,17 +259,22 @@
             </table>
           </div>
           <div id="schools-empty" class="table-empty hidden">لا توجد مدارس بعد.</div>
+          <div id="schools-pager" class="pager hidden"></div>
         </div>
       </div>
 
       <!-- ══════════════════════════════════════════════
            تبويب 2: إدارة المستخدمين
       ══════════════════════════════════════════════ -->
-      <div id="tab-users" class="tab-panel">
+      <div id="tab-users" class="tab-panel" role="tabpanel">
         <div class="section-card">
           <div class="section-header">
             <h2>المستخدمون (<span id="users-count">—</span>)</h2>
             <div class="section-header-actions">
+              <div class="searchbar">
+                <svg><use href="#icon-search"/></svg>
+                <input id="users-search" type="search" placeholder="ابحث بالاسم أو الجهة…" aria-label="بحث في المستخدمين" />
+              </div>
               <select id="users-role-filter">
                 <option value="">كل الأدوار</option>
                 <option value="school_admin">مدير مدرسة</option>
@@ -175,16 +305,21 @@
             </table>
           </div>
           <div id="users-empty" class="table-empty hidden">لا يوجد مستخدمون.</div>
+          <div id="users-pager" class="pager hidden"></div>
         </div>
       </div>
 
       <!-- ══════════════════════════════════════════════
            تبويب 3: سجل التدقيق
       ══════════════════════════════════════════════ -->
-      <div id="tab-audit" class="tab-panel">
-        <div class="section-card">
+      <div id="tab-audit" class="tab-panel" role="tabpanel">
+        <div class="section-card ledger">
           <div class="section-header">
             <h2>سجل التدقيق</h2>
+            <button id="audit-export" class="btn btn-ghost btn-sm">
+              <svg width="14" height="14"><use href="#icon-export"/></svg>
+              تصدير
+            </button>
           </div>
           <div class="filter-bar">
             <select id="audit-school-filter">
@@ -226,7 +361,7 @@
       <!-- ══════════════════════════════════════════════
            تبويب 4: تقويم العطل
       ══════════════════════════════════════════════ -->
-      <div id="tab-holidays" class="tab-panel">
+      <div id="tab-holidays" class="tab-panel" role="tabpanel">
         <div class="section-card">
           <div class="section-header">
             <h2>العطل الرسمية (<span id="holidays-count">—</span>)</h2>
@@ -258,7 +393,7 @@
       <!-- ══════════════════════════════════════════════
            تبويب 5: القوائم المرجعية
       ══════════════════════════════════════════════ -->
-      <div id="tab-lookups" class="tab-panel">
+      <div id="tab-lookups" class="tab-panel" role="tabpanel">
         <div class="section-card">
           <div class="section-header">
             <h2>القوائم المرجعية (<span id="lookups-count">—</span>)</h2>
@@ -295,7 +430,7 @@
         </div>
       </div>
 
-      <div id="tab-subjects" class="tab-panel">
+      <div id="tab-subjects" class="tab-panel" role="tabpanel">
         <div class="section-card">
           <div class="section-header">
             <h2>فهرس المواد (<span id="subjects-count">—</span>)</h2>
@@ -331,6 +466,7 @@
       </div>
 
     </main>
+    </div><!-- /.shell -->
   </div>
 
   <!-- ══════════════════════════════════════════════
@@ -346,44 +482,57 @@
       </div>
       <div id="school-modal-error" class="error-msg hidden"></div>
       <div class="form-group">
-        <label>اسم المدرسة *</label>
-        <input type="text" id="sm-name" placeholder="مدرسة …" />
+        <label for="sm-name">اسم المدرسة *</label>
+        <input type="text" id="sm-name" />
       </div>
       <div class="form-group">
-        <label>المديرية *</label>
+        <label for="sm-directorate">المديرية *</label>
         <select id="sm-directorate"><option value="">— اختر —</option></select>
+      </div>
+      <div class="form-group">
+        <label for="sm-complex-name">اسم المجمع المدرسي *</label>
+        <input type="text" id="sm-complex-name" />
+      </div>
+      <div class="form-group">
+        <label for="sm-school-type">نوع المدرسة *</label>
+        <select id="sm-school-type">
+          <option value="primary">ابتدائي</option>
+          <option value="preparatory">إعدادي</option>
+          <option value="secondary">ثانوي</option>
+        </select>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>خط العرض (lat)</label>
+          <label for="sm-lat">خط العرض (lat)</label>
           <input type="number" id="sm-lat" step="any" placeholder="33.5" />
         </div>
         <div class="form-group">
-          <label>خط الطول (lng)</label>
+          <label for="sm-lng">خط الطول (lng)</label>
           <input type="number" id="sm-lng" step="any" placeholder="36.3" />
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>التصنيف</label>
+          <label for="sm-classification">التصنيف</label>
           <select id="sm-classification">
             <option value="">—</option>
             <option>أ</option><option>ب</option><option>ج</option><option>د</option>
           </select>
         </div>
         <div class="form-group">
-          <label>نوع التعليم</label>
+          <label for="sm-education-type">نوع التعليم</label>
           <select id="sm-education-type">
             <option value="">—</option>
             <option value="عام">عام</option>
+            <option value="خاص">خاص</option>
             <option value="مهني">مهني</option>
-            <option value="ديني">ديني</option>
+            <option value="شرعي">شرعي</option>
           </select>
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>نوع الدوام</label>
+          <label for="sm-shift">نوع الدوام</label>
           <select id="sm-shift">
             <option value="">—</option>
             <option value="صباحي">صباحي</option>
@@ -391,7 +540,7 @@
           </select>
         </div>
         <div class="form-group">
-          <label>نوع الطلاب</label>
+          <label for="sm-student-type">نوع الطلاب</label>
           <select id="sm-student-type">
             <option value="">—</option>
             <option value="مختلط">مختلط</option>
@@ -402,17 +551,13 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>عدد الطلاب</label>
+          <label for="sm-total-students">عدد الطلاب</label>
           <input type="number" id="sm-total-students" min="0" placeholder="0" />
         </div>
         <div class="form-group">
-          <label>عدد المعلمين</label>
+          <label for="sm-total-teachers">عدد المعلمين</label>
           <input type="number" id="sm-total-teachers" min="0" placeholder="0" />
         </div>
-      </div>
-      <div class="form-group">
-        <label>اسم المجمع المدرسي</label>
-        <input type="text" id="sm-complex-name" placeholder="اختياري" />
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" id="school-modal-cancel">إلغاء</button>
@@ -434,19 +579,25 @@
       </div>
       <div id="user-modal-error" class="error-msg hidden"></div>
       <div class="form-group">
-        <label>البريد الإلكتروني *</label>
+        <label for="um-email">البريد الإلكتروني *</label>
         <input type="email" id="um-email" placeholder="user@example.com" autocomplete="off" />
       </div>
       <div class="form-group">
-        <label>كلمة المرور *</label>
-        <input type="password" id="um-password" placeholder="٨ أحرف على الأقل" autocomplete="new-password" />
+        <label for="um-password">كلمة المرور *</label>
+        <!-- type=text لا password: كلمة مرور مولَّدة يجب أن يراها الموظّف
+             ليسلّمها لصاحب الحساب. الإخفاء هنا يخدم لا أحد. -->
+        <input type="text" id="um-password" class="num" autocomplete="off" spellcheck="false" />
+        <button type="button" class="btn btn-ghost btn-sm" id="um-regen" style="align-self:flex-start">
+          <svg width="13" height="13"><use href="#icon-refresh"/></svg>
+          توليد كلمة أخرى
+        </button>
       </div>
       <div class="form-group">
-        <label>الاسم الكامل *</label>
+        <label for="um-fullname">الاسم الكامل *</label>
         <input type="text" id="um-fullname" />
       </div>
       <div class="form-group">
-        <label>الدور *</label>
+        <label for="um-role">الدور *</label>
         <select id="um-role">
           <option value="">— اختر —</option>
           <option value="school_admin">مدير مدرسة</option>
@@ -454,11 +605,11 @@
         </select>
       </div>
       <div class="form-group" id="um-school-group" style="display:none">
-        <label>المدرسة *</label>
+        <label for="um-school">المدرسة *</label>
         <select id="um-school"><option value="">— اختر —</option></select>
       </div>
       <div class="form-group" id="um-directorate-group" style="display:none">
-        <label>المديرية *</label>
+        <label for="um-directorate">المديرية *</label>
         <select id="um-directorate"><option value="">— اختر —</option></select>
       </div>
       <div class="modal-footer">
@@ -511,6 +662,45 @@
     </div>
   </div>
 
+  <!-- أرشفة مدرسة — لا حذف: سجلّات الطلاب والحضور والبيانات الشهرية ووثائق
+       «لا مانع» مرتبطة بالمدرسة، وحذفها يكسر السجلّ التاريخي كلّه. -->
+  <div id="archive-modal" class="modal-overlay hidden">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header">
+        <span class="modal-title">أرشفة المدرسة</span>
+        <button class="btn btn-icon btn-sm" id="archive-modal-close">
+          <svg width="16" height="16"><use href="#icon-close"/></svg>
+        </button>
+      </div>
+      <p style="color:var(--text-dim);font-size:13px;line-height:1.7">
+        ستُخفى <strong id="archive-name" style="color:var(--text);font-weight:800"></strong>
+        من لوحات المديرية والوزارة ومن منتقي الاستيراد. سجلّاتها وطلابها وحضورها
+        تبقى كما هي، ويمكن استرجاعها في أي وقت من هذه اللوحة.
+      </p>
+      <div id="archive-modal-error" class="error-msg hidden"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="archive-modal-cancel">إلغاء</button>
+        <button class="btn btn-danger" id="archive-modal-confirm">أرشفة</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- تنبيه عام — يحلّ محلّ رسائل تُبتلع في console بلا أن يراها أحد -->
+  <div id="alert-modal" class="modal-overlay hidden">
+    <div class="modal" style="max-width:400px">
+      <div class="modal-header">
+        <span class="modal-title" id="alert-modal-title">تنبيه</span>
+        <button class="btn btn-icon btn-sm" id="alert-modal-close">
+          <svg width="16" height="16"><use href="#icon-close"/></svg>
+        </button>
+      </div>
+      <p id="alert-modal-body" style="color:var(--text-muted);font-size:13px;line-height:1.75"></p>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="alert-modal-ok">حسناً</button>
+      </div>
+    </div>
+  </div>
+
   <div id="deactivate-modal" class="modal-overlay hidden">
     <div class="modal" style="max-width:400px">
       <div class="modal-header">
@@ -520,7 +710,7 @@
         </button>
       </div>
       <p style="color:var(--text-dim);font-size:13px;line-height:1.7">
-        سيُحظر حساب <strong id="deactivate-name" style="color:#fff"></strong> ولن يتمكن من تسجيل الدخول.
+        سيُحظر حساب <strong id="deactivate-name" style="color:var(--text);font-weight:800"></strong> ولن يتمكن من تسجيل الدخول.
         يمكن إعادة تفعيله لاحقاً من قِبل مسؤول النظام.
       </p>
       <div id="deactivate-modal-error" class="error-msg hidden"></div>
@@ -544,11 +734,11 @@
       </div>
       <div id="holiday-modal-error" class="error-msg hidden"></div>
       <div class="form-group">
-        <label>التاريخ *</label>
+        <label for="hm-date">التاريخ *</label>
         <input type="date" id="hm-date" />
       </div>
       <div class="form-group">
-        <label>اسم العطلة *</label>
+        <label for="hm-name">اسم العطلة *</label>
         <input type="text" id="hm-name" placeholder="مثال: عيد الفطر" />
       </div>
       <div class="modal-footer">
@@ -570,7 +760,7 @@
         </button>
       </div>
       <p style="color:var(--text-dim);font-size:13px;line-height:1.7">
-        سيتم حذف عطلة <strong id="del-holiday-name" style="color:#fff"></strong>.
+        سيتم حذف عطلة <strong id="del-holiday-name" style="color:var(--text);font-weight:800"></strong>.
         هذا الإجراء قابل للتراجع بإعادة الإضافة.
       </p>
       <div class="modal-footer">
@@ -593,24 +783,24 @@
       </div>
       <div id="lookup-modal-error" class="error-msg hidden"></div>
       <div class="form-group">
-        <label>القائمة</label>
+        <label for="lk-type-label">القائمة</label>
         <input type="text" id="lk-type-label" disabled />
       </div>
       <div class="form-group" id="lk-dir-row" style="display:none">
-        <label>المديرية</label>
+        <label for="lk-dir-label">المديرية</label>
         <input type="text" id="lk-dir-label" disabled />
       </div>
       <div class="form-group">
-        <label>القيمة *</label>
+        <label for="lk-value">القيمة *</label>
         <input type="text" id="lk-value" placeholder="النص العربي" />
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>الترتيب</label>
+          <label for="lk-sort">الترتيب</label>
           <input type="number" id="lk-sort" min="0" placeholder="0" />
         </div>
         <div class="form-group">
-          <label>الحالة</label>
+          <label for="lk-active">الحالة</label>
           <select id="lk-active">
             <option value="true">نشط</option>
             <option value="false">معطّل</option>
@@ -634,7 +824,7 @@
       </div>
       <div id="subject-cat-modal-error" class="error-msg hidden"></div>
       <div class="form-group">
-        <label>اسم المادة *</label>
+        <label for="sc-name">اسم المادة *</label>
         <input type="text" id="sc-name" placeholder="مثال: اللغة العربية" />
       </div>
       <div class="form-row">
@@ -647,11 +837,11 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>الترتيب</label>
+          <label for="sc-sort">الترتيب</label>
           <input type="number" id="sc-sort" min="0" placeholder="0" />
         </div>
         <div class="form-group">
-          <label>الحالة</label>
+          <label for="sc-active">الحالة</label>
           <select id="sc-active">
             <option value="true">نشط</option>
             <option value="false">معطّل</option>
@@ -743,7 +933,7 @@
         </button>
       </div>
       <p style="color:var(--text-dim);font-size:13px;line-height:1.7">
-        سيتم حذف <strong id="del-lookup-name" style="color:#fff"></strong> من القائمة.
+        سيتم حذف <strong id="del-lookup-name" style="color:var(--text);font-weight:800"></strong> من القائمة.
         لن يؤثر ذلك على السجلات المُدخلة سابقاً.
       </p>
       <div id="del-lookup-error" class="error-msg hidden"></div>

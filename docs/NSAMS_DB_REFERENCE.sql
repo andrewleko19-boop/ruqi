@@ -48,9 +48,13 @@
 --   directorate_id  uuid   → directorates.id
 --   total_students  int            ← يُستخدم لحساب نسبة الحضور (عتبة 75%)
 --   total_teachers  int
---   school_type     text   NOT NULL default 'primary'   ← v2 (هذه الجلسة)
---                   'primary' (ابتدائي) | 'middle_high' (إعدادي/ثانوي)
---                   يحدّد تسمية واجهة المدير: ابتدائي="معلم" / إعدادي-ثانوي="موجه"
+--   school_type     text   NOT NULL default 'primary'   ← §25
+--                   'primary' (ابتدائي) | 'preparatory' (إعدادي) | 'secondary' (ثانوي)
+--                   يحدّد تسمية واجهة المدير: ابتدائي="معلم" / غيره="موجه"
+--                   ⚠ لا يُشتقّ من رقم الصف — صفوف الإعدادي والثانوي مرقّمة ١-٢-٣
+--                     محلياً، وstageForGrade في db.js يقرأها خطأً «ابتدائي».
+--   education_type  text           عام | خاص | مهني | شرعي  (وصفي، بلا قيد)
+--   archived_at     timestamptz    غير فارغ = مؤرشفة، تُخفى من القوائم التشغيلية
 --   lat, lng / latitude, longitude ← إحداثيات الخريطة (تأكد من الاسم الفعلي)
 
 -- ── classes ──────────────────────────────────────────────────────────────────
@@ -526,27 +530,28 @@ create policy "report photos admin upload"
 --  تلقائياً حسب schools.school_type. الموجه = نفس دور 'teacher' في القاعدة؛
 --  التغيير في تسمية الواجهة فقط. لا تغيير في أسماء دوال db.js.
 --
+--  بعد §25 صارت القيم ثلاثاً، والشرط في الواجهة «ليس ابتدائياً» لا «يساوي
+--  middle_high» (school/script.js: usesSupervisors()). الإعدادي والثانوي
+--  يشتركان في سلوك الموجّه تماماً — الفصل بينهما للتسمية والتقارير فقط.
+--
 --  • db.js getSchoolById يستخدم select('*') ليجلب school_type دون أن ينكسر
 --    لو العمود غير موجود → ترتيب النشر مرن.
 --  • التبديل في طبقة المدير فقط (school/). المديرية لم تتأثر.
 --  • "الهيئة التدريسية / المعلمون الغائبون" (teachers_present/absent) تبقى "معلم"
 --    عمداً — مفهوم كادر المدرسة، لا الموجه المُسنَد للصفوف.
 
--- ── Migration: عمود school_type (شغّله مرة واحدة — idempotent) ────────────────
-alter table public.schools
-  add column if not exists school_type text not null default 'primary';
-
-do $$
-begin
-  if not exists (select 1 from pg_constraint where conname = 'schools_school_type_chk') then
-    alter table public.schools
-      add constraint schools_school_type_chk
-      check (school_type in ('primary', 'middle_high'));
-  end if;
-end$$;
-
--- تعيين مدرسة كإعدادية/ثانوية:
---   update public.schools set school_type = 'middle_high' where id = '<SCHOOL_ID>';
+-- ⚠ الهجرة انتقلت إلى docs/database-setup.sql §25 — لا تُشغَّل من هنا.
+--   كانت معرَّفة في هذا الملفّ وحده، وهو **مرجع للقراءة لا يُنفَّذ**، فعلى أي
+--   نشرٍ جديد لم يكن العمود موجوداً أصلاً. §25 وسّعت القيم إلى ثلاث وحوّلت
+--   'middle_high' القديمة إلى 'preparatory'.
+--
+-- ⚠ الحارس القديم كان يفحص **اسم** القيد (conname) لا تعريفه، فإعادة تشغيله
+--   بعد أي توسيع للقيم تتخطّاه بصمت بدل أن تستبدله. §25 تحذف القيد صراحةً
+--   قبل إعادة إنشائه — أي تعديل مستقبلي على القيم يلزمه نفس الحذف الصريح.
+--
+-- تعيين مدرسة كإعدادية أو ثانوية (أو من لوحة المشرف مباشرةً):
+--   update public.schools set school_type = 'preparatory' where id = '<SCHOOL_ID>';
+--   update public.schools set school_type = 'secondary'   where id = '<SCHOOL_ID>';
 
 
 -- ── توحيد سياسات RLS (إصلاح أمني كبير) ───────────────────────────────────────
@@ -584,7 +589,7 @@ end$$;
 -- ════════════════════════════════════════════════════════════════════════════
 --  ٩. معرّفات معروفة (بيانات اختبار) — مدرسة أبي عبيدة بن الجراح
 -- ════════════════════════════════════════════════════════════════════════════
---  المدرسة (school_type = 'middle_high'):
+--  المدرسة (school_type = 'preparatory' بعد §25 — كانت 'middle_high'):
 --    3cb48602-35ad-4cd3-9095-a06b5188d1c5
 --
 --  الصفوف (شعبة A):

@@ -423,7 +423,9 @@ async function getCurrentUser() {
 
 // ─── Schools ──────────────────────────────────────────────────────────────────
 async function getSchools(directorateId) {
-  const query = db.from("schools").select("id, name, lat, lng");
+  // المدارس المؤرشفة (§25) تُستثنى من كل قائمة تشغيلية — تبقى مرئية في
+  // لوحة المشرف وحدها تحت مرشّح صريح.
+  const query = db.from("schools").select("id, name, lat, lng").is("archived_at", null);
   if (directorateId) query.eq("directorate_id", directorateId);
   const { data, error } = await query;
   if (error) throw error;
@@ -480,6 +482,7 @@ async function updateSchool(schoolId, patch) {
   if (patch.minAttendancePct !== undefined) row.min_attendance_pct = patch.minAttendancePct;
   if (patch.workStartTime    !== undefined) row.work_start_time     = patch.workStartTime || null;
   // School identity (هوية المدرسة) + GPS — reuses the existing lat/lng columns.
+  if (patch.schoolType    !== undefined) row.school_type    = patch.schoolType;
   if (patch.complexName   !== undefined) row.complex_name   = patch.complexName   || null;
   if (patch.classification!== undefined) row.classification = patch.classification|| null;
   if (patch.educationType !== undefined) row.education_type = patch.educationType || null;
@@ -685,6 +688,7 @@ async function getTodaySummary(directorateId) {
   // مدارس المديرية (نحتاج المعرّفات لفلترة الحضور الفردي)
   const schoolsRes = await db.from("schools")
     .select("id")
+    .is("archived_at", null)
     .eq("directorate_id", directorateId);
   if (schoolsRes.error) throw schoolsRes.error;
   const schoolIds = (schoolsRes.data || []).map((s) => s.id);
@@ -743,6 +747,7 @@ async function getSchoolsAttendanceStatus(directorateId, date) {
 
   const schoolsRes = await db.from("schools")
     .select("id, total_students")
+    .is("archived_at", null)
     .eq("directorate_id", directorateId);
   if (schoolsRes.error) throw schoolsRes.error;
 
@@ -860,7 +865,8 @@ async function getMinistryAttendanceSummary(date) {
 
   const { data: schools, error: schErr } = await db
     .from("schools")
-    .select("id, directorate_id");
+    .select("id, directorate_id")
+    .is("archived_at", null);
   if (schErr) throw schErr;
 
   const allSchoolIds = (schools || []).map(s => s.id);
@@ -2611,6 +2617,9 @@ function computeYearResult(ctx) {
   return ok ? 'ناجح' : 'راسب';
 }
 
+// ⚠️ مرحلة مشتقّة من **رقم الصف** لبطاقات العلامات — ليست schools.school_type.
+//    الكلمات الثلاث نفسها والدلالة مختلفة: مدرسة ثانوية ترقّم صفوفها ١/٢/٣
+//    محلياً، فتُرجِع هذه الدالة 'primary' لصفوفها. لا تستبدل إحداهما بالأخرى.
 function stageForGrade(grade) {
   if (grade <= 6)  return 'primary';     // ابتدائي
   if (grade <= 9)  return 'preparatory'; // إعدادي
@@ -3174,7 +3183,7 @@ async function getAdminDirectorates() {
 async function getAdminSchools() {
   const { data, error } = await db
     .from('schools')
-    .select('id, name, directorate_id, directorates(name, governorate), classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name')
+    .select('id, name, directorate_id, directorates(name, governorate), school_type, classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name, archived_at')
     .order('name');
   if (error) throw error;
   return data ?? [];

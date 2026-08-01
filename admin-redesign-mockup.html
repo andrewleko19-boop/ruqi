@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>نموذج تصميم — لوحة المشرف | رُقِيّ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;600&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   نموذج معاينة — لا يستورد شيئاً من admin/ ولا يؤثّر على أي ملفّ عامل.
+
+   الأطروحة: هذه ليست غرفة عمليات تراقب مدارس — هذه **طاولة النظام**. من هنا
+   تُنشأ المدارس، وتُصكّ الحسابات، ويُحرَّر فهرس المواد الوطني، ويُقرأ سجلّ
+   التدقيق. فالتصميم مبنيّ على مفردات هذا العالم: مفاتيح، سجلّات، صلاحيات،
+   وإجراءات لا رجعة فيها.
+
+   الأرضية غرافيت بارد لا كحلي — تمييزاً متعمَّداً عن لوحة المديرية (#11182b)
+   التي هويّتها «غرفة عمليات». والنيلي لون التفاعل الوحيد؛ القرمزي محجوز
+   للإجراءات المدمِّرة وحدها فلا يُستهلك زينةً؛ والذهبي محجوز لسجلّ التدقيق
+   وبيانات الحسابات — لأن السجلّ هو الشيء الوحيد في هذه اللوحة الذي لا يُعدَّل
+   ولا يُحذف، فيستحقّ أن يُرى مختلفاً.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --slate-900:  #16181d;   /* الأرضية */
+  --slate-850:  #1a1d24;   /* الشريط الجانبي */
+  --slate-800:  #1e212a;   /* البطاقات ورؤوس الجداول */
+  --slate-750:  #242833;   /* التمرير */
+  --line:       #2c3140;
+  --line-soft:  #232733;
+
+  --chalk:      #e8eaf0;   /* الحبر */
+  --chalk-soft: #a6abbd;
+  --chalk-dim:  #6f7488;
+
+  --indigo:      #7b7ce8;  /* لون التفاعل الوحيد */
+  --indigo-ink:  #0f1024;
+  --indigo-tint: #23244a;
+
+  --vermilion:      #e05a4a;  /* المدمِّر — حصراً */
+  --vermilion-tint: #351a17;
+
+  --gold:      #c9a227;       /* السجلّ الرسمي — حصراً */
+  --gold-tint: #2e2711;
+
+  --sage:      #58b98a;       /* حالة سليمة (شارات فقط) */
+  --sage-tint: #16301f;
+
+  --r-sm: 4px;
+  --r:    7px;
+  --r-lg: 12px;
+
+  --ui:  'Tajawal', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  --latin: 'DM Sans', sans-serif;
+
+  --rail:  228px;
+  --top:   58px;
+  --ease:  .16s ease;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 15px; color-scheme: dark; }
+body {
+  font-family: var(--ui);
+  background: var(--slate-900);
+  color: var(--chalk);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; border-radius: 3px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ── لافتة النموذج ─────────────────────────────────────────────────────── */
+.mock-banner {
+  background: var(--indigo-tint);
+  border-bottom: 1px solid var(--indigo);
+  padding: 9px 20px;
+  font-size: .8rem;
+  color: var(--chalk-soft);
+  text-align: center;
+}
+.mock-banner b { color: var(--indigo); font-weight: 700; }
+
+/* ── الشريط العلوي ─────────────────────────────────────────────────────── */
+.top {
+  position: sticky; top: 0; z-index: 40;
+  height: var(--top);
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 18px;
+  background: var(--slate-850);
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: inline-flex; align-items: baseline; gap: .45em; white-space: nowrap; }
+.brand-latin { font-family: var(--latin); font-weight: 600; font-size: 1.02rem; letter-spacing: -.01em; }
+.brand-sep   { color: var(--chalk-dim); font-weight: 300; }
+.brand-ar    { font-weight: 800; font-size: 1.05rem; }
+
+.top-search { flex: 1; max-width: 420px; position: relative; }
+.top-search input {
+  width: 100%; height: 34px;
+  background: var(--slate-900);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--chalk);
+  font-family: var(--ui); font-size: .84rem;
+  padding: 0 34px 0 14px;
+  transition: border-color var(--ease);
+}
+.top-search input::placeholder { color: var(--chalk-dim); }
+.top-search input:focus { outline: none; border-color: var(--indigo); }
+.top-search svg {
+  position: absolute; inset-inline-start: 11px; top: 9px;
+  width: 15px; height: 15px; color: var(--chalk-dim); pointer-events: none;
+}
+
+/* شارة الصلاحيات: دائمة الظهور عمداً — هذه اللوحة تكتب على كل المدارس. */
+.perm-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 11px; border-radius: 999px;
+  background: var(--vermilion-tint);
+  border: 1px solid color-mix(in srgb, var(--vermilion) 45%, transparent);
+  color: var(--vermilion);
+  font-size: .72rem; font-weight: 700; white-space: nowrap;
+}
+.perm-chip svg { width: 13px; height: 13px; }
+.top-user { margin-inline-start: auto; display: flex; align-items: center; gap: 10px; }
+.top-user-name { font-size: .8rem; color: var(--chalk-soft); }
+.avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--indigo-tint); color: var(--indigo);
+  display: grid; place-items: center;
+  font-weight: 800; font-size: .82rem;
+  border: 1px solid color-mix(in srgb, var(--indigo) 40%, transparent);
+}
+
+/* ── الشريط الجانبي — مجمَّع بالغرض ────────────────────────────────────── */
+.shell { display: flex; align-items: flex-start; }
+.rail {
+  position: sticky; top: var(--top);
+  flex: none; width: var(--rail);
+  height: calc(100vh - var(--top));
+  overflow-y: auto;
+  background: var(--slate-850);
+  border-inline-end: 1px solid var(--line);
+  padding: 14px 10px 24px;
+}
+/* العناوين تشرح البنية لا تزيّنها: المدارس والمستخدمون كيانات، والعطل
+   والقوائم والمواد بيانات مرجعية، والتدقيق سجلّ. ليست ستّة أنداد. */
+.rail-group {
+  font-size: .68rem; font-weight: 700; letter-spacing: .08em;
+  color: var(--chalk-dim);
+  padding: 16px 12px 7px;
+  display: flex; align-items: center; gap: 8px;
+}
+.rail-group::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.rail-btn {
+  width: 100%;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px;
+  border: none; background: none;
+  border-radius: var(--r);
+  color: var(--chalk-soft);
+  font-family: var(--ui); font-size: .87rem; font-weight: 500;
+  cursor: pointer; text-align: start;
+  transition: background var(--ease), color var(--ease);
+}
+.rail-btn svg { width: 17px; height: 17px; flex: none; }
+.rail-btn:hover { background: var(--slate-750); color: var(--chalk); }
+.rail-btn.on { background: var(--indigo-tint); color: var(--indigo); font-weight: 700; }
+.rail-count {
+  margin-inline-start: auto;
+  font-family: var(--mono); font-size: .72rem;
+  color: var(--chalk-dim);
+  font-variant-numeric: tabular-nums;
+}
+.rail-btn.on .rail-count { color: var(--indigo); }
+
+.stage { flex: 1; min-width: 0; padding: 22px 24px 64px; }
+
+/* ── ترويسة القسم ──────────────────────────────────────────────────────── */
+.sec { display: none; }
+.sec.on { display: block; }
+.sec-head { margin-bottom: 18px; }
+.sec-head h1 { font-size: 1.32rem; font-weight: 800; letter-spacing: -.01em; }
+.sec-head p { font-size: .85rem; color: var(--chalk-soft); margin-top: 3px; max-width: 62ch; }
+
+/* ── البطاقات ──────────────────────────────────────────────────────────── */
+.card {
+  background: var(--slate-800);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  margin-bottom: 18px;
+}
+.card-head {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.card-head h2 { font-size: .96rem; font-weight: 700; }
+.card-head .spacer { flex: 1; }
+.card-body { padding: 16px 18px; }
+
+/* ── الأزرار ───────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid transparent; border-radius: var(--r);
+  font-family: var(--ui); font-size: .82rem; font-weight: 700;
+  cursor: pointer; white-space: nowrap;
+  transition: background var(--ease), border-color var(--ease), color var(--ease);
+}
+.btn svg { width: 14px; height: 14px; }
+.btn-primary { background: var(--indigo); color: var(--indigo-ink); }
+.btn-primary:hover { background: color-mix(in srgb, var(--indigo) 84%, #fff); }
+.btn-outline { background: none; border-color: var(--line); color: var(--chalk-soft); }
+.btn-outline:hover { background: var(--slate-750); color: var(--chalk); border-color: var(--chalk-dim); }
+.btn-ghost { background: none; color: var(--chalk-soft); }
+.btn-ghost:hover { background: var(--slate-750); color: var(--chalk); }
+/* الأحمر لا يُستعمل إلا هنا — فيبقى معناه «لا رجعة» مفهوماً بلا شرح. */
+.btn-danger { background: var(--vermilion-tint); border-color: color-mix(in srgb, var(--vermilion) 45%, transparent); color: var(--vermilion); }
+.btn-danger:hover { background: var(--vermilion); color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: .76rem; }
+.btn-gold { background: var(--gold-tint); border-color: color-mix(in srgb, var(--gold) 45%, transparent); color: var(--gold); }
+.btn-gold:hover { background: var(--gold); color: var(--indigo-ink); }
+
+/* ── البحث والترقيم ────────────────────────────────────────────────────── */
+.searchbar { position: relative; flex: 1; min-width: 180px; max-width: 320px; }
+.searchbar input {
+  width: 100%; height: 32px;
+  background: var(--slate-900); border: 1px solid var(--line);
+  border-radius: var(--r); color: var(--chalk);
+  font-family: var(--ui); font-size: .82rem; padding: 0 32px 0 12px;
+}
+.searchbar input::placeholder { color: var(--chalk-dim); }
+.searchbar input:focus { outline: none; border-color: var(--indigo); }
+.searchbar svg { position: absolute; inset-inline-start: 10px; top: 8px; width: 14px; height: 14px; color: var(--chalk-dim); }
+
+.pager {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 11px 18px; border-top: 1px solid var(--line);
+  font-size: .78rem; color: var(--chalk-dim);
+}
+.pager .spacer { flex: 1; }
+.pg {
+  min-width: 28px; height: 28px; padding: 0 7px;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: none; color: var(--chalk-soft);
+  font-family: var(--mono); font-size: .76rem; cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.pg:hover { background: var(--slate-750); color: var(--chalk); }
+.pg.on { background: var(--indigo); border-color: var(--indigo); color: var(--indigo-ink); font-weight: 700; }
+
+/* ── الجداول ───────────────────────────────────────────────────────────── */
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+thead th {
+  background: var(--slate-850);
+  color: var(--chalk-dim);
+  font-size: .74rem; font-weight: 700; letter-spacing: .02em;
+  text-align: start; white-space: nowrap;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line);
+}
+tbody td { padding: 10px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--slate-750); }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* عزل ثنائي الاتجاه: أي قيمة لاتينية تبدأ أو تنتهي بمحرف محايد (#، …، -)
+   ينقلب ترتيبها داخل فقرة عربية — «#16181d» تُعرض «16181d#» و«2025-2026»
+   تُعرض «2026-2025». العزل يُبقيها كما كُتبت بلا أن يزيح موضع الصندوق. */
+.ltr { direction: ltr; unicode-bidi: isolate; }
+.sw-hex, .mono-id { direction: ltr; unicode-bidi: isolate; text-align: right; }
+/* لا قاعدة شاملة على .was/.now — أكثر قيمهما عربية ويجب أن تبقى RTL؛
+   القيم اللاتينية وحدها تأخذ .ltr صراحةً في الترميز. */
+.dim { color: var(--chalk-dim); }
+.row-actions { display: flex; gap: 5px; justify-content: flex-end; }
+.is-off td:not(.row-actions-cell) { opacity: .5; }
+
+/* ── الشارات ───────────────────────────────────────────────────────────── */
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 9px; border-radius: 999px;
+  font-size: .72rem; font-weight: 700; white-space: nowrap;
+}
+.chip-indigo { background: var(--indigo-tint); color: var(--indigo); }
+.chip-gold   { background: var(--gold-tint);   color: var(--gold); }
+.chip-sage   { background: var(--sage-tint);   color: var(--sage); }
+.chip-red    { background: var(--vermilion-tint); color: var(--vermilion); }
+.chip-mute   { background: var(--slate-750);   color: var(--chalk-dim); }
+
+/* ── بطاقات العدّ ──────────────────────────────────────────────────────── */
+/* ١٣٠px لا ١٥٠: على جوّال ٣٩٠px يتبقّى للمسرح ~٣٠٤px بعد الشريط والحواشي،
+   فـ١٥٠×٢+فجوة تتجاوزها بقليل وتنهار البطاقات إلى عمود واحد بلا داعٍ. */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+.stat {
+  background: var(--slate-800); border: 1px solid var(--line);
+  border-radius: var(--r-lg); padding: 14px 16px;
+}
+.stat-lbl { font-size: .75rem; color: var(--chalk-dim); }
+.stat-num {
+  display: block; font-family: var(--mono);
+  font-size: 1.7rem; font-weight: 600; line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+.stat-sub { font-size: .73rem; color: var(--chalk-dim); margin-top: 1px; }
+
+/* ── التنبيهات ─────────────────────────────────────────────────────────── */
+.alert-row {
+  display: flex; align-items: center; gap: 11px;
+  padding: 11px 18px; border-bottom: 1px solid var(--line-soft);
+  font-size: .85rem;
+}
+.alert-row:last-child { border-bottom: none; }
+.alert-row svg { width: 16px; height: 16px; flex: none; }
+.alert-row .spacer { flex: 1; }
+.alert-warn svg { color: var(--gold); }
+.alert-bad  svg { color: var(--vermilion); }
+.alert-ok   svg { color: var(--sage); }
+
+/* ── سجلّ التدقيق — السطح الذهبي ───────────────────────────────────────
+   الذهبي هنا وحده في اللوحة كلّها. السجلّ هو الشيء الوحيد الذي لا يُعدَّل
+   ولا يُحذف، فيُرى مختلفاً بلا حاجة لعنوان يشرح ذلك. */
+.ledger { border-color: color-mix(in srgb, var(--gold) 26%, var(--line)); }
+.ledger .card-head { background: var(--gold-tint); border-bottom-color: color-mix(in srgb, var(--gold) 26%, var(--line)); }
+.ledger .card-head h2 { color: var(--gold); }
+.ledger thead th { background: color-mix(in srgb, var(--gold-tint) 55%, var(--slate-850)); }
+.ledger tbody td { font-size: .82rem; }
+.mono-id {
+  font-family: var(--mono); font-size: .76rem;
+  color: var(--chalk-dim);
+  background: var(--slate-900);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  padding: 1px 6px;
+}
+.ledger-when { font-family: var(--mono); font-size: .78rem; color: var(--chalk-soft); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ledger-diff {
+  font-family: var(--mono); font-size: .76rem; color: var(--chalk-soft);
+  background: var(--slate-900); border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm); padding: 7px 10px; margin-top: 6px;
+  white-space: pre-wrap; line-height: 1.75;
+  width: fit-content; max-width: 100%;   /* يحتضن محتواه لا يمتدّ فارغاً */
+}
+.ledger-diff .k { color: var(--chalk-dim); }
+.ledger-diff .was { color: var(--vermilion); }
+.ledger-diff .now { color: var(--sage); }
+
+/* ── النماذج ───────────────────────────────────────────────────────────── */
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 13px; }
+.fld { display: flex; flex-direction: column; gap: 5px; }
+.fld > label { font-size: .78rem; font-weight: 700; color: var(--chalk-soft); }
+.req { color: var(--vermilion); }
+.fld input[type=text], .fld input[type=number], .fld input[type=date], .fld input[type=email], .fld select {
+  height: 34px;
+  background: var(--slate-900); border: 1px solid var(--line);
+  border-radius: var(--r); color: var(--chalk);
+  font-family: var(--ui); font-size: .85rem; padding: 0 11px; width: 100%;
+}
+/* السهم مرسوم لا مُورَّث: appearance:none يُزيل سهم النظام، وبدونه تبدو القائمة
+   حقلاً نصّياً فلا يعرف المستخدم أنها تُفتح. */
+.fld select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236f7488' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 10px center;
+  background-size: 15px;
+  padding-inline-end: 11px;
+  padding-inline-start: 32px;
+}
+.fld input:focus, .fld select:focus { outline: none; border-color: var(--indigo); }
+.fld-hint { font-size: .74rem; color: var(--chalk-dim); line-height: 1.65; }
+.fld-hint b { color: var(--chalk-soft); }
+.span-2 { grid-column: 1 / -1; }
+
+/* حقل نوع المدرسة — الإضافة (أ). يُبرَز لأنه الوحيد الذي يغيّر سلوك بوابة
+   أخرى (لوحة المدرسة)، لا مجرّد بيان وصفي يُخزَّن. */
+.fld-new {
+  grid-column: 1 / -1;
+  background: var(--indigo-tint);
+  border: 1px solid color-mix(in srgb, var(--indigo) 38%, transparent);
+  border-radius: var(--r); padding: 12px 13px;
+}
+.fld-new > label { color: var(--indigo); }
+.new-tag {
+  display: inline-block; margin-inline-start: 7px;
+  background: var(--indigo); color: var(--indigo-ink);
+  font-size: .64rem; font-weight: 800; padding: 1px 7px; border-radius: 999px;
+  vertical-align: middle;
+}
+
+/* ── النوافذ ───────────────────────────────────────────────────────────── */
+/* align-items:start كي لا تتمدّد النافذة القصيرة لطول أطولها فتبدو فارغة. */
+.dlg-demo { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; align-items: start; }
+.dlg {
+  background: var(--slate-800); border: 1px solid var(--line);
+  border-radius: var(--r-lg); padding: 18px; box-shadow: 0 18px 44px -20px rgba(0,0,0,.8);
+}
+.dlg-title { font-size: .95rem; font-weight: 800; margin-bottom: 4px; }
+.dlg-sub { font-size: .82rem; color: var(--chalk-soft); line-height: 1.7; }
+/* الاسم المعنيّ بالإجراء ظاهر بقوّة — في اللوحة الحالية هو أبيض على أبيض
+   في ثلاث نوافذ حذف، أي غير مرئي أصلاً (admin/index.html:523, 573, 746). */
+.dlg-sub strong { color: var(--chalk); font-weight: 800; }
+.dlg-actions { display: flex; gap: 8px; justify-content: flex-start; margin-top: 15px; }
+.dlg-danger { border-color: color-mix(in srgb, var(--vermilion) 38%, transparent); }
+.dlg-gold   { border-color: color-mix(in srgb, var(--gold) 32%, transparent); }
+
+.cred-box {
+  background: var(--gold-tint);
+  border: 1px solid color-mix(in srgb, var(--gold) 40%, transparent);
+  border-radius: var(--r); padding: 11px 12px; margin-top: 12px;
+}
+.cred-box > label { display: block; font-size: .72rem; font-weight: 800; color: var(--gold); margin-bottom: 6px; }
+.cred-row { display: flex; gap: 7px; align-items: center; }
+.cred-row code {
+  flex: 1; font-family: var(--mono); font-size: .9rem; font-weight: 600;
+  background: var(--slate-900); border: 1px solid var(--line);
+  border-radius: var(--r-sm); padding: 6px 10px;
+  overflow-wrap: anywhere; user-select: all;
+}
+.cred-warn { font-size: .72rem; color: var(--gold); margin-top: 7px; font-weight: 600; }
+
+/* ── لوحة العناصر ─────────────────────────────────────────────────────── */
+.swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 11px; }
+.sw { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.sw-chip { height: 46px; }
+.sw-meta { padding: 7px 10px; background: var(--slate-850); }
+.sw-name { font-size: .76rem; font-weight: 700; }
+.sw-hex { font-family: var(--mono); font-size: .7rem; color: var(--chalk-dim); }
+.sw-use { font-size: .7rem; color: var(--chalk-dim); margin-top: 2px; line-height: 1.5; }
+.demo-row { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; margin-bottom: 14px; }
+.demo-lbl { font-size: .74rem; color: var(--chalk-dim); width: 100%; margin-bottom: -4px; }
+
+/* ملاحظة تشرح قراراً — لا تُزيّن */
+.note {
+  border-inline-start: 3px solid var(--indigo);
+  background: var(--slate-850);
+  border-radius: 0 var(--r) var(--r) 0;
+  padding: 11px 14px; margin-top: 14px;
+  font-size: .81rem; color: var(--chalk-soft); line-height: 1.75;
+}
+.note b { color: var(--chalk); }
+.note code { font-family: var(--mono); font-size: .78rem; color: var(--indigo); }
+.note-gold { border-inline-start-color: var(--gold); }
+.note-red  { border-inline-start-color: var(--vermilion); }
+
+/* ── الجوّال ───────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  :root { --rail: 62px; }
+  .rail-label, .rail-group { display: none; }
+  .rail-btn { justify-content: center; padding: 11px 0; }
+  .rail-count { display: none; }
+  .rail { padding-top: 10px; }
+  .top-search { display: none; }
+}
+@media (max-width: 560px) {
+  html { font-size: 14px; }
+  .stage { padding: 16px 12px 56px; }
+  .card-head { padding: 12px 14px; }
+  .card-body { padding: 14px; }
+  .top-user-name { display: none; }
+  .perm-chip span { display: none; }
+  .perm-chip { padding: 5px; }
+}
+</style>
+</head>
+<body>
+
+<div class="mock-banner">
+  <b>نموذج تصميم للمعاينة فقط</b> — ملفّ مستقلّ، لا يمسّ لوحة المشرف العاملة.
+  البيانات المعروضة تمثيلية.
+</div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+    <symbol id="i-school" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 21h18M5 21V9l7-5 7 5v12"/><path d="M10 21v-5h4v5"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16.5 6.2a3 3 0 0 1 0 5.6M18 19.8c0-2.6-1-4.3-2.5-5.2"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 4.5A2 2 0 0 1 6 3h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 17.5h15"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+    <symbol id="i-ledger" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 3h11l4 4v14H5z"/><path d="M16 3v4h4M9 12h6M9 16h6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17z"/></symbol>
+    <symbol id="i-export" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 17v3h16v-3"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3M15.5 12v2.4"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 4 2.5 20h19z"/><path d="M12 10v4M12 17h.01"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12.5 5 5L20 6.5"/></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h10a5 5 0 0 1 0 10h-4"/><path d="m7.5 5.5-3.5 3.5 3.5 3.5"/></symbol>
+  </defs>
+</svg>
+
+<header class="top">
+  <span class="brand">
+    <span class="brand-latin">Ruqí</span><span class="brand-sep">｜</span><span class="brand-ar">رُقِيّ</span>
+  </span>
+  <div class="top-search">
+    <svg><use href="#i-search"/></svg>
+    <input type="search" placeholder="ابحث في المدارس والمستخدمين والمواد…" aria-label="بحث عام" />
+  </div>
+  <span class="perm-chip">
+    <svg><use href="#i-shield"/></svg><span>صلاحيات كاملة</span>
+  </span>
+  <div class="top-user">
+    <span class="top-user-name">مشرف النظام</span>
+    <span class="avatar">م</span>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="rail" role="tablist" aria-label="أقسام لوحة المشرف">
+    <button class="rail-btn on" role="tab" aria-selected="true" data-go="overview">
+      <svg><use href="#i-grid"/></svg><span class="rail-label">نظرة عامة</span>
+    </button>
+
+    <div class="rail-group">إدارة</div>
+    <button class="rail-btn" role="tab" aria-selected="false" data-go="schools">
+      <svg><use href="#i-school"/></svg><span class="rail-label">المدارس</span><span class="rail-count">٧</span>
+    </button>
+    <button class="rail-btn" role="tab" aria-selected="false" data-go="users">
+      <svg><use href="#i-users"/></svg><span class="rail-label">المستخدمون</span><span class="rail-count">١٢</span>
+    </button>
+
+    <div class="rail-group">مرجعيات</div>
+    <button class="rail-btn" role="tab" aria-selected="false" data-go="subjects">
+      <svg><use href="#i-book"/></svg><span class="rail-label">المواد</span><span class="rail-count">٢٤</span>
+    </button>
+    <button class="rail-btn" role="tab" aria-selected="false" data-go="lookups">
+      <svg><use href="#i-list"/></svg><span class="rail-label">القوائم المرجعية</span>
+    </button>
+    <button class="rail-btn" role="tab" aria-selected="false" data-go="holidays">
+      <svg><use href="#i-cal"/></svg><span class="rail-label">تقويم العطل</span>
+    </button>
+
+    <div class="rail-group">سجلّات</div>
+    <button class="rail-btn" role="tab" aria-selected="false" data-go="audit">
+      <svg><use href="#i-ledger"/></svg><span class="rail-label">سجلّ التدقيق</span>
+    </button>
+
+    <div class="rail-group">النظام</div>
+    <button class="rail-btn" role="tab" aria-selected="false" data-go="kit">
+      <svg><use href="#i-grid"/></svg><span class="rail-label">لوحة العناصر</span>
+    </button>
+  </nav>
+
+  <main class="stage">
+    <!-- ═══════ نظرة عامة — الإضافة (ب) ═══════
+         اللوحة اليوم تُسقط المشرف مباشرةً في جدول المدارس بلا سياق. هذا القسم
+         يجيب أوّلاً على «شو وضع النظام؟» و«شو يحتاج تدخّلي؟» قبل أي جدول. -->
+    <section class="sec on" id="sec-overview">
+      <div class="sec-head">
+        <h1>نظرة عامة</h1>
+        <p>حالة النظام وما يحتاج تدخّلاً، قبل الدخول في الجداول.</p>
+      </div>
+
+      <div class="stats" style="margin-bottom:18px">
+        <div class="stat">
+          <span class="stat-num">٧</span>
+          <span class="stat-lbl">مدرسة</span>
+          <div class="stat-sub">في مديريتَين</div>
+        </div>
+        <div class="stat">
+          <span class="stat-num">١٢</span>
+          <span class="stat-lbl">مستخدم</span>
+          <div class="stat-sub">١١ نشط · ١ معطَّل</div>
+        </div>
+        <div class="stat">
+          <span class="stat-num">٢٤</span>
+          <span class="stat-lbl">مادة في الفهرس</span>
+          <div class="stat-sub">٢٢ فعّالة</div>
+        </div>
+        <div class="stat">
+          <span class="stat-num">١٤٨</span>
+          <span class="stat-lbl">سطر تدقيق هذا الشهر</span>
+          <div class="stat-sub">آخره قبل ٤ دقائق</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>يحتاج تدخّلاً</h2></div>
+        <div class="alert-row alert-bad">
+          <svg><use href="#i-warn"/></svg>
+          <span>ثلاث مدارس بلا حساب مدير — لا أحد يستطيع رفع حضورها.</span>
+          <span class="spacer"></span>
+          <button class="btn btn-outline btn-sm">عرضها</button>
+        </div>
+        <div class="alert-row alert-warn">
+          <svg><use href="#i-warn"/></svg>
+          <span>مدرستان نوعهما «ابتدائي» رغم أنّ صفوفها من السابع إلى التاسع.</span>
+          <span class="spacer"></span>
+          <button class="btn btn-outline btn-sm">مراجعة</button>
+        </div>
+        <div class="alert-row alert-ok">
+          <svg><use href="#i-check"/></svg>
+          <span>فهرس المواد متزامن مع كل المدارس.</span>
+        </div>
+      </div>
+
+      <div class="card ledger">
+        <div class="card-head">
+          <h2>آخر ما جرى</h2>
+          <span class="spacer"></span>
+          <button class="btn btn-gold btn-sm" data-go="audit">السجلّ الكامل</button>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr><th>الوقت</th><th>الإجراء</th><th>المُنفِّذ</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="ledger-when">09:41</td><td>تعديل <b>مدرسة</b> — أسامة بن زيد</td><td class="dim">مشرف النظام</td></tr>
+              <tr><td class="ledger-when">09:12</td><td>إضافة <b>مستخدم</b> — هلا فؤاد منزلجي</td><td class="dim">مشرف النظام</td></tr>
+              <tr><td class="ledger-when">08:55</td><td>ترفيع <b>٧٠٥ طلاب</b> — طارق بن زياد</td><td class="dim">غادة مصطفى عاشور</td></tr>
+              <tr><td class="ledger-when">08:30</td><td>إضافة <b>عطلة</b> — عيد الجلاء</td><td class="dim">مشرف النظام</td></tr>
+              <tr><td class="ledger-when">08:02</td><td>تعديل <b>مادة</b> — الرياضيات</td><td class="dim">مشرف النظام</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════ المدارس ═══════ -->
+    <section class="sec" id="sec-schools">
+      <div class="sec-head">
+        <h1>المدارس</h1>
+        <p>إنشاء المدارس وتحرير بياناتها. عمود «النوع» يحسم إن كانت المدرسة تعمل بمعلّم صف أو بموجّه.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>المدارس <span class="dim num">(٧)</span></h2>
+          <div class="searchbar">
+            <svg><use href="#i-search"/></svg>
+            <input type="search" placeholder="ابحث بالاسم أو المديرية أو المجمّع…" aria-label="بحث في المدارس" />
+          </div>
+          <span class="spacer"></span>
+          <button class="btn btn-outline btn-sm"><svg><use href="#i-export"/></svg>تصدير</button>
+          <button class="btn btn-primary btn-sm"><svg><use href="#i-plus"/></svg>إضافة مدرسة</button>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>اسم المدرسة</th><th>النوع</th><th>المديرية</th>
+                <th>التصنيف</th><th>الطلاب</th><th>المعلمون</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="num dim">١</td><td>أسامة بن زيد</td>
+                <td><span class="chip chip-indigo">ابتدائي</span></td>
+                <td class="dim">اللاذقية</td><td class="dim">عادي</td>
+                <td class="num">٦٧٨</td><td class="num">٣٤</td>
+                <td class="row-actions-cell"><div class="row-actions">
+                  <button class="btn btn-ghost btn-sm"><svg><use href="#i-edit"/></svg>تعديل</button>
+                  <button class="btn btn-ghost btn-sm" title="أرشفة"><svg><use href="#i-archive"/></svg></button>
+                </div></td>
+              </tr>
+              <tr>
+                <td class="num dim">٢</td><td>طارق بن زياد</td>
+                <td><span class="chip chip-indigo">ابتدائي</span></td>
+                <td class="dim">اللاذقية</td><td class="dim">عادي</td>
+                <td class="num">٧٠٥</td><td class="num">٤٥</td>
+                <td class="row-actions-cell"><div class="row-actions">
+                  <button class="btn btn-ghost btn-sm"><svg><use href="#i-edit"/></svg>تعديل</button>
+                  <button class="btn btn-ghost btn-sm" title="أرشفة"><svg><use href="#i-archive"/></svg></button>
+                </div></td>
+              </tr>
+              <tr>
+                <td class="num dim">٣</td><td>خالد بن الوليد ح٢</td>
+                <td><span class="chip chip-gold">ثانوي</span></td>
+                <td class="dim">اللاذقية</td><td class="dim">عادي</td>
+                <td class="num">٤١٢</td><td class="num">٢٨</td>
+                <td class="row-actions-cell"><div class="row-actions">
+                  <button class="btn btn-ghost btn-sm"><svg><use href="#i-edit"/></svg>تعديل</button>
+                  <button class="btn btn-ghost btn-sm" title="أرشفة"><svg><use href="#i-archive"/></svg></button>
+                </div></td>
+              </tr>
+              <tr>
+                <td class="num dim">٤</td><td>فرسان المستقبل</td>
+                <td><span class="chip chip-indigo">ابتدائي</span></td>
+                <td class="dim">جبلة</td><td class="dim">ب</td>
+                <td class="num dim">—</td><td class="num dim">—</td>
+                <td class="row-actions-cell"><div class="row-actions">
+                  <button class="btn btn-ghost btn-sm"><svg><use href="#i-edit"/></svg>تعديل</button>
+                  <button class="btn btn-ghost btn-sm" title="أرشفة"><svg><use href="#i-archive"/></svg></button>
+                </div></td>
+              </tr>
+              <tr class="is-off">
+                <td class="num dim">٥</td><td>مدرسة اختبار</td>
+                <td><span class="chip chip-mute">مؤرشفة</span></td>
+                <td class="dim">اللاذقية</td><td class="dim">ب</td>
+                <td class="num dim">—</td><td class="num dim">—</td>
+                <td class="row-actions-cell"><div class="row-actions">
+                  <button class="btn btn-ghost btn-sm"><svg><use href="#i-undo"/></svg>استرجاع</button>
+                </div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <span>٥ من ٧</span>
+          <span class="spacer"></span>
+          <button class="pg on">١</button>
+          <button class="pg">٢</button>
+          <button class="pg">التالي ›</button>
+        </div>
+      </div>
+
+      <div class="note note-red">
+        <b>الإضافة (هـ) — أرشفة مدرسة:</b> اللوحة اليوم لا تملك أي مسار لحذف مدرسة
+        أو إخفائها. الأرشفة (لا الحذف) هي الصواب هنا: سجلّات الطلاب والحضور
+        والبيانات الشهرية مرتبطة بها، وحذفها يكسر السجلّ التاريخي.
+      </div>
+
+      <!-- نافذة إضافة/تعديل مدرسة -->
+      <div class="card">
+        <div class="card-head"><h2>نافذة إضافة / تعديل مدرسة</h2></div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="fld span-2">
+              <label for="m-name">اسم المدرسة <span class="req">*</span></label>
+              <input type="text" id="m-name" value="خالد بن الوليد ح٢" />
+            </div>
+
+            <!-- ═══ الإضافة (أ) — حقل نوع المدرسة ═══ -->
+            <div class="fld fld-new">
+              <label for="m-type">نوع المدرسة <span class="req">*</span><span class="new-tag">جديد</span></label>
+              <select id="m-type">
+                <option>ابتدائي</option>
+                <option selected>إعدادي</option>
+                <option>ثانوي</option>
+              </select>
+              <p class="fld-hint">
+                هذا الحقل <b>يغيّر سلوك لوحة المدرسة نفسها</b>، لا يُخزَّن للوصف فقط:
+                في المدرسة الابتدائية يختار المدير بين «معلّم الصف» و«أستاذ مادة»؛
+                وفي الإعدادية/الثانوية تُتاح «أستاذ مادة» فقط، ويظهر قسم
+                <b>الموجّه</b> المستقلّ الذي يتولّى الحضور.
+              </p>
+            </div>
+
+            <div class="fld">
+              <label for="m-dir">المديرية <span class="req">*</span></label>
+              <select id="m-dir"><option>مديرية تربية اللاذقية</option><option>مديرية تربية طرطوس</option></select>
+            </div>
+            <div class="fld">
+              <label for="m-class">التصنيف</label>
+              <select id="m-class"><option>أ</option><option selected>ب</option><option>ج</option><option>د</option></select>
+            </div>
+            <div class="fld">
+              <label for="m-edu">نوع التعليم</label>
+              <select id="m-edu"><option selected>عام</option><option>خاص</option><option>مهني</option><option>شرعي</option></select>
+            </div>
+            <div class="fld">
+              <label for="m-shift">الدوام</label>
+              <select id="m-shift"><option selected>صباحي</option><option>مسائي</option></select>
+            </div>
+            <div class="fld">
+              <label for="m-stud">نوع الطلاب</label>
+              <select id="m-stud"><option selected>مختلط</option><option>بنين</option><option>بنات</option></select>
+            </div>
+            <div class="fld">
+              <label for="m-complex">المجمّع</label>
+              <input type="text" id="m-complex" value="مدينة اللاذقية" />
+            </div>
+            <div class="fld">
+              <label for="m-lat">خط العرض</label>
+              <input type="text" id="m-lat" class="num" value="35.5231" />
+            </div>
+            <div class="fld">
+              <label for="m-lng">خط الطول</label>
+              <input type="text" id="m-lng" class="num" value="35.7914" />
+            </div>
+          </div>
+          <div class="dlg-actions">
+            <button class="btn btn-primary">حفظ</button>
+            <button class="btn btn-ghost">إلغاء</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="note">
+        <b>ثلاث مراحل مفصولة:</b> §25 وسّعت القيد إلى <code>primary</code> و
+        <code>preparatory</code> و<code>secondary</code>. سلوك معلّم-صف ↔ موجّه
+        لا يتغيّر — الإعدادي والثانوي كلاهما يعمل بموجّه — والفصل للتسمية
+        والتقارير. الأبعاد الأخرى تبقى بأعمدة مستقلّة: نوع التعليم
+        (عام/خاص/مهني/شرعي)، والتصنيف (أ/ب/ج/د)، والحلقة.
+
+        <br><br><b>⚠️ هذا الملفّ نموذج تصميم، والمنفَّذ هو المرجع:</b> لوحة
+        المشرف العاملة تبنّت هذا النظام فعلياً — افتح <code>admin/</code> لا هذا
+        الملفّ لرؤية الحالة الحقيقية.
+      </div>
+    </section>
+    <!-- ═══════ المستخدمون ═══════ -->
+    <section class="sec" id="sec-users">
+      <div class="sec-head">
+        <h1>المستخدمون</h1>
+        <p>حسابات مديري المدارس وموظّفي المديريات. كل إنشاء وتعطيل وإعادة تعيين كلمة مرور يُسجَّل في سجلّ التدقيق.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>المستخدمون <span class="dim num">(١٢)</span></h2>
+          <div class="searchbar">
+            <svg><use href="#i-search"/></svg>
+            <input type="search" placeholder="ابحث بالاسم أو البريد أو المدرسة…" aria-label="بحث في المستخدمين" />
+          </div>
+          <span class="spacer"></span>
+          <button class="btn btn-primary btn-sm"><svg><use href="#i-plus"/></svg>إنشاء حساب</button>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr><th>#</th><th>الاسم</th><th>الدور</th><th>الجهة</th><th>الحالة</th><th></th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="num dim">١</td><td>غادة مصطفى عاشور</td>
+                <td><span class="chip chip-indigo">مدير مدرسة</span></td>
+                <td class="dim">طارق بن زياد</td>
+                <td><span class="chip chip-sage">نشط</span></td>
+                <td class="row-actions-cell"><div class="row-actions">
+                  <button class="btn btn-ghost btn-sm"><svg><use href="#i-key"/></svg>الحساب</button>
+                  <button class="btn btn-ghost btn-sm">تعطيل</button>
+                </div></td>
+              </tr>
+              <tr>
+                <td class="num dim">٢</td><td>عمار الشعري</td>
+                <td><span class="chip chip-indigo">مدير مدرسة</span></td>
+                <td class="dim">أسامة بن زيد</td>
+                <td><span class="chip chip-sage">نشط</span></td>
+                <td class="row-actions-cell"><div class="row-actions">
+                  <button class="btn btn-ghost btn-sm"><svg><use href="#i-key"/></svg>الحساب</button>
+                  <button class="btn btn-ghost btn-sm">تعطيل</button>
+                </div></td>
+              </tr>
+              <tr>
+                <td class="num dim">٣</td><td>وليد محمد كيولة</td>
+                <td><span class="chip chip-gold">موظّف مديرية</span></td>
+                <td class="dim">مديرية تربية اللاذقية</td>
+                <td><span class="chip chip-sage">نشط</span></td>
+                <td class="row-actions-cell"><div class="row-actions">
+                  <button class="btn btn-ghost btn-sm"><svg><use href="#i-key"/></svg>الحساب</button>
+                  <button class="btn btn-ghost btn-sm">تعطيل</button>
+                </div></td>
+              </tr>
+              <tr class="is-off">
+                <td class="num dim">٤</td><td>هلا فؤاد منزلجي</td>
+                <td><span class="chip chip-indigo">مدير مدرسة</span></td>
+                <td class="dim">خالد بن الوليد ح٢</td>
+                <td><span class="chip chip-mute">معطَّل</span></td>
+                <td class="row-actions-cell"><div class="row-actions">
+                  <button class="btn btn-outline btn-sm"><svg><use href="#i-undo"/></svg>إعادة تفعيل</button>
+                </div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <span>٤ من ١٢</span>
+          <span class="spacer"></span>
+          <button class="pg on">١</button><button class="pg">٢</button><button class="pg">٣</button>
+          <button class="pg">التالي ›</button>
+        </div>
+      </div>
+
+      <div class="note">
+        <b>الإضافة (د) — إعادة التفعيل:</b> اللوحة اليوم تُعطّل الحساب ولا تملك أي
+        طريق لإعادته؛ الصفّ يظهر بشارة «معطَّل» وينتهي الأمر عند هذا الحدّ. مسار
+        العودة موجود أعلاه على نفس الصفّ.
+      </div>
+
+      <!-- النوافذ -->
+      <div class="card">
+        <div class="card-head"><h2>نوافذ هذا القسم</h2></div>
+        <div class="card-body">
+          <div class="dlg-demo">
+
+            <!-- إنشاء حساب — كلمة مرور مولَّدة -->
+            <div class="dlg">
+              <div class="dlg-title">إنشاء حساب جديد</div>
+              <div class="dlg-sub">يُنشَأ الحساب وتُصكّ كلمة المرور، وتُعرض مرّة واحدة فقط.</div>
+              <div class="form-grid" style="margin-top:13px">
+                <div class="fld span-2">
+                  <label for="u-name">الاسم الكامل <span class="req">*</span></label>
+                  <input type="text" id="u-name" value="هيا نزار سلوم" />
+                </div>
+                <div class="fld span-2">
+                  <label for="u-mail">البريد الإلكتروني <span class="req">*</span></label>
+                  <input type="email" id="u-mail" class="num" value="haya.saloum@edu.sy" />
+                </div>
+                <div class="fld">
+                  <label for="u-role">الدور <span class="req">*</span></label>
+                  <select id="u-role"><option selected>مدير مدرسة</option><option>موظّف مديرية</option></select>
+                </div>
+                <div class="fld">
+                  <label for="u-org">المدرسة <span class="req">*</span></label>
+                  <select id="u-org"><option>فرسان المستقبل</option></select>
+                </div>
+              </div>
+              <div class="cred-box">
+                <label>كلمة المرور المولَّدة<span class="new-tag">جديد</span></label>
+                <div class="cred-row">
+                  <code>Kf7-mQx2-Rn94</code>
+                  <button class="btn btn-gold btn-sm">نسخ</button>
+                </div>
+                <p class="cred-warn">تُعرض مرّة واحدة — انسخها قبل الإغلاق.</p>
+              </div>
+              <div class="dlg-actions">
+                <button class="btn btn-primary">إنشاء</button>
+                <button class="btn btn-ghost">إلغاء</button>
+              </div>
+            </div>
+
+            <!-- بيانات الحساب — السطح الذهبي -->
+            <div class="dlg dlg-gold">
+              <div class="dlg-title">بيانات الحساب</div>
+              <div class="dlg-sub">
+                حساب <strong>غادة مصطفى عاشور</strong> — مدير مدرسة طارق بن زياد.
+              </div>
+              <div class="form-grid" style="margin-top:12px">
+                <div class="fld span-2">
+                  <label for="c-mail">البريد</label>
+                  <input type="text" id="c-mail" class="num" value="ghada.ashour@edu.sy" readonly />
+                </div>
+              </div>
+              <div class="cred-box">
+                <label>كلمة مرور جديدة</label>
+                <div class="cred-row">
+                  <code>Tz3-bWl8-Pq61</code>
+                  <button class="btn btn-gold btn-sm">نسخ</button>
+                </div>
+                <p class="cred-warn">كلمة المرور القديمة بطلت فور توليد هذه.</p>
+              </div>
+              <div class="dlg-actions">
+                <button class="btn btn-outline">إغلاق</button>
+              </div>
+            </div>
+
+            <!-- تعطيل — الاسم ظاهر بوضوح -->
+            <div class="dlg dlg-danger">
+              <div class="dlg-title">تعطيل الحساب</div>
+              <div class="dlg-sub">
+                سيُمنع <strong>هلا فؤاد منزلجي</strong> من تسجيل الدخول. يمكن إعادة
+                تفعيله لاحقاً من نفس الصفّ في الجدول.
+              </div>
+              <div class="dlg-actions">
+                <button class="btn btn-danger">تعطيل</button>
+                <button class="btn btn-ghost">إلغاء</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="note note-red">
+            <b>الإصلاح (ح):</b> في اللوحة الحالية، اسم المستخدم داخل نافذة التعطيل
+            (وكذلك نافذتَي حذف العطلة وحذف عنصر القائمة) مكتوب بـ<code>color:#fff</code>
+            فوق خلفية <code>#f0f4fa</code> — أي <b>أبيض على أبيض، غير مرئي تماماً</b>.
+            المستخدم يؤكّد إجراءً على اسمٍ لا يراه. هنا الاسم ظاهر بأعلى تباين في الجملة.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════ المواد ═══════ -->
+    <section class="sec" id="sec-subjects">
+      <div class="sec-head">
+        <h1>فهرس المواد</h1>
+        <p>المرجع الوطني للمواد ومكوّنات العلامة. كل مدرسة تشتقّ موادّها منه.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>المواد <span class="dim num">(٢٤)</span></h2>
+          <span class="spacer"></span>
+          <button class="btn btn-outline btn-sm">قواعد النجاح</button>
+          <button class="btn btn-outline btn-sm">مزامنة مع المدارس</button>
+          <button class="btn btn-primary btn-sm"><svg><use href="#i-plus"/></svg>إضافة مادة</button>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr><th>#</th><th>المادة</th><th>مكوّنات العلامة</th><th>الصفوف</th><th>الحالة</th><th></th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="num dim">١</td><td>اللغة العربية <span class="chip chip-gold">أساسية</span></td>
+                <td class="dim num">مذاكرة ٢٠ · شفهي ١٠ · وظائف ١٠ · فصلي ٦٠</td>
+                <td class="num dim">١–١٢</td>
+                <td><span class="chip chip-sage">فعّالة</span></td>
+                <td class="row-actions-cell"><div class="row-actions"><button class="btn btn-ghost btn-sm"><svg><use href="#i-edit"/></svg>تعديل</button></div></td>
+              </tr>
+              <tr>
+                <td class="num dim">٢</td><td>الرياضيات <span class="chip chip-gold">أساسية</span></td>
+                <td class="dim num">مذاكرة ٢٠ · شفهي ١٠ · وظائف ١٠ · فصلي ٦٠</td>
+                <td class="num dim">١–١٢</td>
+                <td><span class="chip chip-sage">فعّالة</span></td>
+                <td class="row-actions-cell"><div class="row-actions"><button class="btn btn-ghost btn-sm"><svg><use href="#i-edit"/></svg>تعديل</button></div></td>
+              </tr>
+              <tr>
+                <td class="num dim">٣</td><td>اللغة الإنكليزية</td>
+                <td class="dim num">مذاكرة ٢٠ · شفهي ١٠ · وظائف ١٠ · فصلي ٦٠</td>
+                <td class="num dim">١–١٢</td>
+                <td><span class="chip chip-sage">فعّالة</span></td>
+                <td class="row-actions-cell"><div class="row-actions"><button class="btn btn-ghost btn-sm"><svg><use href="#i-edit"/></svg>تعديل</button></div></td>
+              </tr>
+              <tr>
+                <td class="num dim">٤</td><td>التربية الرياضية</td>
+                <td class="dim num">مكوّن واحد ١٠٠</td>
+                <td class="num dim">١–١٢</td>
+                <td><span class="chip chip-sage">فعّالة</span></td>
+                <td class="row-actions-cell"><div class="row-actions"><button class="btn btn-ghost btn-sm"><svg><use href="#i-edit"/></svg>تعديل</button></div></td>
+              </tr>
+              <tr class="is-off">
+                <td class="num dim">٥</td><td>الرسم</td>
+                <td class="dim num">مكوّن واحد ١٠٠</td>
+                <td class="num dim">١–٦</td>
+                <td><span class="chip chip-mute">متوقّفة</span></td>
+                <td class="row-actions-cell"><div class="row-actions"><button class="btn btn-ghost btn-sm"><svg><use href="#i-edit"/></svg>تعديل</button></div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════ القوائم المرجعية ═══════ -->
+    <section class="sec" id="sec-lookups">
+      <div class="sec-head">
+        <h1>القوائم المرجعية</h1>
+        <p>القيم التي تظهر في قوائم البوابات الأخرى — الاختصاصات والشهادات والصفات الوظيفية وغيرها.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>العناصر</h2>
+          <div class="fld" style="min-width:230px">
+            <select aria-label="نوع القائمة">
+              <option selected>الاختصاصات</option>
+              <option>الأعمال الإدارية</option>
+              <option>الشهادات</option>
+              <option>الشهادات العليا</option>
+              <option>أنواع الإجازات</option>
+              <option>الوثائق / الموافقات</option>
+              <option>الأعمال المساندة</option>
+              <option>المناطق التعليمية (لكل مديرية)</option>
+              <option>الصفة الوظيفية — التكليف الفني</option>
+              <option>الصفة الإدارية — التكليف الإداري</option>
+            </select>
+          </div>
+          <span class="spacer"></span>
+          <button class="btn btn-primary btn-sm"><svg><use href="#i-plus"/></svg>إضافة عنصر</button>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>#</th><th>القيمة</th><th>الترتيب</th><th>الحالة</th><th></th></tr></thead>
+            <tbody>
+              <tr><td class="num dim">١</td><td>معلّم صف</td><td class="num dim">١</td><td><span class="chip chip-sage">فعّال</span></td>
+                <td class="row-actions-cell"><div class="row-actions"><button class="btn btn-ghost btn-sm"><svg><use href="#i-edit"/></svg>تعديل</button><button class="btn btn-ghost btn-sm">حذف</button></div></td></tr>
+              <tr><td class="num dim">٢</td><td>رياضيات</td><td class="num dim">٢</td><td><span class="chip chip-sage">فعّال</span></td>
+                <td class="row-actions-cell"><div class="row-actions"><button class="btn btn-ghost btn-sm"><svg><use href="#i-edit"/></svg>تعديل</button><button class="btn btn-ghost btn-sm">حذف</button></div></td></tr>
+              <tr><td class="num dim">٣</td><td>لغة عربية</td><td class="num dim">٣</td><td><span class="chip chip-sage">فعّال</span></td>
+                <td class="row-actions-cell"><div class="row-actions"><button class="btn btn-ghost btn-sm"><svg><use href="#i-edit"/></svg>تعديل</button><button class="btn btn-ghost btn-sm">حذف</button></div></td></tr>
+              <tr><td class="num dim">٤</td><td>إرشاد نفسي</td><td class="num dim">٤</td><td><span class="chip chip-sage">فعّال</span></td>
+                <td class="row-actions-cell"><div class="row-actions"><button class="btn btn-ghost btn-sm"><svg><use href="#i-edit"/></svg>تعديل</button><button class="btn btn-ghost btn-sm">حذف</button></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════ تقويم العطل ═══════ -->
+    <section class="sec" id="sec-holidays">
+      <div class="sec-head">
+        <h1>تقويم العطل</h1>
+        <p>العطل الرسمية التي تُستثنى من احتساب الحضور في كل المدارس.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>العطل الرسمية <span class="dim num">(٩)</span></h2>
+          <span class="spacer"></span>
+          <button class="btn btn-primary btn-sm"><svg><use href="#i-plus"/></svg>إضافة عطلة</button>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>#</th><th>المناسبة</th><th>التاريخ</th><th>اليوم</th><th></th></tr></thead>
+            <tbody>
+              <tr><td class="num dim">١</td><td>عيد الجلاء</td><td class="num">2026-04-17</td><td class="dim">الجمعة</td>
+                <td class="row-actions-cell"><div class="row-actions"><button class="btn btn-ghost btn-sm">حذف</button></div></td></tr>
+              <tr><td class="num dim">٢</td><td>عيد العمّال</td><td class="num">2026-05-01</td><td class="dim">الجمعة</td>
+                <td class="row-actions-cell"><div class="row-actions"><button class="btn btn-ghost btn-sm">حذف</button></div></td></tr>
+              <tr><td class="num dim">٣</td><td>عيد الشهداء</td><td class="num">2026-05-06</td><td class="dim">الأربعاء</td>
+                <td class="row-actions-cell"><div class="row-actions"><button class="btn btn-ghost btn-sm">حذف</button></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    <!-- ═══════ سجلّ التدقيق — السطح الذهبي ═══════
+         الذهبي لا يظهر في أي مكان آخر من اللوحة إلا هنا وفي بيانات الحسابات.
+         السجلّ هو الشيء الوحيد الذي لا يُعدَّل ولا يُحذف — فيُرى مختلفاً. -->
+    <section class="sec" id="sec-audit">
+      <div class="sec-head">
+        <h1>سجلّ التدقيق</h1>
+        <p>مَن غيّر ماذا ومتى. سجلّ لا يُعدَّل ولا يُحذف — لذلك يبدو مختلفاً عن كل قسم آخر في هذه اللوحة.</p>
+      </div>
+
+      <div class="card ledger">
+        <div class="card-head">
+          <h2>السجلّ</h2>
+          <div class="fld" style="min-width:170px">
+            <select aria-label="تصفية بالمدرسة"><option selected>كل المدارس</option><option>طارق بن زياد</option><option>أسامة بن زيد</option></select>
+          </div>
+          <div class="fld" style="min-width:140px">
+            <input type="date" class="num" value="2026-07-01" aria-label="من تاريخ" />
+          </div>
+          <span class="spacer"></span>
+          <button class="btn btn-gold btn-sm"><svg><use href="#i-export"/></svg>تصدير</button>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr><th>الوقت</th><th>الكيان</th><th>الإجراء</th><th>المُنفِّذ</th><th>المعرّف</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="ledger-when">2026-07-31<br>09:41:22</td>
+                <td>مدرسة</td>
+                <td>
+                  تعديل — أسامة بن زيد
+                  <div class="ledger-diff"><span class="k">نوع المدرسة:</span> <span class="was">ابتدائي</span> ← <span class="now">إعدادي / ثانوي</span>
+<span class="k">التصنيف:</span> <span class="was">ب</span> ← <span class="now">عادي</span></div>
+                </td>
+                <td class="dim">مشرف النظام</td>
+                <td><span class="mono-id">a2b18fd…</span></td>
+              </tr>
+              <tr>
+                <td class="ledger-when">2026-07-31<br>09:12:07</td>
+                <td>مستخدم</td>
+                <td>
+                  إضافة — هلا فؤاد منزلجي
+                  <div class="ledger-diff"><span class="k">الدور:</span> <span class="now">مدير مدرسة</span>
+<span class="k">المدرسة:</span> <span class="now">خالد بن الوليد ح٢</span></div>
+                </td>
+                <td class="dim">مشرف النظام</td>
+                <td><span class="mono-id">7c1a3a4…</span></td>
+              </tr>
+              <tr>
+                <td class="ledger-when">2026-07-31<br>08:55:44</td>
+                <td>طالب</td>
+                <td>
+                  ترفيع — ٧٠٥ طلاب
+                  <div class="ledger-diff"><span class="k">العام الدراسي:</span> <span class="was ltr">2025-2026</span> ← <span class="now ltr">2026-2027</span></div>
+                </td>
+                <td class="dim">غادة مصطفى عاشور</td>
+                <td><span class="mono-id">d1b9897…</span></td>
+              </tr>
+              <tr>
+                <td class="ledger-when">2026-07-31<br>08:30:11</td>
+                <td>عطلة</td>
+                <td>إضافة — عيد الجلاء</td>
+                <td class="dim">مشرف النظام</td>
+                <td><span class="mono-id">8bcd084…</span></td>
+              </tr>
+              <tr>
+                <td class="ledger-when">2026-07-30<br>19:22:03</td>
+                <td>مستخدم</td>
+                <td>
+                  إعادة تعيين كلمة مرور — عمار الشعري
+                  <div class="ledger-diff"><span class="k">ملاحظة:</span> كلمة المرور لا تُخزَّن في السجلّ إطلاقاً</div>
+                </td>
+                <td class="dim">مشرف النظام</td>
+                <td><span class="mono-id">5492f66…</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <span>٥ من ١٤٨</span>
+          <span class="spacer"></span>
+          <button class="pg">تحميل المزيد</button>
+        </div>
+      </div>
+
+      <div class="note note-gold">
+        <b>لماذا لون خاص لهذا القسم:</b> كل قسم آخر في اللوحة قابل للتحرير — تُضيف
+        مدرسة، تعدّل مادة، تحذف عطلة. السجلّ وحده مقروء فقط ولا رجعة فيه. اللون
+        الذهبي محجوز له ولبيانات الحسابات، فيصير التمييز مفهوماً من النظرة الأولى
+        بلا حاجة إلى عنوان يشرحه.
+      </div>
+    </section>
+
+    <!-- ═══════ لوحة العناصر ═══════ -->
+    <section class="sec" id="sec-kit">
+      <div class="sec-head">
+        <h1>لوحة العناصر</h1>
+        <p>نظام التصميم نفسه، لا الشاشات — لتحكم على الأساس قبل التنفيذ.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>الألوان ودورها</h2></div>
+        <div class="card-body">
+          <div class="swatches">
+            <div class="sw">
+              <div class="sw-chip" style="background:#16181d"></div>
+              <div class="sw-meta"><div class="sw-name">الأرضية</div><div class="sw-hex">#16181d</div>
+                <div class="sw-use">غرافيت بارد — متعمَّد ألّا يكون كحلي المديرية</div></div>
+            </div>
+            <div class="sw">
+              <div class="sw-chip" style="background:#1e212a"></div>
+              <div class="sw-meta"><div class="sw-name">البطاقات</div><div class="sw-hex">#1e212a</div>
+                <div class="sw-use">البطاقات ورؤوس الجداول</div></div>
+            </div>
+            <div class="sw">
+              <div class="sw-chip" style="background:#e8eaf0"></div>
+              <div class="sw-meta"><div class="sw-name">الحبر</div><div class="sw-hex">#e8eaf0</div>
+                <div class="sw-use">النصّ الأساسي</div></div>
+            </div>
+            <div class="sw">
+              <div class="sw-chip" style="background:#7b7ce8"></div>
+              <div class="sw-meta"><div class="sw-name">النيلي</div><div class="sw-hex">#7b7ce8</div>
+                <div class="sw-use">لون التفاعل <b>الوحيد</b> — كل ما يُنقر</div></div>
+            </div>
+            <div class="sw">
+              <div class="sw-chip" style="background:#e05a4a"></div>
+              <div class="sw-meta"><div class="sw-name">القرمزي</div><div class="sw-hex">#e05a4a</div>
+                <div class="sw-use"><b>حصراً</b> للإجراءات المدمِّرة — لا يُستعمل زينةً</div></div>
+            </div>
+            <div class="sw">
+              <div class="sw-chip" style="background:#c9a227"></div>
+              <div class="sw-meta"><div class="sw-name">الذهبي</div><div class="sw-hex">#c9a227</div>
+                <div class="sw-use"><b>حصراً</b> لسجلّ التدقيق وبيانات الحسابات</div></div>
+            </div>
+          </div>
+          <div class="note">
+            <b>القاعدة:</b> لون واحد للتفاعل، ولونان محجوزان لمعنى واحد لا يُخالَف.
+            استعمالُ الأحمر للزينة يستهلك معناه، فحين يظهر فعلاً أمام «حذف» لا
+            يعود ينبّه أحداً.
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>الخطوط</h2></div>
+        <div class="card-body">
+          <p style="font-size:1.6rem;font-weight:800;margin-bottom:2px">عناوين — Tajawal 800</p>
+          <p class="dim" style="font-size:.8rem;margin-bottom:14px">محمَّل أصلاً في لوحة المشرف اليوم — بلا كلفة شبكة جديدة.</p>
+          <p style="margin-bottom:2px">متن — مكدّس النظام العربي، مقروء في الفقرات الطويلة وشروح الحقول.</p>
+          <p class="num" style="font-size:1.05rem;margin-top:12px">1,248 · 2026-07-31 · a2b18fd · 09:41:22</p>
+          <p class="dim" style="font-size:.8rem">بيانات — أحادي العرض لكل معرّف وطابع زمني وعدد، فتصطفّ الأرقام في الأعمدة.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>الأزرار والشارات</h2></div>
+        <div class="card-body">
+          <div class="demo-row"><span class="demo-lbl">الأزرار</span>
+            <button class="btn btn-primary">إجراء أساسي</button>
+            <button class="btn btn-outline">ثانوي</button>
+            <button class="btn btn-ghost">شبح</button>
+            <button class="btn btn-danger">حذف نهائي</button>
+            <button class="btn btn-gold">سجلّ</button>
+          </div>
+          <div class="demo-row"><span class="demo-lbl">الشارات</span>
+            <span class="chip chip-indigo">ابتدائي</span>
+            <span class="chip chip-gold">ثانوي</span>
+            <span class="chip chip-sage">نشط</span>
+            <span class="chip chip-mute">معطَّل</span>
+            <span class="chip chip-red">محظور</span>
+          </div>
+          <div class="demo-row"><span class="demo-lbl">حقول</span>
+            <div class="fld" style="min-width:180px"><label for="k-in">حقل نصّي</label><input type="text" id="k-in" value="قيمة" /></div>
+            <div class="fld" style="min-width:180px"><label for="k-sel">قائمة</label><select id="k-sel"><option>خيار</option></select></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>الإضافات المقترحة</h2></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>#</th><th>الإضافة</th><th>الدافع</th><th>أين تراها</th></tr></thead>
+            <tbody>
+              <tr><td class="num dim">أ</td><td><b>حقل نوع المدرسة</b></td>
+                <td class="dim">بدونه لا وجود لمدرسة تعمل بموجّه — وهذا سؤالك الأصلي</td>
+                <td><button class="btn btn-ghost btn-sm" data-go="schools">المدارس ←</button></td></tr>
+              <tr><td class="num dim">ب</td><td><b>قسم نظرة عامة</b></td>
+                <td class="dim">اللوحة اليوم تُسقطك في جدول بلا سياق</td>
+                <td><button class="btn btn-ghost btn-sm" data-go="overview">نظرة عامة ←</button></td></tr>
+              <tr><td class="num dim">ج</td><td><b>بحث وترقيم صفحات</b></td>
+                <td class="dim">يُرسَم كل صفّ بلا ترقيم؛ التدقيق وحده مُرقَّم اليوم</td>
+                <td><button class="btn btn-ghost btn-sm" data-go="schools">المدارس ←</button></td></tr>
+              <tr><td class="num dim">د</td><td><b>إعادة تفعيل مستخدم</b></td>
+                <td class="dim">التعطيل موجود والعودة مقطوعة — طريق مسدود</td>
+                <td><button class="btn btn-ghost btn-sm" data-go="users">المستخدمون ←</button></td></tr>
+              <tr><td class="num dim">هـ</td><td><b>أرشفة مدرسة</b></td>
+                <td class="dim">لا مسار حذف أو إخفاء للمدارس إطلاقاً</td>
+                <td><button class="btn btn-ghost btn-sm" data-go="schools">المدارس ←</button></td></tr>
+              <tr><td class="num dim">و</td><td><b>كلمة مرور مولَّدة</b></td>
+                <td class="dim">اليوم يكتبها الموظّف بيده؛ مسار إعادة التعيين يولّدها أصلاً</td>
+                <td><button class="btn btn-ghost btn-sm" data-go="users">المستخدمون ←</button></td></tr>
+              <tr><td class="num dim">ز</td><td><b>تصدير</b></td>
+                <td class="dim">لا تصدير للسجلّ ولا للمدارس في اللوحة</td>
+                <td><button class="btn btn-ghost btn-sm" data-go="audit">السجلّ ←</button></td></tr>
+              <tr><td class="num dim">ح</td><td><b>إصلاحات صحّية</b></td>
+                <td class="dim">النصّ الأبيض غير المرئي · Esc لإغلاق النوافذ · Enter للحفظ · ربط الحقول بأسمائها</td>
+                <td><button class="btn btn-ghost btn-sm" data-go="users">المستخدمون ←</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+// تنقّل النموذج فقط — لا منطق تطبيق هنا.
+// أي عنصر يحمل data-go ينقل للقسم، سواء كان في الشريط الجانبي أو داخل جدول
+// الإضافات، فتبقى وجهة واحدة لكل قسم.
+function goTo(name) {
+  document.querySelectorAll('.rail-btn').forEach(function (b) {
+    var on = b.dataset.go === name;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-selected', String(on));
+  });
+  document.querySelectorAll('.sec').forEach(function (s) {
+    s.classList.toggle('on', s.id === 'sec-' + name);
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+document.addEventListener('click', function (e) {
+  var el = e.target.closest('[data-go]');
+  if (el) goTo(el.dataset.go);
+});
+</script>
+</body>
+</html>

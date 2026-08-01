@@ -996,42 +996,54 @@
       <div id="dir-school-modal-error" class="dir-review-msg" hidden style="color:var(--red);margin-bottom:10px;font-size:.88rem"></div>
 
       <div class="form-group">
-        <label>اسم المدرسة *</label>
+        <label for="dir-sm-name">اسم المدرسة *</label>
         <input type="text" id="dir-sm-name" class="field-input" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px" />
+      </div>
+      <div class="form-group">
+        <label for="dir-sm-complex-name">اسم المجمع المدرسي *</label>
+        <input type="text" id="dir-sm-complex-name" class="field-input" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px" />
+      </div>
+      <div class="form-group">
+        <label for="dir-sm-school-type">نوع المدرسة *</label>
+        <select id="dir-sm-school-type" class="field-input" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px">
+          <option value="primary">ابتدائي</option>
+          <option value="preparatory">إعدادي</option>
+          <option value="secondary">ثانوي</option>
+        </select>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="form-group">
-          <label>خط العرض (lat)</label>
+          <label for="dir-sm-lat">خط العرض (lat)</label>
           <input type="number" id="dir-sm-lat" class="field-input" step="any" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px" />
         </div>
         <div class="form-group">
-          <label>خط الطول (lng)</label>
+          <label for="dir-sm-lng">خط الطول (lng)</label>
           <input type="number" id="dir-sm-lng" class="field-input" step="any" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px" />
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="form-group">
-          <label>التصنيف</label>
+          <label for="dir-sm-classification">التصنيف</label>
           <select id="dir-sm-classification" class="field-input" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px">
             <option value="">—</option><option>أ</option><option>ب</option><option>ج</option><option>د</option>
           </select>
         </div>
         <div class="form-group">
-          <label>نوع التعليم</label>
+          <label for="dir-sm-education-type">نوع التعليم</label>
           <select id="dir-sm-education-type" class="field-input" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px">
-            <option value="">—</option><option>عام</option><option>مهني</option><option>ديني</option>
+            <option value="">—</option><option>عام</option><option>خاص</option><option>مهني</option><option>شرعي</option>
           </select>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="form-group">
-          <label>نوع الدوام</label>
+          <label for="dir-sm-shift">نوع الدوام</label>
           <select id="dir-sm-shift" class="field-input" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px">
             <option value="">—</option><option>صباحي</option><option>مسائي</option>
           </select>
         </div>
         <div class="form-group">
-          <label>نوع الطلاب</label>
+          <label for="dir-sm-student-type">نوع الطلاب</label>
           <select id="dir-sm-student-type" class="field-input" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px">
             <option value="">—</option><option>مختلط</option><option>بنين</option><option>بنات</option>
           </select>
@@ -1039,19 +1051,14 @@
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="form-group">
-          <label>عدد الطلاب</label>
+          <label for="dir-sm-total-students">عدد الطلاب</label>
           <input type="number" id="dir-sm-total-students" class="field-input" min="0" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px" />
         </div>
         <div class="form-group">
-          <label>عدد المعلمين</label>
+          <label for="dir-sm-total-teachers">عدد المعلمين</label>
           <input type="number" id="dir-sm-total-teachers" class="field-input" min="0" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px" />
         </div>
       </div>
-      <div class="form-group">
-        <label>اسم المجمع المدرسي</label>
-        <input type="text" id="dir-sm-complex-name" class="field-input" style="width:100%;background:var(--bg-surface);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px" />
-      </div>
-
       <div class="modal-actions" style="margin-top:16px">
         <button class="btn btn-ghost btn-sm" id="dir-school-modal-cancel">إلغاء</button>
         <button class="btn btn-primary btn-sm" id="dir-school-modal-save">حفظ</button>

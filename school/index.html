@@ -997,7 +997,7 @@
       </div>
       <div class="card-body">
         <div class="field-group">
-          <label for="sch-complex">المجمّع التربوي</label>
+          <label for="sch-complex">المجمّع التربوي *</label>
           <input id="sch-complex" class="field-input" type="text" maxlength="120" />
         </div>
         <div class="twin-fields">
@@ -1007,7 +1007,13 @@
           </div>
           <div class="field-group">
             <label for="sch-edutype">نوع التعليم</label>
-            <input id="sch-edutype" class="field-input" type="text" maxlength="60" />
+            <select id="sch-edutype" class="field-input">
+              <option value="">—</option>
+              <option value="عام">عام</option>
+              <option value="خاص">خاص</option>
+              <option value="مهني">مهني</option>
+              <option value="شرعي">شرعي</option>
+            </select>
           </div>
         </div>
         <div class="twin-fields">

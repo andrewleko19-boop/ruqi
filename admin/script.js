@@ -95,6 +95,7 @@ const schoolModalCancel = document.getElementById('school-modal-cancel');
 const schoolModalSave   = document.getElementById('school-modal-save');
 const smName            = document.getElementById('sm-name');
 const smDirectorate     = document.getElementById('sm-directorate');
+const smSchoolType      = document.getElementById('sm-school-type');
 const smLat             = document.getElementById('sm-lat');
 const smLng             = document.getElementById('sm-lng');
 const smClassification  = document.getElementById('sm-classification');
@@ -140,6 +141,7 @@ const deactivateConfirm = document.getElementById('deactivate-modal-confirm');
 CustomSelect.enhance('users-role-filter');
 CustomSelect.enhance('audit-school-filter');
 CustomSelect.enhance('sm-directorate');
+CustomSelect.enhance('sm-school-type');
 CustomSelect.enhance('sm-classification');
 CustomSelect.enhance('sm-education-type');
 CustomSelect.enhance('sm-shift');
@@ -257,12 +259,12 @@ function showDashboard(email) {
   }
 
   loadDirectorates().then(() => {
-    loadSchools();
-    loadUsers();
+    // نظرة عامة تُرسَم بعد أن تستقرّ كل القوائم: تُحسَب منها كلّها ولا تستعلم
+    // بنفسها، فرسمها قبل ذلك يعرض أصفاراً كاذبة لثانية.
+    Promise.allSettled([
+      loadSchools(), loadUsers(), loadHolidays(), loadLookups(), loadSubjectCatalog(),
+    ]).then(renderOverview);
     populateAuditSchoolFilter();
-    loadHolidays();
-    loadLookups();
-    loadSubjectCatalog();
   });
 }
 
@@ -290,14 +292,27 @@ let _adminNavDepth = 0;
 const _adminBackBtn = document.getElementById('btn-back-nav');
 
 function _adminActivateTab(tabName) {
-  tabBtns.forEach(b => b.classList.remove('is-active'));
+  tabBtns.forEach(b => {
+    const on = b.dataset.tab === tabName;
+    b.classList.toggle('is-active', on);
+    b.setAttribute('aria-selected', String(on));
+  });
   tabPanels.forEach(p => p.classList.remove('is-active'));
-  const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
-  if (btn) btn.classList.add('is-active');
   document.getElementById(`tab-${tabName}`)?.classList.add('is-active');
+  if (tabName === 'overview') renderOverview();
 }
 
-history.replaceState({ tab: 'schools', d: 0 }, '', '#schools');
+history.replaceState({ tab: 'overview', d: 0 }, '', '#overview');
+
+// أزرار «اذهب إلى القسم» داخل المحتوى (بطاقة نظرة عامة) — وجهة واحدة لكل قسم.
+document.addEventListener('click', (e) => {
+  const go = e.target.closest('[data-goto-tab]');
+  if (!go) return;
+  _adminNavDepth++;
+  history.pushState({ tab: go.dataset.gotoTab, d: _adminNavDepth }, '', '#' + go.dataset.gotoTab);
+  if (_adminBackBtn) _adminBackBtn.hidden = false;
+  _adminActivateTab(go.dataset.gotoTab);
+});
 
 tabBtns.forEach(btn => {
   btn.addEventListener('click', () => {
@@ -318,6 +333,54 @@ window.addEventListener('popstate', e => {
 if (_adminBackBtn) {
   _adminBackBtn.addEventListener('click', () => history.back());
 }
+
+// ── سلوك النوافذ الموحَّد ─────────────────────────────────────────────────────
+// كان ٤ من ١٢ نافذة فقط تُغلق بنقر الخلفية، ولا واحدة تُغلق بـEsc — فيعلق
+// المستخدم في نافذة يظنّها معطّلة. معالِج واحد على المستند يغطّيها كلّها ويغطّي
+// أي نافذة تُضاف لاحقاً بلا تسجيل جديد.
+//
+// النظامان المتوازيان مدعومان معاً: .modal-overlay تُخفى بصنف .hidden، بينما
+// .confirm-modal-overlay تُخفى بالسمة hidden.
+function _adminOpenModals() {
+  return [...document.querySelectorAll('.modal-overlay:not(.hidden), .confirm-modal-overlay:not([hidden])')];
+}
+
+function _adminCloseModal(overlay) {
+  if (!overlay) return;
+  // نافذة بيانات الحساب أثناء انتظار التأكيد لا تُغلق — إغلاقها يُخفي كلمة
+  // المرور المولَّدة قبل أن يَنسخها المستخدم.
+  if (overlay.id === 'cred-modal' && overlay.dataset.busy === '1') return;
+  if (overlay.classList.contains('confirm-modal-overlay')) overlay.hidden = true;
+  else overlay.classList.add('hidden');
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const open = _adminOpenModals();
+  if (!open.length) return;
+  e.preventDefault();
+  _adminCloseModal(open[open.length - 1]);   // الأعلى فقط، لا كلّها
+});
+
+document.addEventListener('mousedown', (e) => {
+  // النقر على الخلفية نفسها لا على أي شيء بداخلها.
+  if (e.target.classList?.contains('modal-overlay')
+   || e.target.classList?.contains('confirm-modal-overlay')) {
+    _adminCloseModal(e.target);
+  }
+});
+
+// Enter داخل أي حقل نصّي في نافذة = الزرّ الأساسي فيها. لا <form> في هذه
+// اللوحة، فالسلوك الذي يتوقّعه المستخدم يُوفَّر هنا صراحةً.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  const t = e.target;
+  if (!(t instanceof HTMLInputElement) || t.type === 'checkbox') return;
+  const overlay = t.closest('.modal-overlay, .confirm-modal-overlay');
+  if (!overlay) return;
+  const primary = overlay.querySelector('.modal-footer .btn-primary, .confirm-modal-actions .btn-primary');
+  if (primary && !primary.disabled) { e.preventDefault(); primary.click(); }
+});
 
 // ── Directorates (shared lookup) ──────────────────────────────────────────────
 async function loadDirectorates() {
@@ -345,7 +408,7 @@ async function loadSchools() {
 
   const { data, error } = await supabase
     .from('schools')
-    .select('id, name, directorate_id, directorates(name, governorate), classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name')
+    .select('id, name, directorate_id, directorates(name, governorate), school_type, classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name, archived_at')
     .order('name');
 
   hide(schoolsLoading);
@@ -357,28 +420,100 @@ async function loadSchools() {
   // Populate audit school filter
   populateAuditSchoolFilter();
 
-  // Populate school dropdown in user modal
+  // Populate school dropdown in user modal — المؤرشفة مستثناة: لا معنى لإنشاء
+  // حساب مدير لمدرسة أُخرجت من الخدمة.
   while (umSchool.options.length > 1) umSchool.remove(1);
-  allSchools.forEach(s => umSchool.add(new Option(s.name, s.id)));
+  allSchools.filter(s => !s.archived_at).forEach(s => umSchool.add(new Option(s.name, s.id)));
   CustomSelect.refresh(umSchool);
 
   if (allSchools.length === 0) { show(schoolsEmpty); return; }
+  renderSchools();
+}
 
-  schoolsTbody.innerHTML = allSchools.map((s, i) => `
-    <tr>
-      <td class="muted">${i + 1}</td>
+// ── بحث وترقيم ────────────────────────────────────────────────────────────
+// عميليّان على البيانات المحمَّلة أصلاً: القائمة كلّها تُجلب بطلب واحد، وكانت
+// تُرسَم كاملةً بلا ترقيم ولا بحث مهما بلغ عددها.
+const PAGE_SIZE = 25;
+let schoolsPage = 1, usersPage = 1;
+
+const SCHOOL_TYPE_AR = { primary: 'ابتدائي', preparatory: 'إعدادي', secondary: 'ثانوي',
+                         middle_high: 'إعدادي / ثانوي' };
+
+function renderPager(el, total, page, onGo) {
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (total <= PAGE_SIZE) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+  el.classList.remove('hidden');
+  const from = (page - 1) * PAGE_SIZE + 1;
+  const to   = Math.min(page * PAGE_SIZE, total);
+  const btn  = (p, label, on) =>
+    `<button class="pg${on ? ' is-active' : ''}" data-pg="${p}">${label}</button>`;
+  // نافذة من خمس صفحات حول الحالية — قائمة كاملة تتجاوز عرض الشاشة عند العشرات.
+  const first = Math.max(1, Math.min(page - 2, pages - 4));
+  const last  = Math.min(pages, first + 4);
+  let nums = '';
+  for (let p = first; p <= last; p++) nums += btn(p, String(p), p === page);
+  el.innerHTML =
+    `<span>${from}–${to} من ${total}</span><span class="spacer"></span>` +
+    `<button class="pg" data-pg="${page - 1}"${page === 1 ? ' disabled' : ''}>›</button>` +
+    nums +
+    `<button class="pg" data-pg="${page + 1}"${page === pages ? ' disabled' : ''}>‹</button>`;
+  el.querySelectorAll('[data-pg]').forEach(b => b.addEventListener('click', () => {
+    const p = Number(b.dataset.pg);
+    if (p >= 1 && p <= pages) onGo(p);
+  }));
+}
+
+function visibleSchools() {
+  const q = (document.getElementById('schools-search')?.value || '').trim().toLowerCase();
+  const showArchived = !!document.getElementById('schools-show-archived')?.checked;
+  return allSchools.filter(s => {
+    if (!showArchived && s.archived_at) return false;
+    if (!q) return true;
+    return `${s.name ?? ''} ${s.directorates?.name ?? ''} ${s.directorates?.governorate ?? ''} ${s.complex_name ?? ''}`
+      .toLowerCase().includes(q);
+  });
+}
+
+function renderSchools() {
+  const list = visibleSchools();
+  schoolsCount.textContent = list.length;
+  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  if (schoolsPage > pages) schoolsPage = pages;
+  const slice = list.slice((schoolsPage - 1) * PAGE_SIZE, schoolsPage * PAGE_SIZE);
+
+  if (!list.length) {
+    hide(schoolsTableWrap);
+    schoolsEmpty.textContent = allSchools.length ? 'لا توجد مدرسة مطابقة للبحث.' : 'لا توجد مدارس بعد.';
+    show(schoolsEmpty);
+    renderPager(document.getElementById('schools-pager'), 0, 1, () => {});
+    return;
+  }
+  hide(schoolsEmpty);
+
+  schoolsTbody.innerHTML = slice.map((s, i) => `
+    <tr class="${s.archived_at ? 'is-off' : ''}">
+      <td class="muted num">${(schoolsPage - 1) * PAGE_SIZE + i + 1}</td>
       <td>${esc(s.name)}</td>
+      <td>${s.archived_at
+            ? '<span class="badge badge-neutral">مؤرشفة</span>'
+            : esc(SCHOOL_TYPE_AR[s.school_type] ?? s.school_type ?? '—')}</td>
       <td>${esc(s.directorates?.name ?? '—')}</td>
       <td>${esc(s.directorates?.governorate ?? '—')}</td>
       <td>${esc(s.classification ?? '—')}</td>
-      <td>${s.total_students ?? '—'}</td>
-      <td>${s.total_teachers ?? '—'}</td>
-      <td>
-        <button class="btn btn-ghost btn-sm" data-edit-school="${esc(s.id)}">
-          <svg width="13" height="13"><use href="#icon-edit"/></svg>
-          تعديل
-        </button>
-      </td>
+      <td class="num">${s.total_students ?? '—'}</td>
+      <td class="num">${s.total_teachers ?? '—'}</td>
+      <td class="row-actions-cell"><div class="row-actions">
+        ${s.archived_at
+          ? `<button class="btn btn-ghost btn-sm" data-unarchive-school="${esc(s.id)}">
+               <svg width="13" height="13"><use href="#icon-undo"/></svg> استرجاع
+             </button>`
+          : `<button class="btn btn-ghost btn-sm" data-edit-school="${esc(s.id)}">
+               <svg width="13" height="13"><use href="#icon-edit"/></svg> تعديل
+             </button>
+             <button class="btn btn-ghost btn-sm" data-archive-school="${esc(s.id)}" title="أرشفة">
+               <svg width="13" height="13"><use href="#icon-archive"/></svg>
+             </button>`}
+      </div></td>
     </tr>
   `).join('');
   show(schoolsTableWrap);
@@ -386,18 +521,32 @@ async function loadSchools() {
   schoolsTbody.querySelectorAll('[data-edit-school]').forEach(btn => {
     btn.addEventListener('click', () => openEditSchool(btn.dataset.editSchool));
   });
+  schoolsTbody.querySelectorAll('[data-archive-school]').forEach(btn => {
+    btn.addEventListener('click', () => openArchiveSchool(btn.dataset.archiveSchool));
+  });
+  schoolsTbody.querySelectorAll('[data-unarchive-school]').forEach(btn => {
+    btn.addEventListener('click', () => setSchoolArchived(btn.dataset.unarchiveSchool, false));
+  });
+
+  renderPager(document.getElementById('schools-pager'), list.length, schoolsPage,
+              p => { schoolsPage = p; renderSchools(); });
 }
+
+document.getElementById('schools-search')?.addEventListener('input', () => { schoolsPage = 1; renderSchools(); });
+document.getElementById('schools-show-archived')?.addEventListener('change', () => { schoolsPage = 1; renderSchools(); });
 
 function openAddSchool() {
   editingSchoolId = null;
   schoolModalTitle.textContent = 'إضافة مدرسة';
   [smName, smLat, smLng, smTotalStudents, smTotalTeachers, smComplexName].forEach(el => el.value = '');
   smDirectorate.value = '';
+  // ابتدائي افتراضاً — نفس default القاعدة، فلا يمرّ خيار فارغ إلى قيد CHECK.
+  smSchoolType.value = 'primary';
   smClassification.value = '';
   smEducationType.value = '';
   smShift.value = '';
   smStudentType.value = '';
-  [smDirectorate, smClassification, smEducationType, smShift, smStudentType].forEach(s => CustomSelect.refresh(s));
+  [smDirectorate, smSchoolType, smClassification, smEducationType, smShift, smStudentType].forEach(s => CustomSelect.refresh(s));
   clearError(schoolModalError);
   show(schoolModal);
   smName.focus();
@@ -412,6 +561,7 @@ function openEditSchool(schoolId) {
   smDirectorate.value     = s.directorate_id ?? '';
   smLat.value             = s.lat ?? '';
   smLng.value             = s.lng ?? '';
+  smSchoolType.value      = s.school_type ?? 'primary';
   smClassification.value  = s.classification ?? '';
   smEducationType.value   = s.education_type ?? '';
   smShift.value           = s.shift ?? '';
@@ -419,7 +569,7 @@ function openEditSchool(schoolId) {
   smTotalStudents.value   = s.total_students ?? '';
   smTotalTeachers.value   = s.total_teachers ?? '';
   smComplexName.value     = s.complex_name ?? '';
-  [smDirectorate, smClassification, smEducationType, smShift, smStudentType].forEach(s => CustomSelect.refresh(s));
+  [smDirectorate, smSchoolType, smClassification, smEducationType, smShift, smStudentType].forEach(s => CustomSelect.refresh(s));
   clearError(schoolModalError);
   show(schoolModal);
   smName.focus();
@@ -434,8 +584,13 @@ schoolModalSave.addEventListener('click', async () => {
   clearError(schoolModalError);
   const name = smName.value.trim();
   const dirId = smDirectorate.value;
-  if (!name)  { showError(schoolModalError, 'اسم المدرسة مطلوب.'); return; }
-  if (!dirId) { showError(schoolModalError, 'يجب اختيار المديرية.'); return; }
+  const complex = smComplexName.value.trim();
+  if (!name)    { showError(schoolModalError, 'اسم المدرسة مطلوب.'); return; }
+  if (!dirId)   { showError(schoolModalError, 'يجب اختيار المديرية.'); return; }
+  // المجمّع يُطبَع في ترويسة بطاقة العلامات وورقة «لا مانع»، فغيابه يُخرِج
+  // وثيقة رسمية ناقصة — لذلك صار إجبارياً هنا لا اختيارياً.
+  if (!complex) { showError(schoolModalError, 'اسم المجمع المدرسي مطلوب — يظهر في ترويسة الوثائق المطبوعة.'); return; }
+  if (!smSchoolType.value) { showError(schoolModalError, 'يجب اختيار نوع المدرسة.'); return; }
 
   schoolModalSave.disabled = true;
   try {
@@ -444,13 +599,14 @@ schoolModalSave.addEventListener('click', async () => {
       directorate_id: dirId,
       lat:             smLat.value       ? parseFloat(smLat.value)  : null,
       lng:             smLng.value       ? parseFloat(smLng.value)  : null,
+      school_type:     smSchoolType.value,
       classification:  smClassification.value  || null,
       education_type:  smEducationType.value   || null,
       shift:           smShift.value           || null,
       student_type:    smStudentType.value      || null,
       total_students:  smTotalStudents.value !== '' ? parseInt(smTotalStudents.value, 10) : null,
       total_teachers:  smTotalTeachers.value !== '' ? parseInt(smTotalTeachers.value, 10) : null,
-      complex_name:    smComplexName.value.trim() || null,
+      complex_name:    complex,
     };
 
     let err;
@@ -490,27 +646,49 @@ async function loadUsers() {
   renderUsers();
 }
 
-function renderUsers() {
+function visibleUsers() {
   const roleFilter = usersRoleFilter.value;
-  const filtered   = roleFilter ? allUsers.filter(u => u.role === roleFilter) : allUsers;
+  const q = (document.getElementById('users-search')?.value || '').trim().toLowerCase();
+  return allUsers.filter(u => {
+    if (roleFilter && u.role !== roleFilter) return false;
+    if (!q) return true;
+    return `${u.full_name ?? ''} ${u.schools?.name ?? ''} ${u.directorates?.name ?? ''}`
+      .toLowerCase().includes(q);
+  });
+}
+
+function renderUsers() {
+  const filtered = visibleUsers();
   usersCount.textContent = filtered.length;
 
-  if (filtered.length === 0) { hide(usersTableWrap); show(usersEmpty); return; }
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  if (usersPage > pages) usersPage = pages;
+  const slice = filtered.slice((usersPage - 1) * PAGE_SIZE, usersPage * PAGE_SIZE);
 
-  usersTbody.innerHTML = filtered.map((u, i) => {
+  if (filtered.length === 0) {
+    hide(usersTableWrap);
+    usersEmpty.textContent = allUsers.length ? 'لا يوجد مستخدم مطابق للبحث.' : 'لا يوجد مستخدمون.';
+    show(usersEmpty);
+    renderPager(document.getElementById('users-pager'), 0, 1, () => {});
+    return;
+  }
+
+  usersTbody.innerHTML = slice.map((u, i) => {
     const org = u.schools?.name ?? u.directorates?.name ?? '—';
+    // التعطيل كان طريقاً مسدوداً: الصفّ يعرض شارة «مُعطَّل» بلا أي مسار للعودة.
+    const action = u.role === 'ministry_user' ? ''
+      : u.is_active === false
+        ? `<button class="btn btn-ghost btn-sm" data-reactivate="${esc(u.id)}" data-name="${esc(u.full_name ?? '')}">
+             <svg width="13" height="13"><use href="#icon-undo"/></svg> إعادة تفعيل
+           </button>`
+        : `<button class="btn btn-danger btn-sm" data-deactivate="${esc(u.id)}" data-name="${esc(u.full_name)}">تعطيل</button>`;
     return `
-    <tr style="cursor:pointer" data-view-cred="${esc(u.id)}" data-cred-name="${esc(u.full_name ?? '')}">
-      <td class="muted">${i + 1}</td>
+    <tr class="${u.is_active === false ? 'is-off' : ''}" style="cursor:pointer" data-view-cred="${esc(u.id)}" data-cred-name="${esc(u.full_name ?? '')}">
+      <td class="muted num">${(usersPage - 1) * PAGE_SIZE + i + 1}</td>
       <td>${esc(u.full_name ?? '—')}</td>
       <td><span class="role-badge ${roleBadgeClass(u.role)}">${roleName(u.role)}</span></td>
       <td>${esc(org)}</td>
-      <td>${u.role !== 'ministry_user' ? (
-        u.is_active === false
-          ? `<span class="badge-inactive">مُعطَّل</span>`
-          : `<button class="btn btn-danger btn-sm" data-deactivate="${esc(u.id)}" data-name="${esc(u.full_name)}">تعطيل</button>`
-      ) : ''}
-      </td>
+      <td class="row-actions-cell"><div class="row-actions">${action}</div></td>
     </tr>`;
   }).join('');
   show(usersTableWrap);
@@ -522,18 +700,54 @@ function renderUsers() {
       openDeactivate(btn.dataset.deactivate, btn.dataset.name);
     });
   });
+  usersTbody.querySelectorAll('[data-reactivate]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      reactivateUser(btn.dataset.reactivate, btn.dataset.name);
+    });
+  });
   usersTbody.querySelectorAll('[data-view-cred]').forEach(row => {
     row.addEventListener('click', () => openCredModal(row.dataset.viewCred, row.dataset.credName));
   });
+
+  renderPager(document.getElementById('users-pager'), filtered.length, usersPage,
+              p => { usersPage = p; renderUsers(); });
 }
 
-usersRoleFilter.addEventListener('change', renderUsers);
+usersRoleFilter.addEventListener('change', () => { usersPage = 1; renderUsers(); });
+document.getElementById('users-search')?.addEventListener('input', () => { usersPage = 1; renderUsers(); });
+
+// إعادة التفعيل: ترفع الحظر وتُعيد is_active. تحتاج نشر دالة Edge المحدَّثة.
+async function reactivateUser(userId, name) {
+  if (!userId) return;
+  try {
+    await edgeFetch('admin-create-user', { action: 'reactivate', userId });
+    await loadUsers();
+  } catch (e) {
+    alertModal(`تعذّرت إعادة تفعيل «${name || '—'}»: ${e.message}`);
+  }
+}
+
+// كلمة مرور قويّة مولَّدة: كان الموظّف يكتبها بيده فتخرج ضعيفة أو مكرّرة.
+// نفس المسار الحالي — تُرسَل مع الإنشاء كما كانت — فلا يلزم نشر دالة Edge.
+// حروف بلا التباس بصري (لا O/0 ولا I/l/1).
+function generatePassword() {
+  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ', a = 'abcdefghijkmnpqrstuvwxyz', d = '23456789';
+  const pool = A + a + d;
+  const buf = new Uint32Array(12);
+  crypto.getRandomValues(buf);
+  // أوّل ثلاثة أحرف تضمن وجود صنف من كلّ نوع، فلا تسقط في فحص القوّة.
+  const pick = (set, n) => set[n % set.length];
+  const chars = [pick(A, buf[0]), pick(a, buf[1]), pick(d, buf[2])];
+  for (let i = 3; i < 12; i++) chars.push(pick(pool, buf[i]));
+  return `${chars.slice(0, 4).join('')}-${chars.slice(4, 8).join('')}-${chars.slice(8).join('')}`;
+}
 
 function openAddUser() {
   clearError(userModalError);
   umEmail.value = '';
   umFullname.value = '';
-  umPassword.value = '';
+  umPassword.value = generatePassword();
   umRole.value = '';
   CustomSelect.refresh(umRole);
   umSchoolGroup.style.display = 'none';
@@ -546,6 +760,7 @@ function closeUserModal() { hide(userModal); }
 userModalClose.addEventListener('click', closeUserModal);
 userModalCancel.addEventListener('click', closeUserModal);
 addUserBtn.addEventListener('click', openAddUser);
+document.getElementById('um-regen')?.addEventListener('click', () => { umPassword.value = generatePassword(); });
 
 umRole.addEventListener('change', () => {
   umSchoolGroup.style.display  = umRole.value === 'school_admin'      ? '' : 'none';
@@ -618,11 +833,16 @@ deactivateConfirm.addEventListener('click', async () => {
 });
 
 // ── Audit tab ─────────────────────────────────────────────────────────────────
+// المؤرشفة تبقى في هذا المرشّح عمداً — سجلّها التاريخي لا يُؤرشَف معها، وقد
+// يكون البحث فيه هو سبب فتح السجلّ أصلاً.
 function populateAuditSchoolFilter() {
   while (auditSchoolFilter.options.length > 1) auditSchoolFilter.remove(1);
-  allSchools.forEach(s => auditSchoolFilter.add(new Option(s.name, s.id)));
+  allSchools.forEach(s => auditSchoolFilter.add(new Option(
+    s.archived_at ? `${s.name} (مؤرشفة)` : s.name, s.id)));
   CustomSelect.refresh(auditSchoolFilter);
 }
+
+let _adminAuditRows = [];
 
 async function loadAudit(reset = true) {
   if (reset) {
@@ -683,6 +903,14 @@ async function loadAudit(reset = true) {
       .from('users').select('id, full_name').in('id', actorIds);
     (nameRows ?? []).forEach(u => { nameMap[u.id] = u.full_name; });
   }
+
+  // تُحفَظ الصفوف مُثراةً بالأسماء المحلولة: التصدير وبطاقة «آخر ما جرى» في
+  // نظرة عامة يقرآن منها بدل إعادة الاستعلام وحلّ المعرّفات مرّة ثانية.
+  rows.forEach(r => {
+    r._schoolName = (r.school_id && schoolMap[r.school_id]) || '';
+    r._actorName  = (r.actor_id && nameMap[r.actor_id]) || '';
+  });
+  _adminAuditRows = reset ? rows.slice() : _adminAuditRows.concat(rows);
 
   rows.forEach(r => {
     const date = new Date(r.created_at).toLocaleString('ar-SY', { dateStyle: 'short', timeStyle: 'short' });
@@ -1108,6 +1336,7 @@ async function openCredModal(userId, name) {
   // a password is minted so a second click can't replace the copied one.
   const credResetBtn = document.getElementById('cred-reset');
   if (credResetBtn) { credResetBtn.hidden = false; credResetBtn.disabled = false; }
+  delete credModal.dataset.busy;
   show(credModal);
 
   // Only the address is selected — the password column is deliberately not read.
@@ -1139,6 +1368,9 @@ document.getElementById('cred-reset')?.addEventListener('click', async () => {
     if (passEl) passEl.textContent = res.password;
     box?.classList.remove('hidden');
     minted = true;
+    // كلمة مرور معروضة ولم تُنسَخ بعد: تُمنَع Esc والنقر على الخلفية من
+    // إغلاق النافذة، فإغلاقها هنا يُضيّع كلمة المرور بلا رجعة.
+    credModal.dataset.busy = '1';
     if (res.warning && msgEl) { msgEl.textContent = res.warning; msgEl.classList.remove('hidden'); }
   } catch (e) {
     if (msgEl) { msgEl.textContent = e.message || 'تعذّرت إعادة التعيين'; msgEl.classList.remove('hidden'); }
@@ -1159,7 +1391,7 @@ document.getElementById('cred-copy')?.addEventListener('click', async () => {
   } catch { /* المتصفّح منع النسخ — النصّ محدَّد يدوياً */ }
 });
 
-function closeCredModal() { hide(credModal); }
+function closeCredModal() { delete credModal.dataset.busy; hide(credModal); }
 credModalClose.addEventListener('click', closeCredModal);
 credModalOk.addEventListener('click',    closeCredModal);
 credModal.addEventListener('click', e => { if (e.target === credModal) closeCredModal(); });
@@ -1496,3 +1728,162 @@ passRulesSave.addEventListener('click', async () => {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 checkSession();
+
+// ══════════════════════════════════════════════════════════════════════════
+//  تنبيه عام · أرشفة المدرسة · نظرة عامة · تصدير
+// ══════════════════════════════════════════════════════════════════════════
+
+// نافذة تنبيه بدل رسائل تُبتلع في console: كثير من مسارات الفشل في هذه اللوحة
+// كانت تُسجَّل بـconsole.error وحدها فلا يرى المستخدم شيئاً ويظنّ العملية نجحت.
+function alertModal(msg, title) {
+  const box = document.getElementById('alert-modal');
+  if (!box) return;
+  document.getElementById('alert-modal-title').textContent = title || 'تنبيه';
+  document.getElementById('alert-modal-body').textContent  = msg;
+  box.classList.remove('hidden');
+}
+['alert-modal-close', 'alert-modal-ok'].forEach(id =>
+  document.getElementById(id)?.addEventListener('click',
+    () => document.getElementById('alert-modal')?.classList.add('hidden')));
+
+// ── أرشفة / استرجاع مدرسة ────────────────────────────────────────────────
+let _archiveSchoolId = null;
+
+function openArchiveSchool(schoolId) {
+  const s = allSchools.find(x => x.id === schoolId);
+  if (!s) return;
+  _archiveSchoolId = schoolId;
+  document.getElementById('archive-name').textContent = s.name ?? '—';
+  clearError(document.getElementById('archive-modal-error'));
+  document.getElementById('archive-modal')?.classList.remove('hidden');
+}
+
+async function setSchoolArchived(schoolId, archived) {
+  const errEl = document.getElementById('archive-modal-error');
+  const btn   = document.getElementById('archive-modal-confirm');
+  if (btn) btn.disabled = true;
+  try {
+    const { error } = await supabase.from('schools')
+      .update({ archived_at: archived ? new Date().toISOString() : null })
+      .eq('id', schoolId);
+    if (error) throw error;
+    document.getElementById('archive-modal')?.classList.add('hidden');
+    await loadSchools();
+  } catch (e) {
+    const msg = e.message || 'تعذّرت العملية.';
+    if (archived && errEl) showError(errEl, msg); else alertModal(msg);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+document.getElementById('archive-modal-confirm')?.addEventListener('click', () => {
+  if (_archiveSchoolId) setSchoolArchived(_archiveSchoolId, true);
+});
+['archive-modal-close', 'archive-modal-cancel'].forEach(id =>
+  document.getElementById(id)?.addEventListener('click',
+    () => document.getElementById('archive-modal')?.classList.add('hidden')));
+
+// ── نظرة عامة ─────────────────────────────────────────────────────────────
+// تُحسَب كلّها من البيانات المحمَّلة أصلاً — لا استعلام إضافي.
+function renderOverview() {
+  const set = (id, v) => { const n = document.getElementById(id); if (n) n.textContent = v; };
+  const active   = allSchools.filter(s => !s.archived_at);
+  const archived = allSchools.length - active.length;
+  const dirCount = new Set(active.map(s => s.directorate_id).filter(Boolean)).size;
+
+  set('ov-schools', active.length);
+  set('ov-schools-sub', archived ? `${archived} مؤرشفة · ${dirCount} مديرية` : `${dirCount} مديرية`);
+
+  const inactive = allUsers.filter(u => u.is_active === false).length;
+  set('ov-users', allUsers.length);
+  set('ov-users-sub', `${allUsers.length - inactive} نشط · ${inactive} معطَّل`);
+
+  const subjActive = allCatalogSubjects.filter(r => r.active !== false).length;
+  set('ov-subjects', allCatalogSubjects.length);
+  set('ov-subjects-sub', `${subjActive} فعّالة`);
+  set('ov-holidays', allHolidays.length);
+
+  // ── ما يحتاج تدخّلاً ──
+  const alerts = [];
+  // صياغة العدّ بالعربية: المفرد والمثنّى لهما شكلهما، وما فوقهما «ن مدارس».
+  const countAr = (n) => n === 1 ? 'مدرسة واحدة' : n === 2 ? 'مدرستان' : `${n} مدارس`;
+
+  const withAdmin = new Set(allUsers.filter(u => u.role === 'school_admin' && u.is_active !== false)
+                                    .map(u => u.school_id).filter(Boolean));
+  const orphan = active.filter(s => !withAdmin.has(s.id));
+  if (orphan.length) {
+    alerts.push({ tone: 'bad',
+      text: `${countAr(orphan.length)} بلا حساب مدير — لا أحد يستطيع رفع حضورها.`,
+      names: orphan.slice(0, 6).map(s => s.name).join('، ') });
+  }
+  const noComplex = active.filter(s => !s.complex_name);
+  if (noComplex.length) {
+    alerts.push({ tone: 'warn',
+      text: `${countAr(noComplex.length)} بلا مجمّع مدرسي — تخرج ترويسة بطاقة العلامات وورقة «لا مانع» ناقصة.`,
+      names: noComplex.slice(0, 6).map(s => s.name).join('، ') });
+  }
+  if (!alerts.length) alerts.push({ tone: 'ok', text: 'لا شيء يحتاج تدخّلاً الآن.' });
+
+  const icon = { bad: 'warn', warn: 'warn', ok: 'check' };
+  document.getElementById('ov-alerts').innerHTML = alerts.map(a => `
+    <div class="alert-row alert-${a.tone}">
+      <svg><use href="#icon-${icon[a.tone]}"/></svg>
+      <span>${esc(a.text)}${a.names ? ` <span class="muted">(${esc(a.names)}…)</span>` : ''}</span>
+    </div>`).join('');
+
+  // ── آخر ما جرى ──
+  const rows = (_adminAuditRows || []).slice(0, 5);
+  document.getElementById('ov-audit-tbody').innerHTML = rows.length
+    ? rows.map(r => `
+        <tr>
+          <td class="ledger-when ltr">${esc(String(r.created_at ?? '').slice(11, 19))}</td>
+          <td>${esc(AUDIT_ACTION_LABELS[r.action] ?? r.action ?? '—')}
+              <b>${esc(AUDIT_ENTITY_LABELS[r.entity] ?? r.entity ?? '')}</b></td>
+          <td class="muted">${esc(r._actorName ?? '—')}</td>
+        </tr>`).join('')
+    : '<tr><td colspan="3" class="muted">لا سجلّ بعد — افتح تبويب سجلّ التدقيق.</td></tr>';
+}
+
+// ── تصدير CSV ─────────────────────────────────────────────────────────────
+// BOM في المقدّمة كي لا يعرض Excel العربية محارف مشوّهة (نفس قالب الاستيراد).
+function downloadCsv(filename, header, rows) {
+  const cell = (v) => {
+    const t = String(v ?? '');
+    return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  const body = [header, ...rows].map(r => r.map(cell).join(',')).join('\n');
+  const url = URL.createObjectURL(new Blob(['﻿' + body + '\n'], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById('schools-export')?.addEventListener('click', () => {
+  // يُصدَّر ما هو معروض بالضبط (بعد البحث والمرشّح) لا القائمة كلّها — وإلا
+  // فوجئ المستخدم بملفّ لا يطابق ما يراه.
+  downloadCsv('المدارس.csv',
+    ['اسم المدرسة', 'النوع', 'المديرية', 'المحافظة', 'المجمّع', 'التصنيف',
+     'نوع التعليم', 'الدوام', 'نوع الطلاب', 'الطلاب', 'المعلمون', 'الحالة'],
+    visibleSchools().map(s => [
+      s.name, SCHOOL_TYPE_AR[s.school_type] ?? s.school_type ?? '',
+      s.directorates?.name ?? '', s.directorates?.governorate ?? '',
+      s.complex_name ?? '', s.classification ?? '', s.education_type ?? '',
+      s.shift ?? '', s.student_type ?? '', s.total_students ?? '', s.total_teachers ?? '',
+      s.archived_at ? 'مؤرشفة' : 'فعّالة',
+    ]));
+});
+
+document.getElementById('audit-export')?.addEventListener('click', () => {
+  const rows = _adminAuditRows || [];
+  if (!rows.length) { alertModal('لا سجلّ معروض للتصدير — اضغط «تطبيق» أوّلاً.'); return; }
+  downloadCsv('سجل-التدقيق.csv',
+    ['الوقت', 'الكيان', 'الإجراء', 'المدرسة', 'المُنفِّذ', 'التفاصيل'],
+    rows.map(r => [
+      r.created_at ?? '',
+      AUDIT_ENTITY_LABELS[r.entity] ?? r.entity ?? '',
+      AUDIT_ACTION_LABELS[r.action] ?? r.action ?? '',
+      r._schoolName ?? '', r._actorName ?? '',
+      buildAuditChangesText(r.changes).replace(/\n/g, ' · '),
+    ]));
+});
