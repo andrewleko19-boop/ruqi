@@ -2568,6 +2568,8 @@ async function loadDirSchools() {
   const { data, error } = await _sb.from('schools')
     .select('id, name, school_type, classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name, directorate_id, archived_at')
     .eq('directorate_id', currentUser.directorateId)
+    // المؤرشفة (§25) لا تظهر للمديرية — لوحة المشرف وحدها تراها وتسترجعها.
+    .is('archived_at', null)
     .order('name');
 
   loadingEl?.classList.add('hidden');

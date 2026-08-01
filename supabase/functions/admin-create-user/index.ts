@@ -168,6 +168,24 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    // ── reactivate ────────────────────────────────────────────────────────────
+    // نظير deactivate: كانت اللوحة تُعطّل الحساب ولا تملك أي طريق لإعادته،
+    // فيبقى الصفّ بشارة «مُعطَّل» إلى الأبد. نفس الحارس: لا يُمَسّ مستخدم وزارة.
+    if (action === "reactivate") {
+      const userId = String(body.userId ?? "").trim();
+      if (!userId) return json({ error: "معرّف المستخدم مطلوب" }, 400);
+      const { data: target } = await admin.from("users")
+        .select("role").eq("id", userId).maybeSingle();
+      if (!target) return json({ error: "المستخدم غير موجود" }, 404);
+      if (target.role === "ministry_user")
+        return json({ error: "لا يمكن تعديل مستخدم وزارة من هنا" }, 403);
+      // "none" ترفع الحظر الذي وضعه deactivate بـban_duration.
+      const { error } = await admin.auth.admin.updateUserById(userId, { ban_duration: "none" });
+      if (error) return json({ error: error.message }, 400);
+      await admin.from("users").update({ is_active: true }).eq("id", userId);
+      return json({ ok: true });
+    }
+
     // ── reset_password ────────────────────────────────────────────────────────
     // Replaces the stored-plaintext model: the caller never reads an existing
     // password, they mint a new one that is returned exactly once. The generated

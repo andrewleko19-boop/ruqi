@@ -261,7 +261,8 @@ async function loadAllData() {
 
     const { data: schools, error: schErr } = await supabase
       .from('schools')
-      .select('id, name, directorate_id, total_students, lat, lng');
+      .select('id, name, directorate_id, total_students, lat, lng')
+      .is('archived_at', null);
     if (schErr) throw schErr;
 
     const allSchoolIds = (schools || []).map(s => s.id);

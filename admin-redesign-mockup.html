@@ -676,7 +676,7 @@ tbody tr:hover { background: var(--slate-750); }
               </tr>
               <tr>
                 <td class="num dim">٣</td><td>خالد بن الوليد ح٢</td>
-                <td><span class="chip chip-gold">إعدادي / ثانوي</span></td>
+                <td><span class="chip chip-gold">ثانوي</span></td>
                 <td class="dim">اللاذقية</td><td class="dim">عادي</td>
                 <td class="num">٤١٢</td><td class="num">٢٨</td>
                 <td class="row-actions-cell"><div class="row-actions">
@@ -735,8 +735,9 @@ tbody tr:hover { background: var(--slate-750); }
             <div class="fld fld-new">
               <label for="m-type">نوع المدرسة <span class="req">*</span><span class="new-tag">جديد</span></label>
               <select id="m-type">
-                <option>ابتدائي — تُدار الصفوف بمعلّم صف</option>
-                <option selected>إعدادي أو ثانوي — تُدار الصفوف بموجّه</option>
+                <option>ابتدائي</option>
+                <option selected>إعدادي</option>
+                <option>ثانوي</option>
               </select>
               <p class="fld-hint">
                 هذا الحقل <b>يغيّر سلوك لوحة المدرسة نفسها</b>، لا يُخزَّن للوصف فقط:
@@ -756,7 +757,7 @@ tbody tr:hover { background: var(--slate-750); }
             </div>
             <div class="fld">
               <label for="m-edu">نوع التعليم</label>
-              <select id="m-edu"><option selected>عام</option><option>مهني</option><option>ديني</option></select>
+              <select id="m-edu"><option selected>عام</option><option>خاص</option><option>مهني</option><option>شرعي</option></select>
             </div>
             <div class="fld">
               <label for="m-shift">الدوام</label>
@@ -787,12 +788,15 @@ tbody tr:hover { background: var(--slate-750); }
       </div>
 
       <div class="note">
-        <b>لماذا قيمتان لا ثلاث:</b> القيد في القاعدة يسمح بـ<code>primary</code> و
-        <code>middle_high</code> فقط، لأن المستهلك الوحيد لهذا العمود هو مفتاح
-        معلّم/موجّه وهو ثنائي بطبيعته — الإعدادي والثانوي كلاهما يعمل بموجّه.
-        الأبعاد الأخرى محفوظة بأعمدة مستقلّة أصلاً: نوع التعليم (عام/مهني/ديني)،
-        والتصنيف (أ/ب/ج/د)، والحلقة. إذا كنت تحتاج فصل الإعدادي عن الثانوي لسببٍ
-        وزاري، قُلها الآن ونعدّل الهجرة قبل التنفيذ.
+        <b>ثلاث مراحل مفصولة:</b> §25 وسّعت القيد إلى <code>primary</code> و
+        <code>preparatory</code> و<code>secondary</code>. سلوك معلّم-صف ↔ موجّه
+        لا يتغيّر — الإعدادي والثانوي كلاهما يعمل بموجّه — والفصل للتسمية
+        والتقارير. الأبعاد الأخرى تبقى بأعمدة مستقلّة: نوع التعليم
+        (عام/خاص/مهني/شرعي)، والتصنيف (أ/ب/ج/د)، والحلقة.
+
+        <br><br><b>⚠️ هذا الملفّ نموذج تصميم، والمنفَّذ هو المرجع:</b> لوحة
+        المشرف العاملة تبنّت هذا النظام فعلياً — افتح <code>admin/</code> لا هذا
+        الملفّ لرؤية الحالة الحقيقية.
       </div>
     </section>
     <!-- ═══════ المستخدمون ═══════ -->
@@ -1267,7 +1271,7 @@ tbody tr:hover { background: var(--slate-750); }
           </div>
           <div class="demo-row"><span class="demo-lbl">الشارات</span>
             <span class="chip chip-indigo">ابتدائي</span>
-            <span class="chip chip-gold">إعدادي / ثانوي</span>
+            <span class="chip chip-gold">ثانوي</span>
             <span class="chip chip-sage">نشط</span>
             <span class="chip chip-mute">معطَّل</span>
             <span class="chip chip-red">محظور</span>

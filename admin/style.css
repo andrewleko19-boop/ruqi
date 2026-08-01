@@ -1,28 +1,85 @@
 /* ── Reset & base ─────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   نظام رموز لوحة المشرف — هويّة مستقلّة عن بقيّة البوّابات عمداً.
+
+   هذه ليست غرفة عمليات تراقب مدارس (لوحة المديرية) — هذه **طاولة النظام**:
+   من هنا تُنشأ المدارس، وتُصكّ الحسابات، ويُحرَّر فهرس المواد الوطني، ويُقرأ
+   سجلّ التدقيق. فالأرضية غرافيت باردة لا كحليّة، تمييزاً بصرياً فورياً.
+
+   ثلاث قواعد لا تُخالَف:
+     • النيلي هو لون التفاعل **الوحيد** — كل ما يُنقر.
+     • القرمزي **حصراً** للإجراءات المدمِّرة. استعمالُه زينةً يستهلك معناه،
+       فحين يظهر أمام «حذف» لا يعود ينبّه أحداً.
+     • الذهبي **حصراً** لسجلّ التدقيق وبيانات الحسابات — السجلّ هو الشيء
+       الوحيد هنا الذي لا يُعدَّل ولا يُحذف، فيُرى مختلفاً بلا عنوان يشرحه.
+
+   الأسماء القديمة (--bg, --accent, --green…) مُبقاة أسماءً مستعارة فتنقلب
+   مئاتُ القواعد المكتوبة عليها مع الرموز بلا لمسها واحدةً واحدة.
+   ══════════════════════════════════════════════════════════════════════════ */
 :root {
-  --bg:           #f0f4fa;
-  --surface:      #f0f4fa;
-  --surface-2:    #ffffff;
-  --border:       #cbd5e1;
-  --accent:       #2563eb;
-  --accent-hover: #1a2744;
-  --green:        #16a34a;
-  --green-bg:     #dcfce7;
-  --red:          #dc2626;
-  --red-bg:       #fee2e2;
-  --yellow:       #ca8a04;
-  --yellow-bg:    #fef3c7;
-  --text:         #0f172a;
-  --text-muted:   #64748b;
-  --text-dim:     #7e8a99;
-  --radius:       10px;
-  --shadow:       0 4px 24px rgba(0,0,0,0.10);
+  color-scheme: dark;
+
+  /* أوّليّات */
+  --slate-900:  #16181d;
+  --slate-850:  #1a1d24;
+  --slate-800:  #1e212a;
+  --slate-750:  #242833;
+  --line:       #2c3140;
+  --line-soft:  #232733;
+
+  --chalk:      #e8eaf0;
+  --chalk-soft: #a6abbd;
+  --chalk-dim:  #6f7488;
+
+  --indigo:      #7b7ce8;
+  --indigo-ink:  #0f1024;
+  --indigo-tint: #23244a;
+
+  --vermilion:      #e05a4a;
+  --vermilion-tint: #351a17;
+
+  --gold:      #c9a227;
+  --gold-tint: #2e2711;
+
+  --sage:      #58b98a;
+  --sage-tint: #16301f;
+
+  /* أسماء مستعارة للقواعد القائمة */
+  --bg:           var(--slate-900);
+  --surface:      var(--slate-800);
+  --surface-2:    var(--slate-850);
+  --bg-hover:     var(--slate-750);
+  --border:       var(--line);
+  --accent:       var(--indigo);
+  --accent-hover: #8d8eee;
+  --green:        var(--sage);
+  --green-bg:     var(--sage-tint);
+  --red:          var(--vermilion);
+  --red-bg:       var(--vermilion-tint);
+  --yellow:       var(--gold);
+  --yellow-bg:    var(--gold-tint);
+  --text:         var(--chalk);
+  --text-primary: var(--chalk);
+  --text-muted:   var(--chalk-soft);
+  --text-dim:     var(--chalk-dim);
+
+  --radius-sm:    4px;
+  --radius:       7px;
+  --radius-lg:    12px;
+  --shadow:       0 1px 2px rgba(0,0,0,.4), 0 18px 44px -20px rgba(0,0,0,.8);
+
+  --ui:    'Tajawal', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --mono:  ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
+  --latin: 'DM Sans', sans-serif;
+
+  --rail: 228px;
+  --top:  58px;
 }
 
 body {
-  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--ui);
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
@@ -37,7 +94,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at 50% 0%, #eff6ff 0%, var(--bg) 70%);
+  background: radial-gradient(ellipse at 50% 0%, var(--slate-800) 0%, var(--bg) 70%);
   padding: 24px;
 }
 
@@ -105,7 +162,7 @@ body {
 .error-msg {
   background: var(--red-bg);
   border: 1px solid var(--red);
-  color: #991b1b;
+  color: var(--vermilion);
   padding: 10px 14px;
   border-radius: var(--radius);
   font-size: 13px;
@@ -114,7 +171,7 @@ body {
 .success-msg {
   background: var(--green-bg);
   border: 1px solid var(--green);
-  color: #14532d;
+  color: var(--sage);
   padding: 10px 14px;
   border-radius: var(--radius);
   font-size: 13px;
@@ -138,16 +195,16 @@ body {
 
 .btn-primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--indigo-ink);
 }
 .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
 
 .btn-danger {
   background: var(--red-bg);
-  color: #991b1b;
+  color: var(--vermilion);
   border: 1px solid var(--red);
 }
-.btn-danger:hover:not(:disabled) { background: #fbcaca; }
+.btn-danger:hover:not(:disabled) { background: var(--vermilion); color: #fff; }
 
 .btn-ghost {
   background: transparent;
@@ -178,9 +235,10 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: var(--surface);
+  background: var(--surface-2);
   border-bottom: 1px solid var(--border);
-  padding: 12px 28px;
+  height: var(--top);
+  padding: 0 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -218,41 +276,65 @@ body {
   color: var(--text-muted);
 }
 
-/* ── Main ─────────────────────────────────────── */
-.main-content {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 24px 28px 48px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
+/* ── الهيكل: شريط جانبي + مسرح ───────────────────
+   الشريط الأفقي القديم كان display:flex بلا overflow-x ولا flex-wrap، فستّة
+   عناوين عربية لا تتّسع على الجوّال وتلتفّ داخل أزرار مضغوطة — نفس النمط الذي
+   أزلناه من لوحة المدرسة. الشريط الجانبي يحلّ ذلك، ويسمح فوق ذلك بتجميع
+   الأقسام بغرضها: المدارس والمستخدمون **كيانات**، والمواد والقوائم والعطل
+   **بيانات مرجعية**، والتدقيق **سجلّ**. ليست ستّة أنداد. */
+.shell { display: flex; align-items: flex-start; }
 
-/* ── Tabs ─────────────────────────────────────── */
-.tab-bar {
-  display: flex;
-  gap: 4px;
-  border-bottom: 2px solid var(--border);
-  margin-bottom: 4px;
+.rail {
+  position: sticky;
+  top: var(--top);
+  flex: none;
+  width: var(--rail);
+  height: calc(100vh - var(--top));
+  overflow-y: auto;
+  background: var(--surface-2);
+  border-inline-end: 1px solid var(--border);
+  padding: 14px 10px 24px;
 }
+.rail-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--text-dim);
+}
+.rail-group::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
 .tab-btn {
-  background: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
   border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
-  padding: 10px 20px;
+  background: none;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-family: inherit;
   font-size: 14px;
   font-weight: 500;
-  color: var(--text-muted);
   cursor: pointer;
-  font-family: inherit;
-  transition: color .15s, border-color .15s;
+  text-align: start;
+  transition: background .15s, color .15s;
 }
-.tab-btn:hover { color: var(--text); }
-.tab-btn.is-active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+.tab-btn svg { width: 17px; height: 17px; flex: none; }
+.tab-btn:hover { background: var(--bg-hover); color: var(--text); }
+.tab-btn.is-active { background: var(--indigo-tint); color: var(--indigo); font-weight: 700; }
+
+.main-content {
+  flex: 1;
+  min-width: 0;
+  padding: 22px 24px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .tab-panel { display: none; }
@@ -333,9 +415,9 @@ td.muted { color: var(--text-muted); font-size: 12px; }
   font-weight: 600;
   white-space: nowrap;
 }
-.role-school-admin    { background: rgba(37, 99, 235,.12); color: #2563eb; border: 1px solid rgba(37, 99, 235,.25); }
-.role-directorate     { background: rgba(240,180,41,.14); color: #a16207; border: 1px solid rgba(240,180,41,.30); }
-.role-ministry        { background: rgba(72,199,142,.14); color: #0f766e; border: 1px solid rgba(72,199,142,.30); }
+.role-school-admin    { background: var(--indigo-tint); color: var(--indigo); border: 1px solid color-mix(in srgb, var(--indigo) 38%, transparent); }
+.role-directorate     { background: var(--gold-tint); color: var(--gold); border: 1px solid color-mix(in srgb, var(--gold) 38%, transparent); }
+.role-ministry        { background: var(--sage-tint); color: var(--sage); border: 1px solid color-mix(in srgb, var(--sage) 38%, transparent); }
 
 .badge-inactive {
   display: inline-block;
@@ -344,9 +426,9 @@ td.muted { color: var(--text-muted); font-size: 12px; }
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
-  background: rgba(248,113,113,.12);
-  color: #dc2626;
-  border: 1px solid rgba(248,113,113,.30);
+  background: var(--slate-750);
+  color: var(--chalk-dim);
+  border: 1px solid var(--line);
 }
 
 /* ── Credentials modal fields ─────────────────── */
@@ -379,9 +461,9 @@ td.muted { color: var(--text-muted); font-size: 12px; }
   font-size: 11px;
   font-weight: 600;
 }
-.badge-good    { background: var(--green-bg); color: #16a34a; border: 1px solid var(--green); }
-.badge-warning { background: var(--yellow-bg); color: #ca8a04; border: 1px solid var(--yellow); }
-.badge-danger  { background: var(--red-bg); color: #dc2626; border: 1px solid var(--red); }
+.badge-good    { background: var(--green-bg); color: var(--sage); border: 1px solid color-mix(in srgb, var(--sage) 40%, transparent); }
+.badge-warning { background: var(--yellow-bg); color: var(--gold); border: 1px solid color-mix(in srgb, var(--gold) 40%, transparent); }
+.badge-danger  { background: var(--red-bg); color: var(--vermilion); border: 1px solid color-mix(in srgb, var(--vermilion) 40%, transparent); }
 .badge-neutral { background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border); }
 
 /* ── Filter bar ───────────────────────────────── */
@@ -449,7 +531,7 @@ td.muted { color: var(--text-muted); font-size: 12px; }
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,.45);
+  background: rgba(0,0,0,.66);
   z-index: 200;
   display: flex;
   align-items: center;
@@ -464,7 +546,7 @@ td.muted { color: var(--text-muted); font-size: 12px; }
   padding: 32px 28px 28px;
   width: 100%;
   max-width: 480px;
-  box-shadow: 0 8px 48px rgba(0,0,0,.18);
+  box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -584,7 +666,7 @@ select.csel-native {
 .csel.is-open .csel-trigger {
   border-color: var(--accent);
   background: var(--surface-2);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235,.25);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 30%, transparent);
 }
 .csel-trigger.is-disabled { opacity: .55; cursor: not-allowed; }
 .csel-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -624,8 +706,8 @@ select.csel-native {
   transition: background .18s ease, color .18s ease;
   white-space: normal; line-height: 1.4;
 }
-.csel-option:hover { background: rgba(37, 99, 235,.12); }
-.csel-option.is-selected { background: var(--accent); color: #fff; font-weight: 600; }
+.csel-option:hover { background: var(--indigo-tint); }
+.csel-option.is-selected { background: var(--indigo); color: var(--indigo-ink); font-weight: 700; }
 .csel-option.is-disabled { color: var(--text-dim); cursor: not-allowed; opacity: .7; }
 .csel-option.is-disabled:hover { background: transparent; }
 
@@ -651,49 +733,49 @@ select.csel-native {
   display: inline-flex; align-items: center; justify-content: center;
   flex-shrink: 0;
   width: 32px; height: 32px;
-  border: none; background: rgba(37, 99, 235,.08);
+  border: none; background: var(--indigo-tint);
   border-radius: 8px; cursor: pointer;
-  color: var(--accent, #2563eb); transition: background .15s;
+  color: var(--indigo); transition: background .15s;
   margin-inline-end: 6px;
 }
-.tab-back-btn:hover { background: rgba(37, 99, 235,.16); }
+.tab-back-btn:hover { background: color-mix(in srgb, var(--indigo) 24%, transparent); }
 .tab-back-btn svg { transform: scaleX(-1); }
 
 /* ─── Logout Confirm Modal ─────────────────────────────────────────────────── */
 .confirm-modal-overlay {
   position: fixed; inset: 0; z-index: 9200;
-  background: rgba(6,15,30,.6);
+  background: rgba(0,0,0,.66);
   backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center;
   padding: 16px;
 }
 .confirm-modal-overlay[hidden] { display: none; }
 .confirm-modal-sheet {
-  background: var(--surface-2, #fff);
+  background: var(--slate-800);
   border-radius: 16px;
   padding: 28px 24px 20px;
   width: min(340px, 100%);
-  box-shadow: 0 20px 60px rgba(0,0,0,.3);
+  box-shadow: var(--shadow);
   text-align: center;
   display: flex; flex-direction: column; gap: 8px;
 }
-.confirm-modal-title { font-size: 1.1rem; font-weight: 700; margin: 0; color: var(--text, #0f172a); }
-.confirm-modal-sub   { font-size: .9rem; color: var(--text-muted, #64748b); margin: 0 0 8px; }
+.confirm-modal-title { font-size: 1.1rem; font-weight: 700; margin: 0; color: var(--chalk); }
+.confirm-modal-sub   { font-size: .9rem; color: var(--chalk-soft); margin: 0 0 8px; }
 .confirm-modal-actions { display: flex; gap: 10px; margin-top: 4px; }
 .confirm-modal-actions .btn { flex: 1; }
 .btn-outline {
   background: transparent;
-  border: 1.5px solid var(--border, #cbd5e1);
-  color: var(--text, #0f172a);
+  border: 1.5px solid var(--border);
+  color: var(--chalk-soft);
 }
-.btn-outline:hover { background: var(--bg, #f0f4fa); }
+.btn-outline:hover { background: var(--slate-750); color: var(--chalk); }
 
 /* ── إعادة تعيين كلمة المرور (تُعرَض مرة واحدة) ── */
 .cred-reset {
   margin-top: 12px;
   padding: 12px;
   border: 1px solid var(--border);
-  background: var(--bg-hover, rgba(0,0,0,.03));
+  background: var(--bg-hover);
   border-radius: 8px;
 }
 .cred-reset > label {
@@ -715,3 +797,156 @@ select.csel-native {
   user-select: all;
 }
 .cred-warn { margin-top: 8px; font-size: 0.72rem; font-weight: 600; opacity: .85; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   مكوّنات جديدة — نظرة عامة · بحث وترقيم · السجلّ الذهبي
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── شارة الصلاحيات: دائمة الظهور عمداً — هذه اللوحة تكتب على كل المدارس ── */
+.perm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: var(--vermilion-tint);
+  border: 1px solid color-mix(in srgb, var(--vermilion) 45%, transparent);
+  color: var(--vermilion);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.perm-chip svg { width: 13px; height: 13px; }
+
+/* ── بطاقات العدّ ── */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+}
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+}
+.stat-num {
+  display: block;
+  font-family: var(--mono);
+  font-size: 27px;
+  font-weight: 600;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+.stat-lbl { font-size: 12px; color: var(--text-dim); }
+.stat-sub { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+.stat--good .stat-num { color: var(--sage); }
+.stat--warn .stat-num { color: var(--gold); }
+.stat--bad  .stat-num { color: var(--vermilion); }
+
+/* ── صفوف التنبيهات ── */
+.alert-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 20px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.alert-row:last-child { border-bottom: none; }
+.alert-row svg { width: 16px; height: 16px; flex: none; }
+.alert-row .spacer { flex: 1; }
+.alert-warn svg { color: var(--gold); }
+.alert-bad  svg { color: var(--vermilion); }
+.alert-ok   svg { color: var(--sage); }
+
+/* ── شريط البحث ── */
+.searchbar { position: relative; flex: 1 1 240px; min-width: 170px; max-width: 340px; }
+.searchbar input {
+  width: 100%;
+  height: 32px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 0 32px 0 12px;
+}
+.searchbar input::placeholder { color: var(--text-dim); }
+.searchbar input:focus { outline: none; border-color: var(--accent); }
+.searchbar svg {
+  position: absolute;
+  inset-inline-start: 10px;
+  top: 8px;
+  width: 14px;
+  height: 14px;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+/* ── الترقيم ── */
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 11px 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.pager .spacer { flex: 1; }
+.pg {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.pg:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
+.pg.is-active { background: var(--accent); border-color: var(--accent); color: var(--indigo-ink); font-weight: 700; }
+.pg:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ── سطح السجلّ الذهبي ──────────────────────────────────────────────────
+   كل قسم آخر في اللوحة قابل للتحرير؛ السجلّ وحده مقروء فقط ولا رجعة فيه.
+   اللون يقول ذلك من النظرة الأولى بلا عنوان يشرحه. */
+.ledger { border-color: color-mix(in srgb, var(--gold) 26%, var(--border)); }
+.ledger > .section-header {
+  background: var(--gold-tint);
+  border-bottom-color: color-mix(in srgb, var(--gold) 26%, var(--border));
+}
+.ledger > .section-header h2 { color: var(--gold); }
+.ledger thead th { background: color-mix(in srgb, var(--gold-tint) 55%, var(--surface-2)); }
+
+.mono-id, .num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+/* عزل ثنائي الاتجاه: قيمة لاتينية تبدأ أو تنتهي بمحرف محايد (#، …، -) ينقلب
+   ترتيبها داخل فقرة عربية — «2025-2026» تُعرض «2026-2025». */
+.ltr, .mono-id { direction: ltr; unicode-bidi: isolate; text-align: right; }
+
+/* ── الصفوف المعطَّلة/المؤرشفة ── */
+tbody tr.is-off td:not(.row-actions-cell) { opacity: .5; }
+.row-actions { display: flex; gap: 5px; justify-content: flex-end; }
+
+/* ── الشريط الجانبي على الشاشات الضيّقة: رموز فقط ── */
+@media (max-width: 900px) {
+  :root { --rail: 62px; }
+  .rail-label, .rail-group { display: none; }
+  .tab-btn { justify-content: center; padding: 11px 0; }
+  .rail { padding-top: 10px; }
+}
+@media (max-width: 560px) {
+  .main-content { padding: 16px 12px 56px; }
+  .perm-chip span { display: none; }
+  .perm-chip { padding: 5px; }
+  .section-header { padding: 14px; }
+}

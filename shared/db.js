@@ -423,7 +423,9 @@ async function getCurrentUser() {
 
 // ─── Schools ──────────────────────────────────────────────────────────────────
 async function getSchools(directorateId) {
-  const query = db.from("schools").select("id, name, lat, lng");
+  // المدارس المؤرشفة (§25) تُستثنى من كل قائمة تشغيلية — تبقى مرئية في
+  // لوحة المشرف وحدها تحت مرشّح صريح.
+  const query = db.from("schools").select("id, name, lat, lng").is("archived_at", null);
   if (directorateId) query.eq("directorate_id", directorateId);
   const { data, error } = await query;
   if (error) throw error;
@@ -686,6 +688,7 @@ async function getTodaySummary(directorateId) {
   // مدارس المديرية (نحتاج المعرّفات لفلترة الحضور الفردي)
   const schoolsRes = await db.from("schools")
     .select("id")
+    .is("archived_at", null)
     .eq("directorate_id", directorateId);
   if (schoolsRes.error) throw schoolsRes.error;
   const schoolIds = (schoolsRes.data || []).map((s) => s.id);
@@ -744,6 +747,7 @@ async function getSchoolsAttendanceStatus(directorateId, date) {
 
   const schoolsRes = await db.from("schools")
     .select("id, total_students")
+    .is("archived_at", null)
     .eq("directorate_id", directorateId);
   if (schoolsRes.error) throw schoolsRes.error;
 
@@ -861,7 +865,8 @@ async function getMinistryAttendanceSummary(date) {
 
   const { data: schools, error: schErr } = await db
     .from("schools")
-    .select("id, directorate_id");
+    .select("id, directorate_id")
+    .is("archived_at", null);
   if (schErr) throw schErr;
 
   const allSchoolIds = (schools || []).map(s => s.id);
