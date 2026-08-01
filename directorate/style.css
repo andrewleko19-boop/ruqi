@@ -123,8 +123,18 @@ body {
 
 .login-logo {
   text-align: center;
-  margin-bottom: 0.5rem;
-  color: var(--blue);
+  margin-bottom: 0.7rem;
+}
+/* كانت القاعدة تضبط color وحده — وهو بلا أثر على PNG، فيظهر النسر عارياً
+   بلا إطار على أرضية داكنة ويُقرأ كأنه غير موجود. */
+.login-logo img {
+  width: 60px; height: 60px; padding: 9px;
+  border-radius: var(--radius-lg);
+  background: var(--accent-tint);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  object-fit: contain;
+  margin-inline: auto;
+  display: block;
 }
 .login-logo h1 {
   font-size: 2rem;

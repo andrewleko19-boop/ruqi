@@ -7,6 +7,13 @@
   <meta name="theme-color" content="#0c1e35">
   <title>بوابة ولي الأمر — رُقِيّ</title>
   <link rel="stylesheet" href="style.css">
+  <!-- كانت هذه الروابط كلّها غائبة عن هذه البوابة وحدها: لا favicon ولا أيقونة
+       تثبيت ولا manifest — فلا تظهر بأيقونة التطبيق في التبويب ولا تُثبَّت. -->
+  <link rel="icon" href="../icons/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../icons/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="../icons/favicon-16.png" />
+  <link rel="apple-touch-icon" href="../icons/apple-touch-icon-180.png" />
+  <link rel="manifest" href="../manifest.json" />
 </head>
 <body>
 
@@ -14,13 +21,10 @@
 <div id="screen-login" class="screen screen--center">
   <div class="login-card">
     <div class="login-logo">
-      <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <circle cx="24" cy="24" r="22" fill="#2563eb"/>
-        <path d="M24 10c-3.87 0-7 3.13-7 7s3.13 7 7 7 7-3.13 7-7-3.13-7-7-7z" fill="#fff"/>
-        <path d="M36 34c0-6.63-5.37-12-12-12S12 27.37 12 34v2h24v-2z" fill="#fff"/>
-      </svg>
+      <img src="../icons/eagle-mark.png" alt="شعار رُقِيّ" width="44" height="44" />
     </div>
-    <h1 class="login-title">بوابة ولي الأمر</h1>
+    <h1 class="login-title"><span class="brand-lockup"><span class="brand-latin">Ruqí</span><span class="brand-sep">｜</span><span class="brand-ar">رُقِيّ</span></span></h1>
+    <p class="login-role">بوابة ولي الأمر</p>
     <p class="login-subtitle">أدخل رقم هاتفك المسجَّل لدى المدرسة</p>
     <form id="form-phone" novalidate>
       <div class="field-group">

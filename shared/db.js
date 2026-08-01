@@ -7,9 +7,11 @@ const LAYER = location.pathname.split('/').filter(Boolean).find(
   s => ['school', 'teacher', 'directorate', 'ministry', 'admin', 'parent'].includes(s)
 ) || 'root';
 
+const AUTH_STORAGE_KEY = `nsams-auth-${LAYER}`;
+
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
-    storageKey:       `nsams-auth-${LAYER}`,
+    storageKey:       AUTH_STORAGE_KEY,
     persistSession:   true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
@@ -18,42 +20,14 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 export { db as supabase };
 export { SUPABASE_URL as supabaseUrl };
 
-if ('serviceWorker' in navigator) {
-  // An installed PWA reopened from the recents list resumes the existing page:
-  // there is no navigation, so the browser never runs its own Service Worker
-  // update check and a shipped fix can sit unseen indefinitely. Ask for the
-  // check explicitly — on start, and every time the app returns to the
-  // foreground (throttled, since visibilitychange fires often).
-  let _lastSwCheck = 0;
-  navigator.serviceWorker
-    .register(new URL('../sw.js', import.meta.url))
-    .then((reg) => {
-      const checkForUpdate = () => {
-        if (Date.now() - _lastSwCheck < 60_000) return;
-        _lastSwCheck = Date.now();
-        reg.update().catch(() => {});
-      };
-      checkForUpdate();
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') checkForUpdate();
-      });
-    })
-    .catch(err => console.warn('[NSAMS] SW registration failed', err));
-
-  // sw.js calls skipWaiting() + clients.claim(), so a new worker takes over the
-  // live page. Reload once so the page runs the new HTML/JS instead of the old
-  // shell paired with the new worker.
-  const _hadController = !!navigator.serviceWorker.controller;
-  let   _swReloading   = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    // No previous controller = first install on this device; nothing is stale.
-    if (!_hadController || _swReloading) return;
-    // Never discard work in progress (a half-entered attendance sheet, unsaved
-    // marks). Portals expose this hook; the reload happens on the next visit.
-    if (typeof window.nsamsHasUnsavedWork === 'function' && window.nsamsHasUnsavedWork()) return;
-    _swReloading = true;
-    location.reload();
-  });
+/* تسجيل عامل الخدمة انتقل إلى shared/sw-register.js كي تستعمله الصفحة
+   الرئيسية أيضاً — كانت بلا أي <script> فلا يُثبَّت عندها شيء ولا تعمل دون
+   اتصال. الحقن هنا يُبقي البوّابات تعمل كما هي بلا تعديل ستّة ملفّات HTML. */
+if ('serviceWorker' in navigator && !window.__nsamsSwRegistered) {
+  const _reg = document.createElement('script');
+  _reg.src = new URL('./sw-register.js', import.meta.url).href;
+  _reg.defer = true;
+  document.head.appendChild(_reg);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -396,9 +370,53 @@ async function login(identifier, password) {
   };
 }
 
+/* ⚠️ الترتيب مقصود: الحذف المحلّي أوّلاً ثم الإبطال العام.
+   signOut() الافتراضي (scope عام) يحذف الجلسة المحلّية **فقط بعد** نجاح نداء
+   الشبكة. فإن كان الجهاز دون اتصال أو الخادم بعيد المنال، يعود بخطأ ويترك
+   الجلسة في localStorage كما هي — وكل مستدعٍ يبتلع الخطأ ثم يُعيد التحميل،
+   فيجد getCurrentUser الجلسة ويُدخِل «الخارج» من جديد. على أجهزة مشتركة في
+   مدارس ذات إنترنت متقطّع هذا ليس افتراضياً.
+
+   'local' يحذف الجلسة من الجهاز بلا شبكة إطلاقاً، فيصير الخروج مضموناً.
+   ثم نحاول الإبطال العام (سحب رموز التحديث من كل الأجهزة) بلا حجب: نجاحه
+   إضافة أمنية، وفشله لا يُبقي أحداً داخلاً على هذا الجهاز. */
 async function logout() {
-  const { error } = await db.auth.signOut();
-  if (error) throw error;
+  try {
+    await db.auth.signOut({ scope: 'local' });
+  } catch { /* لا يُوقف الخروج */ }
+
+  // إبطال عام بأفضل جهد — لا يُنتظَر ولا يُرمى خطؤه.
+  db.auth.signOut({ scope: 'global' }).catch(() => {});
+
+  // حزام أمان: لو تغيّرت آلية التخزين في supabase-js يوماً، لا تبقى الجلسة.
+  try {
+    for (const k of Object.keys(localStorage)) {
+      if (k.startsWith(AUTH_STORAGE_KEY)) localStorage.removeItem(k);
+    }
+  } catch { /* غير قاتل */ }
+}
+
+/* ⚠️ ملفّ الدور مخبّأ ليعمل الدخول دون اتصال — لا ليمنح صلاحية.
+   getSession() محلّي بالكامل، لكن استعلام الدور كان يضرب الشبكة دائماً؛ فدون
+   اتصال يفشل ويعود null فتُسقط كلُّ بوابة المستخدمَ إلى شاشة الدخول — في
+   تطبيق كامل بُني على العمل دون اتصال. المخبّأ يسدّ هذه الفجوة وحدها.
+
+   التصريح الحقيقي يبقى JWT وسياسات RLS على الخادم: مستخدم يعبث بالمخبّأ ليرى
+   لوحة الوزارة سيراها **فارغة**، لأن كل استعلام يُرفَض. المخبّأ يوجّه الواجهة
+   لا أكثر، ومربوط بمعرّف المستخدم فلا يخدم حساباً آخر، ويُمحى عند الخروج مع
+   بقيّة مخابئ المستأجِر (TENANT_CACHE_PREFIXES). */
+const PROFILE_CACHE_PFX = 'nsams_profile_';
+
+function _cacheProfile(userId, profile) {
+  try { localStorage.setItem(PROFILE_CACHE_PFX + LAYER + '_' + userId, JSON.stringify(profile)); }
+  catch { /* حصة التخزين ممتلئة — غير قاتل */ }
+}
+
+function _cachedProfile(userId) {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_PFX + LAYER + '_' + userId);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
 }
 
 async function getCurrentUser() {
@@ -411,13 +429,21 @@ async function getCurrentUser() {
     .eq("id", session.user.id)
     .maybeSingle();
 
-  if (error || !profile) return null;
+  let row = profile;
+  if (error || !profile) {
+    // فشل الاستعلام: قد يكون انقطاع شبكة (نستعمل المخبّأ) أو حذف المستخدم
+    // فعلاً (لا مخبّأ لديه، فيعود null كما كان).
+    row = _cachedProfile(session.user.id);
+    if (!row) return null;
+  } else {
+    _cacheProfile(session.user.id, profile);
+  }
 
   return {
-    user: { id: session.user.id, email: session.user.email, fullName: profile.full_name },
-    role: profile.role,
-    schoolId: profile.school_id,
-    directorateId: profile.directorate_id,
+    user: { id: session.user.id, email: session.user.email, fullName: row.full_name },
+    role: row.role,
+    schoolId: row.school_id,
+    directorateId: row.directorate_id,
   };
 }
 
@@ -4202,12 +4228,24 @@ async function getTransferDocuments() {
 // المدرسة، مخبأ الدلتا) ويُترك ما لا يخصّها:
 //   • outbox — كتابات لم تُزامَن بعد؛ مسحها فقدانُ عمل المستخدم لا حمايةٌ له.
 //   • nsams_device_id — معرّف الجهاز، لا بيانات فيه.
+/* ⚠️ البادئات هنا هي **المصدر الوحيد**. كانت مكرّرة نصّاً في ملفّين، فحين
+   تغيّرت بادئة ملفّ المدرسة إلى nsams_school2_ (لإهمال نسخ ما قبل §25) بقي
+   الترشيح هنا على nsams_school_ — و'nsams_school2_'.startsWith('nsams_school_')
+   يساوي false. فصار التنظيف الموضوع أصلاً لمنع تسريب بيانات المدرسة بين
+   الجلسات **بلا أثر** على أهمّ ما يُسرَّب. أي بادئة جديدة تُضاف هنا وتُستورَد
+   من هنا، لا تُكتب نصّاً في مكان آخر. */
+const TENANT_CACHE_PREFIXES = [
+  'nsams_stu_',      // صفوف الطلاب كاملةً: الأسماء والأرقام الوطنية وهواتف الأهل
+  'nsams_school2_',  // ملفّ المدرسة: الاسم والإحداثيات والأعداد والتصنيف
+  'nsams_draft_',    // مسودّات الحضور لكل صفّ ويوم — لم يكن ينظّفها شيء
+  'nsams_profile_',  // ملفّ الدور المخبّأ للدخول دون اتصال
+  'nsams_setup_done_',
+];
+
 async function purgeTenantCaches() {
   try {
     for (const k of Object.keys(localStorage)) {
-      if (k.startsWith(STUDENTS_CACHE_PFX) || k.startsWith('nsams_school_')) {
-        localStorage.removeItem(k);
-      }
+      if (TENANT_CACHE_PREFIXES.some(p => k.startsWith(p))) localStorage.removeItem(k);
     }
   } catch { /* غير قاتل */ }
 

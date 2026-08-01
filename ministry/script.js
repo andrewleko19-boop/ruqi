@@ -154,7 +154,8 @@ async function checkSession() {
   if (session) {
     const ok = await verifyRole(session.user.id);
     if (ok) showDashboard(session.user.email, session.user.id);
-    else await supabase.auth.signOut();
+    // logout المشترك: يحذف الجلسة محلّياً أوّلاً فلا يبقى دور خاطئ عند فشل الشبكة.
+    else await window.NSAMS_DB.logout().catch(() => {});
   }
 }
 
@@ -188,7 +189,7 @@ loginBtn.addEventListener('click', async () => {
   const ok = await verifyRole(data.user.id);
   if (!ok) {
     showError('الوصول مرفوض. هذه البوابة لمستخدمي الوزارة فقط.');
-    await supabase.auth.signOut();
+    await window.NSAMS_DB.logout().catch(() => {});
     loginBtn.disabled    = false;
     loginBtn.textContent = 'تسجيل الدخول';
     return;
@@ -211,17 +212,13 @@ btnLogoutOk.addEventListener('click', async () => {
   stopLiveFeed();
   if (minUnsubNotif) { minUnsubNotif(); minUnsubNotif = null; }
   setNotifBadge(0);
-  await supabase.auth.signOut();
-  dashboard.classList.add('hidden');
-  loginScreen.classList.remove('hidden');
-  loginBtn.disabled    = false;
-  loginBtn.textContent = 'تسجيل الدخول';
-  emailInput.value    = '';
-  passwordInput.value = '';
-  tableData = [];
-  lastData  = null;
-  drill     = { level: 'national', gov: null, dirId: null };
-  document.getElementById('drill-card')?.classList.add('hidden');
+  // logout المشترك يحذف الجلسة محلّياً أوّلاً فلا يفشل مفتوحاً دون اتصال،
+  // بخلاف signOut() المباشر الذي كان هنا.
+  try { await window.NSAMS_DB.logout(); } catch { /* لا يُوقف الخروج */ }
+  try { await window.NSAMS_DB.purgeTenantCaches(); } catch { /* ignore */ }
+  // ⚠️ إعادة تحميل لا إخفاء: تفريغ المتغيّرات لا يمسح الجداول المرسومة ولا
+  // بريد المستخدم في الترويسة — كانت تبقى في الـDOM بعد الخروج.
+  location.reload();
 });
 
 function showDashboard(email, userId) {

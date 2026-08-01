@@ -2005,6 +2005,10 @@ async function bootstrap() {
       await initApp();
       return;
     }
+    // ⚠️ جلسة بدور خاطئ تُسجَّل خروجاً لا تُترك: تركها في التخزين يعني أنّ
+    // فتح هذه البوابة لاحقاً يُعيد المحاولة نفسها إلى الأبد، وأنّ حساب بوابة
+    // أخرى يبقى حيّاً على الجهاز بعد أن ظنّ صاحبه أنه غادر.
+    if (session) { try { await logout(); } catch { /* ignore */ } }
   } catch (err) {
     console.warn('[NSAMS-T] bootstrap session check failed', err);
   }
