@@ -87,15 +87,22 @@ header {
   position: relative;
   text-align: center;
   padding: 68px 0 34px;
+  /* يجب أن تحوي الخريطة كاملة (أعلاها + ارتفاعها) وإلا رسمَت خارج صندوق
+     الترويسة فطلت أسفلها خلف خلفية البطاقات المعتمة التالية — وهذا بالضبط
+     ما بدا وكأنّه "قصّ" لحدودها الجنوبية. */
+  min-height: 350px;
 }
 
-/* الخريطة: مطلقة خلف نصّ الترويسة، ومحجوبة عن قارئات الشاشة. */
+/* الخريطة: مطلقة خلف نصّ الترويسة، ومحجوبة عن قارئات الشاشة.
+   الأبعاد قريبة من التربيع (لا ٢:١) لأنّ الإسقاط الآن يحافظ على نسبة
+   سورية الحقيقية بمقياس واحد؛ صندوق عريض جداً كان يترك فراغاً شفافاً
+   ضخماً يمين ويسار الشكل المرسوم بدل استثماره. */
 #syria-map {
   position: absolute;
-  top: 46px; left: 50%;
+  top: 38px; left: 50%;
   transform: translateX(-50%);
-  width: min(560px, 96vw);
-  height: 260px;
+  width: min(340px, 86vw);
+  height: 300px;
   opacity: .48;
   pointer-events: none;
 }
@@ -319,8 +326,8 @@ footer {
 
 /* ── الجوّال ─────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
-  header { padding: 44px 0 26px; }
-  #syria-map { top: 34px; height: 190px; opacity: .36; }
+  header { padding: 44px 0 26px; min-height: 264px; }
+  #syria-map { top: 26px; width: min(260px, 80vw); height: 230px; opacity: .36; }
   .logo-mark { width: 68px; height: 68px; border-radius: 18px; }
   .logo-mark img { width: 42px; height: 42px; }
   .cards { grid-template-columns: 1fr; gap: 13px; }
@@ -578,13 +585,20 @@ footer {
   ];
 
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var lonMin = 35.6, lonMax = 42.5, latMin = 32.3, latMax = 37.5;
+  // ⚠️ الحدّ الجنوبي بعد التوسعة ينزل حتى ٣٢٫٢٠° — فلا بدّ أن يبقى أدنى من
+  //   latMin أو تُقصّ نقطته الأخيرة عند حافة اللوحة.
+  var lonMin = 35.6, lonMax = 42.5, latMin = 32.1, latMax = 37.6;
+  // خط العرض الوسطي لتصحيح جيب-تمام تقارب خطوط الطول — بدونه يُمدَّد
+  // العرض أفقياً فيبدو الشكل مسطّحاً لا كسورية الحقيقية.
+  var latMid  = (latMin + latMax) / 2;
+  var cosLat  = Math.cos(latMid * Math.PI / 180);
   var W = 0, H = 0, pad = 16;
+  var scale = 1, offX = 0, offY = 0;
 
   function project(lon, lat) {
     // RTL لا يقلب الجغرافيا: الشرق يبقى يميناً.
-    var x = pad + (lon - lonMin) / (lonMax - lonMin) * (W - pad * 2);
-    var y = pad + (latMax - lat) / (latMax - latMin) * (H - pad * 2);
+    var x = offX + (lon - lonMin) * cosLat * scale;
+    var y = offY + (latMax - lat) * scale;
     return [x, y];
   }
 
@@ -596,6 +610,16 @@ footer {
     cv.width  = Math.round(W * dpr);
     cv.height = Math.round(H * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // مقياس واحد لا اثنان منفصلان للعرض والارتفاع — هذا ما كان يُمدِّد
+    // الشكل ليملأ صندوقاً بنسبة أبعاد مختلفة عن نسبة سورية الحقيقية.
+    // الفائض من أيّ بُعد يُوزَّع هامشاً متساوياً فيبقى الشكل مُوسَّطاً.
+    var availW = W - pad * 2, availH = H - pad * 2;
+    var lonSpan = (lonMax - lonMin) * cosLat;
+    var latSpan = latMax - latMin;
+    scale = Math.min(availW / lonSpan, availH / latSpan);
+    offX  = pad + (availW - lonSpan * scale) / 2;
+    offY  = pad + (availH - latSpan * scale) / 2;
     return true;
   }
 
