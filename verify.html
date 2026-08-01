@@ -63,6 +63,11 @@
       margin-top: 8px; font-size: .72rem; font-weight: 400;
       color: var(--muted); font-family: ui-monospace, monospace; direction: ltr;
     }
+    /* حالة "لا معرّف إطلاقاً": زيارة مباشرة للصفحة لا عبر مسح QR وثيقة —
+       حالة متوقّعة لا خطأ، فلا تُستعمل ألوان err الحمراء هنا. */
+    .hint-icon { color: var(--green); margin-bottom: 10px; }
+    .hint-icon svg { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .hint p { max-width: 32ch; margin: 0 auto; line-height: 1.8; }
   </style>
 </head>
 <body>
@@ -74,6 +79,16 @@
     </div>
     <div class="body">
       <div id="loading" class="state"><div class="spinner"></div>جارٍ التحقّق…</div>
+      <div id="hint" class="state hint" hidden>
+        <div class="hint-icon">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v3M14 20h3M20 20h.01"/></svg>
+        </div>
+        <p>
+          هذه الصفحة تتحقّق من وثيقة جلاء مدرسي واحدة. امسح رمز QR المطبوع على
+          الوثيقة بكاميرا هاتفك ليفتح رابط التحقّق الخاصّ بها تلقائياً.
+        </p>
+      </div>
       <div id="error" class="state err" hidden></div>
       <div id="result" hidden>
         <span id="verdict" class="badge"></span>
