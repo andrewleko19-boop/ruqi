@@ -5,7 +5,8 @@
 // The RPC is SECURITY DEFINER and returns only the fields already printed on
 // the paper certificate; student ids are unguessable UUIDs.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// محلّية لا من CDN — نفس سبب shared/db.js: عامل الخدمة لا يخزّن cross-origin.
+import { createClient } from "./shared/vendor/supabase-js.mjs";
 
 const SUPABASE_URL      = "https://xocrzpjfvizgnsybegwr.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_HCVzNgEJmov38FWXRO1uFw_DG1d87Y4";

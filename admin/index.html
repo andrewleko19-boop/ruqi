@@ -82,8 +82,9 @@
   <link rel="apple-touch-icon" href="../icons/apple-touch-icon-180.png" />
   <link rel="manifest" href="../manifest.json" />
   <meta name="theme-color" content="#16181d" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;600;700&family=Tajawal:wght@500;700;800&display=swap" rel="stylesheet">
+  <!-- خطوط محلّية لا من Google: عامل الخدمة لا يخزّن cross-origin،
+       فخطوط CDN تفشل دون اتصال. تُبنى بـ tools/build-fonts.mjs. -->
+  <link rel="stylesheet" href="../shared/vendor/fonts/fonts.css" />
 </head>
 <body>
 

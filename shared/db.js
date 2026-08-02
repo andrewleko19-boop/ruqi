@@ -1,4 +1,9 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// ⚠️ محلّية عمداً لا من CDN. كان الاستيراد من esm.sh يجلب ستّة ملفّات من
+//    خادم خارجي، وعامل الخدمة يتخطّى كل ما هو cross-origin — فدون اتصال
+//    يفشل الاستيراد ولا تُنفَّذ هذه الوحدة إطلاقاً: لا createClient ولا
+//    NSAMS_DB، فتُفتح القشرة من الكاش وخلفها لا شيء. الحزمة تُبنى بـ
+//    tools/build-vendor.mjs وتُخزَّن مع القشرة في sw.js.
+import { createClient } from "./vendor/supabase-js.mjs";
 
 const SUPABASE_URL      = "https://xocrzpjfvizgnsybegwr.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_HCVzNgEJmov38FWXRO1uFw_DG1d87Y4";
@@ -19,6 +24,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 export { db as supabase };
 export { SUPABASE_URL as supabaseUrl };
+export { errMessage, isNetworkError };
 
 /* تسجيل عامل الخدمة انتقل إلى shared/sw-register.js كي تستعمله الصفحة
    الرئيسية أيضاً — كانت بلا أي <script> فلا يُثبَّت عندها شيء ولا تعمل دون
@@ -63,6 +69,83 @@ function generateReceiptNumber() {
 }
 
 function isOnline() { return navigator.onLine; }
+
+/* ─── ترجمة الأخطاء ──────────────────────────────────────────────────────────
+   كانت البوّابات الستّ تعرض نصّ الخطأ التقني كما هو: `showError(el, e.message)`
+   أو `textContent = err?.message ?? '…'` في نحو سبعين موضعاً. فيرى معاون مدير
+   التربية «TypeError: Failed to fetch» أو «User is banned» — إنجليزية، ولا
+   تقول له ما العمل.
+
+   هذه الدالّة تحوّل الخطأ إلى جملة عربية **توجيهية**: ماذا حدث وما الخطوة
+   التالية. الرمز التقني لا يُفقَد — يبقى في console.error عند موضع الالتقاط.
+
+   الترتيب مقصود: الشبكة أوّلاً (أشيع سبب في مدارس ذات إنترنت متقطّع)، ثم
+   المصادقة، ثم أكواد Postgres. وما لا يُعرَف يعود إلى fallback العربي الذي
+   يمرّره الموضع نفسه — فالسياق عنده أدقّ ممّا يمكن لدالّة عامّة أن تخمّنه. */
+
+const AUTH_ERRORS = [
+  [/invalid login credentials/i,          'البريد الإلكتروني أو كلمة المرور غير صحيحة.'],
+  [/user is banned|user_banned/i,         'هذا الحساب موقوف. راجع مشرف النظام لإعادة تفعيله.'],
+  [/email not confirmed/i,                'لم يُفعَّل هذا البريد بعد. راجع مشرف النظام.'],
+  [/user already registered/i,            'هذا البريد مسجَّل مسبقاً في النظام.'],
+  [/password should be at least/i,        'كلمة المرور قصيرة — استعمل ٦ محارف على الأقلّ.'],
+  [/same[_ ]password/i,                   'كلمة المرور الجديدة مطابقة للقديمة. اختر واحدة مختلفة.'],
+  [/(over_email_send_rate_limit|too many requests|rate limit)/i,
+                                          'حاولتَ مرّات كثيرة متتالية. انتظر دقيقة ثم أعد المحاولة.'],
+  [/invalid refresh token|refresh[_ ]token[_ ]not[_ ]found|session[_ ]not[_ ]found/i,
+                                          'انتهت صلاحية جلستك. سجّل الدخول من جديد.'],
+  [/jwt expired/i,                        'انتهت صلاحية جلستك. سجّل الدخول من جديد.'],
+  [/invalid api key/i,                    'إعدادات الاتصال بالنظام غير صحيحة. راجع مشرف النظام.'],
+];
+
+const PG_ERRORS = {
+  '23505': 'هذه القيمة مسجَّلة مسبقاً — لا يمكن تكرارها.',
+  '23503': 'لا يمكن إتمام العملية: سجلّ مرتبط بهذه البيانات غير موجود أو ما يزال مستعمَلاً.',
+  '23502': 'حقل مطلوب تُرك فارغاً. أكمل الحقول ثم أعد المحاولة.',
+  '23514': 'إحدى القيم المُدخَلة خارج المدى المسموح.',
+  '22P02': 'إحدى القيم المُدخَلة بصيغة غير صحيحة.',
+  '42501': 'لا تملك صلاحية لهذه العملية على هذه البيانات.',
+  '42P01': 'هذه الميزة غير مكتملة التهيئة في قاعدة البيانات. راجع مشرف النظام.',
+  'PGRST116': 'لا توجد بيانات مطابقة.',
+  'PGRST301': 'انتهت صلاحية جلستك. سجّل الدخول من جديد.',
+};
+
+const NETWORK_MSG =
+  'لا يوجد اتصال بالإنترنت. سيُحفَظ ما أدخلتَه ويُرسَل تلقائياً عند عودة الشبكة.';
+
+function isNetworkError(err) {
+  if (!err) return false;
+  // navigator.onLine=false قاطع؛ أمّا النصّ فلأنّ الجهاز قد يكون «متّصلاً»
+  // بشبكة محلّية بلا إنترنت فعلي، وهي حالة شائعة في المدارس.
+  if (!navigator.onLine) return true;
+  const s = `${err.name || ''} ${err.message || ''} ${err.details || ''}`;
+  return /failed to fetch|networkerror|network request failed|load failed|ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED|ERR_NETWORK|ERR_CONNECTION|fetch failed|timeout|aborted/i.test(s);
+}
+
+/** يُرجع رسالة عربية موجِّهة للمستخدم. `fallback` نصّ السياق عند الاستدعاء. */
+function errMessage(err, fallback = 'تعذّر إتمام العملية. أعد المحاولة.') {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err.trim() || fallback;
+
+  if (isNetworkError(err)) return NETWORK_MSG;
+
+  const code = err.code ?? err.status ?? '';
+  if (code && PG_ERRORS[code]) return PG_ERRORS[code];
+
+  const text = `${err.message || ''} ${err.error_description || ''} ${err.details || ''}`;
+  for (const [re, msg] of AUTH_ERRORS) if (re.test(text)) return msg;
+
+  if (code === 401 || code === '401') return 'انتهت صلاحية جلستك. سجّل الدخول من جديد.';
+  if (code === 403 || code === '403') return 'لا تملك صلاحية لهذه العملية.';
+  if (code === 404 || code === '404') return 'لم يُعثر على البيانات المطلوبة.';
+  if (code === 429 || code === '429') return 'حاولتَ مرّات كثيرة متتالية. انتظر قليلاً ثم أعد المحاولة.';
+  if (Number(code) >= 500)            return 'الخادم لا يستجيب حالياً. أعد المحاولة بعد قليل.';
+
+  // رسالة عربية كتبها الخادم أو RPC عمداً (RAISE EXCEPTION) — تُعرَض كما هي.
+  if (/[؀-ۿ]/.test(err.message || '')) return err.message;
+
+  return fallback;
+}
 
 // ─── Device identity ──────────────────────────────────────────────────────────
 function getDeviceId() {
@@ -992,24 +1075,72 @@ function gradeNameAr(grade) {
 }
 
 // ─── Teacher: get assigned classes ───────────────────────────────────────────
+/* مخبأ صفوف المعلّم — على نمط getCachedStudents الموجود أدناه.
+   كان هذا الاستعلام يضرب الشبكة دائماً بلا مخبأ، بينما الطلاب مخبّؤون
+   وبيانات المدرسة مخبّأة. فالمعلّم دون اتصال يفشل جلبُه فتُعرَض له «لا توجد
+   صفوف مسندة إليك» — وهي كذبة على معلّم له صفوف.
+   لا مهلة انتهاء (بخلاف الطلاب): إسناد الصفوف يتغيّر مرّة في الفصل لا يومياً،
+   ومخبأ عمره أسبوع أصدق بكثير من قائمة فارغة. البادئة في TENANT_CACHE_PREFIXES
+   فتُمحى عند الخروج ولا يرى معلّم صفوف زميله على جهاز مشترك. */
+const CLASSES_CACHE_PFX = 'nsams_classes_';
+
+function getCachedTeacherClasses(teacherId, year) {
+  try {
+    const raw = localStorage.getItem(`${CLASSES_CACHE_PFX}${teacherId}_${year}`);
+    if (!raw) return null;
+    const { data } = JSON.parse(raw);
+    return Array.isArray(data) ? data : null;
+  } catch { return null; }
+}
+
+function setCachedTeacherClasses(teacherId, year, data) {
+  try {
+    localStorage.setItem(`${CLASSES_CACHE_PFX}${teacherId}_${year}`,
+                         JSON.stringify({ ts: Date.now(), data }));
+  } catch { /* حصة التخزين ممتلئة — غير قاتل */ }
+}
+
+/* يرمي `NoCachedClassesError` حين يفشل الجلب ولا مخبأ — كي تميّز الواجهة
+   «تعذّر التحميل» عن «صفر صفوف فعلاً» بدل خلطهما في رسالة واحدة. */
+class NoCachedClassesError extends Error {
+  constructor(cause) {
+    super('تعذّر تحميل الصفوف ولا توجد نسخة محفوظة على هذا الجهاز.');
+    this.name = 'NoCachedClassesError';
+    this.cause = cause;
+  }
+}
+
 async function getTeacherClasses(teacherId) {
   const academicYear = getAcademicYear();
 
-  const { data, error } = await db
-    .from('class_teacher')
-    .select(`
-      class_id, role, subject_ids,
-      classes:class_id (
-        id, grade, section, school_id,
-        schools:school_id ( name, work_start_time )
-      )
-    `)
-    .eq('teacher_id',    teacherId)
-    .eq('academic_year', academicYear);
+  // دون اتصال: لا تُهدَر ثوانٍ في مهلة شبكة محكومة بالفشل — اقرأ المخبأ فوراً.
+  if (!navigator.onLine) {
+    const hit = getCachedTeacherClasses(teacherId, academicYear);
+    if (hit) return hit;
+  }
 
-  if (error) throw error;
+  let data;
+  try {
+    const res = await db
+      .from('class_teacher')
+      .select(`
+        class_id, role, subject_ids,
+        classes:class_id (
+          id, grade, section, school_id,
+          schools:school_id ( name, work_start_time )
+        )
+      `)
+      .eq('teacher_id',    teacherId)
+      .eq('academic_year', academicYear);
+    if (res.error) throw res.error;
+    data = res.data;
+  } catch (err) {
+    const hit = getCachedTeacherClasses(teacherId, academicYear);
+    if (hit) { console.warn('[NSAMS] صفوف المعلّم من المخبأ', err); return hit; }
+    throw new NoCachedClassesError(err);
+  }
 
-  return (data || []).map(row => {
+  const mapped = (data || []).map(row => {
     const c = row.classes;
     return {
       id:          c.id,
@@ -1024,6 +1155,9 @@ async function getTeacherClasses(teacherId) {
       displayName: `الصف ${gradeNameAr(c.grade)} / شعبة ${c.section}`,
     };
   });
+
+  setCachedTeacherClasses(teacherId, academicYear, mapped);
+  return mapped;
 }
 
 // ─── Student cache (24-hour TTL) ─────────────────────────────────────────────
@@ -3448,6 +3582,10 @@ window.NSAMS_DB = {
   getCurrentUser,
   changePassword,
 
+  // رسائل المستخدم — مصدر واحد لترجمة الأخطاء في البوّابات الستّ
+  errMessage,
+  isNetworkError,
+
   // Schools
   getSchools,
   getSchoolStatus,
@@ -4236,6 +4374,7 @@ async function getTransferDocuments() {
    من هنا، لا تُكتب نصّاً في مكان آخر. */
 const TENANT_CACHE_PREFIXES = [
   'nsams_stu_',      // صفوف الطلاب كاملةً: الأسماء والأرقام الوطنية وهواتف الأهل
+  'nsams_classes_',  // صفوف المعلّم المسندة — لئلّا يراها زميله على جهاز مشترك
   'nsams_school2_',  // ملفّ المدرسة: الاسم والإحداثيات والأعداد والتصنيف
   'nsams_draft_',    // مسودّات الحضور لكل صفّ ويوم — لم يكن ينظّفها شيء
   'nsams_profile_',  // ملفّ الدور المخبّأ للدخول دون اتصال

@@ -26,6 +26,7 @@ const {
   directorateBulkImportStudents,
   directorateBulkImportStaff,
   localDateISO,
+  errMessage,
 } = window.NSAMS_DB;
 
 // Local calendar date (not UTC) with a safe fallback.
@@ -136,7 +137,7 @@ function setupLoginForm() {
       startAutoRefresh();
       initNotificationsDir(session.user.id);
     } catch (err) {
-      showLoginError(err.message || 'فشل تسجيل الدخول، يرجى المحاولة مجدداً.');
+      showLoginError(errMessage(err, 'فشل تسجيل الدخول، يرجى المحاولة مجدداً.'));
     } finally {
       btn.disabled    = false;
       btn.textContent = 'تسجيل الدخول';
@@ -608,7 +609,7 @@ async function handleRemind(schoolId, btn) {
     }
   } catch (err) {
     console.error('[Remind] Failed:', err);
-    showToast('خطأ في التذكير', err.message || 'تعذّر إرسال التذكير.', 'error');
+    showToast('خطأ في التذكير', errMessage(err, 'تعذّر إرسال التذكير.'), 'error');
     if (btn) { btn.disabled = false; btn.textContent = 'تذكير'; }
   }
 }
@@ -926,7 +927,7 @@ async function handleStatusUpdate(reportId, newStatus) {
     await loadReports();
   } catch (err) {
     console.error('[Reports] Status update failed:', err);
-    showToast('فشل التحديث', err.message || 'تعذّر تحديث الحالة.', 'error');
+    showToast('فشل التحديث', errMessage(err, 'تعذّر تحديث الحالة.'), 'error');
     btns.forEach(b => (b.disabled = false));
   }
 }
@@ -1758,7 +1759,7 @@ async function doReview(decision) {
   } catch (err) {
     console.error('[DirRequests] review', err);
     msgEl.className = 'msg msg-error';
-    msgEl.textContent = err?.message ?? 'تعذّرت المراجعة';
+    msgEl.textContent = errMessage(err, 'تعذّرت المراجعة');
     msgEl.hidden = false;
   } finally {
     if (approveBtn) approveBtn.disabled = false;
@@ -1926,7 +1927,7 @@ async function doStmtReview(decision) {
     console.error('[DirStatements] review', err);
     if (msgEl) {
       msgEl.className = 'msg msg-error';
-      msgEl.textContent = err?.message ?? 'تعذّرت المراجعة';
+      msgEl.textContent = errMessage(err, 'تعذّرت المراجعة');
       msgEl.hidden = false;
     }
   } finally {
@@ -2420,7 +2421,7 @@ async function doRsReview(decision) {
     console.error('[DirResultSheets] review', err);
     if (msgEl) {
       msgEl.className = 'msg msg-error';
-      msgEl.textContent = err?.message ?? 'تعذّرت المراجعة';
+      msgEl.textContent = errMessage(err, 'تعذّرت المراجعة');
       msgEl.hidden = false;
     }
   } finally {
@@ -2734,7 +2735,7 @@ function setupDirSchools() {
       document.getElementById('dir-school-modal')?.classList.add('hidden');
       await loadDirSchools();
     } catch (e) {
-      if (errEl) { errEl.textContent = e.message; errEl.hidden = false; }
+      if (errEl) { errEl.textContent = errMessage(e, 'تعذّرت العملية. أعد المحاولة.'); errEl.hidden = false; }
     } finally {
       if (saveBtn) saveBtn.disabled = false;
     }
@@ -2907,7 +2908,7 @@ document.getElementById('dir-cred-reset')?.addEventListener('click', async () =>
   } catch (e) {
     if (msgEl) {
       msgEl.className   = 'dir-review-msg';
-      msgEl.textContent = e.message || 'تعذّرت إعادة التعيين';
+      msgEl.textContent = errMessage(e, 'تعذّرت إعادة التعيين');
       msgEl.hidden      = false;
     }
   } finally {
@@ -2973,7 +2974,7 @@ function setupDirPrincipals() {
       closePrincipalModal();
       await loadDirPrincipals();
     } catch (e) {
-      showErr(e.message);
+      showErr(errMessage(e, 'تعذّرت العملية. أعد المحاولة.'));
     } finally {
       if (saveBtn) saveBtn.disabled = false;
     }
@@ -2997,7 +2998,7 @@ function setupDirPrincipals() {
       document.getElementById('dir-deactivate-modal')?.classList.add('hidden');
       await loadDirPrincipals();
     } catch (e) {
-      if (errEl) { errEl.textContent = e.message; errEl.hidden = false; }
+      if (errEl) { errEl.textContent = errMessage(e, 'تعذّرت العملية. أعد المحاولة.'); errEl.hidden = false; }
     } finally {
       if (confirmBtn) confirmBtn.disabled = false;
     }
@@ -3230,7 +3231,7 @@ async function loadImportClasses() {
   try {
     _impClasses = await getSchoolClassesForDirectorate(schoolId);
   } catch (e) {
-    impShowError(`تعذّر جلب صفوف المدرسة: ${e.message || e}`);
+    impShowError(errMessage(e, 'تعذّر جلب صفوف المدرسة.'));
   }
 }
 
@@ -3259,7 +3260,7 @@ async function handleImportFile(file) {
     impEl('imp-step-map').hidden = false;
     impEl('imp-step-map').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } catch (e) {
-    impShowError(e.message || 'تعذّرت قراءة الملفّ.');
+    impShowError(errMessage(e, 'تعذّرت قراءة الملفّ.'));
   }
 }
 
@@ -3642,7 +3643,7 @@ async function runImport() {
     impEl('imp-step-done').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     loadDirSchools().catch(() => {});   // أعداد الطلاب/المعلمين في جدول المدارس
   } catch (e) {
-    impShowError(e.message || 'فشل الاستيراد.');
+    impShowError(errMessage(e, 'فشل الاستيراد.'));
   } finally {
     _impBusy = false;
     btn.disabled = false;

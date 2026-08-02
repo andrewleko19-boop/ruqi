@@ -1,4 +1,4 @@
-import { supabase, supabaseUrl } from '../shared/db.js';
+import { supabase, supabaseUrl, errMessage } from '../shared/db.js';
 import { CustomSelect } from '../shared/csel.js';
 
 const EDGE_BASE = supabaseUrl + '/functions/v1';
@@ -242,7 +242,7 @@ async function doLogin() {
     }
     showDashboard(data.user.email);
   } catch (e) {
-    showError(loginError, e.message);
+    showError(loginError, errMessage(e, 'تعذّر تسجيل الدخول. أعد المحاولة.'));
   } finally {
     loginBtn.disabled = false;
   }
@@ -624,7 +624,7 @@ schoolModalSave.addEventListener('click', async () => {
     closeSchoolModal();
     await loadSchools();
   } catch (e) {
-    showError(schoolModalError, e.message);
+    showError(schoolModalError, errMessage(e, 'تعذّر حفظ بيانات المدرسة.'));
   } finally {
     schoolModalSave.disabled = false;
   }
@@ -728,7 +728,7 @@ async function reactivateUser(userId, name) {
     await edgeFetch('admin-create-user', { action: 'reactivate', userId });
     await loadUsers();
   } catch (e) {
-    alertModal(`تعذّرت إعادة تفعيل «${name || '—'}»: ${e.message}`);
+    alertModal(`تعذّرت إعادة تفعيل «${name || '—'}» — ${errMessage(e, 'أعد المحاولة.')}`);
   }
 }
 
@@ -803,7 +803,7 @@ userModalSave.addEventListener('click', async () => {
     closeUserModal();
     await loadUsers();
   } catch (e) {
-    showError(userModalError, e.message);
+    showError(userModalError, errMessage(e, 'تعذّر حفظ بيانات المستخدم.'));
   } finally {
     userModalSave.disabled = false;
   }
@@ -830,7 +830,7 @@ deactivateConfirm.addEventListener('click', async () => {
     closeDeactivateModal();
     await loadUsers();
   } catch (e) {
-    showError(deactivateError, e.message);
+    showError(deactivateError, errMessage(e, 'تعذّر إيقاف الحساب.'));
   } finally {
     deactivateConfirm.disabled = false;
   }
@@ -876,7 +876,7 @@ async function loadAudit(reset = true) {
   hide(auditLoading);
 
   if (error) {
-    auditEmpty.textContent = 'خطأ في تحميل السجل: ' + error.message;
+    auditEmpty.textContent = errMessage(error, 'خطأ في تحميل السجل.');
     show(auditEmpty);
     return;
   }
@@ -1048,8 +1048,8 @@ holidayModalSave.addEventListener('click', async () => {
     closeHolidayModal();
     await loadHolidays();
   } catch (e) {
-    const dup = /duplicate|unique|already/i.test(e.message);
-    showError(holidayModalError, dup ? 'هذا التاريخ مسجّل مسبقاً.' : e.message);
+    const dup = /duplicate|unique|already/i.test(e?.message || '');
+    showError(holidayModalError, dup ? 'هذا التاريخ مسجّل مسبقاً.' : errMessage(e, 'تعذّر حفظ العطلة.'));
   } finally {
     holidayModalSave.disabled = false;
   }
@@ -1290,8 +1290,8 @@ lookupModalSave.addEventListener('click', async () => {
     closeLookupModal();
     await loadLookups();
   } catch (e) {
-    const dup = /duplicate|unique|already/i.test(e.message);
-    showError(lookupModalError, dup ? 'هذه القيمة موجودة مسبقاً في هذه القائمة.' : e.message);
+    const dup = /duplicate|unique|already/i.test(e?.message || '');
+    showError(lookupModalError, dup ? 'هذه القيمة موجودة مسبقاً في هذه القائمة.' : errMessage(e, 'تعذّر الحفظ.'));
   } finally {
     lookupModalSave.disabled = false;
   }
@@ -1317,7 +1317,7 @@ delLookupConfirm.addEventListener('click', async () => {
     closeDeleteLookupModal();
     await loadLookups();
   } catch (e) {
-    showError(delLookupError, e.message);
+    showError(delLookupError, errMessage(e, 'تعذّر الحذف.'));
   } finally {
     delLookupConfirm.disabled = false;
   }
@@ -1377,7 +1377,7 @@ document.getElementById('cred-reset')?.addEventListener('click', async () => {
     credModal.dataset.busy = '1';
     if (res.warning && msgEl) { msgEl.textContent = res.warning; msgEl.classList.remove('hidden'); }
   } catch (e) {
-    if (msgEl) { msgEl.textContent = e.message || 'تعذّرت إعادة التعيين'; msgEl.classList.remove('hidden'); }
+    if (msgEl) { msgEl.textContent = errMessage(e, 'تعذّرت إعادة التعيين'); msgEl.classList.remove('hidden'); }
   } finally {
     // Once a password is minted, HIDE the regenerate button so a second click can't
     // mint a new password and silently invalidate the one just copied; re-enable
@@ -1596,8 +1596,8 @@ scModalSave.addEventListener('click', async () => {
     window.NSAMS_DB.syncFullMarksFromCatalog().catch((e) =>
       console.warn('[admin] auto syncFullMarksFromCatalog', e));
   } catch (e) {
-    const dup = /duplicate|unique|already/i.test(e.message);
-    showError(scModalError, dup ? 'هذه المادة موجودة مسبقاً.' : e.message);
+    const dup = /duplicate|unique|already/i.test(e?.message || '');
+    showError(scModalError, dup ? 'هذه المادة موجودة مسبقاً.' : errMessage(e, 'تعذّر حفظ المادة.'));
   } finally {
     scModalSave.disabled = false;
   }
@@ -1623,7 +1623,7 @@ delScConfirm.addEventListener('click', async () => {
     closeDelScModal();
     await loadSubjectCatalog();
   } catch (e) {
-    showError(delScError, e.message);
+    showError(delScError, errMessage(e, 'تعذّر الحذف.'));
   } finally {
     delScConfirm.disabled = false;
   }
@@ -1651,7 +1651,7 @@ async function runSyncFullMarks() {
     show(syncFullMarksMsg);
   } catch (e) {
     console.error('[admin] syncFullMarksFromCatalog', e);
-    syncFullMarksMsg.textContent = 'تعذّرت المزامنة: ' + e.message;
+    syncFullMarksMsg.textContent = errMessage(e, 'تعذّرت المزامنة.');
     syncFullMarksMsg.classList.add('error-msg');
     syncFullMarksMsg.classList.remove('success-msg');
     show(syncFullMarksMsg);
@@ -1724,7 +1724,7 @@ passRulesSave.addEventListener('click', async () => {
     await window.NSAMS_DB.setGradePassRules(rules);
     closePassRules();
   } catch (e) {
-    showError(passRulesError, e.message);
+    showError(passRulesError, errMessage(e, 'تعذّر حفظ قواعد النجاح.'));
   } finally {
     passRulesSave.disabled = false;
   }
@@ -1774,7 +1774,7 @@ async function setSchoolArchived(schoolId, archived) {
     document.getElementById('archive-modal')?.classList.add('hidden');
     await loadSchools();
   } catch (e) {
-    const msg = e.message || 'تعذّرت العملية.';
+    const msg = errMessage(e, 'تعذّرت العملية.');
     if (archived && errEl) showError(errEl, msg); else alertModal(msg);
   } finally {
     if (btn) btn.disabled = false;

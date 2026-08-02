@@ -8,7 +8,7 @@
 //   • "مدارس لم تُسجّل" = إجمالي المدارس − المدارس المُسجّلة اليوم
 // ════════════════════════════════════════════════════════════════════════════
 
-import { supabase } from '../shared/db.js';
+import { supabase, errMessage } from '../shared/db.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const loginScreen    = document.getElementById('login-screen');
@@ -180,7 +180,7 @@ loginBtn.addEventListener('click', async () => {
 
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
-    showError(error.message);
+    showError(errMessage(error, 'تعذّر تسجيل الدخول. أعد المحاولة.'));
     loginBtn.disabled    = false;
     loginBtn.textContent = 'تسجيل الدخول';
     return;
@@ -367,7 +367,7 @@ async function loadAllData() {
   } catch (err) {
     console.error('NSAMS Ministry load error:', err);
     tableLoading.classList.add('hidden');
-    tableEmpty.textContent = 'خطأ في تحميل البيانات: ' + (err.message || String(err));
+    tableEmpty.textContent = errMessage(err, 'خطأ في تحميل البيانات.');
     tableEmpty.classList.remove('hidden');
   }
 }

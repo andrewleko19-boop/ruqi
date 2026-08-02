@@ -34,6 +34,7 @@ const {
   teacherCheckIn,
   teacherCheckOut,
   getMyStaffAttendanceToday,
+  errMessage,
 } = window.NSAMS_DB;
 
 // ── App State ─────────────────────────────────────────────────────────────────
@@ -126,6 +127,7 @@ const btnLogout      = $('btn-logout');
 const classesLoading = $('classes-loading');
 const classesList    = $('classes-list');
 const classesEmpty   = $('classes-empty');
+const classesFailed  = $('classes-failed');
 
 // Attendance view
 const attClassName   = $('att-class-name');
@@ -377,10 +379,7 @@ formLogin.addEventListener('submit', async (e) => {
     await initApp();
   } catch (err) {
     console.error('[NSAMS-T] login error', err);
-    loginError.textContent =
-      err?.message?.includes('Invalid login')
-        ? 'بيانات الدخول غير صحيحة'
-        : (err?.message ?? 'فشل تسجيل الدخول، يرجى المحاولة مجدداً');
+    loginError.textContent = errMessage(err, 'تعذّر تسجيل الدخول. أعد المحاولة.');
     show(loginError);
   } finally {
     setLoginBusy(false);
@@ -437,13 +436,20 @@ async function loadClasses() {
   show(classesLoading);
   hide(classesList);
   hide(classesEmpty);
+  hide(classesFailed);
 
+  /* ثلاث حالات لا واحدة. كان الفشل في الجلب يُسنِد [] ثم يعرض «لا توجد صفوف
+     مسندة إليك» — وهي كذبة على معلّم له صفوف، وهي بالضبط ما أبلغ عنه
+     المستخدم. الآن: نجاح · فشل مع نسخة محفوظة (يقرأها db.js تلقائياً) ·
+     فشل بلا نسخة (NoCachedClassesError) → شاشة خاصّة بها. */
   try {
     S.classes = await getTeacherClasses(S.user.user.id);
   } catch (err) {
     console.error('[NSAMS-T] getTeacherClasses', err);
-    toast('تعذّر تحميل قائمة الصفوف', 'error');
     S.classes = [];
+    hide(classesLoading);
+    show(classesFailed);
+    return;
   }
 
   hide(classesLoading);
@@ -459,6 +465,15 @@ async function loadClasses() {
   setupModeTabs();
   applyHomeMode();
 }
+
+// إعادة المحاولة يدوياً: أسرع من إغلاق التطبيق وفتحه بعد عودة الشبكة.
+$('btn-retry-classes')?.addEventListener('click', () => { loadClasses(); });
+
+// وعودة الشبكة تُعيد المحاولة تلقائياً إن كنّا عالقين على شاشة الفشل — فمعلّم
+// دخل الصفّ قبل أن يلتقط الجهاز الشبكة لا يبقى ينظر إلى رسالة خطأ.
+window.addEventListener('online', () => {
+  if (classesFailed && !classesFailed.hidden) loadClasses();
+});
 
 // ── Duty card: self check-in / out ──────────────────────────────────────────────
 // The teacher's school + work-start time come from their class assignment (all
@@ -602,6 +617,9 @@ async function renderClassList() {
   const list = classesForMode(homeMode);
 
   hide(classesEmpty);
+  hide(classesFailed);
+  // فراغ حقيقي هنا: الصفوف محمّلة لكن لا شيء منها يخصّ هذا الوضع (حضور /
+  // درجات / سلوك) — رسالة «لا توجد صفوف» صادقة في هذا الموضع وحده.
   if (list.length === 0) { hide(classesList); show(classesEmpty); return; }
 
   // Submission badges only matter in attendance mode.
@@ -735,7 +753,7 @@ async function openAttendanceView(cls) {
 
   } catch (err) {
     console.error('[NSAMS-T] openAttendanceView', err);
-    toast(err?.message ?? 'تعذّر تحميل بيانات الصف', 'error');
+    toast(errMessage(err, 'تعذّر تحميل بيانات الصف'), 'error');
     hide(studentsLoading);
     hide(attFooter);
   }
@@ -1061,7 +1079,7 @@ btnConfirmSubmit.addEventListener('click', async () => {
 
   } catch (err) {
     console.error('[NSAMS-T] submit error', err);
-    toast(err?.message ?? 'حدث خطأ أثناء الإرسال', 'error');
+    toast(errMessage(err, 'حدث خطأ أثناء الإرسال'), 'error');
     closeConfirmModal();
   }
 });
@@ -1140,7 +1158,7 @@ async function openAbsenceLog() {
     console.error('[NSAMS-T] absence log', err);
     hide(abslogLoading);
     closeAbsenceLog();
-    toast('تعذّر تحميل سجل الغيابات', 'error');
+    toast(errMessage(err, 'تعذّر تحميل سجل الغيابات.'), 'error');
   }
 }
 
@@ -1705,7 +1723,7 @@ btnGraceSend.addEventListener('click', async () => {
   } catch (err) {
     console.error('[NSAMS] proposeGrace', err);
     setGraceBusy(false);
-    graceError(err?.message || 'تعذّر إرسال الاقتراح');
+    graceError(errMessage(err, 'تعذّر إرسال الاقتراح'));
   }
 });
 
@@ -1860,7 +1878,7 @@ async function openConductView(cls) {
   } catch (err) {
     console.error('[NSAMS-T] openConductView', err);
     hide(conductLoading); hide(conductFooter);
-    toast('تعذّر تحميل قائمة الطلاب', 'error');
+    toast(errMessage(err, 'تعذّر تحميل قائمة الطلاب.'), 'error');
   }
 }
 

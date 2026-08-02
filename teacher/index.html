@@ -6,8 +6,9 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#0c1e35" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;600;700&family=Tajawal:wght@500;700;800&display=swap" rel="stylesheet">
+  <!-- خطوط محلّية لا من Google: عامل الخدمة لا يخزّن cross-origin،
+       فخطوط CDN تفشل دون اتصال. تُبنى بـ tools/build-fonts.mjs. -->
+  <link rel="stylesheet" href="../shared/vendor/fonts/fonts.css" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>رُقِيّ – معلم الصف</title>
   <link rel="stylesheet" href="./style.css" />
@@ -297,6 +298,18 @@
         <svg class="icon icon-2xl"><use href="#ic-users"/></svg>
         <p>لا توجد صفوف مسندة إليك في السنة الدراسية الحالية.</p>
         <p style="margin-top:6px;font-size:.8rem">تواصل مع مدير المدرسة لإضافة صفك.</p>
+      </div>
+      <!-- حالة مستقلّة عن «لا صفوف»: تعذّر الجلب ولا نسخة محفوظة. خلطُهما
+           في رسالة واحدة كان يخبر معلّماً له صفوف أنّه بلا صفوف. -->
+      <div id="classes-failed" class="classes-empty" hidden>
+        <svg class="icon icon-2xl"><use href="#ic-wifi-off"/></svg>
+        <p>تعذّر تحميل صفوفك — لا يوجد اتصال ولا نسخة محفوظة على هذا الجهاز.</p>
+        <p style="margin-top:6px;font-size:.8rem">
+          افتح البوابة مرّة واحدة وأنت متّصل بالإنترنت، وبعدها ستعمل دون اتصال.
+        </p>
+        <button type="button" id="btn-retry-classes" class="btn btn-ghost" style="margin-top:12px">
+          إعادة المحاولة
+        </button>
       </div>
     </div>
   </div><!-- /view-home -->

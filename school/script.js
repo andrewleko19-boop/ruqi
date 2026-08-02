@@ -22,6 +22,7 @@ const {
   getPendingReports,
   localDateISO,
   changePassword,
+  errMessage,
 } = window.NSAMS_DB;
 
 // ── App state ─────────────────────────────────────────────────────────────────
@@ -220,6 +221,14 @@ async function loadSchoolData() {
   toast('تعذّر تحميل بيانات المدرسة. تحقق من الاتصال وأعد تسجيل الدخول.', 'error', 6000);
 }
 
+/* رابط ورقة الخطوط المحلّية بمسار مطلق — نوافذ الطباعة تُفتَح على about:blank
+   فلا يُحلّ فيها مسار نسبي. كانت هذه النوافذ تجلب Google Fonts، فتُطبَع
+   الوثائق الرسمية بخطّ بديل عند انقطاع الاتصال. */
+function printFontsLink() {
+  const href = new URL('../shared/vendor/fonts/fonts.css', location.href).href;
+  return '<link rel="stylesheet" href="' + href + '">';
+}
+
 // ── DOM helpers ───────────────────────────────────────────────────────────────
 const el   = (id) => document.getElementById(id);
 const show = (elem) => { elem.hidden = false; };
@@ -374,7 +383,17 @@ function refreshPendingBar() {
   }
 }
 
-window.addEventListener('online',  () => { updateConnUI(); doSync(); });
+window.addEventListener('online',  () => {
+  updateConnUI();
+  doSync();
+  // القسم المحجوب يُفتَح من نفسه: المستخدم واقف أمامه ينتظر، فإجباره على
+  // النقر مجدداً عقوبة بلا سبب. switchTab يُعيد التحميل الكسول أيضاً.
+  for (const [name, { view }] of Object.entries(TABS)) {
+    if (view && !view.hidden && ONLINE_ONLY_TABS[name] && clearOfflineGate(view)) {
+      switchTab(name, true);
+    }
+  }
+});
 window.addEventListener('offline', updateConnUI);
 
 // ── Sync ──────────────────────────────────────────────────────────────────────
@@ -756,10 +775,7 @@ formLogin.addEventListener('submit', async (e) => {
     await initApp();
   } catch (err) {
     console.error('[NSAMS] login error', err);
-    loginError.textContent =
-      err?.message?.includes('Invalid login')
-        ? 'بيانات الدخول غير صحيحة'
-        : (err?.message ?? 'فشل تسجيل الدخول، يرجى المحاولة مجدداً');
+    loginError.textContent = errMessage(err, 'تعذّر تسجيل الدخول. أعد المحاولة.');
     show(loginError);
   } finally {
     setLoginBusy(false);
@@ -1163,7 +1179,7 @@ async function loadClassSummaries() {
     console.error('[NSAMS] loadClassSummaries', err);
     hide(clasSubLoading);
     classesRefreshIcon.classList.remove('syncing');
-    toast(RW.loadSubsErr, 'error');
+    toast(errMessage(err, RW.loadSubsErr), 'error');
   }
 }
 
@@ -1418,7 +1434,7 @@ detailDate.addEventListener('change', async () => {
     renderDetailMeta(_summaryByClass[_detailClassId], countsFromMap(_detailMap));
   } catch (err) {
     console.error('[NSAMS] detail date change', err);
-    toast('تعذّر تحميل حضور هذا التاريخ', 'error');
+    toast(errMessage(err, 'تعذّر تحميل حضور هذا التاريخ.'), 'error');
   }
 });
 
@@ -1511,7 +1527,7 @@ async function printClassSheet(win) {
   win.document.write(
     '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">' +
     '<title>كشف الحضور — ' + escapeHtml(s.displayName) + '</title>' +
-    '<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">' +
+    printFontsLink() +
     '<style>' +
     "body{font-family:'Cairo',Arial,sans-serif;color:#0f172a;padding:24px;margin:0}" +
     '.head{text-align:center;margin-bottom:6px}' +
@@ -1677,6 +1693,45 @@ const TABS = {
   noc:        { tab: tabNoc,        view: viewNoc },
 };
 
+/* ─── أقسام تحتاج الخادم فعلاً ────────────────────────────────────────────────
+   الحضور والصفوف والطلاب والكادر تعمل من المخبأ. أمّا هذه فتُصدِر وثائق رسمية
+   أو تكتب عبر RPC، ولا يجوز أن تعمل على نسخة قديمة: جلاء مبنيّ على درجات
+   الأسبوع الماضي وثيقة خاطئة، لا ميزة.
+   كانت تُفتَح دون اتصال فتفشل استعلاماتها وتعرض خطأً تقنياً إنجليزياً — الآن
+   تعرض سبباً مفهوماً وتُفتَح تلقائياً عند عودة الشبكة. */
+const ONLINE_ONLY_TABS = {
+  statement: 'البيان الشهري يُبنى من بيانات المدرسة لحظة الإصدار ويُرسَل إلى المديرية.',
+  noc:       'وثيقة «لا مانع» وثيقة رسمية تُسجَّل في النظام لحظة إصدارها.',
+  registry:  'السجلّ العام يُقرأ من قاعدة البيانات مباشرةً ولا يُخزَّن على الجهاز.',
+};
+
+function renderOfflineGate(view, reason) {
+  let gate = view.querySelector(':scope > .offline-gate');
+  if (!gate) {
+    gate = document.createElement('div');
+    gate.className = 'offline-gate';
+    gate.innerHTML =
+      '<svg class="icon icon-2xl"><use href="#ic-wifi-off"></use></svg>' +
+      '<p class="offline-gate-title">هذا القسم يحتاج اتصالاً بالإنترنت</p>' +
+      '<p class="offline-gate-why"></p>' +
+      '<p class="offline-gate-hint">سيُفتَح تلقائياً فور عودة الشبكة. ' +
+      'أمّا الحضور والصفوف والطلاب فتعمل دون اتصال كالمعتاد.</p>';
+    view.prepend(gate);
+  }
+  gate.querySelector('.offline-gate-why').textContent = reason;
+  gate.hidden = false;
+  // إخفاء محتوى القسم نفسه لا استبداله: العودة للاتصال تُظهره كما كان.
+  for (const child of view.children) if (child !== gate) child.hidden = true;
+}
+
+function clearOfflineGate(view) {
+  const gate = view.querySelector(':scope > .offline-gate');
+  if (!gate || gate.hidden) return false;
+  gate.hidden = true;
+  for (const child of view.children) if (child !== gate) child.hidden = false;
+  return true;
+}
+
 function switchTab(tab, fromHistory = false) {
   for (const [name, { tab: t, view: v }] of Object.entries(TABS)) {
     const active = name === tab;
@@ -1699,6 +1754,15 @@ function switchTab(tab, fromHistory = false) {
   closeSectionsSheet();
 
   if (!fromHistory) pushTabHistory(tab);
+
+  // البوّابة قبل التحميل الكسول: تشغيل init* دون اتصال يُطلق استعلامات
+  // محكومة بالفشل ثمّ يعرض أخطاءها — وهو ما كان يحدث.
+  const gateView = TABS[tab]?.view;
+  if (gateView && ONLINE_ONLY_TABS[tab] && !navigator.onLine) {
+    renderOfflineGate(gateView, ONLINE_ONLY_TABS[tab]);
+    return;
+  }
+  if (gateView) clearOfflineGate(gateView);
 
   if (tab === 'absence')         loadAbsenceView();
   if (tab === 'summary-reports') loadSummaryReports();
@@ -2421,7 +2485,7 @@ btnSaveSubject.addEventListener('click', async () => {
     refreshAssignSubjectsPicker();
   } catch (err) {
     console.error('[NSAMS] saveSubject', err);
-    subjError.textContent = err?.message ?? 'تعذّر حفظ المادة';
+    subjError.textContent = errMessage(err, 'تعذّر حفظ المادة');
     show(subjError);
   } finally {
     btnSaveSubject.disabled = false;
@@ -2751,7 +2815,7 @@ async function submitRequest() {
     loadRequests();
   } catch (err) {
     console.error('[Requests] submit', err);
-    msgEl.className = 'msg msg-error'; msgEl.textContent = err?.message ?? 'تعذّر إرسال الطلب'; show(msgEl);
+    msgEl.className = 'msg msg-error'; msgEl.textContent = errMessage(err, 'تعذّر إرسال الطلب'); show(msgEl);
   } finally {
     btn.disabled = false;
   }
@@ -2771,7 +2835,7 @@ async function loadRequests() {
   } catch (err) {
     console.error('[Requests] load', err);
     hide(loadEl);
-    toast('تعذّر تحميل الطلبات', 'error');
+    toast(errMessage(err, 'تعذّر تحميل الطلبات.'), 'error');
   }
 }
 
@@ -2914,7 +2978,7 @@ btnPromoteClass?.addEventListener('click', async () => {
     hide(btnPromoteClass);
   } catch (err) {
     console.error('[NSAMS] promote', err);
-    toast('تعذّر تنفيذ الترفيع: ' + (err.message || String(err)), 'error');
+    toast(errMessage(err, 'تعذّر تنفيذ الترفيع.'), 'error');
   } finally {
     btnPromoteClass.disabled = false;
     btnPromoteClass.textContent = 'تنفيذ الترفيع السنوي للصف';
@@ -3029,7 +3093,7 @@ el('btn-submit-result-sheet')?.addEventListener('click', async () => {
     await _loadResultSheetStatus(classId);
   } catch (err) {
     console.error('[NSAMS] submitResultSheet', err);
-    if (errEl) { errEl.textContent = 'تعذّر إرسال الجلاء — ' + (err?.message || err); show(errEl); }
+    if (errEl) { errEl.textContent = errMessage(err, 'تعذّر إرسال الجلاء.'); show(errEl); }
     if (btn) btn.disabled = false;
   } finally {
     if (spinner) spinner.hidden = true;
@@ -3335,7 +3399,7 @@ async function printReportDoc(win, cards, term = 'year') {
   win.document.write(
     '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">' +
     '<title>الجلاء المدرسي</title>' +
-    '<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">' +
+    printFontsLink() +
     '<style>' +
     // print-color-adjust:exact يمنع تحوّل الرؤوس الخضراء إلى رمادي عند الطباعة
     '*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}' +
@@ -3496,7 +3560,7 @@ async function loadGraceProposals(card) {
           loadReports(_repData.class.id);
         } catch (err) {
           console.error('[NSAMS] decideGraceProposal', err);
-          graceErrorEl.textContent = err?.message || 'تعذّر تنفيذ القرار.';
+          graceErrorEl.textContent = errMessage(err, 'تعذّر تنفيذ القرار.');
           show(graceErrorEl);
           btn.disabled = false;
         }
@@ -3546,7 +3610,7 @@ btnSaveGrace.addEventListener('click', async () => {
     loadReports(_repData.class.id);
   } catch (err) {
     console.error('[NSAMS] setStudentGrace', err);
-    graceErrorEl.textContent = err?.message || 'تعذّر الحفظ.'; show(graceErrorEl);
+    graceErrorEl.textContent = errMessage(err, 'تعذّر الحفظ.'); show(graceErrorEl);
     btnSaveGrace.disabled = false;
   }
 });
@@ -4083,14 +4147,14 @@ async function loadDropoutWarning() {
           toast('تم ترقين قيد الطالب', 'success');
           await loadDropoutWarning();
         } catch (e) {
-          toast('تعذّر ترقين القيد: ' + e.message, 'error');
+          toast(errMessage(e, 'تعذّر ترقين القيد.'), 'error');
           btn.disabled = false;
         }
       });
     });
   } catch (err) {
     loadingEl.hidden = true;
-    if (hintEl) hintEl.textContent = 'تعذّر تحميل بيانات التسرب' + (err?.message ? ' — ' + err.message : '');
+    if (hintEl) hintEl.textContent = 'تعذّر تحميل بيانات التسرب' + (err?.message ? errMessage(err, '.') : '');
     console.warn('[Dropout]', err);
   }
 }
@@ -4143,7 +4207,7 @@ async function loadStudents() {
     renderStudents();
   } catch (err) {
     console.error('[NSAMS] loadStudents', err);
-    toast('تعذّر تحميل الطلاب', 'error');
+    toast(errMessage(err, 'تعذّر تحميل الطلاب.'), 'error');
   } finally {
     hide(stuLoading);
   }
@@ -4480,7 +4544,7 @@ el('import-file').addEventListener('change', async (e) => {
     el('import-btn-label').textContent = `استيراد ${parsed.length} طالب`;
     el('btn-confirm-import').hidden = parsed.length === 0;
   } catch (err) {
-    el('import-error').textContent = err.message || 'تعذّرت قراءة الملف.'; show(el('import-error'));
+    el('import-error').textContent = errMessage(err, 'تعذّرت قراءة الملف.'); show(el('import-error'));
   }
 });
 
@@ -4500,7 +4564,7 @@ el('btn-confirm-import').addEventListener('click', async () => {
     await loadStudents();
   } catch (err) {
     console.error('[NSAMS] bulkImportStudents', err);
-    el('import-error').textContent = err.message || 'تعذّر الاستيراد.'; show(el('import-error'));
+    el('import-error').textContent = errMessage(err, 'تعذّر الاستيراد.'); show(el('import-error'));
   } finally {
     btn.disabled = false; hide(el('import-spinner'));
   }
@@ -4609,7 +4673,7 @@ el('btn-save-counts')?.addEventListener('click', async () => {
     setTimeout(() => hide(msg), 2500);
   } catch (err) {
     console.error('[NSAMS] saveCounts', err);
-    msg.className = 'msg msg-error'; msg.textContent = err?.message ?? 'تعذّر الحفظ.'; show(msg);
+    msg.className = 'msg msg-error'; msg.textContent = errMessage(err, 'تعذّر الحفظ.'); show(msg);
   } finally {
     btn.disabled = false;
   }
@@ -4639,7 +4703,7 @@ async function loadStaffCredentials() {
     renderCredentials();
   } catch (err) {
     console.error('[NSAMS] loadStaffCredentials', err);
-    toast('تعذّر تحميل بيانات تسجيل الكادر', 'error');
+    toast(errMessage(err, 'تعذّر تحميل بيانات تسجيل الكادر.'), 'error');
   } finally {
     hide(el('cred-loading'));
   }
@@ -4713,7 +4777,7 @@ el('btn-confirm-del-teacher')?.addEventListener('click', async () => {
     await loadStaffCredentials();
   } catch (err) {
     console.error('[NSAMS] delete teacher account', err);
-    el('del-teacher-error').textContent = err.message || 'تعذّر الحذف.'; show(el('del-teacher-error'));
+    el('del-teacher-error').textContent = errMessage(err, 'تعذّر الحذف.'); show(el('del-teacher-error'));
   } finally {
     btn.disabled = false; hide(el('del-teacher-spinner'));
   }
@@ -4760,7 +4824,7 @@ el('btn-save-teacher').addEventListener('click', async () => {
     await Promise.all([loadStaffCredentials(), loadRosterCard()]);
   } catch (err) {
     console.error('[NSAMS] save teacher account', err);
-    showTchErr(err.message || 'تعذّر الحفظ.');
+    showTchErr(errMessage(err, 'تعذّر الحفظ.'));
   } finally {
     btn.disabled = false; hide(el('tch-spinner'));
   }
@@ -7122,7 +7186,7 @@ async function loadStatementPeriod() {
     stmtRefreshMeta();
   } catch (err) {
     console.error('[Statement] load', err);
-    if (errEl) { errEl.textContent = 'تعذّر تحميل البيان — ' + (err?.message || err); errEl.hidden = false; }
+    if (errEl) { errEl.textContent = errMessage(err, 'تعذّر تحميل البيان.'); errEl.hidden = false; }
   } finally {
     STMT.loading = false;
   }
@@ -7572,7 +7636,7 @@ async function _stmtSkipSuggestion(staffId, changeType) {
     renderStmtChangesSec(); stmtQueueSave(); stmtRefreshMeta();
   } catch (err) {
     console.error('[Statement] skip suggestion', err);
-    toast('تعذّر حفظ التجاهل — ' + (err?.message || err), 'error');
+    toast(errMessage(err, 'تعذّر حفظ التجاهل.'), 'error');
   }
 }
 
@@ -7620,7 +7684,7 @@ async function saveStmtChange() {
     toast('حُفظ التعديل ✓', 'success');
   } catch (err) {
     console.error('[Statement] save change', err);
-    errEl.textContent = 'تعذّر الحفظ — ' + (err?.message || err);
+    errEl.textContent = errMessage(err, 'تعذّر الحفظ.');
     errEl.hidden = false;
   } finally {
     if (spin) spin.hidden = true;
@@ -7635,7 +7699,7 @@ async function _stmtDeleteChange(id) {
     renderStmtChangesSec(); stmtQueueSave(); stmtRefreshMeta();
   } catch (err) {
     console.error('[Statement] delete change', err);
-    toast('تعذّر الحذف — ' + (err?.message || err), 'error');
+    toast(errMessage(err, 'تعذّر الحذف.'), 'error');
   }
 }
 
@@ -7684,7 +7748,7 @@ function openStmtClassify() {
           openStmtClassify();
         } catch (err) {
           console.error('[Statement] classify', err);
-          el('stmt-classify-error').textContent = 'تعذّر الحفظ — ' + (err?.message || err);
+          el('stmt-classify-error').textContent = errMessage(err, 'تعذّر الحفظ.');
           el('stmt-classify-error').hidden = false;
           sel.disabled = false;
         }
@@ -7726,7 +7790,7 @@ async function submitStatement() {
     stmtRefreshMeta();
   } catch (err) {
     console.error('[Statement] submit', err);
-    if (errEl) { errEl.textContent = 'تعذّر إرسال البيان — ' + (err?.message || err); errEl.hidden = false; }
+    if (errEl) { errEl.textContent = errMessage(err, 'تعذّر إرسال البيان.'); errEl.hidden = false; }
     if (btn) btn.disabled = false;
   } finally {
     if (spinner) spinner.hidden = true;
@@ -8126,7 +8190,7 @@ async function exportStatementExcel() {
     }
   } catch (err) {
     console.error('[Statement] exportExcel', err);
-    if (errEl) { errEl.textContent = 'تعذّر تصدير Excel — ' + (err?.message || err); errEl.hidden = false; }
+    if (errEl) { errEl.textContent = errMessage(err, 'تعذّر تصدير Excel.'); errEl.hidden = false; }
   } finally {
     if (btn) btn.disabled = false;
     if (label) label.textContent = 'تصدير Excel';
@@ -8490,7 +8554,7 @@ async function verifyNocStudent() {
     show(modalNocVerify);
   } catch (err) {
     _nocVerified = null;
-    nocIssueError.textContent = err?.message || 'تعذّر التحقّق من بيانات الطالب.';
+    nocIssueError.textContent = errMessage(err, 'تعذّر التحقّق من بيانات الطالب.');
     show(nocIssueError);
   } finally {
     _nocBusy = false;
@@ -8567,7 +8631,7 @@ async function submitNocDocument() {
     await loadNocDocs();
     printNocDocument(doc);
   } catch (err) {
-    nocIssueError.textContent = err?.message || 'تعذّر إصدار الوثيقة.';
+    nocIssueError.textContent = errMessage(err, 'تعذّر إصدار الوثيقة.');
     show(nocIssueError);
   } finally {
     _nocBusy = false;
@@ -8621,7 +8685,7 @@ async function reviewNoc(action) {
     // قوائم الطلاب تغيّرت فعلياً: أعِد تحميلها في زيارتها القادمة.
     _studentsLoaded = false;
   } catch (err) {
-    nocReviewError.textContent = err?.message || 'تعذّر تنفيذ القرار.';
+    nocReviewError.textContent = errMessage(err, 'تعذّر تنفيذ القرار.');
     show(nocReviewError);
   } finally {
     _nocBusy = false;
@@ -8641,7 +8705,7 @@ async function cancelNoc(doc) {
     toast('سُحبت الوثيقة', 'success');
     await loadNocDocs();
   } catch (err) {
-    toast(err?.message || 'تعذّر سحب الوثيقة', 'error');
+    toast(errMessage(err, 'تعذّر سحب الوثيقة'), 'error');
   }
 }
 
@@ -8741,7 +8805,7 @@ async function printNocDocument(doc) {
 
   win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <title>ورقة لا مانع — ${esc(name)}</title>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+${printFontsLink()}
 <style>
   @page { size: A4; margin: 18mm; }
   body { font-family:'Cairo',Arial,sans-serif; color:#0f172a; margin:0; font-size:13px; line-height:1.9; }

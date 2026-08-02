@@ -1,27 +1,57 @@
 /* NSAMS service worker — offline-first app shell.
  *
  * Strategy:
- *   - Precache the known shells we can list (root + teacher + shared db).
+ *   - Precache the app shell. CRITICAL entries must all succeed or the whole
+ *     install is rejected (see below); OPTIONAL entries are best-effort.
  *   - Navigations: network-first, fall back to cache, then to the root shell.
  *   - Other same-origin GETs: stale-while-revalidate (fast + self-updating).
- *   - Cross-origin (Supabase API, Google Fonts) is left to the network.
+ *   - Cross-origin (Supabase API only) is left to the network. The Supabase
+ *     *library* and the fonts used to be cross-origin too — they are vendored
+ *     under shared/vendor/ now precisely so this SW can cache them.
  *
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'nsams-v123';
+const CACHE = 'nsams-v126';
 
-const PRECACHE = [
+/* ⚠️ التقسيم مقصود ويعالج عطلاً حقيقياً.
+   كان التثبيت كلّه على Promise.allSettled — يبتلع فشل أي ملفّ ويُعلن النجاح —
+   ثمّ يحذف التفعيلُ الكاشات القديمة **بلا شرط**. فإذا ضعف الاتصال أثناء
+   التثبيت فشلت بعض الملفّات صمتاً، ثمّ أُعدِم الكاش القديم السليم، فتبقى تلك
+   الملفّات مفقودة نهائياً حتى زيارة متّصلة تالية — وهذا ما ولّد أيقونة النسر
+   المكسورة عند المستخدم.
+   الآن: CRITICAL عبر addAll (ذرّية) — أي فشل يرفض التثبيت، فيبقى العامل
+   القديم وكاشه السليم يعملان، ولا يصل التفعيل أصلاً ليحذف شيئاً. */
+const CRITICAL = [
   './',
   './index.html',
   './manifest.json',
   './shared/db.js',
-  './shared/csel.js',
   './shared/sw-register.js',
+  // مكتبة Supabase محلّية: بدونها لا تُنفَّذ db.js إطلاقاً فلا تعمل أي لوحة.
+  './shared/vendor/supabase-js.mjs',
+  './shared/vendor/fonts/fonts.css',
+  './icons/eagle-mark.png',
+  './icons/icon-192.png',
+];
+
+const OPTIONAL = [
+  './shared/csel.js',
   './shared/qr.js',
   './shared/import-parser.js',
   // قالب البيان الشهري — التصدير يجلبه بـ fetch، فبدون تخزينه
   // مسبقاً لا يعمل «تصدير Excel» دون اتصال.
   './shared/statement_template.xlsx',
+  './shared/vendor/fonts/cairo-arabic-200-1000.woff2',
+  './shared/vendor/fonts/cairo-latin-200-1000.woff2',
+  './shared/vendor/fonts/dm-sans-latin-400-700.woff2',
+  './shared/vendor/fonts/tajawal-arabic-400.woff2',
+  './shared/vendor/fonts/tajawal-arabic-500.woff2',
+  './shared/vendor/fonts/tajawal-arabic-700.woff2',
+  './shared/vendor/fonts/tajawal-arabic-800.woff2',
+  './shared/vendor/fonts/tajawal-latin-400.woff2',
+  './shared/vendor/fonts/tajawal-latin-500.woff2',
+  './shared/vendor/fonts/tajawal-latin-700.woff2',
+  './shared/vendor/fonts/tajawal-latin-800.woff2',
   './verify.html',
   './verify.js',
   './school/index.html',
@@ -46,21 +76,20 @@ const PRECACHE = [
   './parent/style.css',
   './icons/apple-touch-icon-180.png',
   './icons/favicon-32.png',
-  './icons/icon-192.png',
-  './icons/eagle-mark.png',
 ];
 
 self.addEventListener('install', (event) => {
-  // skipWaiting so the new SW takes control immediately on every deploy,
-  // even if an existing tab is open. Required for security/logic fixes in
-  // db.js to reach all clients without waiting for a full tab cycle.
-  self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE).then((cache) =>
-      // allSettled: a single 404 must not abort the whole precache.
-      Promise.allSettled(PRECACHE.map((url) => cache.add(url)))
-    )
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    // addAll ذرّية: ترمي عند أوّل فشل → يفشل التثبيت → لا تفعيل ولا حذف
+    // للكاش القديم. هذا هو الفرق بين «نسخة ناقصة» و«النسخة السابقة سليمة».
+    await cache.addAll(CRITICAL);
+    // البقيّة أفضل-جهد: 404 لملفّ ثانوي لا يجوز أن يمنع التحديث كلّه.
+    await Promise.allSettled(OPTIONAL.map((url) => cache.add(url)));
+    // skipWaiting **بعد** نجاح التخزين لا قبله: استعجال السيطرة قبل اكتمال
+    // الكاش هو ما يجعل عامل خدمة نصف-جاهز يخدم صفحات ناقصة.
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', (event) => {
@@ -107,7 +136,15 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         })
-        .catch(() => cached);
+        // ⚠️ كان `.catch(() => cached)` وحده: حين لا يوجد مخبّأ ولا شبكة
+        //    يعود undefined، و respondWith(undefined) يرمي TypeError فيظهر
+        //    عطل شبكة خام في الـ console بدل استجابة مفهومة. نُعيد استجابة
+        //    صريحة دائماً.
+        .catch(() => cached || new Response(
+          'غير متوفّر دون اتصال',
+          { status: 504, statusText: 'Offline',
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
+        ));
       return cached || network;
     })
   );

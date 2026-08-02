@@ -19,6 +19,7 @@ const {
   getAcademicYear,
   registerPushSubscription,
   escapeHtml,
+  errMessage,
 } = window.NSAMS_DB;
 
 // ── State ─────────────────────────────────────────────────────────────────
@@ -233,7 +234,7 @@ formPhone.addEventListener('submit', async e => {
     otpCells[0].focus();
     startCountdown(600);
   } catch (err) {
-    phoneErr.textContent = err.message;
+    phoneErr.textContent = errMessage(err, 'تعذّر إرسال رمز التحقّق. تأكّد من الرقم.');
     phoneErr.hidden = false;
   } finally {
     _phoneSubmitting = false;
@@ -257,7 +258,7 @@ btnResend.addEventListener('click', async () => {
     otpCells.forEach(c => c.value = '');
     otpCells[0].focus();
   } catch (err) {
-    otpErr.textContent = err.message;
+    otpErr.textContent = errMessage(err, 'الرمز غير صحيح أو انتهت صلاحيته.');
     otpErr.hidden = false;
     btnResend.hidden = false;
   }
@@ -307,7 +308,7 @@ formOtp.addEventListener('submit', async e => {
     showScreen('app');
     await loadApp();
   } catch (err) {
-    otpErr.textContent = err.message;
+    otpErr.textContent = errMessage(err, 'الرمز غير صحيح أو انتهت صلاحيته.');
     otpErr.hidden = false;
     otpCells.forEach(c => c.value = '');
     otpCells[0].focus();
@@ -340,7 +341,7 @@ async function loadApp() {
     bottomNav.hidden = false;
     await loadActiveStudentData();
   } catch (err) {
-    toast('تعذَّر تحميل البيانات: ' + err.message, 'error');
+    toast(errMessage(err, 'تعذَّر تحميل البيانات.'), 'error');
   } finally {
     mainLoading.hidden = true;
   }
@@ -853,7 +854,7 @@ formExcuse.addEventListener('submit', async e => {
     await loadAttendanceForMonth();
     if (S.activeView === 'more') await loadExcuses();
   } catch (err) {
-    excuseSubmitErr.textContent = err.message;
+    excuseSubmitErr.textContent = errMessage(err, 'تعذّر إرسال العذر.');
     excuseSubmitErr.hidden = false;
   } finally {
     setBusy(spinExcuse, btnExcuseSubmit.querySelector('.btn-label'), false);

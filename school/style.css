@@ -1,5 +1,7 @@
 /* school/style.css */
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
+/* خطوط محلّية: كان @import يجلب Google Fonts، وهو أصل خارجي لا يخزّنه
+   عامل الخدمة — فيفشل دون اتصال ويقفز التخطيط. */
+@import url('../shared/vendor/fonts/fonts.css');
 
 /* ═══ Design Tokens ══════════════════════════════════════════════════════════ */
 :root {
@@ -2381,3 +2383,27 @@ select.csel-native {
 .noc-v-name { font-size: 1rem; font-weight: 800; margin: 0 0 2px; }
 .noc-v-sub  { font-size: .78rem; color: var(--clr-text-3, #94A3B8); margin: 0 0 4px;
               font-variant-numeric: tabular-nums; }
+
+/* ── بوّابة «هذا القسم يحتاج اتصالاً» ──────────────────────────────────────
+   تحلّ محلّ محتوى الأقسام التي تُصدِر وثائق رسمية حين ينقطع الاتصال. كانت
+   تُفتَح فتفشل استعلاماتها وتعرض خطأً تقنياً إنجليزياً بلا سبب مفهوم. */
+.offline-gate {
+  text-align: center;
+  padding: 40px 22px;
+  max-width: 46ch;
+  margin: 22px auto;
+  background: var(--clr-warning-bg, #FEF3C7);
+  border: 1px solid var(--clr-warning-brd, #FCD34D);
+  border-radius: 14px;
+}
+.offline-gate svg { color: var(--clr-warning, #F59E0B); margin-bottom: 12px; }
+.offline-gate-title {
+  font-size: 1rem; font-weight: 800; margin-bottom: 8px;
+  color: var(--clr-text, #0F172A);
+}
+.offline-gate-why  { font-size: .88rem; line-height: 1.8; color: var(--clr-text-2, #475569); }
+.offline-gate-hint {
+  font-size: .78rem; line-height: 1.75; margin-top: 12px;
+  padding-top: 10px; border-top: 1px solid var(--clr-warning-brd, #FCD34D);
+  color: var(--clr-text-2, #475569);
+}
