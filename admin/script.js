@@ -217,7 +217,7 @@ async function checkSession() {
   if (ok) { showDashboard(session.user.email); return; }
   // ⚠️ كان هذا الفرع غائباً: جلسة بدور غير ministry_user تبقى في التخزين إلى
   // الأبد وتُعرض شاشة الدخول فوقها، فيظنّ المستخدم أنه خرج وهو لم يخرج.
-  try { await window.NSAMS_DB.logout(); } catch { /* ignore */ }
+  try { await window.RUQI_DB.logout(); } catch { /* ignore */ }
 }
 
 async function verifyRole(userId) {
@@ -236,7 +236,7 @@ async function doLogin() {
     if (error) throw error;
     const ok = await verifyRole(data.user.id);
     if (!ok) {
-      await window.NSAMS_DB.logout().catch(() => {});
+      await window.RUQI_DB.logout().catch(() => {});
       showError(loginError, 'هذه البوابة مخصصة لمشرف النظام فقط.');
       return;
     }
@@ -257,7 +257,7 @@ function showDashboard(email) {
   // must subscribe here to receive OS push notifications.
   if ('Notification' in window) {
     Notification.requestPermission().then((perm) => {
-      if (perm === 'granted') window.NSAMS_DB.registerPushSubscription().catch(() => {});
+      if (perm === 'granted') window.RUQI_DB.registerPushSubscription().catch(() => {});
     });
   }
 
@@ -282,8 +282,8 @@ modalConfirmLogout.addEventListener('click', e => {
 });
 btnLogoutOk.addEventListener('click', async () => {
   modalConfirmLogout.hidden = true;
-  try { await window.NSAMS_DB.logout(); } catch { /* لا يُوقف الخروج */ }
-  try { await window.NSAMS_DB.purgeTenantCaches(); } catch { /* ignore */ }
+  try { await window.RUQI_DB.logout(); } catch { /* لا يُوقف الخروج */ }
+  try { await window.RUQI_DB.purgeTenantCaches(); } catch { /* ignore */ }
   location.reload();
 });
 
@@ -1549,7 +1549,7 @@ async function openEditCatalog(id) {
   show(scModal);
   scName.focus();
   try {
-    const comps = await window.NSAMS_DB.getCatalogComponents(id);
+    const comps = await window.RUQI_DB.getCatalogComponents(id);
     scCompList.innerHTML = '';
     if (comps.length) comps.forEach(c => scAddCompRow(c.name, c.max_mark));
     else scAddCompRow('', '');
@@ -1587,13 +1587,13 @@ scModalSave.addEventListener('click', async () => {
       if (error) throw error;
       catalogId = data.id;
     }
-    await window.NSAMS_DB.setCatalogComponents(catalogId, scReadComps());
+    await window.RUQI_DB.setCatalogComponents(catalogId, scReadComps());
     closeScModal();
     await loadSubjectCatalog();
     // Push allow_full_marks onto any subjects already created from this
     // catalog entry in schools, before this save — best-effort, a failure
     // here must not make the catalog save itself look like it failed.
-    window.NSAMS_DB.syncFullMarksFromCatalog().catch((e) =>
+    window.RUQI_DB.syncFullMarksFromCatalog().catch((e) =>
       console.warn('[admin] auto syncFullMarksFromCatalog', e));
   } catch (e) {
     const dup = /duplicate|unique|already/i.test(e?.message || '');
@@ -1642,7 +1642,7 @@ async function runSyncFullMarks() {
   syncFullMarksBtn.disabled = true;
   hide(syncFullMarksMsg);
   try {
-    const n = await window.NSAMS_DB.syncFullMarksFromCatalog();
+    const n = await window.RUQI_DB.syncFullMarksFromCatalog();
     syncFullMarksMsg.textContent = n > 0
       ? `تمّت مزامنة ${n} مادة في المدارس.`
       : 'كل المواد متزامنة أصلاً — لا شيء يحتاج تحديثاً.';
@@ -1689,7 +1689,7 @@ async function openPassRules() {
   passRulesList.innerHTML = '';
   show(passRulesModal);
   try {
-    const rules = await window.NSAMS_DB.getGradePassRules();
+    const rules = await window.RUQI_DB.getGradePassRules();
     if (rules.length) {
       rules.forEach(passRuleRow);
     } else {
@@ -1721,7 +1721,7 @@ passRulesSave.addEventListener('click', async () => {
   }
   passRulesSave.disabled = true;
   try {
-    await window.NSAMS_DB.setGradePassRules(rules);
+    await window.RUQI_DB.setGradePassRules(rules);
     closePassRules();
   } catch (e) {
     showError(passRulesError, errMessage(e, 'تعذّر حفظ قواعد النجاح.'));

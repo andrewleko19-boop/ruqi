@@ -1,11 +1,11 @@
-# 📦 NSAMS Release Bundle — كيف تستخدم
+# 📦 Ruqi Release Bundle — كيف تستخدم
 
 ## المحتوى
 
 هذا الـ ZIP يحوي **النسخة الكاملة الجاهزة** من التطبيق:
 
 - ✅ `index.html` — صفحة الهبوط (روابط البوابات الأربع)
-- ✅ `sw.js` — Service Worker (CACHE = nsams-v1)
+- ✅ `sw.js` — Service Worker (CACHE = ruqi-v1)
 - ✅ `manifest.json` — PWA manifest
 - ✅ `shared/db.js` — طبقة البيانات المشتركة (Supabase + الطوابير + التجميعات)
 - ✅ `teacher/` · `school/` · `directorate/` · `ministry/` — البوابات الأربع
@@ -23,15 +23,15 @@
 
 ```bash
 cd ~/Downloads
-unzip nsams-release.zip
+unzip ruqi-release.zip
 ```
 
-سيُنشأ مجلد `nsams/` فيه كل شيء.
+سيُنشأ مجلد `ruqi/` فيه كل شيء.
 
 ### الخطوة 2 — انتقل للمجلد
 
 ```bash
-cd nsams
+cd ruqi
 ```
 
 ### الخطوة 3 — شغّل سكربت الرفع
@@ -57,7 +57,7 @@ setup.bat
 
 سترى رسالة `SUCCESS — pushed to GitHub`. اذهب إلى:
 ```
-https://github.com/andrewleko19-boop/nsams
+https://github.com/andrewleko19-boop/ruqi
 ```
 
 تأكد أنك ترى:

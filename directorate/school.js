@@ -1,10 +1,10 @@
 // directorate/school.js — صفحة ملف المدرسة (drill-down من لوحة المديرية)
 // الجلسة مشتركة مع اللوحة (LAYER يُكتشف من مقطع المسار /directorate/)
-if (!window.NSAMS_DB) {
+if (!window.RUQI_DB) {
   document.body.innerHTML =
     '<p style="padding:24px;color:#e2685a;font-family:sans-serif;direction:rtl">' +
     'خطأ: تعذّر تحميل طبقة البيانات. تأكد من تضمين shared/db.js قبل هذا الملف.</p>';
-  throw new Error('window.NSAMS_DB is not defined');
+  throw new Error('window.RUQI_DB is not defined');
 }
 const {
   logout,
@@ -15,7 +15,7 @@ const {
   getReportsForDirectorate,
   resolveReportPhotos,
   localDateISO,
-} = window.NSAMS_DB;
+} = window.RUQI_DB;
 
 function todayLocalISO() {
   if (typeof localDateISO === 'function') return localDateISO();
@@ -320,7 +320,7 @@ async function countWorkingDays(daysBack) {
   const d = new Date();
   let holidays = new Set();
   try {
-    const rows = await window.NSAMS_DB.getHolidays();
+    const rows = await window.RUQI_DB.getHolidays();
     holidays = new Set(rows.map(h => h.date));
   } catch { /* fallback: no holidays */ }
   for (let i = 1; i <= daysBack; i++) {

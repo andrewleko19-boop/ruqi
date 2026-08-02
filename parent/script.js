@@ -1,7 +1,7 @@
 // ── Guard ─────────────────────────────────────────────────────────────────
-if (!window.NSAMS_DB) {
+if (!window.RUQI_DB) {
   document.body.innerHTML = '<p style="padding:2rem;text-align:center;color:red">تعذَّر تحميل shared/db.js</p>';
-  throw new Error('NSAMS_DB not loaded');
+  throw new Error('RUQI_DB not loaded');
 }
 
 const {
@@ -20,7 +20,7 @@ const {
   registerPushSubscription,
   escapeHtml,
   errMessage,
-} = window.NSAMS_DB;
+} = window.RUQI_DB;
 
 // ── State ─────────────────────────────────────────────────────────────────
 const S = {
@@ -728,7 +728,7 @@ modalConfirmLogout.addEventListener('click', e => {
 btnConfirmLogoutOk.addEventListener('click', async () => {
   modalConfirmLogout.hidden = true;
   try { await parentLogout(); } catch { /* ignore */ }
-  try { await window.NSAMS_DB.purgeTenantCaches(); } catch { /* ignore */ }
+  try { await window.RUQI_DB.purgeTenantCaches(); } catch { /* ignore */ }
   // ⚠️ إعادة تحميل لا showScreen: الأخيرة تقلب hidden فقط، فتبقى أسماء أبناء
   // الأهل السابق ودرجاتهم وتقويم غيابهم واسم مدرستهم **في الـDOM** مخفيّةً،
   // وتعود للظهور لحظة دخول أهلٍ آخرين قبل أن تصل بياناتهم. نفس العلّة أُصلحت

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# apply-fix.sh — re-applies NSAMS's canonical CI configuration
+# apply-fix.sh — re-applies Ruqi's canonical CI configuration
 #
-# Run this from the nsams folder. It rewrites the CI-related files to their
+# Run this from the ruqi folder. It rewrites the CI-related files to their
 # known-good state and re-verifies, which is handy after a messy merge or when
 # bringing an old copy of the repo back in line. It will:
 #   1. Rewrite package.json
@@ -17,13 +17,13 @@ set -e  # exit on first error
 
 echo
 echo "============================================"
-echo " NSAMS — applying canonical CI config"
+echo " Ruqi — applying canonical CI config"
 echo "============================================"
 echo
 
 # Verify we're in the right folder
 if [ ! -f "index.html" ] || [ ! -f "sw.js" ]; then
-  echo "ERROR: Run this from the nsams folder."
+  echo "ERROR: Run this from the ruqi folder."
   exit 1
 fi
 
@@ -33,7 +33,7 @@ mkdir -p .github/workflows tools
 echo "[1/5] Updating package.json..."
 cat > package.json <<'PKG_EOF'
 {
-  "name": "nsams",
+  "name": "ruqi",
   "version": "1.0.0",
   "private": true,
   "description": "Offline-first multi-page PWA for national school-attendance tracking (school / directorate / ministry / teacher). CI tooling lives here; the app itself is the static HTML/JS in each role folder.",

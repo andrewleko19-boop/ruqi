@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# apply-sentry.sh — adds Sentry error tracking to NSAMS
+# apply-sentry.sh — adds Sentry error tracking to Ruqi
 #
-# NSAMS is multi-page (a landing page + four portals), so this inserts the
+# Ruqi is multi-page (a landing page + four portals), so this inserts the
 # Sentry SDK loader + config into the <head> of EVERY page. Each portal gets
 # its own initialization; they all report to the same project.
 #
@@ -13,7 +13,7 @@
 # Before you run it: set your own DSN below (or edit the pages afterwards).
 # The DSN is public-by-design — it only allows POSTING events to your project.
 #
-# NOTE on CSP: the NSAMS pages don't ship a Content-Security-Policy <meta> tag.
+# NOTE on CSP: the Ruqi pages don't ship a Content-Security-Policy <meta> tag.
 # If you add one later, remember to allow:
 #   script-src  https://browser.sentry-cdn.com
 #   connect-src https://*.sentry.io https://*.ingest.de.sentry.io
@@ -29,12 +29,12 @@ PAGES=(index.html school/index.html directorate/index.html ministry/index.html t
 
 echo
 echo "============================================"
-echo " NSAMS — installing Sentry"
+echo " Ruqi — installing Sentry"
 echo "============================================"
 echo
 
 if [ ! -f "index.html" ] || [ ! -f "sw.js" ]; then
-  echo "ERROR: Run this from the nsams folder."
+  echo "ERROR: Run this from the ruqi folder."
   exit 1
 fi
 
@@ -68,7 +68,7 @@ build_snippet() {
   function initSentry() {
     Sentry.init({
       dsn: '${SENTRY_DSN}',
-      release: typeof window.NSAMS_VERSION !== 'undefined' ? window.NSAMS_VERSION : 'unknown',
+      release: typeof window.RUQI_VERSION !== 'undefined' ? window.RUQI_VERSION : 'unknown',
       environment: (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
         ? 'development' : 'production',
       sampleRate: 1.0,
@@ -125,19 +125,19 @@ for page in "${PAGES[@]}"; do
     continue
   fi
 
-  build_snippet > /tmp/nsams-sentry-snippet.html
+  build_snippet > /tmp/ruqi-sentry-snippet.html
 
   # Insert the snippet right before the first </head>.
   awk '
     /<\/head>/ && !inserted {
-      while ((getline line < "/tmp/nsams-sentry-snippet.html") > 0) print line
-      close("/tmp/nsams-sentry-snippet.html")
+      while ((getline line < "/tmp/ruqi-sentry-snippet.html") > 0) print line
+      close("/tmp/ruqi-sentry-snippet.html")
       inserted = 1
     }
     { print }
   ' "$page" > "$page.new" && mv "$page.new" "$page"
 
-  rm -f /tmp/nsams-sentry-snippet.html
+  rm -f /tmp/ruqi-sentry-snippet.html
   echo "    + $page"
 done
 echo "    done."

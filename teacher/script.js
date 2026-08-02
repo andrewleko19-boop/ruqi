@@ -2,11 +2,11 @@
 // Loaded as <script type="module"> after shared/db.js
 
 // ── Guard ─────────────────────────────────────────────────────────────────────
-if (!window.NSAMS_DB) {
+if (!window.RUQI_DB) {
   document.body.innerHTML =
     '<p style="padding:24px;color:#EF4444;font-family:sans-serif;direction:rtl">' +
     'خطأ: تعذّر تحميل طبقة البيانات. تأكد من تضمين shared/db.js قبل هذا الملف.</p>';
-  throw new Error('window.NSAMS_DB is not defined');
+  throw new Error('window.RUQI_DB is not defined');
 }
 
 const {
@@ -35,7 +35,7 @@ const {
   teacherCheckOut,
   getMyStaffAttendanceToday,
   errMessage,
-} = window.NSAMS_DB;
+} = window.RUQI_DB;
 
 // ── App State ─────────────────────────────────────────────────────────────────
 const S = {
@@ -315,7 +315,7 @@ async function doSync() {
     if (result.staffAtt?.synced > 0) await loadDutyCard();
     refreshPendingBar();
   } catch (err) {
-    console.warn('[NSAMS-T] sync error', err);
+    console.warn('[Ruqi-T] sync error', err);
     toast('تعذّرت المزامنة', 'error');
   } finally {
     syncIcon.classList.remove('syncing');
@@ -336,7 +336,7 @@ if ('serviceWorker' in navigator) {
 // a teacher mid-entry must not lose an attendance sheet or a column of marks.
 // G and C are declared later in the file; guard against the temporal dead zone
 // by only touching them once they exist.
-window.nsamsHasUnsavedWork = () => {
+window.ruqiHasUnsavedWork = () => {
   try {
     return Boolean(S.isDirty || G?.dirty || C?.dirty);
   } catch { return false; }
@@ -378,7 +378,7 @@ formLogin.addEventListener('submit', async (e) => {
     S.user = session;
     await initApp();
   } catch (err) {
-    console.error('[NSAMS-T] login error', err);
+    console.error('[Ruqi-T] login error', err);
     loginError.textContent = errMessage(err, 'تعذّر تسجيل الدخول. أعد المحاولة.');
     show(loginError);
   } finally {
@@ -412,7 +412,7 @@ btnLogoutOk.addEventListener('click', async () => {
   // إعادة تحميل كاملة بدل مسح حقول S وحدها: المعلّم التالي على الجهاز نفسه
   // يجب ألّا يرى صفّاً واحداً من طلاب سابقه. نفس علّة بوابة المدرسة —
   // الحالة والقوائم المرسومة تنجو من تبديل الشاشة وحده.
-  try { await window.NSAMS_DB.purgeTenantCaches(); } catch { /* غير قاتل */ }
+  try { await window.RUQI_DB.purgeTenantCaches(); } catch { /* غير قاتل */ }
   location.reload();
 });
 
@@ -445,7 +445,7 @@ async function loadClasses() {
   try {
     S.classes = await getTeacherClasses(S.user.user.id);
   } catch (err) {
-    console.error('[NSAMS-T] getTeacherClasses', err);
+    console.error('[Ruqi-T] getTeacherClasses', err);
     S.classes = [];
     hide(classesLoading);
     show(classesFailed);
@@ -538,7 +538,7 @@ async function loadDutyCard() {
   try {
     S.duty = await getMyStaffAttendanceToday(S.user.user.id);
   } catch (err) {
-    console.error('[NSAMS-T] getMyStaffAttendanceToday', err);
+    console.error('[Ruqi-T] getMyStaffAttendanceToday', err);
     S.duty = null;
   }
   renderDutyCard();
@@ -554,7 +554,7 @@ async function handleCheckIn() {
     toast(res.synced ? 'تم تسجيل دخولك' : 'سُجّل دخولك محلياً وسيُزامن عند الاتصال',
           res.synced ? 'success' : 'warning');
   } catch (err) {
-    console.error('[NSAMS-T] checkIn', err);
+    console.error('[Ruqi-T] checkIn', err);
     toast('تعذّر تسجيل الدخول', 'error');
   } finally {
     S.dutyBusy = false; renderDutyCard();
@@ -571,7 +571,7 @@ async function handleCheckOut() {
     toast(res.synced ? 'تم تسجيل خروجك' : 'سُجّل خروجك محلياً وسيُزامن عند الاتصال',
           res.synced ? 'success' : 'warning');
   } catch (err) {
-    console.error('[NSAMS-T] checkOut', err);
+    console.error('[Ruqi-T] checkOut', err);
     toast('تعذّر تسجيل الخروج', 'error');
   } finally {
     S.dutyBusy = false; renderDutyCard();
@@ -752,7 +752,7 @@ async function openAttendanceView(cls) {
     updateSummaryBar();
 
   } catch (err) {
-    console.error('[NSAMS-T] openAttendanceView', err);
+    console.error('[Ruqi-T] openAttendanceView', err);
     toast(errMessage(err, 'تعذّر تحميل بيانات الصف'), 'error');
     hide(studentsLoading);
     hide(attFooter);
@@ -1078,7 +1078,7 @@ btnConfirmSubmit.addEventListener('click', async () => {
     }
 
   } catch (err) {
-    console.error('[NSAMS-T] submit error', err);
+    console.error('[Ruqi-T] submit error', err);
     toast(errMessage(err, 'حدث خطأ أثناء الإرسال'), 'error');
     closeConfirmModal();
   }
@@ -1155,7 +1155,7 @@ async function openAbsenceLog() {
 
     show(abslogBody);
   } catch (err) {
-    console.error('[NSAMS-T] absence log', err);
+    console.error('[Ruqi-T] absence log', err);
     hide(abslogLoading);
     closeAbsenceLog();
     toast(errMessage(err, 'تعذّر تحميل سجل الغيابات.'), 'error');
@@ -1489,7 +1489,7 @@ async function openGradesView(cls) {
 
     await loadGradesForCurrent();
   } catch (err) {
-    console.error('[NSAMS-T] openGradesView', err);
+    console.error('[Ruqi-T] openGradesView', err);
     hide(gradesLoading);
     hide(gradesFooter);
     gradesFillWrap.hidden = true;
@@ -1519,7 +1519,7 @@ async function loadGradesForCurrent() {
       }
     }
   } catch (err) {
-    console.error('[NSAMS-T] getClassGrades', err);
+    console.error('[Ruqi-T] getClassGrades', err);
     toast(gradesErr(err, 'تعذّر تحميل الدرجات'), 'error');
     for (const stu of G.students) {
       G.marks[stu.id] = {};
@@ -1721,7 +1721,7 @@ btnGraceSend.addEventListener('click', async () => {
     closeProposeGrace();
     toast('أُرسل الاقتراح لمدير المدرسة', 'success');
   } catch (err) {
-    console.error('[NSAMS] proposeGrace', err);
+    console.error('[Ruqi] proposeGrace', err);
     setGraceBusy(false);
     graceError(errMessage(err, 'تعذّر إرسال الاقتراح'));
   }
@@ -1837,7 +1837,7 @@ btnSaveGrades.addEventListener('click', async () => {
       refreshPendingBar();
     }
   } catch (err) {
-    console.error('[NSAMS-T] saveStudentGrades', err);
+    console.error('[Ruqi-T] saveStudentGrades', err);
     toast(gradesErr(err, 'تعذّر حفظ الدرجات'), 'error');
   } finally {
     btnSaveGrades.disabled   = false;
@@ -1876,7 +1876,7 @@ async function openConductView(cls) {
     });
     show(conductList);
   } catch (err) {
-    console.error('[NSAMS-T] openConductView', err);
+    console.error('[Ruqi-T] openConductView', err);
     hide(conductLoading); hide(conductFooter);
     toast(errMessage(err, 'تعذّر تحميل قائمة الطلاب.'), 'error');
   }
@@ -1936,7 +1936,7 @@ btnSaveConduct.addEventListener('click', async () => {
     C.dirty = false;
     toast(res.synced ? 'تم حفظ السلوك' : 'حُفظ محلياً وسيُرسل عند الاتصال', 'success');
   } catch (err) {
-    console.error('[NSAMS-T] saveStudentConduct', err);
+    console.error('[Ruqi-T] saveStudentConduct', err);
     toast('تعذّر حفظ السلوك', 'error');
   } finally {
     btnSaveConduct.disabled = false;
@@ -1968,7 +1968,7 @@ async function loadNotifListT() {
   const notifList = $('notif-list');
   if (!notifList) return;
   try {
-    const items = await window.NSAMS_DB.getNotifications(30);
+    const items = await window.RUQI_DB.getNotifications(30);
     if (!items.length) { notifList.innerHTML = '<li class="notif-empty">لا توجد إشعارات</li>'; return; }
     notifList.innerHTML = items.map(n => {
       const diff = Date.now() - new Date(n.created_at).getTime();
@@ -1982,7 +1982,7 @@ async function loadNotifListT() {
         <div class="notif-item-time">${ago}</div>
       </li>`;
     }).join('');
-  } catch (e) { console.warn('[NSAMS-T] loadNotifList', e); }
+  } catch (e) { console.warn('[Ruqi-T] loadNotifList', e); }
 }
 
 function initNotificationsTeacher(userId) {
@@ -1993,15 +1993,15 @@ function initNotificationsTeacher(userId) {
   if ($('btn-notif-close'))  $('btn-notif-close').addEventListener('click',  () => { if (modalNotif) modalNotif.hidden = true; });
   if (modalNotif) modalNotif.addEventListener('click', (e) => { if (e.target === modalNotif) modalNotif.hidden = true; });
   if ($('btn-notif-read-all')) $('btn-notif-read-all').addEventListener('click', async () => {
-    await window.NSAMS_DB.markAllNotificationsRead().catch(() => {});
+    await window.RUQI_DB.markAllNotificationsRead().catch(() => {});
     updateNotifBadgeT(0);
     loadNotifListT();
   });
 
-  window.NSAMS_DB.getUnreadNotificationsCount().then(updateNotifBadgeT).catch(() => {});
+  window.RUQI_DB.getUnreadNotificationsCount().then(updateNotifBadgeT).catch(() => {});
 
   if (_unsubNotifT) _unsubNotifT();
-  _unsubNotifT = window.NSAMS_DB.subscribeNotifications(userId, (notif) => {
+  _unsubNotifT = window.RUQI_DB.subscribeNotifications(userId, (notif) => {
     updateNotifBadgeT(_unreadCountT + 1);
     toast(notif.title, 'info', 5000);
     if (Notification.permission === 'granted') {
@@ -2011,7 +2011,7 @@ function initNotificationsTeacher(userId) {
   });
 
   Notification.requestPermission().then((perm) => {
-    if (perm === 'granted') window.NSAMS_DB.registerPushSubscription().catch(() => {});
+    if (perm === 'granted') window.RUQI_DB.registerPushSubscription().catch(() => {});
   });
 }
 
@@ -2028,7 +2028,7 @@ async function bootstrap() {
     // أخرى يبقى حيّاً على الجهاز بعد أن ظنّ صاحبه أنه غادر.
     if (session) { try { await logout(); } catch { /* ignore */ } }
   } catch (err) {
-    console.warn('[NSAMS-T] bootstrap session check failed', err);
+    console.warn('[Ruqi-T] bootstrap session check failed', err);
   }
   showScreen('login');
 }

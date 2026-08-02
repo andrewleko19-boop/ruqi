@@ -8,10 +8,10 @@
 // get the OLD app for days. Bumping `CACHE` on every deploy is what purges old
 // caches on activate.
 //
-// Unlike a single-file app, NSAMS has no single APP_VERSION constant to keep in
-// lockstep — the only version token is `const CACHE = 'nsams-vN'` in sw.js. So
+// Unlike a single-file app, Ruqi has no single APP_VERSION constant to keep in
+// lockstep — the only version token is `const CACHE = 'ruqi-vN'` in sw.js. So
 // this check just enforces that the token exists and follows the expected
-// `nsams-v<number>` shape (a malformed key is the actual failure mode we hit).
+// `ruqi-v<number>` shape (a malformed key is the actual failure mode we hit).
 //
 // Exit codes: 0 = valid, 1 = missing or malformed cache version
 
@@ -32,18 +32,18 @@ function readText(path) {
 
 const swJs = readText('sw.js');
 
-// Parse: const CACHE = 'nsams-v1';   (single OR double quotes, any whitespace)
+// Parse: const CACHE = 'ruqi-v1';   (single OR double quotes, any whitespace)
 const match = swJs.match(/const\s+CACHE\s*=\s*['"]([^'"]+)['"]/);
 if (!match) {
   console.error(`${RED}✗ CACHE constant not found in sw.js${RESET}`);
-  console.error(`  Expected a line like: const CACHE = 'nsams-v1';`);
+  console.error(`  Expected a line like: const CACHE = 'ruqi-v1';`);
   process.exit(1);
 }
 
 const cache = match[1];
-if (!/^nsams-v\d+$/.test(cache)) {
+if (!/^ruqi-v\d+$/.test(cache)) {
   console.error(`${RED}✗ CACHE = '${cache}' does not match the expected pattern${RESET}`);
-  console.error(`  Use 'nsams-v<number>' (e.g. nsams-v2) and bump it on every deploy,`);
+  console.error(`  Use 'ruqi-v<number>' (e.g. ruqi-v2) and bump it on every deploy,`);
   console.error(`  otherwise the Service Worker won't invalidate its cache and`);
   console.error(`  returning users will see the old app indefinitely.`);
   process.exit(1);

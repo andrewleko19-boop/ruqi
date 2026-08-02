@@ -1,5 +1,5 @@
 // directorate/script.js
-// ── DB من window.NSAMS_DB (يُحمَّل عبر shared/db.js قبل هذا الملف) ──────────
+// ── DB من window.RUQI_DB (يُحمَّل عبر shared/db.js قبل هذا الملف) ──────────
 import { CustomSelect }                      from '../shared/csel.js';
 import { supabase as _sb, supabaseUrl as _sbUrl } from '../shared/db.js';
 const {
@@ -27,7 +27,7 @@ const {
   directorateBulkImportStaff,
   localDateISO,
   errMessage,
-} = window.NSAMS_DB;
+} = window.RUQI_DB;
 
 // Local calendar date (not UTC) with a safe fallback.
 function todayLocalISO() {
@@ -287,8 +287,8 @@ function renderMap(schools, statusMap) {
         .addTo(map);
     }
     // Metadata the legend/search filter reads to dim non-matching pins.
-    markersLayer[school.id]._nsamsStatus = color;
-    markersLayer[school.id]._nsamsName   = school.name || '';
+    markersLayer[school.id]._ruqiStatus = color;
+    markersLayer[school.id]._ruqiName   = school.name || '';
   }
 
   const countEl = document.getElementById('map-school-count');
@@ -323,8 +323,8 @@ function applyMapFilter() {
   );
 
   for (const marker of Object.values(markersLayer)) {
-    const statusOk = onStatuses.size === 0 || onStatuses.has(marker._nsamsStatus);
-    const nameOk   = !q || (marker._nsamsName || '').includes(q);
+    const statusOk = onStatuses.size === 0 || onStatuses.has(marker._ruqiStatus);
+    const nameOk   = !q || (marker._ruqiName || '').includes(q);
     const show     = statusOk && nameOk;
     marker.setOpacity(show ? 1 : 0.18);
     const el = marker.getElement();
@@ -468,7 +468,7 @@ async function countWorkingDays(daysBack) {
   const d = new Date();
   let holidays = new Set();
   try {
-    const rows = await NSAMS_DB.getHolidays();
+    const rows = await RUQI_DB.getHolidays();
     holidays = new Set(rows.map(h => h.date));
   } catch { /* fallback: no holidays */ }
   for (let i = 1; i <= daysBack; i++) {
@@ -1079,7 +1079,7 @@ function exportReportsCSV() {
     r.media_urls?.length ?? 0,
   ]);
 
-  downloadCSV(`nsams_reports_${todayLocalISO()}.csv`, [headers, ...dataRows]);
+  downloadCSV(`ruqi_reports_${todayLocalISO()}.csv`, [headers, ...dataRows]);
 }
 
 async function exportComplianceCSV() {
@@ -1095,7 +1095,7 @@ async function exportComplianceCSV() {
     r.monthPct,
   ]);
 
-  downloadCSV(`nsams_compliance_${todayLocalISO()}.csv`, [headers, ...dataRows]);
+  downloadCSV(`ruqi_compliance_${todayLocalISO()}.csv`, [headers, ...dataRows]);
 }
 
 function setupCSVExports() {
@@ -1291,7 +1291,7 @@ async function loadDropoutSummary() {
   if (emptyEl)   emptyEl.hidden   = true;
 
   try {
-    const rows = await NSAMS_DB.getDirectorateDropoutSummary();
+    const rows = await RUQI_DB.getDirectorateDropoutSummary();
     loadingEl.hidden = true;
     if (!rows || rows.length === 0) {
       if (emptyEl) emptyEl.hidden = false;
@@ -1341,7 +1341,7 @@ async function loadPeriodicReports() {
   tbody.innerHTML = '';
 
   try {
-    const reports = await NSAMS_DB.getPeriodicReports('directorate');
+    const reports = await RUQI_DB.getPeriodicReports('directorate');
     loadingEl?.classList.add('hidden');
     if (!reports.length) { emptyEl?.removeAttribute('hidden'); return; }
 
@@ -1370,7 +1370,7 @@ async function loadPeriodicReports() {
     });
   } catch (err) {
     loadingEl?.classList.add('hidden');
-    console.error('[NSAMS] loadPeriodicReports', err);
+    console.error('[Ruqi] loadPeriodicReports', err);
     if (emptyEl) { emptyEl.textContent = 'تعذّر تحميل التقارير الشهرية.'; emptyEl.removeAttribute('hidden'); }
   }
 }
@@ -1565,7 +1565,7 @@ async function loadDirNotifList() {
   const list = document.getElementById('notif-list');
   if (!list) return;
   try {
-    const items = await window.NSAMS_DB.getNotifications(30);
+    const items = await window.RUQI_DB.getNotifications(30);
     if (!items.length) {
       list.innerHTML = '<li style="padding:32px 16px;text-align:center;color:var(--text-muted);font-size:.9rem">لا توجد إشعارات</li>';
       return;
@@ -1584,7 +1584,7 @@ async function loadDirNotifList() {
         <div style="font-size:.75rem;color:var(--text-muted);margin-top:4px">${ago}</div>
       </li>`;
     }).join('');
-  } catch (e) { console.warn('[NSAMS-D] loadDirNotifList', e); }
+  } catch (e) { console.warn('[Ruqi-D] loadDirNotifList', e); }
 }
 
 function initNotificationsDir(userId) {
@@ -1599,15 +1599,15 @@ function initNotificationsDir(userId) {
   });
   modal?.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
   document.getElementById('btn-notif-read-all')?.addEventListener('click', async () => {
-    await window.NSAMS_DB.markAllNotificationsRead().catch(() => {});
+    await window.RUQI_DB.markAllNotificationsRead().catch(() => {});
     updateDirNotifBadge(0);
     loadDirNotifList();
   });
 
-  window.NSAMS_DB.getUnreadNotificationsCount().then(updateDirNotifBadge).catch(() => {});
+  window.RUQI_DB.getUnreadNotificationsCount().then(updateDirNotifBadge).catch(() => {});
 
   if (_dirUnsubNotif) _dirUnsubNotif();
-  _dirUnsubNotif = window.NSAMS_DB.subscribeNotifications(userId, (notif) => {
+  _dirUnsubNotif = window.RUQI_DB.subscribeNotifications(userId, (notif) => {
     updateDirNotifBadge(_dirUnreadCount + 1);
     showToast(notif.title, notif.body ?? '', 'info');
     // OS notifications come from web push (the SW push handler). The page-context
@@ -1618,7 +1618,7 @@ function initNotificationsDir(userId) {
   });
 
   Notification.requestPermission().then((perm) => {
-    if (perm === 'granted') window.NSAMS_DB.registerPushSubscription().catch(() => {});
+    if (perm === 'granted') window.RUQI_DB.registerPushSubscription().catch(() => {});
   });
 }
 
@@ -3027,7 +3027,7 @@ function setupDirPrincipals() {
 // الإرسال حاجة عملية (الموظّف يُصحّح ملفّه لا يكتشف الخطأ بعد الكتابة)،
 // والخادم يبقى المرجع الأخير.
 
-const IMP = window.NSAMS_ImportParser;
+const IMP = window.RUQI_ImportParser;
 
 const STUDENT_IMPORT_SCHEMA = [
   { key: 'firstName',  label: 'الاسم الأول',    required: true,

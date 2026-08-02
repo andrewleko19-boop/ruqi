@@ -1,6 +1,6 @@
-# NSAMS — Architecture Deep Dive
+# Ruqi — Architecture Deep Dive
 
-> A technical internals guide to NSAMS: the multi-portal layout, the shared data-access layer, the offline-first sync model for attendance and field reports, how each tier aggregates the same underlying data, the security model, and the trade-offs worth defending. Written for any engineer — or future me — who needs to understand *why* things are built the way they are.
+> A technical internals guide to Ruqi: the multi-portal layout, the shared data-access layer, the offline-first sync model for attendance and field reports, how each tier aggregates the same underlying data, the security model, and the trade-offs worth defending. Written for any engineer — or future me — who needs to understand *why* things are built the way they are.
 
 ---
 
@@ -24,7 +24,7 @@
 
 ## 1. Project Overview
 
-**NSAMS** (النظام الوطني لإدارة المدارس) is a Progressive Web App built to track daily school attendance — students and teachers — and to escalate field reports across the four tiers of a national education system: **teacher → school → directorate → ministry**.
+**Ruqi** (النظام الوطني لإدارة المدارس) is a Progressive Web App built to track daily school attendance — students and teachers — and to escalate field reports across the four tiers of a national education system: **teacher → school → directorate → ministry**.
 
 | Property | Value |
 |---|---|
@@ -45,9 +45,9 @@ The four audiences have almost no UI overlap — a teacher submitting attendance
 ### Project Structure
 
 ```
-nsams/
+ruqi/
 ├── index.html          # Launcher → links to the four portals
-├── sw.js               # Service Worker: network-first nav, SWR assets (nsams-v1)
+├── sw.js               # Service Worker: network-first nav, SWR assets (ruqi-v1)
 ├── manifest.json       # PWA manifest (theme, icons, display: standalone)
 ├── shared/
 │   └── db.js           # The data layer — Supabase, auth, queues, aggregations
@@ -60,7 +60,7 @@ nsams/
     └── ARCHITECTURE.md # This document
 ```
 
-> `nsams_database_schema.sql` — tables, RLS policies, RPC bodies, and storage-bucket policies — is maintained outside this repository.
+> `ruqi_database_schema.sql` — tables, RLS policies, RPC bodies, and storage-bucket policies — is maintained outside this repository.
 
 ---
 
@@ -225,14 +225,14 @@ A single physical device (a shared school computer, say) may need to be logged i
 
 ## 9. The Service Worker
 
-`sw.js` keys its cache on `const CACHE = 'nsams-v1'` and:
+`sw.js` keys its cache on `const CACHE = 'ruqi-v1'` and:
 
 - **Precaches** the known shells it can list: the root, the teacher portal (the one most likely used in the field, offline), and `shared/db.js`.
 - **Navigations:** network-first → fall back to cache → fall back to the root shell. Fresh data when online; still usable when not.
 - **Other same-origin GETs:** stale-while-revalidate (fast and self-updating).
 - **Cross-origin** (Supabase API, Google Fonts, map tiles) is left to the network.
 
-There is intentionally **no `skipWaiting()`** — a new SW activates only once old tabs close, which avoids serving a half-updated mix of old HTML and new JS mid-session. Bump `CACHE` on every deploy; `tools/check-versions.mjs` enforces the `nsams-v<number>` shape so a malformed key can't ship.
+There is intentionally **no `skipWaiting()`** — a new SW activates only once old tabs close, which avoids serving a half-updated mix of old HTML and new JS mid-session. Bump `CACHE` on every deploy; `tools/check-versions.mjs` enforces the `ruqi-v<number>` shape so a malformed key can't ship.
 
 ---
 
@@ -281,7 +281,7 @@ Honest v1 estimates, not load-tested:
 
 | Resource | URL |
 |---|---|
-| Repository | https://github.com/andrewleko19-boop/nsams |
+| Repository | https://github.com/andrewleko19-boop/ruqi |
 | Supabase Docs | https://supabase.com/docs |
 | PWA Checklist | https://web.dev/pwa-checklist/ |
 | RLS Guide | https://supabase.com/docs/guides/database/postgres/row-level-security |

@@ -1,7 +1,7 @@
 // ⚠️ محلّية عمداً لا من CDN. كان الاستيراد من esm.sh يجلب ستّة ملفّات من
 //    خادم خارجي، وعامل الخدمة يتخطّى كل ما هو cross-origin — فدون اتصال
 //    يفشل الاستيراد ولا تُنفَّذ هذه الوحدة إطلاقاً: لا createClient ولا
-//    NSAMS_DB، فتُفتح القشرة من الكاش وخلفها لا شيء. الحزمة تُبنى بـ
+//    RUQI_DB، فتُفتح القشرة من الكاش وخلفها لا شيء. الحزمة تُبنى بـ
 //    tools/build-vendor.mjs وتُخزَّن مع القشرة في sw.js.
 import { createClient } from "./vendor/supabase-js.mjs";
 
@@ -29,7 +29,7 @@ export { errMessage, isNetworkError };
 /* تسجيل عامل الخدمة انتقل إلى shared/sw-register.js كي تستعمله الصفحة
    الرئيسية أيضاً — كانت بلا أي <script> فلا يُثبَّت عندها شيء ولا تعمل دون
    اتصال. الحقن هنا يُبقي البوّابات تعمل كما هي بلا تعديل ستّة ملفّات HTML. */
-if ('serviceWorker' in navigator && !window.__nsamsSwRegistered) {
+if ('serviceWorker' in navigator && !window.__ruqiSwRegistered) {
   const _reg = document.createElement('script');
   _reg.src = new URL('./sw-register.js', import.meta.url).href;
   _reg.defer = true;
@@ -376,7 +376,7 @@ async function materialisePhotos(mediaUrls) {
   for (const u of mediaUrls) {
     if (typeof u === 'string' && u.startsWith('data:')) {
       try { out.push(await uploadDataUri(u)); }
-      catch (e) { console.warn('[NSAMS] photo upload failed — keeping inline data URI', e); out.push(u); }
+      catch (e) { console.warn('[Ruqi] photo upload failed — keeping inline data URI', e); out.push(u); }
     } else {
       out.push(u);
     }
@@ -398,7 +398,7 @@ async function resolveReportPhotos(mediaUrls) {
       const { data, error } = await db.storage
         .from(REPORT_BUCKET)
         .createSignedUrl(u, SIGNED_URL_TTL);
-      if (error) { console.warn('[NSAMS] signed URL failed for', u, error); }
+      if (error) { console.warn('[Ruqi] signed URL failed for', u, error); }
       else out.push(data.signedUrl);
     }
   }
@@ -1136,7 +1136,7 @@ async function getTeacherClasses(teacherId) {
     data = res.data;
   } catch (err) {
     const hit = getCachedTeacherClasses(teacherId, academicYear);
-    if (hit) { console.warn('[NSAMS] صفوف المعلّم من المخبأ', err); return hit; }
+    if (hit) { console.warn('[Ruqi] صفوف المعلّم من المخبأ', err); return hit; }
     throw new NoCachedClassesError(err);
   }
 
@@ -1289,7 +1289,7 @@ async function writeAudit({ schoolId, entity, entityId, action, changes = null, 
     if (error) throw error;
     return true;
   } catch (e) {
-    console.warn('[NSAMS] writeAudit failed (non-fatal)', e);
+    console.warn('[Ruqi] writeAudit failed (non-fatal)', e);
     return false;
   }
 }
@@ -1346,7 +1346,7 @@ async function enqueueOrSyncStudent(item) {
     return { success: true, id: item.id, synced: true };
   } catch (err) {
     await enqueueOutbox({ ...item, table: 'students' });
-    console.warn('[NSAMS] saveStudent: falling back to queue', err);
+    console.warn('[Ruqi] saveStudent: falling back to queue', err);
     return { success: true, id: item.id, synced: false };
   }
 }
@@ -1732,7 +1732,7 @@ async function saveStudentAttendance({ records, classId, schoolId, date, teacher
     return { success: true, localId, synced: true };
   } catch (err) {
     await enqueueOutbox({ ...payload, table: 'daily_student_attendance' });
-    console.warn('[NSAMS] saveStudentAttendance: falling back to queue', err);
+    console.warn('[Ruqi] saveStudentAttendance: falling back to queue', err);
     return { success: true, localId, synced: false };
   }
 }
@@ -1898,7 +1898,7 @@ async function queueOrSyncStaff(payload) {
     return { success: true, localId, synced: true };
   } catch (err) {
     await enqueueOutbox({ ...enriched, table: 'staff_attendance' });
-    console.warn('[NSAMS] staff attendance: falling back to queue', err);
+    console.warn('[Ruqi] staff attendance: falling back to queue', err);
     return { success: true, localId, synced: false };
   }
 }
@@ -2571,7 +2571,7 @@ async function saveStudentGrades({ records, classId, schoolId, subjectId, semest
     return { success: true, localId, synced: true };
   } catch (err) {
     await enqueueOutbox({ ...payload, table: 'student_grades' });
-    console.warn('[NSAMS] saveStudentGrades: falling back to queue', err);
+    console.warn('[Ruqi] saveStudentGrades: falling back to queue', err);
     return { success: true, localId, synced: false };
   }
 }
@@ -2636,7 +2636,7 @@ async function saveStudentConduct({ records, classId, schoolId, teacherId }) {
     return { success: true, localId, synced: true };
   } catch (err) {
     await enqueueOutbox({ ...payload, table: 'student_conduct' });
-    console.warn('[NSAMS] saveStudentConduct: falling back to queue', err);
+    console.warn('[Ruqi] saveStudentConduct: falling back to queue', err);
     return { success: true, localId, synced: false };
   }
 }
@@ -3193,9 +3193,9 @@ async function registerPushSubscription() {
     const { error } = await db.functions.invoke('save-push-subscription', {
       body: { subscription: sub.toJSON() },
     });
-    if (error) console.warn('[NSAMS] push subscription save failed', error);
+    if (error) console.warn('[Ruqi] push subscription save failed', error);
   } catch (e) {
-    console.warn('[NSAMS] registerPushSubscription failed', e);
+    console.warn('[Ruqi] registerPushSubscription failed', e);
   }
 }
 
@@ -3575,7 +3575,7 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-window.NSAMS_DB = {
+window.RUQI_DB = {
   // Auth
   login,
   logout,

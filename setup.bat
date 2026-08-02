@@ -1,6 +1,6 @@
 @echo off
 REM ============================================================
-REM  NSAMS — One-click GitHub setup
+REM  Ruqi — One-click GitHub setup
 REM ============================================================
 REM  This script:
 REM    1. Initializes git in the current folder
@@ -17,18 +17,18 @@ REM ============================================================
 
 echo.
 echo ============================================
-echo  NSAMS — pushing to GitHub
+echo  Ruqi — pushing to GitHub
 echo ============================================
 echo.
 
 REM Verify we're in the right folder
 if not exist "index.html" (
-  echo ERROR: index.html not found. Make sure you ran this from the nsams folder.
+  echo ERROR: index.html not found. Make sure you ran this from the ruqi folder.
   pause
   exit /b 1
 )
 if not exist "sw.js" (
-  echo ERROR: sw.js not found. Make sure you ran this from the nsams folder.
+  echo ERROR: sw.js not found. Make sure you ran this from the ruqi folder.
   pause
   exit /b 1
 )
@@ -53,7 +53,7 @@ if not exist ".git" (
 REM Set/update remote
 echo Setting GitHub remote...
 git remote remove origin 2>nul
-git remote add origin https://github.com/andrewleko19-boop/nsams.git
+git remote add origin https://github.com/andrewleko19-boop/ruqi.git
 echo.
 
 REM Stage and commit
@@ -96,7 +96,7 @@ if errorlevel 1 (
   echo       Use a Personal Access Token as the password:
   echo       https://github.com/settings/tokens
   echo    3. Repo doesn't exist: check it's at
-  echo       https://github.com/andrewleko19-boop/nsams
+  echo       https://github.com/andrewleko19-boop/ruqi
   echo.
   pause
   exit /b 1
@@ -108,7 +108,7 @@ echo  SUCCESS — pushed to GitHub.
 echo ============================================
 echo.
 echo  Next steps:
-echo    1. Open https://github.com/andrewleko19-boop/nsams
+echo    1. Open https://github.com/andrewleko19-boop/ruqi
 echo    2. Verify .github/workflows/ folder is visible
 echo    3. Click "Actions" tab — first CI run starts automatically
 echo    4. Settings - Pages - Source: GitHub Actions

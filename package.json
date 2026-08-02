@@ -1,5 +1,5 @@
 {
-  "name": "nsams",
+  "name": "ruqi",
   "version": "1.0.0",
   "private": true,
   "description": "Offline-first multi-page PWA for national school-attendance tracking (school / directorate / ministry / teacher). CI tooling lives here; the app itself is the static HTML/JS in each role folder.",

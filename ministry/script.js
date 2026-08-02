@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════════
-//  NSAMS — لوحة تحكم الوزارة (script.js)
+//  Ruqi — لوحة تحكم الوزارة (script.js)
 //  مصدر الحضور: daily_student_attendance (سجل فردي لكل طالب) — المصدر الحقيقي.
 //
 //  المقاييس:
@@ -155,7 +155,7 @@ async function checkSession() {
     const ok = await verifyRole(session.user.id);
     if (ok) showDashboard(session.user.email, session.user.id);
     // logout المشترك: يحذف الجلسة محلّياً أوّلاً فلا يبقى دور خاطئ عند فشل الشبكة.
-    else await window.NSAMS_DB.logout().catch(() => {});
+    else await window.RUQI_DB.logout().catch(() => {});
   }
 }
 
@@ -189,7 +189,7 @@ loginBtn.addEventListener('click', async () => {
   const ok = await verifyRole(data.user.id);
   if (!ok) {
     showError('الوصول مرفوض. هذه البوابة لمستخدمي الوزارة فقط.');
-    await window.NSAMS_DB.logout().catch(() => {});
+    await window.RUQI_DB.logout().catch(() => {});
     loginBtn.disabled    = false;
     loginBtn.textContent = 'تسجيل الدخول';
     return;
@@ -214,8 +214,8 @@ btnLogoutOk.addEventListener('click', async () => {
   setNotifBadge(0);
   // logout المشترك يحذف الجلسة محلّياً أوّلاً فلا يفشل مفتوحاً دون اتصال،
   // بخلاف signOut() المباشر الذي كان هنا.
-  try { await window.NSAMS_DB.logout(); } catch { /* لا يُوقف الخروج */ }
-  try { await window.NSAMS_DB.purgeTenantCaches(); } catch { /* ignore */ }
+  try { await window.RUQI_DB.logout(); } catch { /* لا يُوقف الخروج */ }
+  try { await window.RUQI_DB.purgeTenantCaches(); } catch { /* ignore */ }
   // ⚠️ إعادة تحميل لا إخفاء: تفريغ المتغيّرات لا يمسح الجداول المرسومة ولا
   // بريد المستخدم في الترويسة — كانت تبقى في الـDOM بعد الخروج.
   location.reload();
@@ -235,7 +235,7 @@ function showDashboard(email, userId) {
   // subscribe here or they never receive OS push notifications.
   if ('Notification' in window) {
     Notification.requestPermission().then((perm) => {
-      if (perm === 'granted') window.NSAMS_DB.registerPushSubscription().catch(() => {});
+      if (perm === 'granted') window.RUQI_DB.registerPushSubscription().catch(() => {});
     });
   }
 }
@@ -365,7 +365,7 @@ async function loadAllData() {
     setLastUpdated();
 
   } catch (err) {
-    console.error('NSAMS Ministry load error:', err);
+    console.error('Ruqi Ministry load error:', err);
     tableLoading.classList.add('hidden');
     tableEmpty.textContent = errMessage(err, 'خطأ في تحميل البيانات.');
     tableEmpty.classList.remove('hidden');
@@ -861,7 +861,7 @@ exportBtn.addEventListener('click', () => {
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = `nsams_national_report_${dateStr}.csv`;
+  a.download = `ruqi_national_report_${dateStr}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 });
@@ -930,7 +930,7 @@ async function loadNationalResultSheets() {
   tbody.innerHTML = '';
 
   try {
-    const sheets = await window.NSAMS_DB.getMinistryResultSheets();
+    const sheets = await window.RUQI_DB.getMinistryResultSheets();
     loadingEl?.classList.add('hidden');
     renderNationalAcademic(sheets);        // same fetch, no extra query
     if (!sheets.length) { emptyEl?.classList.remove('hidden'); return; }
@@ -1286,7 +1286,7 @@ async function loadNotifList() {
   const list = document.getElementById('notif-list');
   if (!list) return;
   try {
-    const items = await window.NSAMS_DB.getNotifications(30);
+    const items = await window.RUQI_DB.getNotifications(30);
     if (!items.length) {
       list.innerHTML = '<li class="notif-empty">لا توجد إشعارات</li>';
       return;
@@ -1299,7 +1299,7 @@ async function loadNotifList() {
         <div class="notif-item-time">${esc(timeAgoAr(n.created_at))}</div>
       </li>`).join('');
   } catch (err) {
-    console.warn('[NSAMS-M] loadNotifList', err);
+    console.warn('[Ruqi-M] loadNotifList', err);
     list.innerHTML = '<li class="notif-empty">تعذّر تحميل الإشعارات</li>';
   }
 }
@@ -1315,15 +1315,15 @@ function initNotifications(userId) {
   });
   modal?.addEventListener('click', (e) => { if (e.target === modal) modal.hidden = true; });
   document.getElementById('btn-notif-read-all')?.addEventListener('click', async () => {
-    await window.NSAMS_DB.markAllNotificationsRead().catch(() => {});
+    await window.RUQI_DB.markAllNotificationsRead().catch(() => {});
     setNotifBadge(0);
     loadNotifList();
   });
 
-  window.NSAMS_DB.getUnreadNotificationsCount().then(setNotifBadge).catch(() => {});
+  window.RUQI_DB.getUnreadNotificationsCount().then(setNotifBadge).catch(() => {});
 
   if (minUnsubNotif) minUnsubNotif();
-  minUnsubNotif = window.NSAMS_DB.subscribeNotifications(userId, (notif) => {
+  minUnsubNotif = window.RUQI_DB.subscribeNotifications(userId, (notif) => {
     setNotifBadge(minUnreadCount + 1);
     if (modal && !modal.hidden) loadNotifList();
     // A national report is the one notification worth pulling fresh numbers for.

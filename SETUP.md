@@ -63,7 +63,7 @@ Make a trivial change (e.g., a comment in a page), commit, push to a new branch,
 npm run check          # All validation in one shot
 npm run check:js       # JS syntax (all pages + shared/db.js + each role script.js)
 npm run check:html     # HTML structure (all five pages)
-npm run check:versions # Service Worker cache-version (nsams-v<number>) sanity
+npm run check:versions # Service Worker cache-version (ruqi-v<number>) sanity
 npm run check:manifest # PWA manifest sanity
 npm run lighthouse     # Full Lighthouse audit (needs Chrome installed)
 ```
@@ -82,5 +82,5 @@ If `npm run check` passes locally, CI will pass. If it doesn't, fix it locally �
 → Normal. CI hardware varies. That's why budgets are lenient and we run 3 times. If it's consistently below threshold, there's a real regression.
 
 **Deploy ran but the site shows old content**
-→ Almost always: you forgot to bump `CACHE` in `sw.js` (`nsams-v1` → `nsams-v2`, …). The `check:versions` job enforces the format, but it can't know you *meant* to bump it.
+→ Almost always: you forgot to bump `CACHE` in `sw.js` (`ruqi-v1` → `ruqi-v2`, …). The `check:versions` job enforces the format, but it can't know you *meant* to bump it.
 → Hard refresh on the user side: DevTools → Application → Service Workers → Unregister, then reload.

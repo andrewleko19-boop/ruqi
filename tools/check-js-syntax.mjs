@@ -1,6 +1,6 @@
 // tools/check-js-syntax.mjs
 //
-// Syntax-checks every piece of JavaScript NSAMS ships:
+// Syntax-checks every piece of JavaScript Ruqi ships:
 //   1. Each standalone module — shared/db.js and every <role>/script.js
 //   2. Every inline <script> block in the HTML pages (root + role folders),
 //      skipping external src= references.
@@ -59,7 +59,7 @@ const HTML_FILES = [
 // `<script type="..." src="...">` alike.
 const scriptRegex = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g;
 
-const tmp = join(tmpdir(), `nsams-syntax-check-${process.pid}`);
+const tmp = join(tmpdir(), `ruqi-syntax-check-${process.pid}`);
 mkdirSync(tmp, { recursive: true });
 
 let checked = 0;

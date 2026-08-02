@@ -1,7 +1,7 @@
-/* NSAMS — محرّك الاستيراد المشترك: قراءة ملفّ، مطابقة أعمدة، تحليل متسامح.
+/* Ruqi — محرّك الاستيراد المشترك: قراءة ملفّ، مطابقة أعمدة، تحليل متسامح.
  *
  * سكربت كلاسيكي (لا وحدة ES) على نمط shared/qr.js، يُصدِّر
- * window.NSAMS_ImportParser. لا يعتمد على DOM ولا على Supabase ولا يعرف من
+ * window.RUQI_ImportParser. لا يعتمد على DOM ولا على Supabase ولا يعرف من
  * سيكتب البيانات لاحقاً — يبني فقط صفوفاً مُطابَقة جاهزة للتحقّق، فيصلح لأي
  * بوابة تستدعيه.
  *
@@ -278,7 +278,7 @@
     return { headers, rows: rows.slice(1) };
   }
 
-  window.NSAMS_ImportParser = {
+  window.RUQI_ImportParser = {
     readFile, parseCSV, loadExcelJS,
     matchHeaders, applyMapping,
     normalizeArabicDigits, normalizeArabicText, normGender,

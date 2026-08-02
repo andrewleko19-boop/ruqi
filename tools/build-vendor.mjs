@@ -10,7 +10,7 @@
 // ملفّات أخرى من esm.sh — أي ستّ طلبات لخادم خارجي لفتح أي لوحة. وعامل
 // الخدمة (sw.js) يتخطّى كل ما هو cross-origin عمداً، فلا يخزّن منها شيئاً.
 // النتيجة دون اتصال: الاستيراد يفشل → الوحدة كلّها لا تُنفَّذ → لا
-// createClient ولا window.NSAMS_DB، فتُفتح القشرة من الكاش وخلفها لا شيء.
+// createClient ولا window.RUQI_DB، فتُفتح القشرة من الكاش وخلفها لا شيء.
 // تطبيق «يعمل دون اتصال» كان يتعذّر الدخول إليه دون اتصال.
 //
 // الحلّ: حزمة ESM واحدة داخل المستودع تُخزّنها sw.js مع بقيّة القشرة.
@@ -33,7 +33,7 @@ const ESBUILD_VERSION  = '0.24.0';
 const OUT_DIR  = 'shared/vendor';
 const OUT_FILE = join(OUT_DIR, 'supabase-js.mjs');
 
-const work = join(tmpdir(), 'nsams-vendor-' + Date.now());
+const work = join(tmpdir(), 'ruqi-vendor-' + Date.now());
 
 function run(cmd, args, cwd) {
   return execFileSync(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });

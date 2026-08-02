@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-#  NSAMS — One-click GitHub setup (Git Bash version)
+#  Ruqi — One-click GitHub setup (Git Bash version)
 # ============================================================
 #  This script:
 #    1. Initializes git in the current folder
@@ -19,14 +19,14 @@ set -e  # exit on first error
 
 echo
 echo "============================================"
-echo " NSAMS — pushing to GitHub"
+echo " Ruqi — pushing to GitHub"
 echo "============================================"
 echo
 
 # Verify we're in the right folder
 if [ ! -f "index.html" ] || [ ! -f "sw.js" ]; then
   echo "ERROR: index.html or sw.js not found."
-  echo "Run this script from the nsams folder."
+  echo "Run this script from the ruqi folder."
   exit 1
 fi
 
@@ -50,7 +50,7 @@ fi
 # Set/update remote
 echo "Setting GitHub remote..."
 git remote remove origin 2>/dev/null || true
-git remote add origin https://github.com/andrewleko19-boop/nsams.git
+git remote add origin https://github.com/andrewleko19-boop/ruqi.git
 echo
 
 # Stage and commit
@@ -87,7 +87,7 @@ if ! git push -u origin main --force; then
   echo "   2. Auth: use a Personal Access Token as password:"
   echo "      https://github.com/settings/tokens"
   echo "   3. Repo doesn't exist:"
-  echo "      https://github.com/andrewleko19-boop/nsams"
+  echo "      https://github.com/andrewleko19-boop/ruqi"
   exit 1
 fi
 
@@ -97,7 +97,7 @@ echo " SUCCESS — pushed to GitHub."
 echo "============================================"
 echo
 echo " Next steps:"
-echo "   1. Open https://github.com/andrewleko19-boop/nsams"
+echo "   1. Open https://github.com/andrewleko19-boop/ruqi"
 echo "   2. Verify .github/workflows/ folder is visible"
 echo "   3. Click 'Actions' tab — first CI run starts automatically"
 echo "   4. Settings → Pages → Source: GitHub Actions"

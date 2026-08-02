@@ -1,4 +1,4 @@
-/* NSAMS service worker — offline-first app shell.
+/* Ruqi service worker — offline-first app shell.
  *
  * Strategy:
  *   - Precache the app shell. CRITICAL entries must all succeed or the whole
@@ -11,7 +11,7 @@
  *
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'nsams-v126';
+const CACHE = 'ruqi-v127';
 
 /* ⚠️ التقسيم مقصود ويعالج عطلاً حقيقياً.
    كان التثبيت كلّه على Promise.allSettled — يبتلع فشل أي ملفّ ويُعلن النجاح —
@@ -152,7 +152,7 @@ self.addEventListener('fetch', (event) => {
 
 // Resolve a path against the SW registration scope so notification assets and
 // click targets are correct under any deploy base — GitHub Pages serves the app
-// under /nsams/, so self.location.origin alone (no /nsams/) would 404.
+// under /ruqi/, so self.location.origin alone (no /ruqi/) would 404.
 function appUrl(path) {
   return new URL(path || '', self.registration.scope).href;
 }
@@ -172,7 +172,7 @@ self.addEventListener('push', (event) => {
       vibrate: [200, 100, 200],
       silent:  false,
       renotify: true,
-      tag:     data.tag || 'nsams',
+      tag:     data.tag || 'ruqi',
       requireInteraction: false,
       timestamp: Date.now(),
       // send-push provides `path` (portal folder for the recipient's role); fall

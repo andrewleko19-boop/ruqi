@@ -1,13 +1,13 @@
 # Offline Sync & Submission Testing Guide
 
-NSAMS has no push-notification feature yet; what actually needs careful testing is
+Ruqi has no push-notification feature yet; what actually needs careful testing is
 the **offline-first submission + sync** path and the **in-app feedback** users get
 when they record attendance or file a report. This guide is the manual test plan
 for that surface. (When real push notifications land, extend this file.)
 
 ## Prerequisites
 
-- ✅ Service Worker registered and active (`nsams-v1`)
+- ✅ Service Worker registered and active (`ruqi-v1`)
 - ✅ Browser: Chrome/Firefox with DevTools (to toggle the network)
 - ✅ A test account for the relevant portal (teacher / school)
 

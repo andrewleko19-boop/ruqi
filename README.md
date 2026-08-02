@@ -1,9 +1,9 @@
-# NSAMS — النظام الوطني لإدارة المدارس
+# Ruqi — النظام الوطني لإدارة المدارس
 
 > An offline-first, Arabic (RTL) PWA that connects the four tiers of a national school system — **teacher → school → directorate → ministry** — around one shared source of truth for daily attendance and field reports. Built with vanilla JS, no framework, no build step, on top of Supabase.
 
 <p align="center">
-  <img src="docs/screenshots/splash.png" alt="NSAMS splash" width="280">
+  <img src="docs/screenshots/splash.png" alt="Ruqi splash" width="280">
   <!-- TODO: add docs/screenshots/splash.png -->
 </p>
 
@@ -33,7 +33,7 @@
 
 ## 🎯 What it is
 
-NSAMS (النظام الوطني لإدارة المدارس) is a single installable web app that replaces the paper registers, phone calls, and spreadsheets used to track **who showed up to school today** — students and teachers alike — and to escalate urgent field reports up the chain of command.
+Ruqi (النظام الوطني لإدارة المدارس) is a single installable web app that replaces the paper registers, phone calls, and spreadsheets used to track **who showed up to school today** — students and teachers alike — and to escalate urgent field reports up the chain of command.
 
 It is **multi-page by design**: a small landing page routes each kind of user into a dedicated portal, and every portal shares one data-access layer (`shared/db.js`) and one Supabase backend.
 
@@ -49,7 +49,7 @@ It is **multi-page by design**: a small landing page routes each kind of user in
 - 🌍 **Arabic-first, RTL** UI (Cairo font), Syria-timezone aware date handling.
 - 📡 **Offline-first:** attendance and reports are written to a local queue first and synced to Supabase when the connection returns — nothing is lost on a dropped link.
 - 🗺️ **Live directorate map** via Leaflet + OpenStreetMap tiles.
-- 📲 **Installable PWA** with a Service Worker app shell (`nsams-v1`) and a separate auth session per portal.
+- 📲 **Installable PWA** with a Service Worker app shell (`ruqi-v1`) and a separate auth session per portal.
 - 🔐 **Auth:** Supabase email/password, with per-layer session storage so a school login and a directorate login can coexist on one device.
 
 ---
@@ -154,8 +154,8 @@ graph TB
 ## 🚀 Running it locally
 
 ```bash
-git clone https://github.com/andrewleko19-boop/nsams.git
-cd nsams
+git clone https://github.com/andrewleko19-boop/ruqi.git
+cd ruqi
 
 # Serve over a real origin (Service Workers + Supabase auth won't work from file://)
 npx serve .
@@ -186,7 +186,7 @@ See **[SETUP.md](SETUP.md)** for wiring up GitHub Actions + Pages.
 The app talks to a hosted Supabase project. To run your own:
 
 1. Create a project at https://supabase.com (free tier is enough).
-2. Run `nsams_database_schema.sql` against your project (SQL Editor) to create the tables, RLS policies, RPCs, and the `report-photos` storage bucket.
+2. Run `ruqi_database_schema.sql` against your project (SQL Editor) to create the tables, RLS policies, RPCs, and the `report-photos` storage bucket.
    > The SQL schema is maintained separately and is **not** committed here.
 3. Enable **Email** auth under Authentication → Providers and set your Site URL + redirect URLs.
 4. In `shared/db.js`, replace `SUPABASE_URL` and `SUPABASE_ANON_KEY` with your project's values.
@@ -198,10 +198,10 @@ The anon key is safe to ship — RLS enforces all access control server-side.
 ## 📁 Project structure
 
 ```
-nsams/
+ruqi/
 ├── index.html                 # Landing page — links to the four portals
 ├── manifest.json              # PWA manifest (theme, icons, display: standalone)
-├── sw.js                      # Service Worker (network-first nav, SWR assets, nsams-v1)
+├── sw.js                      # Service Worker (network-first nav, SWR assets, ruqi-v1)
 ├── shared/
 │   └── db.js                  # Shared data layer: Supabase + auth + offline queues + aggregations
 ├── teacher/                   # Teacher portal (index.html / script.js / style.css)
@@ -216,7 +216,7 @@ nsams/
     └── screenshots/
 ```
 
-> `nsams_database_schema.sql` (tables + RLS + RPCs + storage policies) is maintained outside this repository.
+> `ruqi_database_schema.sql` (tables + RLS + RPCs + storage policies) is maintained outside this repository.
 
 ---
 
@@ -224,7 +224,7 @@ nsams/
 
 Push to `main` → the **Deploy** workflow re-validates and publishes the whole site (landing + all portals) to GitHub Pages.
 
-> ⚠️ When you change any cached shell file, **bump `CACHE` in `sw.js`** (`nsams-v1` → `nsams-v2`, …). The Service Worker only purges old caches when the key changes; CI's `check:versions` enforces the `nsams-v<number>` shape. Forget, and returning users keep the old shell.
+> ⚠️ When you change any cached shell file, **bump `CACHE` in `sw.js`** (`ruqi-v1` → `ruqi-v2`, …). The Service Worker only purges old caches when the key changes; CI's `check:versions` enforces the `ruqi-v<number>` shape. Forget, and returning users keep the old shell.
 
 After deploy, test on the live URL: DevTools → Application → Clear site data → unregister the Service Worker → hard reload.
 
