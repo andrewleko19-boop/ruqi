@@ -1,0 +1,7 @@
+# هذا المجلد يتعامل مع مفاتيح حيّة — لا تدفع أي سرّ إطلاقاً
+.env
+.env.*
+!.env.example
+node_modules/
+REPORT.md
+report.json
