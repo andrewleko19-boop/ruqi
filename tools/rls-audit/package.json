@@ -1,0 +1,22 @@
+{
+  "name": "ruqi-rls-audit",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Live security + reliability audit harness for Ruqi/NSAMS: RLS tenant-isolation tests, known-bug probes, and query-performance checks against a real Supabase project.",
+  "scripts": {
+    "audit": "node run-all.mjs",
+    "rls": "node rls-test.mjs",
+    "bugs": "node bug-check.mjs",
+    "perf": "node perf-check.mjs",
+    "teardown": "node seed.mjs --teardown-only"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5",
+    "pg": "^8.12.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
