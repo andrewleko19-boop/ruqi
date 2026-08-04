@@ -7,6 +7,7 @@
   "scripts": {
     "audit": "node run-all.mjs",
     "rls": "node rls-test.mjs",
+    "rls:sql": "node rls-sql-test.mjs",
     "bugs": "node bug-check.mjs",
     "perf": "node perf-check.mjs",
     "teardown": "node seed.mjs --teardown-only"

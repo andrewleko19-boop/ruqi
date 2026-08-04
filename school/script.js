@@ -4978,10 +4978,8 @@ function initNotifications(userId) {
     // `new Notification()` constructor throws on Android, so it is not used here.
   });
 
-  // Web Push registration (fire-and-forget)
-  Notification.requestPermission().then((perm) => {
-    if (perm === 'granted') window.RUQI_DB.registerPushSubscription().catch(() => {});
-  });
+  // Web Push: يُظهر طلب تفعيل ضمن إيماءة مستخدم (يشترك بصمت إن كان الإذن ممنوحاً)
+  window.RUQI_DB.initPushPrompt();
 
   // Attendance reminder
   checkAttendanceReminder();

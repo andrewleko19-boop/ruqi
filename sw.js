@@ -11,7 +11,7 @@
  *
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'ruqi-v127';
+const CACHE = 'ruqi-v128';
 
 /* ⚠️ التقسيم مقصود ويعالج عطلاً حقيقياً.
    كان التثبيت كلّه على Promise.allSettled — يبتلع فشل أي ملفّ ويُعلن النجاح —
@@ -197,6 +197,30 @@ self.addEventListener('notificationclick', (event) => {
       }
     }
     await self.clients.openWindow(target);
+  })());
+});
+
+// pushsubscriptionchange — المتصفّح يُدوّر الاشتراك أحياناً (انتهاء صلاحية/تحديث).
+// نُعيد الاشتراك بنفس مفتاح VAPID فوراً حتى لا يتوقّف الوصول، ثمّ نُبلّغ أي client
+// مفتوح ليحفظ الاشتراك الجديد في Supabase (الحفظ يحتاج جلسة auth لا يملكها الـSW).
+const VAPID_PUBLIC_KEY = 'BJPKEruYPsOjR7X34522QTExr7FNilujlkD1SHgR7vWAGFswsWSnFrezgA5yQvP3gQdu_j54t20UFiR9IS4YnUw';
+function vapidKeyBytes(b64) {
+  const pad = '='.repeat((4 - b64.length % 4) % 4);
+  const s = (b64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(s); const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil((async () => {
+    try {
+      const sub = await self.registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidKeyBytes(VAPID_PUBLIC_KEY),
+      });
+      const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const w of wins) w.postMessage({ type: 'PUSH_RESUBSCRIBED', subscription: sub.toJSON() });
+    } catch (e) { /* الجهاز سيُعيد الاشتراك عند فتح التطبيق تالياً عبر initPushPrompt */ }
   })());
 });
 
