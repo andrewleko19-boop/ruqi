@@ -2010,9 +2010,8 @@ function initNotificationsTeacher(userId) {
     if (notif.type === 'duty_adjusted') loadDutyCard().catch(() => {});
   });
 
-  Notification.requestPermission().then((perm) => {
-    if (perm === 'granted') window.RUQI_DB.registerPushSubscription().catch(() => {});
-  });
+  // Web Push: طلب تفعيل ضمن إيماءة مستخدم (يشترك بصمت إن كان الإذن ممنوحاً)
+  window.RUQI_DB.initPushPrompt();
 }
 
 async function bootstrap() {

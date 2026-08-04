@@ -6,6 +6,7 @@ import { writeFileSync } from 'node:fs';
 import { Report, paint, nowIso } from './config.mjs';
 import { createFixtures, teardown } from './seed.mjs';
 import { runRlsTests } from './rls-test.mjs';
+import { runSqlRlsTests } from './rls-sql-test.mjs';
 import { runBugChecks } from './bug-check.mjs';
 import { runPerfChecks } from './perf-check.mjs';
 
@@ -35,15 +36,24 @@ let fx;
 console.log(paint.bold('\n🔍 تدقيق رقي المباشر — RLS + الباغات + الأداء\n'));
 
 try {
-  // ١) RLS (يحتاج بذراً)
+  // ١) RLS — الطريقة الأساسية (بذر مستخدمين حقيقيين + مسار PostgREST)
+  let rlsRan = false;
   try {
     fx = await createFixtures();
     await runRlsTests(report, fx);
+    rlsRan = true;
   } catch (e) {
     report.section('١) عزل المستأجر (RLS)').rows.push(
-      Report.row('warn', 'تعذّر تشغيل اختبار RLS', e.message));
+      Report.row('warn', 'تعذّرت طريقة البذر — سنجرّب الطريقة البديلة (SQL)', e.message));
   } finally {
     if (fx) await teardown().catch((e) => console.error(paint.warn('تنظيف جزئي: ' + e.message)));
+  }
+
+  // ١ب) طريقة SQL البديلة — تعمل بلا بذر إن توفّر DATABASE_URL (وتفيد كتحقّق ثانٍ
+  //     أو كبديل كامل حين يفشل إنشاء المستخدمين).
+  if (process.env.DATABASE_URL && (!rlsRan || process.env.AUDIT_RUN_SQL_RLS)) {
+    try { await runSqlRlsTests(report); }
+    catch (e) { report.section('١ب) عزل RLS — طريقة SQL').rows.push(Report.row('warn', 'تعذّرت طريقة SQL', e.message)); }
   }
 
   // ٢) الباغات (على البيانات الحيّة، بلا بذر)

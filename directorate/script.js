@@ -1617,9 +1617,8 @@ function initNotificationsDir(userId) {
     if (notif.type === 'result_sheet_submitted') loadResultSheets().catch(() => {});
   });
 
-  Notification.requestPermission().then((perm) => {
-    if (perm === 'granted') window.RUQI_DB.registerPushSubscription().catch(() => {});
-  });
+  // Web Push: طلب تفعيل ضمن إيماءة مستخدم (يشترك بصمت إن كان الإذن ممنوحاً)
+  window.RUQI_DB.initPushPrompt();
 }
 
 // ══════════════════════════════════════════════

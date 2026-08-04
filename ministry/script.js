@@ -231,13 +231,8 @@ function showDashboard(email, userId) {
   startLiveFeed();
   if (userId) initNotifications(userId);
 
-  // Web Push registration (fire-and-forget) — ministry_user devices must
-  // subscribe here or they never receive OS push notifications.
-  if ('Notification' in window) {
-    Notification.requestPermission().then((perm) => {
-      if (perm === 'granted') window.RUQI_DB.registerPushSubscription().catch(() => {});
-    });
-  }
+  // Web Push: طلب تفعيل ضمن إيماءة مستخدم (يشترك بصمت إن كان الإذن ممنوحاً)
+  window.RUQI_DB.initPushPrompt();
 }
 
 // ── Data Fetching ─────────────────────────────────────────────────────────────

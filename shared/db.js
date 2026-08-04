@@ -3180,9 +3180,17 @@ function subscribeNotifications(userId, onNew) {
   return () => db.removeChannel(ch);
 }
 
+function pushSupported() {
+  return ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
+}
+
+// يشترك في Web Push ويحفظ الاشتراك في Supabase. يفترض أن الإذن مُمنوح مسبقاً
+// (permission === 'granted') — لا يطلب الإذن بنفسه لأنّ طلب الإذن يجب أن يقع
+// ضمن إيماءة مستخدم (انظر initPushPrompt). يُعيد سلسلة حالة قابلة للفحص.
 async function registerPushSubscription() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-  if (!VAPID_PUBLIC_KEY.startsWith('B') || VAPID_PUBLIC_KEY.includes('Replace')) return; // placeholder guard
+  if (!pushSupported()) return 'unsupported';
+  if (!VAPID_PUBLIC_KEY.startsWith('B') || VAPID_PUBLIC_KEY.includes('Replace')) return 'no-vapid';
+  if (Notification.permission !== 'granted') return 'no-permission';
   try {
     const reg      = await navigator.serviceWorker.ready;
     const existing = await reg.pushManager.getSubscription();
@@ -3193,10 +3201,109 @@ async function registerPushSubscription() {
     const { error } = await db.functions.invoke('save-push-subscription', {
       body: { subscription: sub.toJSON() },
     });
-    if (error) console.warn('[Ruqi] push subscription save failed', error);
+    if (error) { console.warn('[Ruqi] push subscription save failed', error); return 'save-failed'; }
+    return 'ok';
   } catch (e) {
     console.warn('[Ruqi] registerPushSubscription failed', e);
+    return 'error';
   }
+}
+
+// ── نافذة/زر تفعيل الإشعارات (يُستدعى من كل بوابة بعد الدخول) ─────────────────
+// لماذا هذا بدل النداء التلقائي القديم؟ لأنّ Notification.requestPermission()
+// عند التحميل بلا إيماءة مستخدم: Firefox يرفضه، iOS Safari يتجاهله (ولا يعمل Push
+// أصلاً إلا بعد تثبيت الـPWA)، وChrome يجعل رفض المستخدم دائماً — فلا يُنشَأ أي
+// اشتراك. هنا الطلب يقع داخل نقرة زر (إيماءة صالحة على كل المتصفّحات).
+const PUSH_SNOOZE_KEY = 'ruqi_push_prompt_snooze';
+
+async function initPushPrompt({ force = false } = {}) {
+  if (!pushSupported()) return;
+
+  // إذا كان الإذن ممنوحاً: نضمن وجود اشتراك حيّ (يعالج اشتراكاً منتهياً أو جهازاً
+  // جديداً) بلا أي واجهة — بصمت عند كل دخول.
+  if (Notification.permission === 'granted') {
+    registerPushSubscription().catch(() => {});
+    return;
+  }
+  // مرفوض نهائياً: لا يمكن إعادة الطلب برمجياً — نصمت.
+  if (Notification.permission === 'denied') return;
+
+  // permission === 'default': نعرض زراً غير مزعج. نحترم «التأجيل» السابق.
+  try {
+    if (!force && localStorage.getItem(PUSH_SNOOZE_KEY)) {
+      const until = Number(localStorage.getItem(PUSH_SNOOZE_KEY));
+      if (Number.isFinite(until) && Date.now() < until) return;
+    }
+  } catch { /* localStorage محجوب → أكمل */ }
+
+  if (document.getElementById('ruqi-push-prompt')) return; // idempotent
+
+  if (!document.getElementById('ruqi-push-prompt-css')) {
+    const st = document.createElement('style');
+    st.id = 'ruqi-push-prompt-css';
+    st.textContent = `
+      #ruqi-push-prompt{position:fixed;inset-inline-end:16px;inset-block-end:16px;z-index:9999;
+        max-width:340px;display:flex;gap:12px;align-items:flex-start;padding:14px 16px;
+        border-radius:14px;background:var(--paper-2,#1a2236);color:var(--ink,#e8edf7);
+        border:1px solid var(--line,#2a3550);box-shadow:0 10px 30px rgba(0,0,0,.35);
+        font-family:inherit;animation:ruqiPushIn .25s ease}
+      @keyframes ruqiPushIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+      #ruqi-push-prompt .rpp-ico{flex:0 0 auto;font-size:22px;line-height:1.2}
+      #ruqi-push-prompt .rpp-body{flex:1 1 auto;font-size:.86rem;line-height:1.6}
+      #ruqi-push-prompt .rpp-body b{display:block;margin-bottom:2px;font-size:.92rem}
+      #ruqi-push-prompt .rpp-actions{display:flex;gap:8px;margin-top:10px}
+      #ruqi-push-prompt button{font-family:inherit;font-size:.82rem;font-weight:700;
+        border-radius:9px;padding:7px 14px;cursor:pointer;border:1px solid transparent}
+      #ruqi-push-prompt .rpp-yes{background:var(--accent,#35b3ac);color:#04211f}
+      #ruqi-push-prompt .rpp-no{background:transparent;color:var(--ink-soft,#9fb0c9);
+        border-color:var(--line,#2a3550)}
+      @media (prefers-reduced-motion:reduce){#ruqi-push-prompt{animation:none}}`;
+    document.head.appendChild(st);
+  }
+
+  const box = document.createElement('div');
+  box.id = 'ruqi-push-prompt';
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-label', 'تفعيل الإشعارات');
+  box.innerHTML = `
+    <div class="rpp-ico" aria-hidden="true">🔔</div>
+    <div class="rpp-body">
+      <b>فعّل الإشعارات الفورية</b>
+      لتصلك التنبيهات المهمّة فور حدوثها حتى والتطبيق مغلق.
+      <div class="rpp-actions">
+        <button type="button" class="rpp-yes">تفعيل</button>
+        <button type="button" class="rpp-no">لاحقاً</button>
+      </div>
+    </div>`;
+  document.body.appendChild(box);
+
+  box.querySelector('.rpp-no').addEventListener('click', () => {
+    try { localStorage.setItem(PUSH_SNOOZE_KEY, String(Date.now() + 7 * 24 * 3600 * 1000)); } catch {}
+    box.remove();
+  });
+  box.querySelector('.rpp-yes').addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget; btn.disabled = true; btn.textContent = '…';
+    try {
+      const perm = await Notification.requestPermission(); // إيماءة صالحة → يعمل على كل المتصفّحات
+      if (perm === 'granted') {
+        const status = await registerPushSubscription();
+        if (status !== 'ok') console.warn('[Ruqi] push register status:', status);
+      }
+    } catch (e) { console.warn('[Ruqi] push prompt failed', e); }
+    try { localStorage.removeItem(PUSH_SNOOZE_KEY); } catch {}
+    box.remove();
+  });
+}
+
+// عندما يُدوّر الـSW الاشتراك (pushsubscriptionchange) يُرسل الاشتراك الجديد إلى
+// الصفحة — نحفظه هنا لأنّ الـSW لا يملك جلسة auth. مستمع واحد لكل البوابات.
+if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data?.type === 'PUSH_RESUBSCRIBED' && e.data.subscription) {
+      db.functions.invoke('save-push-subscription', { body: { subscription: e.data.subscription } })
+        .catch(() => {});
+    }
+  });
 }
 
 // Unified roster: all teachers (from users) + admins/workers (from school_personnel),
@@ -3727,6 +3834,7 @@ window.RUQI_DB = {
   markAllNotificationsRead,
   subscribeNotifications,
   registerPushSubscription,
+  initPushPrompt,
   escapeHtml,
 
   // Holiday calendar
