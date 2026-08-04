@@ -56,6 +56,26 @@ async function sha256(text: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Find an auth user by exact email. A single admin.auth.admin.listUsers() call
+// returns only the FIRST page (default 50 of ALL auth users), so a returning
+// parent whose row has fallen off page 1 would be missed → createUser would then
+// fail on the duplicate email and lock the parent out permanently. Page through
+// the full list until the email is found. perPage 1000 keeps this to one request
+// for typical deployments; the page cap is a safety bound, not a real limit.
+// deno-lint-ignore no-explicit-any
+async function findUserByEmail(admin: any, email: string) {
+  const perPage = 1000;
+  for (let page = 1; page <= 500; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+    if (error) throw error;
+    const users = data?.users ?? [];
+    const hit = users.find((u: { email?: string }) => u.email === email);
+    if (hit) return hit;
+    if (users.length < perPage) break; // reached the last page
+  }
+  return null;
+}
+
 function generateOtp(): string {
   // Cryptographically secure 6-digit code. Math.random() is NOT suitable for
   // security tokens — it is predictable from internal state.
@@ -96,15 +116,32 @@ Deno.serve(async (req) => {
       if (!phone.match(/^\+9639[0-9]{8}$/))
         return json({ error: "رقم الهاتف غير صالح (مثال: 0961234567)" }, 400);
 
-      // Rate limit: at most 5 OTP requests per phone per hour. Blocks OTP
-      // flooding and brute-force amplification (issuing many codes then guessing).
       const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+      // Rate limit 1: at most 5 OTP requests per phone per hour. Blocks OTP
+      // flooding and brute-force amplification (issuing many codes then guessing).
       const { count: recentCount } = await admin.from("parent_otps")
         .select("id", { count: "exact", head: true })
         .eq("phone", phone)
         .gt("created_at", since);
       if ((recentCount ?? 0) >= 5)
         return json({ error: "تجاوزت الحد المسموح لطلبات الرمز، حاول بعد ساعة" }, 429);
+
+      // Rate limit 2: cap requests per source IP per hour, independent of the
+      // phone. Without this, one attacker can iterate arbitrary numbers (5 each)
+      // and SMS-bomb at scale. The IP is stored hashed (data minimization).
+      const rawIp = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim()
+        || req.headers.get("cf-connecting-ip") || "";
+      const ipHash = rawIp ? await sha256(rawIp) : null;
+      const IP_HOURLY_CAP = 15;
+      if (ipHash) {
+        const { count: ipCount } = await admin.from("parent_otps")
+          .select("id", { count: "exact", head: true })
+          .eq("ip_hash", ipHash)
+          .gt("created_at", since);
+        if ((ipCount ?? 0) >= IP_HOURLY_CAP)
+          return json({ error: "تجاوزت الحد المسموح لطلبات الرمز من هذا المصدر، حاول لاحقاً" }, 429);
+      }
 
       const code = generateOtp();
       const hash = await sha256(code);
@@ -117,7 +154,7 @@ Deno.serve(async (req) => {
         .is("used_at", null);
 
       const { error: insErr } = await admin.from("parent_otps").insert({
-        phone, code_hash: hash, expires_at: expiresAt,
+        phone, code_hash: hash, expires_at: expiresAt, ip_hash: ipHash,
       });
       if (insErr) return json({ error: `تعذّر حفظ رمز التحقق: ${insErr.message}` }, 500);
 
@@ -169,8 +206,7 @@ Deno.serve(async (req) => {
       const email = `${phone}@${PARENT_EMAIL_DOMAIN}`;
       let userId: string;
 
-      const { data: existing } = await admin.auth.admin.listUsers();
-      const existingUser = existing?.users?.find(u => u.email === email);
+      const existingUser = await findUserByEmail(admin, email);
 
       if (existingUser) {
         userId = existingUser.id;
@@ -182,9 +218,17 @@ Deno.serve(async (req) => {
           email_confirm: true,
           user_metadata: { phone, role: "parent" },
         });
-        if (createErr || !created?.user)
-          return json({ error: `تعذّر إنشاء الحساب: ${createErr?.message ?? ""}` }, 500);
-        userId = created.user.id;
+        if (createErr || !created?.user) {
+          // Guard the create/find race (and any pagination miss): if the email is
+          // already registered, recover the existing user instead of 500-ing.
+          const dup = /already|registered|exists|duplicate/i.test(createErr?.message ?? "");
+          const recovered = dup ? await findUserByEmail(admin, email) : null;
+          if (!recovered)
+            return json({ error: `تعذّر إنشاء الحساب: ${createErr?.message ?? ""}` }, 500);
+          userId = recovered.id;
+        } else {
+          userId = created.user.id;
+        }
         // Parents authenticate via auth.users + parent_links only.
         // public.users is for staff (teachers/admins) and has a role+school
         // constraint that rejects parent rows — do not insert here.

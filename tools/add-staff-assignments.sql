@@ -203,6 +203,15 @@ begin
 
   -- مزامنة class_teacher: تكليف فني صفّي تدريسي بحساب دخول → جسر صلاحية المعلّم
   if v_kind = 'technical' and v_class is not null and v_user is not null and v_year <> '' then
+    -- class_teacher هو ما تقرأه teaches_class() لتخويل المعلّم على الحضور والدرجات
+    -- والسلوك. الصف والمعلّم يأتيان من payload المتصفح، فبدون هذا التحقق يستطيع
+    -- مدير مدرسة ربط معلّم بأي صفّ في مدرسة أخرى (منح صلاحية عابر للنطاق).
+    if not exists (select 1 from public.classes c where c.id = v_class and c.school_id = v_school) then
+      raise exception 'الصف المحدّد لا يتبع مدرستك';
+    end if;
+    if not exists (select 1 from public.users u where u.id = v_user and u.school_id = v_school) then
+      raise exception 'المعلّم المحدّد لا يتبع مدرستك';
+    end if;
     insert into public.class_teacher (class_id, teacher_id, academic_year, role, subject_ids)
     values (v_class, v_user, v_year,
             case when array_length(v_subjects,1) is null then 'homeroom' else 'subject' end,

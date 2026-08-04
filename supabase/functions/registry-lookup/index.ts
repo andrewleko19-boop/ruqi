@@ -86,24 +86,35 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    if (kind === "student") {
-      const { data, error } = await admin
-        .from("national_students_registry")
-        .select("*")
-        .eq("national_id", id)
-        .maybeSingle();
-
-      if (error) return json({ ok: false, error: `خطأ في قاعدة البيانات: ${error.message}` }, 500);
-      if (!data) return json({ ok: false, error: "لم يُعثر على السجل" }, 404);
-      return json({ ok: true, data });
+    // Anti-enumeration: a single account must not silently scrape the registry.
+    // Cap lookups per caller per hour and record every lookup for audit. The
+    // number→identity lookup is a legitimate enrollment step, so we make it
+    // accountable and rate-limited rather than blocking it.
+    const HOURLY_LOOKUP_CAP = 60;
+    const sinceHour = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: recentLookups } = await admin
+      .from("registry_lookup_audit")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .gt("created_at", sinceHour);
+    if ((recentLookups ?? 0) >= HOURLY_LOOKUP_CAP) {
+      return json({ ok: false, error: "تجاوزت الحد المسموح لعمليات الاستعلام عن السجل، حاول لاحقاً" }, 429);
     }
 
-    // kind === 'staff'
+    const table  = kind === "student" ? "national_students_registry" : "national_staff_registry";
+    const column = kind === "student" ? "national_id" : "self_number";
     const { data, error } = await admin
-      .from("national_staff_registry")
+      .from(table)
       .select("*")
-      .eq("self_number", id)
+      .eq(column, id)
       .maybeSingle();
+
+    // Record the attempt (found or not) before responding — fire-and-forget so a
+    // logging hiccup never blocks a legitimate lookup, but the row is normally
+    // written so ministry can audit who accessed which record.
+    await admin.from("registry_lookup_audit")
+      .insert({ user_id: user.id, kind, lookup_id: id, found: !!data })
+      .then(() => {}, () => {});
 
     if (error) return json({ ok: false, error: `خطأ في قاعدة البيانات: ${error.message}` }, 500);
     if (!data) return json({ ok: false, error: "لم يُعثر على السجل" }, 404);

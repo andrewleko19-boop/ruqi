@@ -111,7 +111,11 @@ Deno.serve(async (req) => {
         await admin.auth.admin.deleteUser(newId);
         return json({ error: `تعذّر إنشاء الملف الشخصي: ${uErr.message}` }, 500);
       }
-      await admin.from("admin_credentials").insert({ user_id: newId, email, password, created_by: user.id });
+      // Store the account row for the listing, but NOT the password: keeping a
+      // recoverable plaintext copy is the hole this avoids. The password was just
+      // set by the caller (who therefore knows it once); to recover it later they
+      // use reset_password, which mints a new one shown exactly once.
+      await admin.from("admin_credentials").insert({ user_id: newId, email, created_by: user.id });
       return json({ ok: true, id: newId });
     }
 
@@ -148,7 +152,11 @@ Deno.serve(async (req) => {
         await admin.auth.admin.deleteUser(newId);
         return json({ error: `تعذّر إنشاء الملف الشخصي: ${uErr.message}` }, 500);
       }
-      await admin.from("admin_credentials").insert({ user_id: newId, email, password, created_by: user.id });
+      // Store the account row for the listing, but NOT the password: keeping a
+      // recoverable plaintext copy is the hole this avoids. The password was just
+      // set by the caller (who therefore knows it once); to recover it later they
+      // use reset_password, which mints a new one shown exactly once.
+      await admin.from("admin_credentials").insert({ user_id: newId, email, created_by: user.id });
       return json({ ok: true, id: newId });
     }
 
@@ -158,10 +166,36 @@ Deno.serve(async (req) => {
       if (!userId) return json({ error: "معرّف المستخدم مطلوب" }, 400);
       // Prevent deactivating another ministry_user (safety check).
       const { data: target } = await admin.from("users")
-        .select("role").eq("id", userId).maybeSingle();
+        .select("role, school_id, directorate_id").eq("id", userId).maybeSingle();
       if (!target) return json({ error: "المستخدم غير موجود" }, 404);
       if (target.role === "ministry_user")
         return json({ error: "لا يمكن تعطيل مستخدم وزارة من هنا" }, 403);
+
+      // A directorate may only deactivate accounts inside its OWN directorate —
+      // either its schools' admins/teachers, or its own staff. Without this scope
+      // check a directorate_user could ban any non-ministry account nationwide
+      // (the caller gate above admits both ministry and directorate). Mirrors the
+      // reset_password scoping below.
+      if (isDirectorate) {
+        if (!callerDirectorateId)
+          return json({ error: "حساب المديرية غير مرتبط بمديرية — راجع مشرف الوزارة" }, 403);
+        if (target.school_id) {
+          const { data: school, error: schoolErr } = await admin.from("schools")
+            .select("directorate_id").eq("id", target.school_id).maybeSingle();
+          if (schoolErr)
+            return json({ error: `تعذّر التحقّق من مدرسة الحساب: ${schoolErr.message}` }, 500);
+          if (!school)
+            return json({ error: "مدرسة هذا الحساب غير موجودة في السجل" }, 404);
+          if (school.directorate_id !== callerDirectorateId)
+            return json({ error: "مدرسة هذا الحساب تتبع مديرية أخرى" }, 403);
+        } else if (target.directorate_id) {
+          if (target.directorate_id !== callerDirectorateId)
+            return json({ error: "هذا الحساب يتبع مديرية أخرى" }, 403);
+        } else {
+          return json({ error: "هذا الحساب غير مرتبط بمدرسة ولا بمديرية" }, 403);
+        }
+      }
+
       const { error } = await admin.auth.admin.updateUserById(userId, { ban_duration: "876000h" });
       if (error) return json({ error: error.message }, 400);
       await admin.from("users").update({ is_active: false }).eq("id", userId);

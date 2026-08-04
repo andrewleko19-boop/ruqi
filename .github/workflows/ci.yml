@@ -40,3 +40,22 @@ jobs:
 
       - name: Manifest sanity
         run: node tools/check-manifest.mjs
+
+  edge-functions:
+    name: Type-check Supabase Edge Functions (Deno)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type-check every edge function
+        # deno check resolves the https:// imports (supabase-js) and validates the
+        # Deno globals, catching type errors before `supabase functions deploy`.
+        run: deno check supabase/functions/*/index.ts

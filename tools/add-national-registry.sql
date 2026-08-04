@@ -368,6 +368,7 @@ declare
   v_caller_role text;
   v_caller_school uuid;
   v_stu_school  uuid;
+  v_stu_name_norm text;
   v_registry    public.national_students_registry%rowtype;
 begin
   -- 1) هوية المستدعي
@@ -377,9 +378,11 @@ begin
     from public.users
    where id = v_caller_id;
 
-  -- 2) مدرسة الطالب
-  select school_id
-    into v_stu_school
+  -- 2) مدرسة الطالب + اسمه الحالي (للمطابقة في الخطوة ٤ب)
+  select school_id,
+         public.ar_norm(coalesce(full_name,'')   || ' ' || coalesce(first_name,'')  || ' ' ||
+                        coalesce(father_name,'')  || ' ' || coalesce(family_name,''))
+    into v_stu_school, v_stu_name_norm
     from public.students
    where id = p_student_id;
 
@@ -402,6 +405,17 @@ begin
 
   if not found then
     raise exception 'الرقم الوطني % غير موجود في السجلّ الوطني', p_national_id;
+  end if;
+
+  -- 4ب) التحقق من تطابق الهوية قبل النسخ أو الإرجاع.
+  --     السجلّ الوطني محجوز للوزارة (RLS: using(false) لغيرها)؛ بدون هذا الحارس
+  --     تصبح الدالة أداة استخراج هوية أي مواطن بالرقم الوطني وحده. نطبّق نفس منطق
+  --     lookup_student_for_transfer: يجب أن يطابق اسمُ الطالب الحالي السجلَّ، وإلا
+  --     فالرقم وحده لا يُرجع شيئاً.
+  if position(public.ar_norm(coalesce(v_registry.first_name,''))  in v_stu_name_norm) = 0
+     or position(public.ar_norm(coalesce(v_registry.father_name,'')) in v_stu_name_norm) = 0
+     or position(public.ar_norm(coalesce(v_registry.family_name,'')) in v_stu_name_norm) = 0 then
+    raise exception 'اسم الطالب لا يطابق السجلّ الوطني لهذا الرقم — تحقّق من الرقم الوطني والاسم';
   end if;
 
   -- 5) تطبيق التحديث مع تجاوز trigger القفل
@@ -464,6 +478,8 @@ declare
   v_caller_role   text;
   v_caller_school uuid;
   v_staff_school  uuid;
+  v_staff_name_norm text;
+  v_reg_name_norm   text;
   v_registry      public.national_staff_registry%rowtype;
 begin
   -- 1) هوية المستدعي
@@ -473,9 +489,9 @@ begin
     from public.users
    where id = v_caller_id;
 
-  -- 2) مدرسة الكادر
-  select school_id
-    into v_staff_school
+  -- 2) مدرسة الكادر + اسمه الحالي (للمطابقة في الخطوة ٤ب)
+  select school_id, public.ar_norm(coalesce(full_name,''))
+    into v_staff_school, v_staff_name_norm
     from public.staff_records
    where id = p_staff_id;
 
@@ -498,6 +514,16 @@ begin
 
   if not found then
     raise exception 'الرقم الذاتي % غير موجود في السجلّ الوطني للكادر', p_self_number;
+  end if;
+
+  -- 4ب) التحقق من تطابق الهوية قبل النسخ أو الإرجاع (كما في link_student_to_registry).
+  --     السجلّ الذاتي للكادر يحمل full_name فقط، فنطلب أن يحتوي أحد الاسمين الآخر
+  --     (تطابق باتجاهين) — يمنع استخراج هوية أي فرد بالرقم الذاتي وحده.
+  v_reg_name_norm := public.ar_norm(coalesce(v_registry.full_name,''));
+  if coalesce(v_staff_name_norm,'') = ''
+     or (position(v_staff_name_norm in v_reg_name_norm) = 0
+         and position(v_reg_name_norm in v_staff_name_norm) = 0) then
+    raise exception 'اسم الكادر لا يطابق السجلّ الوطني لهذا الرقم — تحقّق من الرقم الذاتي والاسم';
   end if;
 
   -- 5) تطبيق التحديث مع تجاوز trigger القفل
