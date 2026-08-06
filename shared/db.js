@@ -25,6 +25,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 export { db as supabase };
 export { SUPABASE_URL as supabaseUrl };
 export { errMessage, isNetworkError };
+export { getModuleCatalog, getRoleModulePermissions, setRoleModulePermission, updateUserPermissionRole };
 
 /* تسجيل عامل الخدمة انتقل إلى shared/sw-register.js كي تستعمله الصفحة
    الرئيسية أيضاً — كانت بلا أي <script> فلا يُثبَّت عندها شيء ولا تعمل دون
