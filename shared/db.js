@@ -1,4 +1,9 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// ⚠️ محلّية عمداً لا من CDN. كان الاستيراد من esm.sh يجلب ستّة ملفّات من
+//    خادم خارجي، وعامل الخدمة يتخطّى كل ما هو cross-origin — فدون اتصال
+//    يفشل الاستيراد ولا تُنفَّذ هذه الوحدة إطلاقاً: لا createClient ولا
+//    RUQI_DB، فتُفتح القشرة من الكاش وخلفها لا شيء. الحزمة تُبنى بـ
+//    tools/build-vendor.mjs وتُخزَّن مع القشرة في sw.js.
+import { createClient } from "./vendor/supabase-js.mjs";
 
 const SUPABASE_URL      = "https://xocrzpjfvizgnsybegwr.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_HCVzNgEJmov38FWXRO1uFw_DG1d87Y4";
@@ -7,9 +12,11 @@ const LAYER = location.pathname.split('/').filter(Boolean).find(
   s => ['school', 'teacher', 'directorate', 'ministry', 'admin', 'parent'].includes(s)
 ) || 'root';
 
+const AUTH_STORAGE_KEY = `nsams-auth-${LAYER}`;
+
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
-    storageKey:       `nsams-auth-${LAYER}`,
+    storageKey:       AUTH_STORAGE_KEY,
     persistSession:   true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
@@ -17,43 +24,16 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 export { db as supabase };
 export { SUPABASE_URL as supabaseUrl };
+export { errMessage, isNetworkError };
 
-if ('serviceWorker' in navigator) {
-  // An installed PWA reopened from the recents list resumes the existing page:
-  // there is no navigation, so the browser never runs its own Service Worker
-  // update check and a shipped fix can sit unseen indefinitely. Ask for the
-  // check explicitly — on start, and every time the app returns to the
-  // foreground (throttled, since visibilitychange fires often).
-  let _lastSwCheck = 0;
-  navigator.serviceWorker
-    .register(new URL('../sw.js', import.meta.url))
-    .then((reg) => {
-      const checkForUpdate = () => {
-        if (Date.now() - _lastSwCheck < 60_000) return;
-        _lastSwCheck = Date.now();
-        reg.update().catch(() => {});
-      };
-      checkForUpdate();
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') checkForUpdate();
-      });
-    })
-    .catch(err => console.warn('[NSAMS] SW registration failed', err));
-
-  // sw.js calls skipWaiting() + clients.claim(), so a new worker takes over the
-  // live page. Reload once so the page runs the new HTML/JS instead of the old
-  // shell paired with the new worker.
-  const _hadController = !!navigator.serviceWorker.controller;
-  let   _swReloading   = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    // No previous controller = first install on this device; nothing is stale.
-    if (!_hadController || _swReloading) return;
-    // Never discard work in progress (a half-entered attendance sheet, unsaved
-    // marks). Portals expose this hook; the reload happens on the next visit.
-    if (typeof window.nsamsHasUnsavedWork === 'function' && window.nsamsHasUnsavedWork()) return;
-    _swReloading = true;
-    location.reload();
-  });
+/* تسجيل عامل الخدمة انتقل إلى shared/sw-register.js كي تستعمله الصفحة
+   الرئيسية أيضاً — كانت بلا أي <script> فلا يُثبَّت عندها شيء ولا تعمل دون
+   اتصال. الحقن هنا يُبقي البوّابات تعمل كما هي بلا تعديل ستّة ملفّات HTML. */
+if ('serviceWorker' in navigator && !window.__ruqiSwRegistered) {
+  const _reg = document.createElement('script');
+  _reg.src = new URL('./sw-register.js', import.meta.url).href;
+  _reg.defer = true;
+  document.head.appendChild(_reg);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -89,6 +69,83 @@ function generateReceiptNumber() {
 }
 
 function isOnline() { return navigator.onLine; }
+
+/* ─── ترجمة الأخطاء ──────────────────────────────────────────────────────────
+   كانت البوّابات الستّ تعرض نصّ الخطأ التقني كما هو: `showError(el, e.message)`
+   أو `textContent = err?.message ?? '…'` في نحو سبعين موضعاً. فيرى معاون مدير
+   التربية «TypeError: Failed to fetch» أو «User is banned» — إنجليزية، ولا
+   تقول له ما العمل.
+
+   هذه الدالّة تحوّل الخطأ إلى جملة عربية **توجيهية**: ماذا حدث وما الخطوة
+   التالية. الرمز التقني لا يُفقَد — يبقى في console.error عند موضع الالتقاط.
+
+   الترتيب مقصود: الشبكة أوّلاً (أشيع سبب في مدارس ذات إنترنت متقطّع)، ثم
+   المصادقة، ثم أكواد Postgres. وما لا يُعرَف يعود إلى fallback العربي الذي
+   يمرّره الموضع نفسه — فالسياق عنده أدقّ ممّا يمكن لدالّة عامّة أن تخمّنه. */
+
+const AUTH_ERRORS = [
+  [/invalid login credentials/i,          'البريد الإلكتروني أو كلمة المرور غير صحيحة.'],
+  [/user is banned|user_banned/i,         'هذا الحساب موقوف. راجع مشرف النظام لإعادة تفعيله.'],
+  [/email not confirmed/i,                'لم يُفعَّل هذا البريد بعد. راجع مشرف النظام.'],
+  [/user already registered/i,            'هذا البريد مسجَّل مسبقاً في النظام.'],
+  [/password should be at least/i,        'كلمة المرور قصيرة — استعمل ٦ محارف على الأقلّ.'],
+  [/same[_ ]password/i,                   'كلمة المرور الجديدة مطابقة للقديمة. اختر واحدة مختلفة.'],
+  [/(over_email_send_rate_limit|too many requests|rate limit)/i,
+                                          'حاولتَ مرّات كثيرة متتالية. انتظر دقيقة ثم أعد المحاولة.'],
+  [/invalid refresh token|refresh[_ ]token[_ ]not[_ ]found|session[_ ]not[_ ]found/i,
+                                          'انتهت صلاحية جلستك. سجّل الدخول من جديد.'],
+  [/jwt expired/i,                        'انتهت صلاحية جلستك. سجّل الدخول من جديد.'],
+  [/invalid api key/i,                    'إعدادات الاتصال بالنظام غير صحيحة. راجع مشرف النظام.'],
+];
+
+const PG_ERRORS = {
+  '23505': 'هذه القيمة مسجَّلة مسبقاً — لا يمكن تكرارها.',
+  '23503': 'لا يمكن إتمام العملية: سجلّ مرتبط بهذه البيانات غير موجود أو ما يزال مستعمَلاً.',
+  '23502': 'حقل مطلوب تُرك فارغاً. أكمل الحقول ثم أعد المحاولة.',
+  '23514': 'إحدى القيم المُدخَلة خارج المدى المسموح.',
+  '22P02': 'إحدى القيم المُدخَلة بصيغة غير صحيحة.',
+  '42501': 'لا تملك صلاحية لهذه العملية على هذه البيانات.',
+  '42P01': 'هذه الميزة غير مكتملة التهيئة في قاعدة البيانات. راجع مشرف النظام.',
+  'PGRST116': 'لا توجد بيانات مطابقة.',
+  'PGRST301': 'انتهت صلاحية جلستك. سجّل الدخول من جديد.',
+};
+
+const NETWORK_MSG =
+  'لا يوجد اتصال بالإنترنت. سيُحفَظ ما أدخلتَه ويُرسَل تلقائياً عند عودة الشبكة.';
+
+function isNetworkError(err) {
+  if (!err) return false;
+  // navigator.onLine=false قاطع؛ أمّا النصّ فلأنّ الجهاز قد يكون «متّصلاً»
+  // بشبكة محلّية بلا إنترنت فعلي، وهي حالة شائعة في المدارس.
+  if (!navigator.onLine) return true;
+  const s = `${err.name || ''} ${err.message || ''} ${err.details || ''}`;
+  return /failed to fetch|networkerror|network request failed|load failed|ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED|ERR_NETWORK|ERR_CONNECTION|fetch failed|timeout|aborted/i.test(s);
+}
+
+/** يُرجع رسالة عربية موجِّهة للمستخدم. `fallback` نصّ السياق عند الاستدعاء. */
+function errMessage(err, fallback = 'تعذّر إتمام العملية. أعد المحاولة.') {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err.trim() || fallback;
+
+  if (isNetworkError(err)) return NETWORK_MSG;
+
+  const code = err.code ?? err.status ?? '';
+  if (code && PG_ERRORS[code]) return PG_ERRORS[code];
+
+  const text = `${err.message || ''} ${err.error_description || ''} ${err.details || ''}`;
+  for (const [re, msg] of AUTH_ERRORS) if (re.test(text)) return msg;
+
+  if (code === 401 || code === '401') return 'انتهت صلاحية جلستك. سجّل الدخول من جديد.';
+  if (code === 403 || code === '403') return 'لا تملك صلاحية لهذه العملية.';
+  if (code === 404 || code === '404') return 'لم يُعثر على البيانات المطلوبة.';
+  if (code === 429 || code === '429') return 'حاولتَ مرّات كثيرة متتالية. انتظر قليلاً ثم أعد المحاولة.';
+  if (Number(code) >= 500)            return 'الخادم لا يستجيب حالياً. أعد المحاولة بعد قليل.';
+
+  // رسالة عربية كتبها الخادم أو RPC عمداً (RAISE EXCEPTION) — تُعرَض كما هي.
+  if (/[؀-ۿ]/.test(err.message || '')) return err.message;
+
+  return fallback;
+}
 
 // ─── Device identity ──────────────────────────────────────────────────────────
 function getDeviceId() {
@@ -319,7 +376,7 @@ async function materialisePhotos(mediaUrls) {
   for (const u of mediaUrls) {
     if (typeof u === 'string' && u.startsWith('data:')) {
       try { out.push(await uploadDataUri(u)); }
-      catch (e) { console.warn('[NSAMS] photo upload failed — keeping inline data URI', e); out.push(u); }
+      catch (e) { console.warn('[Ruqi] photo upload failed — keeping inline data URI', e); out.push(u); }
     } else {
       out.push(u);
     }
@@ -341,7 +398,7 @@ async function resolveReportPhotos(mediaUrls) {
       const { data, error } = await db.storage
         .from(REPORT_BUCKET)
         .createSignedUrl(u, SIGNED_URL_TTL);
-      if (error) { console.warn('[NSAMS] signed URL failed for', u, error); }
+      if (error) { console.warn('[Ruqi] signed URL failed for', u, error); }
       else out.push(data.signedUrl);
     }
   }
@@ -396,16 +453,53 @@ async function login(identifier, password) {
   };
 }
 
+/* ⚠️ الترتيب مقصود: الحذف المحلّي أوّلاً ثم الإبطال العام.
+   signOut() الافتراضي (scope عام) يحذف الجلسة المحلّية **فقط بعد** نجاح نداء
+   الشبكة. فإن كان الجهاز دون اتصال أو الخادم بعيد المنال، يعود بخطأ ويترك
+   الجلسة في localStorage كما هي — وكل مستدعٍ يبتلع الخطأ ثم يُعيد التحميل،
+   فيجد getCurrentUser الجلسة ويُدخِل «الخارج» من جديد. على أجهزة مشتركة في
+   مدارس ذات إنترنت متقطّع هذا ليس افتراضياً.
+
+   'local' يحذف الجلسة من الجهاز بلا شبكة إطلاقاً، فيصير الخروج مضموناً.
+   ثم نحاول الإبطال العام (سحب رموز التحديث من كل الأجهزة) بلا حجب: نجاحه
+   إضافة أمنية، وفشله لا يُبقي أحداً داخلاً على هذا الجهاز. */
 async function logout() {
-  // Purge tenant caches (student rosters, school profile, delta cache) so the next
-  // user on a shared device can't read the previous account's student PII. Every
-  // portal routes through here, so this closes the gap for the portals that don't
-  // call purgeTenantCaches() themselves. Unsynced outbox writes are deliberately
-  // preserved; best-effort, never blocks logout. Runs before signOut while the
-  // IndexedDB/localStorage context is still valid.
-  try { await purgeTenantCaches(); } catch { /* non-fatal */ }
-  const { error } = await db.auth.signOut();
-  if (error) throw error;
+  try {
+    await db.auth.signOut({ scope: 'local' });
+  } catch { /* لا يُوقف الخروج */ }
+
+  // إبطال عام بأفضل جهد — لا يُنتظَر ولا يُرمى خطؤه.
+  db.auth.signOut({ scope: 'global' }).catch(() => {});
+
+  // حزام أمان: لو تغيّرت آلية التخزين في supabase-js يوماً، لا تبقى الجلسة.
+  try {
+    for (const k of Object.keys(localStorage)) {
+      if (k.startsWith(AUTH_STORAGE_KEY)) localStorage.removeItem(k);
+    }
+  } catch { /* غير قاتل */ }
+}
+
+/* ⚠️ ملفّ الدور مخبّأ ليعمل الدخول دون اتصال — لا ليمنح صلاحية.
+   getSession() محلّي بالكامل، لكن استعلام الدور كان يضرب الشبكة دائماً؛ فدون
+   اتصال يفشل ويعود null فتُسقط كلُّ بوابة المستخدمَ إلى شاشة الدخول — في
+   تطبيق كامل بُني على العمل دون اتصال. المخبّأ يسدّ هذه الفجوة وحدها.
+
+   التصريح الحقيقي يبقى JWT وسياسات RLS على الخادم: مستخدم يعبث بالمخبّأ ليرى
+   لوحة الوزارة سيراها **فارغة**، لأن كل استعلام يُرفَض. المخبّأ يوجّه الواجهة
+   لا أكثر، ومربوط بمعرّف المستخدم فلا يخدم حساباً آخر، ويُمحى عند الخروج مع
+   بقيّة مخابئ المستأجِر (TENANT_CACHE_PREFIXES). */
+const PROFILE_CACHE_PFX = 'nsams_profile_';
+
+function _cacheProfile(userId, profile) {
+  try { localStorage.setItem(PROFILE_CACHE_PFX + LAYER + '_' + userId, JSON.stringify(profile)); }
+  catch { /* حصة التخزين ممتلئة — غير قاتل */ }
+}
+
+function _cachedProfile(userId) {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_PFX + LAYER + '_' + userId);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
 }
 
 async function getCurrentUser() {
@@ -418,19 +512,29 @@ async function getCurrentUser() {
     .eq("id", session.user.id)
     .maybeSingle();
 
-  if (error || !profile) return null;
+  let row = profile;
+  if (error || !profile) {
+    // فشل الاستعلام: قد يكون انقطاع شبكة (نستعمل المخبّأ) أو حذف المستخدم
+    // فعلاً (لا مخبّأ لديه، فيعود null كما كان).
+    row = _cachedProfile(session.user.id);
+    if (!row) return null;
+  } else {
+    _cacheProfile(session.user.id, profile);
+  }
 
   return {
-    user: { id: session.user.id, email: session.user.email, fullName: profile.full_name },
-    role: profile.role,
-    schoolId: profile.school_id,
-    directorateId: profile.directorate_id,
+    user: { id: session.user.id, email: session.user.email, fullName: row.full_name },
+    role: row.role,
+    schoolId: row.school_id,
+    directorateId: row.directorate_id,
   };
 }
 
 // ─── Schools ──────────────────────────────────────────────────────────────────
 async function getSchools(directorateId) {
-  const query = db.from("schools").select("id, name, lat, lng");
+  // المدارس المؤرشفة (§25) تُستثنى من كل قائمة تشغيلية — تبقى مرئية في
+  // لوحة المشرف وحدها تحت مرشّح صريح.
+  const query = db.from("schools").select("id, name, lat, lng").is("archived_at", null);
   if (directorateId) query.eq("directorate_id", directorateId);
   const { data, error } = await query;
   if (error) throw error;
@@ -487,6 +591,7 @@ async function updateSchool(schoolId, patch) {
   if (patch.minAttendancePct !== undefined) row.min_attendance_pct = patch.minAttendancePct;
   if (patch.workStartTime    !== undefined) row.work_start_time     = patch.workStartTime || null;
   // School identity (هوية المدرسة) + GPS — reuses the existing lat/lng columns.
+  if (patch.schoolType    !== undefined) row.school_type    = patch.schoolType;
   if (patch.complexName   !== undefined) row.complex_name   = patch.complexName   || null;
   if (patch.classification!== undefined) row.classification = patch.classification|| null;
   if (patch.educationType !== undefined) row.education_type = patch.educationType || null;
@@ -692,6 +797,7 @@ async function getTodaySummary(directorateId) {
   // مدارس المديرية (نحتاج المعرّفات لفلترة الحضور الفردي)
   const schoolsRes = await db.from("schools")
     .select("id")
+    .is("archived_at", null)
     .eq("directorate_id", directorateId);
   if (schoolsRes.error) throw schoolsRes.error;
   const schoolIds = (schoolsRes.data || []).map((s) => s.id);
@@ -750,6 +856,7 @@ async function getSchoolsAttendanceStatus(directorateId, date) {
 
   const schoolsRes = await db.from("schools")
     .select("id, total_students")
+    .is("archived_at", null)
     .eq("directorate_id", directorateId);
   if (schoolsRes.error) throw schoolsRes.error;
 
@@ -867,7 +974,8 @@ async function getMinistryAttendanceSummary(date) {
 
   const { data: schools, error: schErr } = await db
     .from("schools")
-    .select("id, directorate_id");
+    .select("id, directorate_id")
+    .is("archived_at", null);
   if (schErr) throw schErr;
 
   const allSchoolIds = (schools || []).map(s => s.id);
@@ -967,24 +1075,72 @@ function gradeNameAr(grade) {
 }
 
 // ─── Teacher: get assigned classes ───────────────────────────────────────────
+/* مخبأ صفوف المعلّم — على نمط getCachedStudents الموجود أدناه.
+   كان هذا الاستعلام يضرب الشبكة دائماً بلا مخبأ، بينما الطلاب مخبّؤون
+   وبيانات المدرسة مخبّأة. فالمعلّم دون اتصال يفشل جلبُه فتُعرَض له «لا توجد
+   صفوف مسندة إليك» — وهي كذبة على معلّم له صفوف.
+   لا مهلة انتهاء (بخلاف الطلاب): إسناد الصفوف يتغيّر مرّة في الفصل لا يومياً،
+   ومخبأ عمره أسبوع أصدق بكثير من قائمة فارغة. البادئة في TENANT_CACHE_PREFIXES
+   فتُمحى عند الخروج ولا يرى معلّم صفوف زميله على جهاز مشترك. */
+const CLASSES_CACHE_PFX = 'nsams_classes_';
+
+function getCachedTeacherClasses(teacherId, year) {
+  try {
+    const raw = localStorage.getItem(`${CLASSES_CACHE_PFX}${teacherId}_${year}`);
+    if (!raw) return null;
+    const { data } = JSON.parse(raw);
+    return Array.isArray(data) ? data : null;
+  } catch { return null; }
+}
+
+function setCachedTeacherClasses(teacherId, year, data) {
+  try {
+    localStorage.setItem(`${CLASSES_CACHE_PFX}${teacherId}_${year}`,
+                         JSON.stringify({ ts: Date.now(), data }));
+  } catch { /* حصة التخزين ممتلئة — غير قاتل */ }
+}
+
+/* يرمي `NoCachedClassesError` حين يفشل الجلب ولا مخبأ — كي تميّز الواجهة
+   «تعذّر التحميل» عن «صفر صفوف فعلاً» بدل خلطهما في رسالة واحدة. */
+class NoCachedClassesError extends Error {
+  constructor(cause) {
+    super('تعذّر تحميل الصفوف ولا توجد نسخة محفوظة على هذا الجهاز.');
+    this.name = 'NoCachedClassesError';
+    this.cause = cause;
+  }
+}
+
 async function getTeacherClasses(teacherId) {
   const academicYear = getAcademicYear();
 
-  const { data, error } = await db
-    .from('class_teacher')
-    .select(`
-      class_id, role, subject_ids,
-      classes:class_id (
-        id, grade, section, school_id,
-        schools:school_id ( name, work_start_time )
-      )
-    `)
-    .eq('teacher_id',    teacherId)
-    .eq('academic_year', academicYear);
+  // دون اتصال: لا تُهدَر ثوانٍ في مهلة شبكة محكومة بالفشل — اقرأ المخبأ فوراً.
+  if (!navigator.onLine) {
+    const hit = getCachedTeacherClasses(teacherId, academicYear);
+    if (hit) return hit;
+  }
 
-  if (error) throw error;
+  let data;
+  try {
+    const res = await db
+      .from('class_teacher')
+      .select(`
+        class_id, role, subject_ids,
+        classes:class_id (
+          id, grade, section, school_id,
+          schools:school_id ( name, work_start_time )
+        )
+      `)
+      .eq('teacher_id',    teacherId)
+      .eq('academic_year', academicYear);
+    if (res.error) throw res.error;
+    data = res.data;
+  } catch (err) {
+    const hit = getCachedTeacherClasses(teacherId, academicYear);
+    if (hit) { console.warn('[Ruqi] صفوف المعلّم من المخبأ', err); return hit; }
+    throw new NoCachedClassesError(err);
+  }
 
-  return (data || []).map(row => {
+  const mapped = (data || []).map(row => {
     const c = row.classes;
     return {
       id:          c.id,
@@ -999,6 +1155,9 @@ async function getTeacherClasses(teacherId) {
       displayName: `الصف ${gradeNameAr(c.grade)} / شعبة ${c.section}`,
     };
   });
+
+  setCachedTeacherClasses(teacherId, academicYear, mapped);
+  return mapped;
 }
 
 // ─── Student cache (24-hour TTL) ─────────────────────────────────────────────
@@ -1130,7 +1289,7 @@ async function writeAudit({ schoolId, entity, entityId, action, changes = null, 
     if (error) throw error;
     return true;
   } catch (e) {
-    console.warn('[NSAMS] writeAudit failed (non-fatal)', e);
+    console.warn('[Ruqi] writeAudit failed (non-fatal)', e);
     return false;
   }
 }
@@ -1187,7 +1346,7 @@ async function enqueueOrSyncStudent(item) {
     return { success: true, id: item.id, synced: true };
   } catch (err) {
     await enqueueOutbox({ ...item, table: 'students' });
-    console.warn('[NSAMS] saveStudent: falling back to queue', err);
+    console.warn('[Ruqi] saveStudent: falling back to queue', err);
     return { success: true, id: item.id, synced: false };
   }
 }
@@ -1573,7 +1732,7 @@ async function saveStudentAttendance({ records, classId, schoolId, date, teacher
     return { success: true, localId, synced: true };
   } catch (err) {
     await enqueueOutbox({ ...payload, table: 'daily_student_attendance' });
-    console.warn('[NSAMS] saveStudentAttendance: falling back to queue', err);
+    console.warn('[Ruqi] saveStudentAttendance: falling back to queue', err);
     return { success: true, localId, synced: false };
   }
 }
@@ -1739,7 +1898,7 @@ async function queueOrSyncStaff(payload) {
     return { success: true, localId, synced: true };
   } catch (err) {
     await enqueueOutbox({ ...enriched, table: 'staff_attendance' });
-    console.warn('[NSAMS] staff attendance: falling back to queue', err);
+    console.warn('[Ruqi] staff attendance: falling back to queue', err);
     return { success: true, localId, synced: false };
   }
 }
@@ -2369,45 +2528,27 @@ function markStudentGradesSynced(localId) {
 async function syncStudentGradesRecord(payload) {
   const { records, classId, schoolId, subjectId, semester, academicYear, teacherId } = payload;
 
-  // A record with mark == null means the teacher blanked a previously-saved cell.
-  // Upsert alone would leave the stale value behind (silent grade-correction loss),
-  // so entered marks are upserted and cleared marks are deleted by the same
-  // conflict key. Both halves are idempotent, so queue replay is safe.
-  const entered = records.filter(r => r.mark != null);
-  const cleared = records.filter(r => r.mark == null);
+  const rows = records.map(r => ({
+    student_id:    r.studentId,
+    class_id:      classId,
+    school_id:     schoolId,
+    subject_id:    subjectId,
+    component_id:  r.componentId,
+    semester,
+    academic_year: academicYear,
+    mark:          r.mark,
+    recorded_by:   teacherId,
+    recorded_at:   new Date().toISOString(),
+  }));
+  if (rows.length === 0) return true;
 
-  if (entered.length) {
-    const rows = entered.map(r => ({
-      student_id:    r.studentId,
-      class_id:      classId,
-      school_id:     schoolId,
-      subject_id:    subjectId,
-      component_id:  r.componentId,
-      semester,
-      academic_year: academicYear,
-      mark:          r.mark,
-      recorded_by:   teacherId,
-      recorded_at:   new Date().toISOString(),
-    }));
-    const { error } = await db
-      .from('student_grades')
-      .upsert(rows, {
-        onConflict: 'student_id,component_id,semester,academic_year',
-        ignoreDuplicates: false,
-      });
-    if (error) throw error;
-  }
-
-  for (const r of cleared) {
-    const { error } = await db
-      .from('student_grades')
-      .delete()
-      .eq('student_id',    r.studentId)
-      .eq('component_id',  r.componentId)
-      .eq('semester',      semester)
-      .eq('academic_year', academicYear);
-    if (error) throw error;
-  }
+  const { error } = await db
+    .from('student_grades')
+    .upsert(rows, {
+      onConflict: 'student_id,component_id,semester,academic_year',
+      ignoreDuplicates: false,
+    });
+  if (error) throw error;
   return true;
 }
 
@@ -2430,7 +2571,7 @@ async function saveStudentGrades({ records, classId, schoolId, subjectId, semest
     return { success: true, localId, synced: true };
   } catch (err) {
     await enqueueOutbox({ ...payload, table: 'student_grades' });
-    console.warn('[NSAMS] saveStudentGrades: falling back to queue', err);
+    console.warn('[Ruqi] saveStudentGrades: falling back to queue', err);
     return { success: true, localId, synced: false };
   }
 }
@@ -2461,36 +2602,20 @@ function markStudentConductSynced(localId) {
 
 async function syncStudentConductRecord(payload) {
   const { records, classId, schoolId, academicYear, teacherId } = payload;
-
-  // Same delete-on-clear contract as grades: a null mark means a previously-saved
-  // conduct score was blanked and must be removed, not silently left in place.
-  const entered = records.filter(r => r.mark != null);
-  const cleared = records.filter(r => r.mark == null);
-
-  if (entered.length) {
-    const rows = entered.map(r => ({
-      student_id:    r.studentId,
-      class_id:      classId,
-      school_id:     schoolId,
-      academic_year: academicYear,
-      mark:          r.mark,
-      recorded_by:   teacherId,
-      recorded_at:   new Date().toISOString(),
-    }));
-    const { error } = await db
-      .from('student_conduct')
-      .upsert(rows, { onConflict: 'student_id,academic_year', ignoreDuplicates: false });
-    if (error) throw error;
-  }
-
-  for (const r of cleared) {
-    const { error } = await db
-      .from('student_conduct')
-      .delete()
-      .eq('student_id',    r.studentId)
-      .eq('academic_year', academicYear);
-    if (error) throw error;
-  }
+  const rows = records.map(r => ({
+    student_id:    r.studentId,
+    class_id:      classId,
+    school_id:     schoolId,
+    academic_year: academicYear,
+    mark:          r.mark,
+    recorded_by:   teacherId,
+    recorded_at:   new Date().toISOString(),
+  }));
+  if (rows.length === 0) return true;
+  const { error } = await db
+    .from('student_conduct')
+    .upsert(rows, { onConflict: 'student_id,academic_year', ignoreDuplicates: false });
+  if (error) throw error;
   return true;
 }
 
@@ -2511,7 +2636,7 @@ async function saveStudentConduct({ records, classId, schoolId, teacherId }) {
     return { success: true, localId, synced: true };
   } catch (err) {
     await enqueueOutbox({ ...payload, table: 'student_conduct' });
-    console.warn('[NSAMS] saveStudentConduct: falling back to queue', err);
+    console.warn('[Ruqi] saveStudentConduct: falling back to queue', err);
     return { success: true, localId, synced: false };
   }
 }
@@ -2652,6 +2777,9 @@ function computeYearResult(ctx) {
   return ok ? 'ناجح' : 'راسب';
 }
 
+// ⚠️ مرحلة مشتقّة من **رقم الصف** لبطاقات العلامات — ليست schools.school_type.
+//    الكلمات الثلاث نفسها والدلالة مختلفة: مدرسة ثانوية ترقّم صفوفها ١/٢/٣
+//    محلياً، فتُرجِع هذه الدالة 'primary' لصفوفها. لا تستبدل إحداهما بالأخرى.
 function stageForGrade(grade) {
   if (grade <= 6)  return 'primary';     // ابتدائي
   if (grade <= 9)  return 'preparatory'; // إعدادي
@@ -3052,9 +3180,17 @@ function subscribeNotifications(userId, onNew) {
   return () => db.removeChannel(ch);
 }
 
+function pushSupported() {
+  return ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
+}
+
+// يشترك في Web Push ويحفظ الاشتراك في Supabase. يفترض أن الإذن مُمنوح مسبقاً
+// (permission === 'granted') — لا يطلب الإذن بنفسه لأنّ طلب الإذن يجب أن يقع
+// ضمن إيماءة مستخدم (انظر initPushPrompt). يُعيد سلسلة حالة قابلة للفحص.
 async function registerPushSubscription() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-  if (!VAPID_PUBLIC_KEY.startsWith('B') || VAPID_PUBLIC_KEY.includes('Replace')) return; // placeholder guard
+  if (!pushSupported()) return 'unsupported';
+  if (!VAPID_PUBLIC_KEY.startsWith('B') || VAPID_PUBLIC_KEY.includes('Replace')) return 'no-vapid';
+  if (Notification.permission !== 'granted') return 'no-permission';
   try {
     const reg      = await navigator.serviceWorker.ready;
     const existing = await reg.pushManager.getSubscription();
@@ -3065,10 +3201,109 @@ async function registerPushSubscription() {
     const { error } = await db.functions.invoke('save-push-subscription', {
       body: { subscription: sub.toJSON() },
     });
-    if (error) console.warn('[NSAMS] push subscription save failed', error);
+    if (error) { console.warn('[Ruqi] push subscription save failed', error); return 'save-failed'; }
+    return 'ok';
   } catch (e) {
-    console.warn('[NSAMS] registerPushSubscription failed', e);
+    console.warn('[Ruqi] registerPushSubscription failed', e);
+    return 'error';
   }
+}
+
+// ── نافذة/زر تفعيل الإشعارات (يُستدعى من كل بوابة بعد الدخول) ─────────────────
+// لماذا هذا بدل النداء التلقائي القديم؟ لأنّ Notification.requestPermission()
+// عند التحميل بلا إيماءة مستخدم: Firefox يرفضه، iOS Safari يتجاهله (ولا يعمل Push
+// أصلاً إلا بعد تثبيت الـPWA)، وChrome يجعل رفض المستخدم دائماً — فلا يُنشَأ أي
+// اشتراك. هنا الطلب يقع داخل نقرة زر (إيماءة صالحة على كل المتصفّحات).
+const PUSH_SNOOZE_KEY = 'ruqi_push_prompt_snooze';
+
+async function initPushPrompt({ force = false } = {}) {
+  if (!pushSupported()) return;
+
+  // إذا كان الإذن ممنوحاً: نضمن وجود اشتراك حيّ (يعالج اشتراكاً منتهياً أو جهازاً
+  // جديداً) بلا أي واجهة — بصمت عند كل دخول.
+  if (Notification.permission === 'granted') {
+    registerPushSubscription().catch(() => {});
+    return;
+  }
+  // مرفوض نهائياً: لا يمكن إعادة الطلب برمجياً — نصمت.
+  if (Notification.permission === 'denied') return;
+
+  // permission === 'default': نعرض زراً غير مزعج. نحترم «التأجيل» السابق.
+  try {
+    if (!force && localStorage.getItem(PUSH_SNOOZE_KEY)) {
+      const until = Number(localStorage.getItem(PUSH_SNOOZE_KEY));
+      if (Number.isFinite(until) && Date.now() < until) return;
+    }
+  } catch { /* localStorage محجوب → أكمل */ }
+
+  if (document.getElementById('ruqi-push-prompt')) return; // idempotent
+
+  if (!document.getElementById('ruqi-push-prompt-css')) {
+    const st = document.createElement('style');
+    st.id = 'ruqi-push-prompt-css';
+    st.textContent = `
+      #ruqi-push-prompt{position:fixed;inset-inline-end:16px;inset-block-end:16px;z-index:9999;
+        max-width:340px;display:flex;gap:12px;align-items:flex-start;padding:14px 16px;
+        border-radius:14px;background:var(--paper-2,#1a2236);color:var(--ink,#e8edf7);
+        border:1px solid var(--line,#2a3550);box-shadow:0 10px 30px rgba(0,0,0,.35);
+        font-family:inherit;animation:ruqiPushIn .25s ease}
+      @keyframes ruqiPushIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+      #ruqi-push-prompt .rpp-ico{flex:0 0 auto;font-size:22px;line-height:1.2}
+      #ruqi-push-prompt .rpp-body{flex:1 1 auto;font-size:.86rem;line-height:1.6}
+      #ruqi-push-prompt .rpp-body b{display:block;margin-bottom:2px;font-size:.92rem}
+      #ruqi-push-prompt .rpp-actions{display:flex;gap:8px;margin-top:10px}
+      #ruqi-push-prompt button{font-family:inherit;font-size:.82rem;font-weight:700;
+        border-radius:9px;padding:7px 14px;cursor:pointer;border:1px solid transparent}
+      #ruqi-push-prompt .rpp-yes{background:var(--accent,#35b3ac);color:#04211f}
+      #ruqi-push-prompt .rpp-no{background:transparent;color:var(--ink-soft,#9fb0c9);
+        border-color:var(--line,#2a3550)}
+      @media (prefers-reduced-motion:reduce){#ruqi-push-prompt{animation:none}}`;
+    document.head.appendChild(st);
+  }
+
+  const box = document.createElement('div');
+  box.id = 'ruqi-push-prompt';
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-label', 'تفعيل الإشعارات');
+  box.innerHTML = `
+    <div class="rpp-ico" aria-hidden="true">🔔</div>
+    <div class="rpp-body">
+      <b>فعّل الإشعارات الفورية</b>
+      لتصلك التنبيهات المهمّة فور حدوثها حتى والتطبيق مغلق.
+      <div class="rpp-actions">
+        <button type="button" class="rpp-yes">تفعيل</button>
+        <button type="button" class="rpp-no">لاحقاً</button>
+      </div>
+    </div>`;
+  document.body.appendChild(box);
+
+  box.querySelector('.rpp-no').addEventListener('click', () => {
+    try { localStorage.setItem(PUSH_SNOOZE_KEY, String(Date.now() + 7 * 24 * 3600 * 1000)); } catch {}
+    box.remove();
+  });
+  box.querySelector('.rpp-yes').addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget; btn.disabled = true; btn.textContent = '…';
+    try {
+      const perm = await Notification.requestPermission(); // إيماءة صالحة → يعمل على كل المتصفّحات
+      if (perm === 'granted') {
+        const status = await registerPushSubscription();
+        if (status !== 'ok') console.warn('[Ruqi] push register status:', status);
+      }
+    } catch (e) { console.warn('[Ruqi] push prompt failed', e); }
+    try { localStorage.removeItem(PUSH_SNOOZE_KEY); } catch {}
+    box.remove();
+  });
+}
+
+// عندما يُدوّر الـSW الاشتراك (pushsubscriptionchange) يُرسل الاشتراك الجديد إلى
+// الصفحة — نحفظه هنا لأنّ الـSW لا يملك جلسة auth. مستمع واحد لكل البوابات.
+if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data?.type === 'PUSH_RESUBSCRIBED' && e.data.subscription) {
+      db.functions.invoke('save-push-subscription', { body: { subscription: e.data.subscription } })
+        .catch(() => {});
+    }
+  });
 }
 
 // Unified roster: all teachers (from users) + admins/workers (from school_personnel),
@@ -3215,7 +3450,7 @@ async function getAdminDirectorates() {
 async function getAdminSchools() {
   const { data, error } = await db
     .from('schools')
-    .select('id, name, directorate_id, directorates(name, governorate), classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name')
+    .select('id, name, directorate_id, directorates(name, governorate), school_type, classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name, archived_at')
     .order('name');
   if (error) throw error;
   return data ?? [];
@@ -3447,12 +3682,16 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-window.NSAMS_DB = {
+window.RUQI_DB = {
   // Auth
   login,
   logout,
   getCurrentUser,
   changePassword,
+
+  // رسائل المستخدم — مصدر واحد لترجمة الأخطاء في البوّابات الستّ
+  errMessage,
+  isNetworkError,
 
   // Schools
   getSchools,
@@ -3595,6 +3834,7 @@ window.NSAMS_DB = {
   markAllNotificationsRead,
   subscribeNotifications,
   registerPushSubscription,
+  initPushPrompt,
   escapeHtml,
 
   // Holiday calendar
@@ -3695,6 +3935,11 @@ window.NSAMS_DB = {
 
   // تنظيف مخابئ المستأجِر عند الخروج
   purgeTenantCaches,
+
+  // الاستيراد الجماعي من لوحة المديرية — §24
+  getSchoolClassesForDirectorate,
+  directorateBulkImportStudents,
+  directorateBulkImportStaff,
 
   // وثائق «لا مانع» — §23
   lookupStudentForTransfer,
@@ -4229,12 +4474,25 @@ async function getTransferDocuments() {
 // المدرسة، مخبأ الدلتا) ويُترك ما لا يخصّها:
 //   • outbox — كتابات لم تُزامَن بعد؛ مسحها فقدانُ عمل المستخدم لا حمايةٌ له.
 //   • nsams_device_id — معرّف الجهاز، لا بيانات فيه.
+/* ⚠️ البادئات هنا هي **المصدر الوحيد**. كانت مكرّرة نصّاً في ملفّين، فحين
+   تغيّرت بادئة ملفّ المدرسة إلى nsams_school2_ (لإهمال نسخ ما قبل §25) بقي
+   الترشيح هنا على nsams_school_ — و'nsams_school2_'.startsWith('nsams_school_')
+   يساوي false. فصار التنظيف الموضوع أصلاً لمنع تسريب بيانات المدرسة بين
+   الجلسات **بلا أثر** على أهمّ ما يُسرَّب. أي بادئة جديدة تُضاف هنا وتُستورَد
+   من هنا، لا تُكتب نصّاً في مكان آخر. */
+const TENANT_CACHE_PREFIXES = [
+  'nsams_stu_',      // صفوف الطلاب كاملةً: الأسماء والأرقام الوطنية وهواتف الأهل
+  'nsams_classes_',  // صفوف المعلّم المسندة — لئلّا يراها زميله على جهاز مشترك
+  'nsams_school2_',  // ملفّ المدرسة: الاسم والإحداثيات والأعداد والتصنيف
+  'nsams_draft_',    // مسودّات الحضور لكل صفّ ويوم — لم يكن ينظّفها شيء
+  'nsams_profile_',  // ملفّ الدور المخبّأ للدخول دون اتصال
+  'nsams_setup_done_',
+];
+
 async function purgeTenantCaches() {
   try {
     for (const k of Object.keys(localStorage)) {
-      if (k.startsWith(STUDENTS_CACHE_PFX) || k.startsWith('nsams_school_')) {
-        localStorage.removeItem(k);
-      }
+      if (TENANT_CACHE_PREFIXES.some(p => k.startsWith(p))) localStorage.removeItem(k);
     }
   } catch { /* غير قاتل */ }
 
@@ -4248,4 +4506,43 @@ async function purgeTenantCaches() {
       tx.onabort    = resolve;
     });
   } catch { /* غير قاتل */ }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §24 — الاستيراد الجماعي من لوحة المديرية
+// ─────────────────────────────────────────────────────────────────────────────
+// كل الكتابة عبر دوال security definer في القاعدة: المديرية لا تملك — ولا
+// يجوز أن تُمنَح — صلاحية RLS مباشرة على students أو staff_records أو classes.
+// ومتّصلة حصراً كبقية العمليات العابرة للمدارس؛ طابور الـ offline مخصّص
+// لكتابات المدرسة على بياناتها هي.
+
+// صفوف مدرسة داخل مديريتي — تلزم لمعاينة الاستيراد قبل الإرسال.
+async function getSchoolClassesForDirectorate(schoolId) {
+  const { data, error } = await db.rpc('get_school_classes_for_directorate', {
+    p_school_id: schoolId,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
+// rows: [{ first_name, father_name, family_name, gender, birth_date, national_id }]
+// تُستدعى مرّة لكل شعبة — الواجهة تُجمّع سطور الملفّ حسب الشعبة المُحلَّلة.
+async function directorateBulkImportStudents({ schoolId, classId, rows }) {
+  if (!isOnline()) throw new Error('الاستيراد الجماعي يتطلّب اتصالاً بالإنترنت.');
+  const { data, error } = await db.rpc('directorate_bulk_import_students', {
+    p_school_id: schoolId, p_class_id: classId, p_rows: rows,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// rows: [{ full_name, staff_type, gender, ...حقول اختيارية }]
+// مزامنة school_personnel تجري داخل الدالة نفسها، لا بخطوة تالية هنا.
+async function directorateBulkImportStaff({ schoolId, rows }) {
+  if (!isOnline()) throw new Error('الاستيراد الجماعي يتطلّب اتصالاً بالإنترنت.');
+  const { data, error } = await db.rpc('directorate_bulk_import_staff', {
+    p_school_id: schoolId, p_rows: rows,
+  });
+  if (error) throw error;
+  return data;
 }
