@@ -933,6 +933,8 @@ if (backNavBtn) {
 
 // ── App init ──────────────────────────────────────────────────────────────────
 async function initApp() {
+  await RUQI_PERMISSIONS.init();
+  RUQI_PERMISSIONS.applyToDom();
   showScreen('app');
   history.replaceState({ tab: 'attendance', d: 0 }, '', '#attendance');
   _navDepth = 0;
@@ -1741,7 +1743,7 @@ function switchTab(tab, fromHistory = false) {
       t.setAttribute('aria-selected', String(active));
     }
   }
-  if (fabReport) fabReport.hidden = tab !== 'attendance';
+  if (fabReport) fabReport.hidden = tab !== 'attendance' || !RUQI_PERMISSIONS.isEnabled('emergency-reports');
   if (btnMore) btnMore.classList.toggle('is-active', tab !== 'attendance');
   closeMoreMenu();
 

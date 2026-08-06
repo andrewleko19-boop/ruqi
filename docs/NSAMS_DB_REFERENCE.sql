@@ -877,3 +877,46 @@ create policy "report photos admin upload"
 --   select c.name, count(s.id) from public.classes c
 --   left join public.students s on s.class_id = c.id
 --   where c.school_id = '<SCHOOL_ID>' group by c.name order by c.name;
+
+-- ════════════════════════════════════════════════════════════════════════════
+--  ١١. §26 — نظام "الوحدات القابلة للتفعيل" (Module Permissions)
+-- ════════════════════════════════════════════════════════════════════════════
+-- طبقة عرض (UI rollout) فوق نظام الأدوار، **ليست** طبقة أمان: current_user_role()
+-- وكل RLS policy قائمة لم يُلمَسا. إخفاء وحدة = إخفاء عناصرها في الواجهة فقط؛
+-- استعلاماتها وRPCs الخاصة بها تبقى تعمل بلا أي تغيير — الغرض تفعيل تدريجي
+-- (مدرسة/مديرية/وزارة) دون كسر أي علاقة بيانات.
+--
+--  جداول جديدة:
+--    modules(key, name_ar, description_ar, category, is_core, sort_order)
+--      — فهرس 14 وحدة أعمال. is_core=true (attendance-core, student-records,
+--      sysadmin-console) محمية بـ trigger (enforce_core_module_enabled) يفرض
+--      is_enabled=true دائماً بصرف النظر عمّا تكتبه الواجهة.
+--    role_module_permissions(role_key, module_key, is_enabled, updated_by, updated_at)
+--      — مصفوفة (دور × وحدة)، مفتاحها المركّب (role_key, module_key). قراءة
+--      وكتابة مقصورتان على current_user_role() = 'ministry_user' (نفس شرط
+--      الوصول إلى admin/ اليوم — لم يُشدَّد).
+--
+--  عمود جديد: users.permission_role (نص، اختياري) — مستوى إداري فرعي ضمن نفس
+--  role التقني، القيم: teacher | school_admin | directorate_staff |
+--  directorate_head | ministry_staff | minister. الحسابات القائمة هُجِّرت إلى
+--  المستوى الأعلى (directorate_head / minister) في نفس migration الإضافة، فلا
+--  فقدان وصول. الوزارة تُغيّر هذا الحقل لاحقاً من تبويب "المستخدمون" في admin/
+--  لتمييز "الوزير" عن "موظف الوزارة"، و"مدير التربية" عن "موظف مديرية".
+--
+--  ⚠ ولي الأمر (parent) لا صفّ له في users (انظر §الأهل أعلاه) — لذلك
+--    current_user_permission_role() يتحقّق أخيراً من وجوده في parent_links
+--    قبل أن يُرجِع 'parent'. أي تعديل مستقبلي على مسار مصادقة الأهل (parent-auth)
+--    يجب أن يُبقي هذا الافتراض صحيحاً (أن كل جلسة أهل ظاهرة في parent_links).
+--
+--  دالتان جديدتان (security definer + set search_path، بلا EXECUTE لـ anon):
+--    current_user_permission_role() → text  — المستوى الفعّال للمستخدم الحالي.
+--    get_my_module_permissions()    → setof text — مفاتيح الوحدات المفعّلة له.
+--    كل بوّابة تستدعي الثانية بعد تسجيل الدخول (shared/permissions.js) وتُخفي
+--    كل عنصر DOM يحمل data-module لمفتاح غائب عن النتيجة.
+--
+--  الحزمة الأولى (مفعّلة بحسب ملاءمة الدور): attendance-core, student-records,
+--  school-requests, emergency-reports, analytics-dashboards, notifications,
+--  sysadmin-console. المراحل التالية (مخفية للجميع في seed §26.8، تُفعَّل من
+--  لوحة admin/ دون أي نشر جديد): staff-hr, grades-reportcards,
+--  official-statement, year-end-clearance, transfer-noc, parent-portal,
+--  national-registry.

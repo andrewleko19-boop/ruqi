@@ -72,6 +72,7 @@ const childrenBar   = $('children-bar');
 const childrenPills = $('children-pills');
 const mainLoading   = $('main-loading');
 const noStudents    = $('no-students');
+const portalDisabled= $('portal-disabled');
 const bottomNav     = $('bottom-nav');
 const btnLogout     = $('btn-logout');
 
@@ -323,9 +324,18 @@ formOtp.addEventListener('submit', async e => {
 async function loadApp() {
   mainLoading.hidden = false;
   noStudents.hidden = true;
+  portalDisabled.hidden = true;
   childrenBar.hidden = true;
   bottomNav.hidden = true;
   allViews.forEach(v => v.hidden = true);
+
+  await window.RUQI_PERMISSIONS.init();
+  if (!window.RUQI_PERMISSIONS.isEnabled('parent-portal')) {
+    mainLoading.hidden = true;
+    portalDisabled.hidden = false;
+    return;
+  }
+  window.RUQI_PERMISSIONS.applyToDom();
 
   try {
     const students = await parentGetMyStudents();

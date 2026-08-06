@@ -365,32 +365,32 @@
       <div class="sheet-body">
         <nav class="bubble-grid" role="tablist" aria-label="أقسام لوحة المدير">
           <button class="bubble-tab is-active" id="tab-attendance" role="tab"
-                  aria-selected="true" data-tab="attendance">
+                  aria-selected="true" data-tab="attendance" data-module="attendance-core">
             <svg class="icon"><use href="#ic-home"/></svg>
             <span>الرئيسية</span>
           </button>
           <button class="bubble-tab" id="tab-absence" role="tab"
-                  aria-selected="false" data-tab="absence">
+                  aria-selected="false" data-tab="absence" data-module="attendance-core">
             <svg class="icon"><use href="#ic-x-circle"/></svg>
             <span>الغياب</span>
           </button>
           <button class="bubble-tab" id="tab-summary-reports" role="tab"
-                  aria-selected="false" data-tab="summary-reports">
+                  aria-selected="false" data-tab="summary-reports" data-module="analytics-dashboards">
             <svg class="icon"><use href="#ic-bar-chart"/></svg>
             <span>التقارير</span>
           </button>
           <button class="bubble-tab" id="tab-manage" role="tab"
-                  aria-selected="false" data-tab="manage">
+                  aria-selected="false" data-tab="manage" data-module="student-records">
             <svg class="icon"><use href="#ic-users"/></svg>
             <span>الصفوف</span>
           </button>
           <button class="bubble-tab" id="tab-students" role="tab"
-                  aria-selected="false" data-tab="students">
+                  aria-selected="false" data-tab="students" data-module="student-records">
             <svg class="icon"><use href="#ic-user"/></svg>
             <span>الطلاب</span>
           </button>
           <button class="bubble-tab" id="tab-personnel" role="tab"
-                  aria-selected="false" data-tab="personnel">
+                  aria-selected="false" data-tab="personnel" data-module="staff-hr">
             <svg class="icon"><use href="#ic-receipt"/></svg>
             <span>الكادر</span>
           </button>
@@ -400,27 +400,27 @@
             <span>إعدادات المدرسة</span>
           </button>
           <button class="bubble-tab" id="tab-subjects" role="tab"
-                  aria-selected="false" data-tab="subjects">
+                  aria-selected="false" data-tab="subjects" data-module="school-requests">
             <svg class="icon"><use href="#ic-inbox"/></svg>
             <span>الطلبات</span>
           </button>
           <button class="bubble-tab" id="tab-reports" role="tab"
-                  aria-selected="false" data-tab="reports">
+                  aria-selected="false" data-tab="reports" data-module="grades-reportcards">
             <svg class="icon"><use href="#ic-award"/></svg>
             <span>الشهادات</span>
           </button>
           <button class="bubble-tab" id="tab-registry" role="tab"
-                  aria-selected="false" data-tab="registry">
+                  aria-selected="false" data-tab="registry" data-module="staff-hr">
             <svg class="icon"><use href="#ic-user-group"/></svg>
             <span>الكوادر</span>
           </button>
           <button class="bubble-tab" id="tab-statement" role="tab"
-                  aria-selected="false" data-tab="statement">
+                  aria-selected="false" data-tab="statement" data-module="official-statement">
             <svg class="icon"><use href="#ic-file-text"/></svg>
             <span>البيان</span>
           </button>
           <button class="bubble-tab" id="tab-noc" role="tab"
-                  aria-selected="false" data-tab="noc">
+                  aria-selected="false" data-tab="noc" data-module="transfer-noc">
             <svg class="icon"><use href="#ic-send"/></svg>
             <span>وثائق لا مانع</span>
           </button>
@@ -2825,7 +2825,7 @@
   </main><!-- /page (noc) -->
 
   <!-- FAB: Emergency Report -->
-  <button class="fab" id="btn-open-report" aria-label="فتح نموذج البلاغ الطارئ">
+  <button class="fab" id="btn-open-report" data-module="emergency-reports" aria-label="فتح نموذج البلاغ الطارئ">
     <svg class="icon icon-lg"><use href="#ic-alert"/></svg>
     <span class="fab-label">بلاغ طارئ</span>
   </button>
@@ -3529,9 +3529,10 @@
   </div>
 </div>
 
-<!-- Load order: Supabase → shared DB → this module -->
+<!-- Load order: Supabase → shared DB → permissions → this module -->
 <script src="../shared/qr.js"></script>
 <script type="module" src="../shared/db.js"></script>
+<script type="module" src="../shared/permissions.js"></script>
 <script type="module" src="./script.js"></script>
 </body>
 </html>

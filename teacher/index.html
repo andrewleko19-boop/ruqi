@@ -262,7 +262,7 @@
           <svg class="icon icon-sm"><use href="#ic-clipboard"/></svg>
           الحضور
         </button>
-        <button id="mode-grades" class="mode-tab" role="tab" aria-selected="false">
+        <button id="mode-grades" class="mode-tab" role="tab" aria-selected="false" data-module="grades-reportcards">
           <svg class="icon icon-sm"><use href="#ic-award"/></svg>
           الدرجات
         </button>
@@ -726,9 +726,10 @@
   </div>
 </div>
 
-<!-- Load order: Supabase → shared DB → this module -->
+<!-- Load order: Supabase → shared DB → permissions → this module -->
 
 <script type="module" src="../shared/db.js"></script>
+<script type="module" src="../shared/permissions.js"></script>
 <script type="module" src="./script.js"></script>
 </body>
 </html>

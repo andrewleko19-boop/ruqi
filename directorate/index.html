@@ -164,24 +164,24 @@
 
     <!-- شريط التنقّل الجانبي (يتحوّل إلى شريط سفلي على الجوّال) -->
     <nav class="dir-rail" role="tablist" aria-label="أقسام لوحة المديرية">
-      <button class="dir-tab-btn is-active" data-tab="overview" role="tab" aria-selected="true">
+      <button class="dir-tab-btn is-active" data-tab="overview" role="tab" aria-selected="true" data-module="analytics-dashboards">
         <svg class="icon"><use href="#icon-map"/></svg><span class="dir-rail-label">نظرة عامة</span>
       </button>
-      <button class="dir-tab-btn" data-tab="performance" role="tab" aria-selected="false">
+      <button class="dir-tab-btn" data-tab="performance" role="tab" aria-selected="false" data-module="analytics-dashboards">
         <svg class="icon"><use href="#icon-clock"/></svg><span class="dir-rail-label">الأداء</span>
       </button>
-      <button class="dir-tab-btn" data-tab="approvals" role="tab" aria-selected="false">
+      <button class="dir-tab-btn" data-tab="approvals" role="tab" aria-selected="false" data-module="school-requests">
         <svg class="icon"><use href="#icon-check"/></svg><span class="dir-rail-label">الاعتمادات</span>
         <span class="dir-rail-count" id="rail-count-approvals" hidden>0</span>
       </button>
-      <button class="dir-tab-btn" data-tab="academic" role="tab" aria-selected="false">
+      <button class="dir-tab-btn" data-tab="academic" role="tab" aria-selected="false" data-module="grades-reportcards">
         <svg class="icon"><use href="#icon-clipboard"/></svg><span class="dir-rail-label">المستوى الأكاديمي</span>
       </button>
-      <button class="dir-tab-btn" data-tab="reports" role="tab" aria-selected="false">
+      <button class="dir-tab-btn" data-tab="reports" role="tab" aria-selected="false" data-module="emergency-reports">
         <svg class="icon"><use href="#icon-alert"/></svg><span class="dir-rail-label">البلاغات</span>
         <span class="dir-rail-count" id="rail-count-reports" hidden>0</span>
       </button>
-      <button class="dir-tab-btn" data-tab="schools" role="tab" aria-selected="false">
+      <button class="dir-tab-btn" data-tab="schools" role="tab" aria-selected="false" data-module="student-records">
         <svg class="icon"><use href="#icon-school"/></svg><span class="dir-rail-label">المدارس والطاقم</span>
       </button>
     </nav>
@@ -430,7 +430,7 @@
     <div id="dir-tab-approvals" class="dir-tab-panel">
     <div class="main-content">
       <!-- الجلاءات (اعتماد النتائج النهائية) -->
-      <section class="panel" id="result-sheets-card">
+      <section class="panel" id="result-sheets-card" data-module="year-end-clearance">
         <div class="panel-header">
           <div><span class="eyebrow">اعتمادات</span>
             <h2>الجلاءات</h2></div>
@@ -473,7 +473,7 @@
       </section>
 
       <!-- البيانات الشهرية -->
-      <section class="panel" id="statements-card">
+      <section class="panel" id="statements-card" data-module="official-statement">
         <div class="panel-header">
           <div><span class="eyebrow">اعتمادات</span>
             <h2>البيانات الشهرية</h2></div>
@@ -499,7 +499,7 @@
       </section>
 
       <!-- طلبات المدارس -->
-      <section class="panel" id="requests-card">
+      <section class="panel" id="requests-card" data-module="school-requests">
         <div class="panel-header">
           <div><span class="eyebrow">اعتمادات</span>
             <h2>طلبات المدارس</h2></div>
@@ -1206,6 +1206,8 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script src="../shared/import-parser.js"></script>
-  <script type="module" src="../shared/db.js"></script>  <script type="module" src="script.js"></script>
+  <script type="module" src="../shared/db.js"></script>
+  <script type="module" src="../shared/permissions.js"></script>
+  <script type="module" src="script.js"></script>
 </body>
 </html>

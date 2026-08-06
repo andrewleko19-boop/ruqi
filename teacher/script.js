@@ -418,6 +418,8 @@ btnLogoutOk.addEventListener('click', async () => {
 
 // ── App Init ──────────────────────────────────────────────────────────────────
 async function initApp() {
+  await RUQI_PERMISSIONS.init();
+  RUQI_PERMISSIONS.applyToDom();
   showScreen('app');
   showView('home');
 

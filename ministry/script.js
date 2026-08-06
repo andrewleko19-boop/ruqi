@@ -9,6 +9,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { supabase, errMessage } from '../shared/db.js';
+import * as RUQI_PERMISSIONS from '../shared/permissions.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const loginScreen    = document.getElementById('login-screen');
@@ -221,10 +222,12 @@ btnLogoutOk.addEventListener('click', async () => {
   location.reload();
 });
 
-function showDashboard(email, userId) {
+async function showDashboard(email, userId) {
   loginScreen.classList.add('hidden');
   dashboard.classList.remove('hidden');
   userEmailEl.textContent = email;
+  await RUQI_PERMISSIONS.init();
+  RUQI_PERMISSIONS.applyToDom();
   setTodayLabel();
   loadAllData();
   startAutoRefresh();

@@ -3465,12 +3465,47 @@ async function createAdminSchool(data) {
 async function getAdminUsers() {
   const { data, error } = await db
     .from('users')
-    .select('id, full_name, role, school_id, directorate_id, schools(name), directorates(name)')
+    .select('id, full_name, role, permission_role, school_id, directorate_id, schools(name), directorates(name)')
     .in('role', ['school_admin', 'directorate_user', 'ministry_user'])
     .order('role')
     .order('full_name');
   if (error) throw error;
   return data ?? [];
+}
+
+async function updateUserPermissionRole(userId, permissionRole) {
+  const { error } = await db
+    .from('users')
+    .update({ permission_role: permissionRole })
+    .eq('id', userId);
+  if (error) throw error;
+}
+
+// ─── الوحدات والصلاحيات — لوحة التحكم المركزية (module permissions) ─────────
+
+async function getModuleCatalog() {
+  const { data, error } = await db
+    .from('modules')
+    .select('key, name_ar, description_ar, category, is_core, sort_order')
+    .order('sort_order');
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function getRoleModulePermissions() {
+  const { data, error } = await db
+    .from('role_module_permissions')
+    .select('role_key, module_key, is_enabled, updated_at');
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function setRoleModulePermission(roleKey, moduleKey, isEnabled) {
+  const { error } = await db
+    .from('role_module_permissions')
+    .upsert({ role_key: roleKey, module_key: moduleKey, is_enabled: isEnabled },
+             { onConflict: 'role_key,module_key' });
+  if (error) throw error;
 }
 
 async function getAuditLogAll({ schoolId, from, to, offset = 0, limit = 100 } = {}) {
@@ -3863,7 +3898,13 @@ window.RUQI_DB = {
   getAdminSchools,
   createAdminSchool,
   getAdminUsers,
+  updateUserPermissionRole,
   getAuditLogAll,
+
+  // الوحدات والصلاحيات — لوحة التحكم المركزية
+  getModuleCatalog,
+  getRoleModulePermissions,
+  setRoleModulePermission,
 
   // البيان الشهري — القوائم المرجعية وسجل الكوادر
   getLookupList,

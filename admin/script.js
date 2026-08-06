@@ -1,4 +1,8 @@
-import { supabase, supabaseUrl, errMessage } from '../shared/db.js';
+import {
+  supabase, supabaseUrl, errMessage,
+  getModuleCatalog, getRoleModulePermissions, setRoleModulePermission,
+  updateUserPermissionRole,
+} from '../shared/db.js';
 import { CustomSelect } from '../shared/csel.js';
 
 const EDGE_BASE = supabaseUrl + '/functions/v1';
@@ -170,6 +174,13 @@ const delHolidayClose   = document.getElementById('del-holiday-close');
 const delHolidayCancel  = document.getElementById('del-holiday-cancel');
 const delHolidayConfirm = document.getElementById('del-holiday-confirm');
 
+// Modules & permissions tab
+const modulesLoading    = document.getElementById('modules-loading');
+const modulesMatrixWrap = document.getElementById('modules-matrix-wrap');
+const modulesMatrixHead = document.getElementById('modules-matrix-head');
+const modulesMatrixBody = document.getElementById('modules-matrix-tbody');
+const modulesSaveStatus = document.getElementById('modules-save-status');
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let allSchools     = [];   // { id, name, directorate_id, directorates:{name,governorate}, ... }
 let allUsers       = [];   // { id, full_name, role, school_id, directorate_id, schools, directorates }
@@ -179,6 +190,8 @@ let pendingDeactivateId = null;
 let pendingDeleteHolidayId = null;
 let auditOffset    = 0;
 const AUDIT_LIMIT  = 100;
+let moduleCatalog   = [];   // { key, name_ar, description_ar, category, is_core, sort_order }
+let rolePermsByCell = {};   // `${role_key}:${module_key}` -> boolean
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -193,6 +206,31 @@ function roleName(role) {
 function roleBadgeClass(role) {
   return { school_admin: 'role-school-admin', directorate_user: 'role-directorate', ministry_user: 'role-ministry' }[role] ?? '';
 }
+
+// ── المستوى الإداري الفرعي (permission_role) — يفصل "الوزير" عن "موظف
+// الوزارة"، و"مدير التربية" عن "موظف مديرية"، ضمن نفس role التقني (RLS لا
+// يتغيّر). يُستخدم في تبويب المستخدمين وفي مصفوفة الوحدات والصلاحيات. ─────────
+const PERMISSION_ROLE_OPTIONS = {
+  directorate_user: [
+    { value: 'directorate_head',  label: 'مدير التربية' },
+    { value: 'directorate_staff', label: 'موظف مديرية' },
+  ],
+  ministry_user: [
+    { value: 'minister',       label: 'الوزير' },
+    { value: 'ministry_staff', label: 'موظف الوزارة' },
+  ],
+};
+
+// ترتيب أعمدة مصفوفة الوحدات — يغطي كل الأدوار السبعة في role_module_permissions.
+const MATRIX_ROLES = [
+  { key: 'teacher',           label: 'معلم / موجّه' },
+  { key: 'school_admin',      label: 'مدير مدرسة' },
+  { key: 'directorate_staff', label: 'موظف مديرية' },
+  { key: 'directorate_head',  label: 'مدير التربية' },
+  { key: 'ministry_staff',    label: 'موظف الوزارة' },
+  { key: 'minister',          label: 'الوزير' },
+  { key: 'parent',            label: 'ولي الأمر' },
+];
 
 async function edgeFetch(path, body) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -261,6 +299,7 @@ function showDashboard(email) {
     // بنفسها، فرسمها قبل ذلك يعرض أصفاراً كاذبة لثانية.
     Promise.allSettled([
       loadSchools(), loadUsers(), loadHolidays(), loadLookups(), loadSubjectCatalog(),
+      loadModulesMatrix(),
     ]).then(renderOverview);
     populateAuditSchoolFilter();
   });
@@ -633,7 +672,7 @@ async function loadUsers() {
 
   const { data, error } = await supabase
     .from('users')
-    .select('id, full_name, role, is_active, school_id, directorate_id, schools(name), directorates(name)')
+    .select('id, full_name, role, permission_role, is_active, school_id, directorate_id, schools(name), directorates(name)')
     .in('role', ['school_admin', 'directorate_user', 'ministry_user'])
     .order('role')
     .order('full_name');
@@ -681,11 +720,18 @@ function renderUsers() {
              <svg width="13" height="13"><use href="#icon-undo"/></svg> إعادة تفعيل
            </button>`
         : `<button class="btn btn-danger btn-sm" data-deactivate="${esc(u.id)}" data-name="${esc(u.full_name)}">تعطيل</button>`;
+    const permOptions = PERMISSION_ROLE_OPTIONS[u.role];
+    const permCell = permOptions
+      ? `<select class="perm-role-select" data-perm-role="${esc(u.id)}" onclick="event.stopPropagation()">
+           ${permOptions.map(o => `<option value="${o.value}" ${u.permission_role === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}
+         </select>`
+      : '<span class="muted">—</span>';
     return `
     <tr class="${u.is_active === false ? 'is-off' : ''}" style="cursor:pointer" data-view-cred="${esc(u.id)}" data-cred-name="${esc(u.full_name ?? '')}">
       <td class="muted num">${(usersPage - 1) * PAGE_SIZE + i + 1}</td>
       <td>${esc(u.full_name ?? '—')}</td>
       <td><span class="role-badge ${roleBadgeClass(u.role)}">${roleName(u.role)}</span></td>
+      <td>${permCell}</td>
       <td>${esc(org)}</td>
       <td class="row-actions-cell"><div class="row-actions">${action}</div></td>
     </tr>`;
@@ -708,9 +754,89 @@ function renderUsers() {
   usersTbody.querySelectorAll('[data-view-cred]').forEach(row => {
     row.addEventListener('click', () => openCredModal(row.dataset.viewCred, row.dataset.credName));
   });
+  usersTbody.querySelectorAll('[data-perm-role]').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      const userId = sel.dataset.permRole;
+      sel.disabled = true;
+      try {
+        await updateUserPermissionRole(userId, sel.value);
+        const u = allUsers.find(x => x.id === userId);
+        if (u) u.permission_role = sel.value;
+      } catch (e) {
+        alertModal(`تعذّر تحديث المستوى الإداري — ${errMessage(e, 'أعد المحاولة.')}`);
+        renderUsers();
+      } finally {
+        sel.disabled = false;
+      }
+    });
+  });
 
   renderPager(document.getElementById('users-pager'), filtered.length, usersPage,
               p => { usersPage = p; renderUsers(); });
+}
+
+// ── الوحدات والصلاحيات — لوحة التحكم المركزية ────────────────────────────────
+async function loadModulesMatrix() {
+  show(modulesLoading);
+  hide(modulesMatrixWrap);
+  try {
+    const [catalog, perms] = await Promise.all([getModuleCatalog(), getRoleModulePermissions()]);
+    moduleCatalog = catalog;
+    rolePermsByCell = {};
+    for (const p of perms) rolePermsByCell[`${p.role_key}:${p.module_key}`] = p.is_enabled;
+    renderModulesMatrix();
+  } catch (e) {
+    console.error(e);
+  } finally {
+    hide(modulesLoading);
+  }
+}
+
+function renderModulesMatrix() {
+  modulesMatrixHead.innerHTML =
+    '<th>الوحدة</th>' + MATRIX_ROLES.map(r => `<th>${r.label}</th>`).join('');
+
+  modulesMatrixBody.innerHTML = moduleCatalog.map(m => {
+    const cells = MATRIX_ROLES.map(r => {
+      const key = `${r.key}:${m.key}`;
+      const on = !!rolePermsByCell[key];
+      const locked = m.is_core; // وحدة أساسية — لا تُعطَّل
+      return `<td style="text-align:center">
+        <input type="checkbox" data-cell="${key}" ${on ? 'checked' : ''} ${locked ? 'disabled' : ''}
+               title="${locked ? 'وحدة أساسية — لا يمكن تعطيلها' : ''}" />
+      </td>`;
+    }).join('');
+    return `<tr>
+      <td>
+        <strong>${esc(m.name_ar)}</strong>${m.is_core ? ' ★' : ''}
+        <div class="muted" style="font-size:.76rem;margin-top:2px">${esc(m.description_ar)}</div>
+      </td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  show(modulesMatrixWrap);
+  hide(modulesLoading);
+
+  modulesMatrixBody.querySelectorAll('[data-cell]').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const [roleKey, moduleKey] = cb.dataset.cell.split(':');
+      cb.disabled = true;
+      modulesSaveStatus.textContent = 'جارٍ الحفظ…';
+      try {
+        await setRoleModulePermission(roleKey, moduleKey, cb.checked);
+        rolePermsByCell[cb.dataset.cell] = cb.checked;
+        modulesSaveStatus.textContent = 'تم الحفظ ✓';
+        setTimeout(() => { modulesSaveStatus.textContent = ''; }, 2000);
+      } catch (e) {
+        cb.checked = !cb.checked;
+        modulesSaveStatus.textContent = '';
+        alertModal(`تعذّر حفظ التبديل — ${errMessage(e, 'أعد المحاولة.')}`);
+      } finally {
+        cb.disabled = moduleCatalog.find(m => m.key === moduleKey)?.is_core || false;
+      }
+    });
+  });
 }
 
 usersRoleFilter.addEventListener('change', () => { usersPage = 1; renderUsers(); });
