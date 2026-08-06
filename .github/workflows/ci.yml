@@ -41,6 +41,9 @@ jobs:
       - name: Manifest sanity
         run: node tools/check-manifest.mjs
 
+      - name: db.js import/export consistency
+        run: node tools/check-db-imports.mjs
+
   edge-functions:
     name: Type-check Supabase Edge Functions (Deno)
     runs-on: ubuntu-latest
