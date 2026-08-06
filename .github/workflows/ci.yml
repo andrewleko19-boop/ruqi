@@ -40,3 +40,6 @@ jobs:
 
       - name: Manifest sanity
         run: node tools/check-manifest.mjs
+
+      - name: db.js import/export consistency
+        run: node tools/check-db-imports.mjs

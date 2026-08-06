@@ -4,11 +4,12 @@
   "private": true,
   "description": "Offline-first multi-page PWA for national school-attendance tracking (school / directorate / ministry / teacher). CI tooling lives here; the app itself is the static HTML/JS in each role folder.",
   "scripts": {
-    "check": "npm run check:js && npm run check:html && npm run check:versions && npm run check:manifest",
+    "check": "npm run check:js && npm run check:html && npm run check:versions && npm run check:manifest && npm run check:imports",
     "check:js": "node tools/check-js-syntax.mjs",
     "check:html": "html-validate index.html verify.html school/index.html directorate/index.html directorate/school.html ministry/index.html teacher/index.html parent/index.html admin/index.html",
     "check:versions": "node tools/check-versions.mjs",
     "check:manifest": "node tools/check-manifest.mjs",
+    "check:imports": "node tools/check-db-imports.mjs",
     "serve": "npx serve . -l 8000",
     "lighthouse": "lhci autorun"
   },
