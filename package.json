@@ -15,7 +15,7 @@
   },
   "devDependencies": {
     "@lhci/cli": "^0.13.0",
-    "html-validate": "^8.18.0"
+    "html-validate": "^8.29.0"
   },
   "engines": {
     "node": ">=20"

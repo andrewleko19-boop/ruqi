@@ -27,10 +27,13 @@ function json(obj: unknown, status = 200): Response {
 // ── Minimal VAPID + Web Push implementation (no npm:web-push dependency) ──────
 // We sign the request manually using the Web Crypto API available in Deno Deploy.
 
-function base64urlDecode(s: string): Uint8Array {
+function base64urlDecode(s: string): Uint8Array<ArrayBuffer> {
   s = s.replace(/-/g, "+").replace(/_/g, "/");
   while (s.length % 4) s += "=";
-  return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  const decoded = atob(s);
+  const result = new Uint8Array(decoded.length);
+  for (let i = 0; i < decoded.length; i++) result[i] = decoded.charCodeAt(i);
+  return result;
 }
 
 function base64urlEncode(buf: ArrayBuffer | Uint8Array): string {
@@ -158,7 +161,7 @@ async function sendWebPush(
   }
 }
 
-function concatBuffers(...bufs: (ArrayBuffer | Uint8Array)[]): Uint8Array {
+function concatBuffers(...bufs: (ArrayBuffer | Uint8Array)[]): Uint8Array<ArrayBuffer> {
   const total  = bufs.reduce((n, b) => n + b.byteLength, 0);
   const result = new Uint8Array(total);
   let   offset = 0;

@@ -163,6 +163,11 @@
       <button class="tab-btn" data-tab="audit" role="tab" aria-selected="false" aria-controls="tab-audit">
         <svg><use href="#icon-ledger"/></svg><span class="rail-label">سجل التدقيق</span>
       </button>
+
+      <div class="rail-group">النظام</div>
+      <button class="tab-btn" data-tab="modules" role="tab" aria-selected="false" aria-controls="tab-modules">
+        <svg><use href="#icon-shield"/></svg><span class="rail-label">الوحدات والصلاحيات</span>
+      </button>
     </nav>
 
     <main class="main-content">
@@ -298,6 +303,7 @@
                   <th>#</th>
                   <th>الاسم</th>
                   <th>الدور</th>
+                  <th>المستوى الإداري</th>
                   <th>المدرسة / المديرية</th>
                   <th></th>
                 </tr>
@@ -463,6 +469,31 @@
             </table>
           </div>
           <div id="subjects-empty" class="table-empty hidden">لا توجد مواد بعد.</div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════
+           تبويب 6: الوحدات والصلاحيات (تفعيل تدريجي بالدور)
+      ══════════════════════════════════════════════ -->
+      <div id="tab-modules" class="tab-panel" role="tabpanel">
+        <div class="section-card">
+          <div class="section-header">
+            <h2>الوحدات والصلاحيات</h2>
+            <span id="modules-save-status" class="filter-hint"></span>
+          </div>
+          <p class="table-empty" style="text-align:right;color:var(--text-dim);padding:0 0 10px">
+            حدّد أي وحدة أعمال تظهر لكل دور — التبديل ينعكس فوراً على واجهة المستخدمين
+            دون أي نشر جديد للتطبيق. الوحدات المؤشَّرة (★) أساسية للتشغيل اليومي ولا يمكن تعطيلها.
+          </p>
+          <div id="modules-loading" class="table-loading">
+            <div class="spinner"></div><span>جارٍ تحميل المصفوفة…</span>
+          </div>
+          <div id="modules-matrix-wrap" class="table-wrapper hidden">
+            <table id="modules-matrix-table">
+              <thead><tr id="modules-matrix-head"></tr></thead>
+              <tbody id="modules-matrix-tbody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 

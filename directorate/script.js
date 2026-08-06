@@ -91,6 +91,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const user = await getCurrentUser();
   if (user && user.role === 'directorate_user') {
     currentUser = user;
+    await RUQI_PERMISSIONS.init();
+    RUQI_PERMISSIONS.applyToDom();
+    // إن كانت الوحدة الافتراضية (نظرة عامة) مخفية، فعِّل أوّل تبويب ظاهر بدلاً
+    // من ترك اللوحة بلا تبويب نشط.
+    if (document.querySelector('.dir-tab-btn.is-active')?.hidden) {
+      const firstVisible = document.querySelector('.dir-tab-btn:not([hidden])');
+      if (firstVisible) _dirActivateTab(firstVisible.dataset.tab);
+    }
     showApp(user);
     await loadAll();
     startAutoRefresh();
