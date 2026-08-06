@@ -46,11 +46,28 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v4
+      - name: Assemble web-only artifact
+        # Copy only web-serving files into _site/ — excludes backend/tooling dirs
+        # (supabase, tools, docs, screenshots) to keep the Pages artifact small.
+        run: |
+          rsync -a \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.claude' \
+            --exclude='node_modules' \
+            --exclude='supabase' \
+            --exclude='tools' \
+            --exclude='docs' \
+            --exclude='screenshots' \
+            --exclude='package.json' \
+            --exclude='package-lock.json' \
+            --exclude='.htmlvalidate.json' \
+            --exclude='_site' \
+            . _site/
       - name: Upload artifact
-        # Ships the whole multi-page site (root landing + role folders + shared/).
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: '_site'
 
   deploy:
     name: Deploy to GitHub Pages
