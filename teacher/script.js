@@ -263,8 +263,33 @@ function toast(msg, type = 'info', ms = 3800) {
 
 // ── Screen / view routing ─────────────────────────────────────────────────────
 function showScreen(name) {
+  removeBootSplash();               // أول شاشة حقيقية تُرفع مؤشّر الإقلاع فوراً
   screenLogin.hidden = name !== 'login';
   screenApp.hidden   = name !== 'app';
+}
+
+// مؤشّر تحميل الإقلاع: يمنع وميض شاشة الدخول قبل حسم الجلسة — قد يستغرق فحصُها
+// ثوانيَ قليلة على شبكة «متصلة لكن ميتة». يُنشأ من JS فقط، فلو تعذّر تحميل
+// السكربت أصلاً تبقى شاشة الدخول ظاهرة كحالة تراجُع آمنة. يُرفع في showScreen بمجرّد
+// ظهور اللوحة (لا بعد اكتمال كل تحميلاتها) كي لا يحجب لوحةً جاهزة تحته.
+function showBootSplash() {
+  screenLogin.hidden = true;
+  let el = document.getElementById('boot-splash');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'boot-splash';
+    el.setAttribute('style',
+      'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;' +
+      'background:var(--clr-bg,#0f172a);z-index:9999');
+    el.innerHTML = '<span class="spinner" style="width:40px;height:40px"></span>';
+    document.body.appendChild(el);
+  }
+  el.hidden = false;
+  return el;
+}
+function removeBootSplash() {
+  const el = document.getElementById('boot-splash');
+  if (el) el.remove();
 }
 
 function showView(name) {
@@ -418,7 +443,7 @@ btnLogoutOk.addEventListener('click', async () => {
 
 // ── App Init ──────────────────────────────────────────────────────────────────
 async function initApp() {
-  await RUQI_PERMISSIONS.init();
+  await RUQI_PERMISSIONS.init(S.user?.user?.id);
   RUQI_PERMISSIONS.applyToDom();
   showScreen('app');
   showView('home');
@@ -2017,6 +2042,7 @@ function initNotificationsTeacher(userId) {
 }
 
 async function bootstrap() {
+  showBootSplash();
   try {
     const session = await getCurrentUser();
     if (session && session.role === 'teacher') {
@@ -2030,6 +2056,8 @@ async function bootstrap() {
     if (session) { try { await logout(); } catch { /* ignore */ } }
   } catch (err) {
     console.warn('[Ruqi-T] bootstrap session check failed', err);
+  } finally {
+    removeBootSplash();  // شبكة أمان: fall-through يستدعي showScreen('login') الذي يرفعه أصلاً
   }
   showScreen('login');
 }

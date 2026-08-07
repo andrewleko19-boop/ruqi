@@ -25,6 +25,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 export { db as supabase };
 export { SUPABASE_URL as supabaseUrl };
 export { errMessage, isNetworkError };
+export { withTimeout, getOfflineUserId };
 export { getModuleCatalog, getRoleModulePermissions, setRoleModulePermission, updateUserPermissionRole };
 
 /* تسجيل عامل الخدمة انتقل إلى shared/sw-register.js كي تستعمله الصفحة
@@ -70,6 +71,26 @@ function generateReceiptNumber() {
 }
 
 function isOnline() { return navigator.onLine; }
+
+/* مهلة زمنية لأيّ وعد شبكي. على شبكة «متصلة لكن ميتة» (راوتر بلا خطّ، واي‑فاي
+   أسير) يبقى fetch معلّقاً بلا سقف فتتجمّد الواجهة — وهذا ما يجعل الدخول يستغرق
+   ~15ث أو لا يكتمل. نُسابق الوعد بمؤقّت يرمي TimeoutError، فيتحوّل التعلّق إلى
+   فشلٍ سريع تلتقطه مساراتُ المخبأ (كأنّنا دون اتصال). لا يُلغى الطلب الأصلي —
+   يُترَك يكتمل في الخلفية بلا ضرر — إنّما يُحرَّر المنتظِر فقط. */
+class TimeoutError extends Error {
+  constructor(ms) { super(`انتهت مهلة الشبكة (${ms}ms)`); this.name = 'TimeoutError'; }
+}
+function withTimeout(promise, ms) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new TimeoutError(ms)), ms);
+  });
+  return Promise.race([Promise.resolve(promise), timeout])
+    .finally(() => clearTimeout(timer));
+}
+
+// سقفٌ زمنيّ موحّد لقراءات البيانات على شبكة «متصلة لكن ميتة» قبل السقوط للمخبأ.
+const OFFLINE_READ_TIMEOUT_MS = 6000;
 
 /* ─── ترجمة الأخطاء ──────────────────────────────────────────────────────────
    كانت البوّابات الستّ تعرض نصّ الخطأ التقني كما هو: `showError(el, e.message)`
@@ -490,6 +511,7 @@ async function logout() {
    لا أكثر، ومربوط بمعرّف المستخدم فلا يخدم حساباً آخر، ويُمحى عند الخروج مع
    بقيّة مخابئ المستأجِر (TENANT_CACHE_PREFIXES). */
 const PROFILE_CACHE_PFX = 'nsams_profile_';
+const LAST_USER_PFX     = 'nsams_lastuser_';   // مؤشّر «آخر مستخدم دخل» لهذه البوّابة
 
 function _cacheProfile(userId, profile) {
   try { localStorage.setItem(PROFILE_CACHE_PFX + LAYER + '_' + userId, JSON.stringify(profile)); }
@@ -503,26 +525,81 @@ function _cachedProfile(userId) {
   } catch { return null; }
 }
 
-async function getCurrentUser() {
-  const { data: { session } } = await db.auth.getSession();
-  if (!session) return null;
+/* مؤشّر «آخر مستخدم» يُمكِّن الدخول أوفلاين بعد انتهاء التوكن: getSession() لا
+   يعيد جلسةً حينها، فبلا هذا المؤشّر لا نعرف مِن أيّ userId نقرأ الملفّ المخبّأ.
+   يُمحى عند الخروج مع بقيّة مخابئ المستأجِر (TENANT_CACHE_PREFIXES). */
+function _cacheLastUser(userId, email) {
+  try { localStorage.setItem(LAST_USER_PFX + LAYER, JSON.stringify({ id: userId, email: email ?? null })); }
+  catch { /* غير قاتل */ }
+}
+function _cachedLastUser() {
+  try {
+    const raw = localStorage.getItem(LAST_USER_PFX + LAYER);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
 
-  const { data: profile, error } = await db
-    .from("users")
-    .select("role, school_id, directorate_id, full_name")
-    .eq("id", session.user.id)
-    .maybeSingle();
+/* دخول أوفلاين: يبني كائن المستخدم من المخبأ وحده (صفر شبكة) لتخطّي شاشة الدخول
+   متى سبق الدخول على هذا الجهاز. لا يمنح صلاحية — كلّ قراءة لاحقة من المخابئ،
+   وكلّ كتابة تدخل طابور الـoutbox، وRLS يبقى الحَكم عند المزامنة. يعيد null إن لم
+   يسبق دخول (لا مؤشّر/لا ملفّ مخبّأ) فتظهر شاشة الدخول كالمعتاد. */
+function getCurrentUserOffline() {
+  const last = _cachedLastUser();
+  if (!last?.id) return null;
+  const row = _cachedProfile(last.id);
+  if (!row) return null;
+  return {
+    user: { id: last.id, email: last.email ?? null, fullName: row.full_name },
+    role: row.role,
+    schoolId: row.school_id,
+    directorateId: row.directorate_id,
+    offline: true,
+  };
+}
+
+// معرّف «آخر مستخدم دخل» على هذا الجهاز، لطبقة العرض (permissions) حين لا جلسة
+// حيّة (توكن منتهٍ بعد طول انقطاع) كي تقرأ مصفوفة الوحدات المخبّأة له.
+function getOfflineUserId() { return _cachedLastUser()?.id ?? null; }
+
+async function getCurrentUser() {
+  // getSession() محلّي، لكنّه قد يُطلق تحديث توكن شبكياً بلا سقف على شبكة ميتة →
+  // نُسابقه بمهلة قصيرة. أيّ تعلّق يسقط لهوية أوفلاين مخبّأة بدل تجميد الواجهة.
+  let session;
+  try {
+    const res = await withTimeout(db.auth.getSession(), 3500);
+    session = res?.data?.session ?? null;
+  } catch {
+    return getCurrentUserOffline();
+  }
+  if (!session) {
+    // لا جلسة: خروجٌ حقيقي (أونلاين → شاشة الدخول) أو توكنٌ انتهى بعد طول انقطاع
+    // (أوفلاين → ادخل بالمخبأ). التمييز بحالة الاتصال؛ RLS يحمي الخادم أيّاً كان.
+    return isOnline() ? null : getCurrentUserOffline();
+  }
+
+  let profile = null;
+  try {
+    const { data, error } = await withTimeout(
+      db.from("users")
+        .select("role, school_id, directorate_id, full_name")
+        .eq("id", session.user.id)
+        .maybeSingle(),
+      3500,
+    );
+    if (error) throw error;
+    profile = data;
+  } catch { /* انقطاع/مهلة أثناء استعلام الملفّ → نسقط للمخبأ أدناه */ }
 
   let row = profile;
-  if (error || !profile) {
-    // فشل الاستعلام: قد يكون انقطاع شبكة (نستعمل المخبّأ) أو حذف المستخدم
-    // فعلاً (لا مخبّأ لديه، فيعود null كما كان).
+  if (!row) {
+    // لا ملفّ حيّ: مخبّأ (انقطاع شبكة) أو مستخدمٌ حُذف فعلاً (لا مخبّأ → null).
     row = _cachedProfile(session.user.id);
     if (!row) return null;
   } else {
     _cacheProfile(session.user.id, profile);
   }
 
+  _cacheLastUser(session.user.id, session.user.email);
   return {
     user: { id: session.user.id, email: session.user.email, fullName: row.full_name },
     role: row.role,
@@ -576,11 +653,15 @@ async function getDailyAttendance(schoolId, date) {
 async function getSchoolById(schoolId) {
   // select('*') so school_type is included once the migration runs, while
   // staying safe (no "column does not exist" error) if it hasn't yet.
-  const { data, error } = await db
-    .from('schools')
-    .select('*')
-    .eq('id', schoolId)
-    .single();
+  // withTimeout: على شبكة «متصلة لكن ميتة» يرمي بعد المهلة بدل التعلّق، فيسقط
+  // loadSchoolData لمخبأ المدرسة (nsams_school2_) بدل تجميد تحميل اللوحة.
+  const { data, error } = await withTimeout(
+    db.from('schools')
+      .select('*')
+      .eq('id', schoolId)
+      .single(),
+    OFFLINE_READ_TIMEOUT_MS,
+  );
   if (error) throw error;
   return data;
 }
@@ -1122,17 +1203,21 @@ async function getTeacherClasses(teacherId) {
 
   let data;
   try {
-    const res = await db
-      .from('class_teacher')
-      .select(`
-        class_id, role, subject_ids,
-        classes:class_id (
-          id, grade, section, school_id,
-          schools:school_id ( name, work_start_time )
-        )
-      `)
-      .eq('teacher_id',    teacherId)
-      .eq('academic_year', academicYear);
+    // withTimeout: على شبكة «متصلة لكن ميتة» (navigator.onLine=true) لا يتعلّق
+    // الجلب إلى ما لا نهاية — يسقط للمخبأ بعد المهلة كأنّنا دون اتصال.
+    const res = await withTimeout(
+      db.from('class_teacher')
+        .select(`
+          class_id, role, subject_ids,
+          classes:class_id (
+            id, grade, section, school_id,
+            schools:school_id ( name, work_start_time )
+          )
+        `)
+        .eq('teacher_id',    teacherId)
+        .eq('academic_year', academicYear),
+      OFFLINE_READ_TIMEOUT_MS,
+    );
     if (res.error) throw res.error;
     data = res.data;
   } catch (err) {
@@ -1203,19 +1288,27 @@ async function getClassStudents(classId, { status } = {}) {
     // included once the migration runs, while staying safe if it hasn't yet —
     // same rationale as getSchoolById. Existing consumers keep reading
     // full_name / national_id / gender / seat_number unchanged.
-    const { data, error } = await db
-      .from('students')
-      .select('*')
-      .eq('class_id',  classId)
-      .eq('is_active', true)
-      .order('seat_number', { ascending: true,  nullsFirst: false })
-      .order('full_name',   { ascending: true });
-
-    if (error) throw error;
-
-    const students = data ?? [];
-    setCachedStudents(classId, students);
-    return students;
+    try {
+      // withTimeout + سقوط للمخبأ: على شبكة «متصلة لكن ميتة» (navigator.onLine=
+      // true) لا يتعلّق الجلب، بل يعود للطلاب المخبّأين بعد المهلة.
+      const { data, error } = await withTimeout(
+        db.from('students')
+          .select('*')
+          .eq('class_id',  classId)
+          .eq('is_active', true)
+          .order('seat_number', { ascending: true,  nullsFirst: false })
+          .order('full_name',   { ascending: true }),
+        OFFLINE_READ_TIMEOUT_MS,
+      );
+      if (error) throw error;
+      const students = data ?? [];
+      setCachedStudents(classId, students);
+      return students;
+    } catch (err) {
+      const cached = getCachedStudents(classId);
+      if (cached) { console.warn('[Ruqi] طلاب الصفّ من المخبأ', err); return cached; }
+      throw err;
+    }
   }
 
   // Explicit lifecycle status (school-admin status tabs) — online, uncached.
@@ -1550,35 +1643,86 @@ async function getClassAbsenceSummary(classId) {
 // All of these rely on the existing RLS policy school_admin_all_class_teacher
 // (FOR ALL, class_belongs_to_my_school) and the schools/classes read policies.
 
+/* مخبأ أوفلاين للصفوف والكادر — نفس فلسفة getTeacherClasses: التوزيع يتغيّر مرّة
+   كل فصل لا يومياً، فمخبأٌ بلا TTL أصدق بكثير من قائمة فارغة دون اتصال. كانت هذه
+   الدوال تضرب الشبكة دائماً بلا مخبأ ولا مهلة، فبوّابة المدير أوفلاين تُظهر
+   «صفوف/شعب» فارغة أو تتجمّد على شبكة ميتة. البادئات في TENANT_CACHE_PREFIXES
+   لتُمحى عند الخروج (تحوي أسماء الكادر). */
+const SCHOOL_CLASSES_CACHE_PFX  = 'nsams_sclasses_';
+const SCHOOL_TEACHERS_CACHE_PFX = 'nsams_steachers_';
+const CLASS_TEACHERS_CACHE_PFX  = 'nsams_cteachers_';
+
+function _readJSONCache(key) {
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }
+  catch { return null; }
+}
+function _writeJSONCache(key, data) {
+  try { localStorage.setItem(key, JSON.stringify(data)); } catch { /* حصة التخزين ممتلئة */ }
+}
+
 // All classes in a school (for the management dropdown).
 async function getSchoolClasses(schoolId) {
-  const { data, error } = await db
-    .from('classes')
-    .select('id, name, grade, section')
-    .eq('school_id', schoolId)
-    .order('grade', { ascending: true })
-    .order('section', { ascending: true });
-  if (error) throw error;
-  return (data ?? []).map(c => ({
+  const key = SCHOOL_CLASSES_CACHE_PFX + schoolId;
+  if (!isOnline()) {
+    const hit = _readJSONCache(key);
+    if (hit) return hit;
+  }
+  let data;
+  try {
+    const res = await withTimeout(
+      db.from('classes')
+        .select('id, name, grade, section')
+        .eq('school_id', schoolId)
+        .order('grade', { ascending: true })
+        .order('section', { ascending: true }),
+      OFFLINE_READ_TIMEOUT_MS,
+    );
+    if (res.error) throw res.error;
+    data = res.data;
+  } catch (err) {
+    const hit = _readJSONCache(key);
+    if (hit) { console.warn('[Ruqi] صفوف المدرسة من المخبأ', err); return hit; }
+    throw new NoCachedClassesError(err);
+  }
+  const mapped = (data ?? []).map(c => ({
     id:      c.id,
     name:    c.name,
     grade:   c.grade,
     section: c.section,
   }));
+  _writeJSONCache(key, mapped);
+  return mapped;
 }
 
 // Teachers belonging to a school. If excludeClassId is given, teachers already
 // assigned to that class (this academic year) are filtered OUT, so the "assign"
 // dropdown only shows teachers not yet on the class.
 async function getTeachersBySchool(schoolId, excludeClassId = null) {
-  const { data, error } = await db
-    .from('users')
-    .select('id, full_name')
-    .eq('role', 'teacher')
-    .eq('school_id', schoolId)
-    .order('full_name', { ascending: true });
-  if (error) throw error;
-  let teachers = (data ?? []).map(t => ({ id: t.id, fullName: t.full_name }));
+  const key = SCHOOL_TEACHERS_CACHE_PFX + schoolId;
+  let teachers = null;
+  if (!isOnline()) {
+    const hit = _readJSONCache(key);
+    if (hit) teachers = hit;
+  }
+  if (!teachers) {
+    try {
+      const res = await withTimeout(
+        db.from('users')
+          .select('id, full_name')
+          .eq('role', 'teacher')
+          .eq('school_id', schoolId)
+          .order('full_name', { ascending: true }),
+        OFFLINE_READ_TIMEOUT_MS,
+      );
+      if (res.error) throw res.error;
+      teachers = (res.data ?? []).map(t => ({ id: t.id, fullName: t.full_name }));
+      _writeJSONCache(key, teachers);
+    } catch (err) {
+      const hit = _readJSONCache(key);
+      if (hit) { console.warn('[Ruqi] كادر المدرسة من المخبأ', err); teachers = hit; }
+      else throw err;
+    }
+  }
 
   if (excludeClassId) {
     const assigned = await getClassTeachers(excludeClassId);
@@ -1592,25 +1736,47 @@ async function getTeachersBySchool(schoolId, excludeClassId = null) {
 // role (homeroom/supervisor/subject) and the subjects they may grade.
 async function getClassTeachers(classId) {
   const year = getAcademicYear();
-  const { data, error } = await db
-    .from('class_teacher')
-    .select('id, teacher_id, role, subject_ids, teacher:users!class_teacher_teacher_id_fkey(full_name)')
-    .eq('class_id', classId)
-    .eq('academic_year', year);
-  if (error) throw error;
+  const key  = CLASS_TEACHERS_CACHE_PFX + classId + '_' + year;
 
-  // Resolve subject ids → names for display (subjects are per grade).
-  let nameById = {};
+  if (!isOnline()) {
+    const hit = _readJSONCache(key);
+    if (hit) return hit;
+  }
+
+  let data;
   try {
-    const { data: cls } = await db
-      .from('classes').select('grade, school_id').eq('id', classId).single();
-    if (cls) {
-      const subs = await getSchoolSubjects(cls.school_id, cls.grade);
-      nameById = Object.fromEntries(subs.map(s => [s.id, s.name]));
-    }
-  } catch { /* names are best-effort */ }
+    const res = await withTimeout(
+      db.from('class_teacher')
+        .select('id, teacher_id, role, subject_ids, teacher:users!class_teacher_teacher_id_fkey(full_name)')
+        .eq('class_id', classId)
+        .eq('academic_year', year),
+      OFFLINE_READ_TIMEOUT_MS,
+    );
+    if (res.error) throw res.error;
+    data = res.data;
+  } catch (err) {
+    const hit = _readJSONCache(key);
+    if (hit) { console.warn('[Ruqi] معلّمو الصفّ من المخبأ', err); return hit; }
+    throw err;
+  }
 
-  return (data ?? []).map(r => {
+  // Resolve subject ids → names for display (subjects are per grade). Best-effort,
+  // and skipped entirely offline so a dead network never stalls the assignment list.
+  let nameById = {};
+  if (isOnline()) {
+    try {
+      const { data: cls } = await withTimeout(
+        db.from('classes').select('grade, school_id').eq('id', classId).single(),
+        OFFLINE_READ_TIMEOUT_MS,
+      );
+      if (cls) {
+        const subs = await getSchoolSubjects(cls.school_id, cls.grade);
+        nameById = Object.fromEntries(subs.map(s => [s.id, s.name]));
+      }
+    } catch { /* names are best-effort */ }
+  }
+
+  const mapped = (data ?? []).map(r => {
     const subjectIds = Array.isArray(r.subject_ids) ? r.subject_ids : [];
     return {
       assignmentId: r.id,
@@ -1621,6 +1787,8 @@ async function getClassTeachers(classId) {
       fullName:     r.teacher?.full_name ?? '—',
     };
   });
+  _writeJSONCache(key, mapped);
+  return mapped;
 }
 
 // Assign a teacher to a class for the current academic year with a role and the
@@ -4005,7 +4173,9 @@ async function getLookupList(listType, directorateId = null) {
   q = directorateId
     ? q.or(`directorate_id.is.null,directorate_id.eq.${directorateId}`)
     : q.is('directorate_id', null);
-  const { data, error } = await q;
+  // withTimeout: قوائم البحث تُجلب عند فتح النوافذ؛ بلا مهلة تتعلّق القائمة على
+  // شبكة «متصلة لكن ميتة». المستدعي (getLookup) يلتقط الرمي ويكتفي بقائمة فارغة.
+  const { data, error } = await withTimeout(q, OFFLINE_READ_TIMEOUT_MS);
   if (error) throw error;
   return (data || []).map(r => r.value);
 }
@@ -4523,11 +4693,15 @@ async function getTransferDocuments() {
    الجلسات **بلا أثر** على أهمّ ما يُسرَّب. أي بادئة جديدة تُضاف هنا وتُستورَد
    من هنا، لا تُكتب نصّاً في مكان آخر. */
 const TENANT_CACHE_PREFIXES = [
-  'nsams_stu_',      // صفوف الطلاب كاملةً: الأسماء والأرقام الوطنية وهواتف الأهل
-  'nsams_classes_',  // صفوف المعلّم المسندة — لئلّا يراها زميله على جهاز مشترك
-  'nsams_school2_',  // ملفّ المدرسة: الاسم والإحداثيات والأعداد والتصنيف
-  'nsams_draft_',    // مسودّات الحضور لكل صفّ ويوم — لم يكن ينظّفها شيء
-  'nsams_profile_',  // ملفّ الدور المخبّأ للدخول دون اتصال
+  'nsams_stu_',       // صفوف الطلاب كاملةً: الأسماء والأرقام الوطنية وهواتف الأهل
+  'nsams_classes_',   // صفوف المعلّم المسندة — لئلّا يراها زميله على جهاز مشترك
+  'nsams_sclasses_',  // صفوف المدرسة (بوّابة المدير)
+  'nsams_steachers_', // كادر المدرسة (بوّابة المدير)
+  'nsams_cteachers_', // معلّمو الصفّ المسندون
+  'nsams_school2_',   // ملفّ المدرسة: الاسم والإحداثيات والأعداد والتصنيف
+  'nsams_draft_',     // مسودّات الحضور لكل صفّ ويوم — لم يكن ينظّفها شيء
+  'nsams_profile_',   // ملفّ الدور المخبّأ للدخول دون اتصال
+  'nsams_lastuser_',  // مؤشّر «آخر مستخدم» — يُمسح كي لا يُحيي دخولاً أوفلاين بعد الخروج
   'nsams_setup_done_',
 ];
 
