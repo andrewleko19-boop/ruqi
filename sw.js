@@ -11,7 +11,7 @@
  *
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'ruqi-v130';
+const CACHE = 'ruqi-v131';
 
 /* ⚠️ التقسيم مقصود ويعالج عطلاً حقيقياً.
    كان التثبيت كلّه على Promise.allSettled — يبتلع فشل أي ملفّ ويُعلن النجاح —
@@ -29,6 +29,17 @@ const CRITICAL = [
   './shared/sw-register.js',
   // مكتبة Supabase محلّية: بدونها لا تُنفَّذ db.js إطلاقاً فلا تعمل أي لوحة.
   './shared/vendor/supabase-js.mjs',
+  /* ⚠️ حرِج رغم أنّه «طبقة عرض». كل بوّابة تُحمّله بـ<script type="module">، وأوّل
+     سطر في initApp هو `await RUQI_PERMISSIONS.init(...)`. فإن لم يُحمَّل الملفّ
+     بقي window.RUQI_PERMISSIONS معدوماً، فرمى ذلك السطرُ
+     `ReferenceError: RUQI_PERMISSIONS is not defined` التقطه catch في bootstrap
+     فأظهر **شاشة الدخول** لمستخدمٍ داخلٍ فعلاً. (فشلُ وحدةٍ لا يمنع تنفيذ
+     التالية — لذلك يعمل script.js ويصل إلى السطر الرامي بدل أن يتوقّف قبله.)
+     وكان غيابه عن هذه القائمة مستوراً بالتخزين اللحظي: يُخزَّن الملفّ عند أوّل
+     جلب ناجح داخل الكاش الجاري، فيعمل أوفلاين صدفةً. لكنّ رفع CACHE يحذف الكاش
+     القديم في activate بلا شرط — فذهب الملفّ معه ولم يُعوّضه التخزين المسبق،
+     وانكسر الدخول أوفلاين في البوّابات الستّ دفعةً واحدة. */
+  './shared/permissions.js',
   './shared/vendor/fonts/fonts.css',
   './icons/eagle-mark.png',
   './icons/icon-192.png',
