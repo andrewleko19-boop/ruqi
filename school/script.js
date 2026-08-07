@@ -1115,6 +1115,7 @@ async function bootstrap() {
 const clasSubLoading     = el('class-sub-loading');
 const clasSubEmpty       = el('class-sub-empty');
 const clasSubList        = el('class-sub-list');
+const clasSubFailed      = el('class-sub-failed');
 const btnRefreshClasses  = el('btn-refresh-classes');
 const classesRefreshIcon = el('classes-refresh-icon');
 const modalReject        = el('modal-reject');
@@ -1146,6 +1147,10 @@ hide(modalReject);
 let _rejectSubmissionId = null;
 let _classBusy          = false;
 let _summaryByClass     = {};   // classId -> summary row (for the detail modal)
+/* «فشل التحميل» ≠ «صفر صفوف». تبويبا الغياب والتقارير يقرآن _summaryByClass لا
+   الشبكة، فكان فشلُ الجلب يتركه فارغاً فيعرضان «لا توجد بيانات» و«٠٪ (٠/٠)»
+   كأنّها حقيقةُ اليوم. هذه الراية تفصل الحالتين فيُقال للمدير الصدق. */
+let _summaryFailed      = false;
 // Class-detail modal state
 let _detailClassId  = null;
 let _detailStudents = [];
@@ -1161,10 +1166,12 @@ async function loadClassSummaries() {
   show(clasSubLoading);
   hide(clasSubList);
   hide(clasSubEmpty);
+  if (clasSubFailed) hide(clasSubFailed);
   classesRefreshIcon.classList.add('syncing');
 
   try {
     const summaries = await DB.getSchoolDailySummary(S.school.id, todayISO());
+    _summaryFailed = false;
     hide(clasSubLoading);
     classesRefreshIcon.classList.remove('syncing');
 
@@ -1221,12 +1228,26 @@ async function loadClassSummaries() {
       inStuAbsent.value  = totalAbsent;
     }
   } catch (err) {
+    /* ثلاث حالات لا حالتان. كان الفشل يُخفي التحميل ويكتفي بـtoast عابر، فتبقى
+       البطاقة بلا قائمة ولا رسالة ولا زرّ — وهو ما يبدو للمدير «القسم لا يفتح».
+       الآن للفشل شاشتُه الخاصّة بزرّ إعادة محاولة، تماماً كما في بوّابة المعلّم. */
     console.error('[Ruqi] loadClassSummaries', err);
+    _summaryFailed = true;
     hide(clasSubLoading);
     classesRefreshIcon.classList.remove('syncing');
-    toast(errMessage(err, RW.loadSubsErr), 'error');
+    if (clasSubFailed) show(clasSubFailed);
+    else toast(errMessage(err, RW.loadSubsErr), 'error');
   }
 }
+
+// إعادة المحاولة يدوياً: أسرع من إعادة تحميل البوابة كلّها بعد عودة الشبكة.
+el('btn-retry-subs')?.addEventListener('click', () => { loadClassSummaries(); });
+
+// وعودة الشبكة تُعيد المحاولة تلقائياً إن كنّا عالقين على شاشة الفشل، فمديرٌ فتح
+// اللوحة قبل أن يلتقط الجهاز الشبكة لا يبقى ينظر إلى رسالة تعذُّر.
+window.addEventListener('online', () => {
+  if (clasSubFailed && !clasSubFailed.hidden) loadClassSummaries();
+});
 
 function buildClassRow(s) {
   const sub    = s.submission;
@@ -1281,6 +1302,10 @@ async function loadAbsenceView() {
   if (Object.keys(_summaryByClass).length === 0) {
     await loadClassSummaries();
   }
+  if (_summaryFailed) {
+    listEl.innerHTML = `<div style="text-align:center;padding:24px;color:#94A3B8">تعذّر تحميل بيانات اليوم — لا يوجد اتصال ولا نسخة محفوظة.</div>`;
+    return;
+  }
   const summaries = Object.values(_summaryByClass);
   if (summaries.length === 0) {
     listEl.innerHTML = `<div style="text-align:center;padding:24px;color:#94A3B8">لا توجد بيانات لليوم</div>`;
@@ -1307,6 +1332,11 @@ async function loadSummaryReports() {
   if (!bodyEl) return;
   if (Object.keys(_summaryByClass).length === 0) {
     await loadClassSummaries();
+  }
+  // أصفارٌ ملفّقة أسوأ من لا شيء: «٠٪ (٠/٠)» تُقرأ كأنّ أحداً لم يُرسل كشفه اليوم.
+  if (_summaryFailed) {
+    bodyEl.innerHTML = `<div style="text-align:center;padding:24px;color:#94A3B8">تعذّر تحميل بيانات اليوم — لا يوجد اتصال ولا نسخة محفوظة.</div>`;
+    return;
   }
   const summaries  = Object.values(_summaryByClass);
   const confirmed  = summaries.filter(s => s.submission?.status === 'confirmed').length;

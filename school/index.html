@@ -550,6 +550,18 @@
         <div id="class-sub-empty" hidden style="padding:28px 16px;text-align:center;color:#94A3B8;font-size:.85rem">
           لا توجد صفوف دراسية مسجلة لهذا العام
         </div>
+        <!-- حالة مستقلّة عن «لا صفوف»: تعذّر الجلب ولا نسخة محفوظة لليوم. كان
+             الفشل يُخفي البطاقة كلَّها ويكتفي بـtoast عابر، فتبدو مكسورة. -->
+        <div id="class-sub-failed" hidden style="padding:28px 16px;text-align:center;color:#94A3B8;font-size:.85rem">
+          <svg class="icon icon-2xl" style="color:#CBD5E1"><use href="#ic-wifi-off"/></svg>
+          <p style="margin-top:10px">تعذّر تحميل الكشوف — لا يوجد اتصال ولا نسخة محفوظة لليوم.</p>
+          <p style="margin-top:6px;font-size:.8rem">
+            افتح البوابة مرّة واحدة وأنت متّصل بالإنترنت، وبعدها ستعمل دون اتصال.
+          </p>
+          <button type="button" class="btn btn-ghost" id="btn-retry-subs" style="margin-top:12px">
+            إعادة المحاولة
+          </button>
+        </div>
         <div id="class-sub-list" hidden></div>
       </div>
     </section>

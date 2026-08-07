@@ -1195,8 +1195,10 @@ function setCachedTeacherClasses(teacherId, year, data) {
 /* يرمي `NoCachedClassesError` حين يفشل الجلب ولا مخبأ — كي تميّز الواجهة
    «تعذّر التحميل» عن «صفر صفوف فعلاً» بدل خلطهما في رسالة واحدة. */
 class NoCachedClassesError extends Error {
-  constructor(cause) {
-    super('تعذّر تحميل الصفوف ولا توجد نسخة محفوظة على هذا الجهاز.');
+  // message اختيارية: يستعملها من يقرأ شيئاً غير «الصفوف» (كشوف اليوم مثلاً)
+  // كي لا تُعرَض له رسالةٌ عن الصفوف. المستدعون القدامى يمرّرون cause وحدها.
+  constructor(cause, message) {
+    super(message || 'تعذّر تحميل الصفوف ولا توجد نسخة محفوظة على هذا الجهاز.');
     this.name = 'NoCachedClassesError';
     this.cause = cause;
   }
@@ -1661,6 +1663,7 @@ async function getClassAbsenceSummary(classId) {
 const SCHOOL_CLASSES_CACHE_PFX  = 'nsams_sclasses_';
 const SCHOOL_TEACHERS_CACHE_PFX = 'nsams_steachers_';
 const CLASS_TEACHERS_CACHE_PFX  = 'nsams_cteachers_';
+const SCHOOL_SUMMARY_CACHE_PFX  = 'nsams_ssum_';   // كشوف اليوم لكل صفّ
 
 function _readJSONCache(key) {
   try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }
@@ -1668,6 +1671,17 @@ function _readJSONCache(key) {
 }
 function _writeJSONCache(key, data) {
   try { localStorage.setItem(key, JSON.stringify(data)); } catch { /* حصة التخزين ممتلئة */ }
+}
+
+/* مخبأ مؤرَّخ لبياناتٍ تخصّ يوماً بعينه. مفتاحٌ واحدٌ للمدرسة يحمل تاريخه معه،
+   فيتحقّق أمران معاً: لا يقرأ يومٌ بياناتِ يومٍ آخر، ولا تتراكم المدخلات بعدد
+   الأيام حتى تمتلئ حصّة التخزين. عدم التطابق يعني «لا نسخة» لا «نسخة قديمة». */
+function _readDatedCache(key, isoDate) {
+  const hit = _readJSONCache(key);
+  return (hit && hit.date === isoDate) ? hit.data : null;
+}
+function _writeDatedCache(key, isoDate, data) {
+  _writeJSONCache(key, { date: isoDate, data });
 }
 
 // All classes in a school (for the management dropdown).
@@ -2254,89 +2268,133 @@ async function computeStaffDailyCounts(schoolId, date) {
 }
 
 // ─── School admin: daily summary per class ───────────────────────────────────
+/* ⚠️ أهمّ قراءة في بوّابة المدير — بطاقة «كشوف الحضور من المعلمين» — وكانت
+   الوحيدة بلا مهلة ولا مخبأ رغم أربع رحلات شبكية. دون اتصال ترمي فوراً فتبقى
+   البطاقة بلا قائمة ولا رسالة (هذا هو «القسم لا يفتح»)؛ وعلى شبكة «متصلة لكن
+   ميتة» تتعلّق بلا سقف فيدور هيكل التحميل إلى الأبد. وتسقط معها «الغياب»
+   و«التقارير» لأنّهما يقرآن _summaryByClass نفسه لا الشبكة.
+
+   المخبأ مؤرَّخ عمداً: هذه بيانات يومٍ بعينه، وعرضُ كشوف الأمس تحت تاريخ اليوم
+   ليس عرضاً قديماً بل رقماً خاطئاً — تُملأ منه خانات الحضور المجمّع تلقائياً
+   (school/script.js) ثمّ يُرسَل إلى المديرية. فإن لم توجد نسخةٌ لليوم نرمي
+   NoCachedClassesError كي تعرض الواجهة فشلاً صريحاً بزرّ إعادة محاولة، لا
+   قائمةً فارغة تُقرأ على أنّها «لم يُرسل أحدٌ كشفه». */
 async function getSchoolDailySummary(schoolId, date) {
   const isoDate = date instanceof Date ? localDateISO(date) : date;
+  const key     = SCHOOL_SUMMARY_CACHE_PFX + schoolId;
 
-  const { data: allClasses, error: classErr } = await db
-    .from('classes')
-    .select(`
-      id, grade, section, academic_year,
-      class_teacher!left (
-        role,
-        teacher_id,
-        users:teacher_id ( full_name )
-      )
-    `)
-    .eq('school_id', schoolId);
+  const NO_CACHE_MSG =
+    'تعذّر تحميل كشوف اليوم ولا توجد نسخة محفوظة لهذا اليوم على الجهاز.';
 
-  if (classErr) throw classErr;
+  // دون اتصال: لا تُهدَر مهلة على شبكة غائبة — اقرأ نسخة اليوم فوراً إن وُجدت،
+  // وإلّا فالنداء الشبكي محكومٌ بالفشل ولا معنى لتجميد البطاقة ستّ ثوانٍ على
+  // هيكل تحميل قبل رسالةٍ نعرفها سلفاً. (navigator.onLine=false موثوقٌ نفياً؛
+  // إثباتُه وحده هو غير الموثوق، وذلك ما تتكفّل به withTimeout أدناه.)
+  // نفس نمط getClassStudents المثبت في هذا الملفّ.
+  if (!isOnline()) {
+    const hit = _readDatedCache(key, isoDate);
+    if (hit) return hit;
+    throw new NoCachedClassesError(null, NO_CACHE_MSG);
+  }
 
-  // Use the latest academic_year stored in DB (avoids JS vs SQL year-boundary mismatch)
-  const years = [...new Set((allClasses ?? []).map(c => c.academic_year).filter(Boolean))];
-  const latestYear = years.sort().at(-1) ?? null;
-  const classRows = latestYear
-    ? (allClasses ?? []).filter(c => c.academic_year === latestYear)
-    : (allClasses ?? []);
+  let summary;
+  try {
+    const clsRes = await withTimeout(
+      db.from('classes')
+        .select(`
+          id, grade, section, academic_year,
+          class_teacher!left (
+            role,
+            teacher_id,
+            users:teacher_id ( full_name )
+          )
+        `)
+        .eq('school_id', schoolId),
+      OFFLINE_READ_TIMEOUT_MS,
+    );
+    if (clsRes.error) throw clsRes.error;
+    const allClasses = clsRes.data;
 
-  const classIds = classRows.map(c => c.id);
-  if (classIds.length === 0) return [];
+    // Use the latest academic_year stored in DB (avoids JS vs SQL year-boundary mismatch)
+    const years = [...new Set((allClasses ?? []).map(c => c.academic_year).filter(Boolean))];
+    const latestYear = years.sort().at(-1) ?? null;
+    const classRows = latestYear
+      ? (allClasses ?? []).filter(c => c.academic_year === latestYear)
+      : (allClasses ?? []);
 
-  const [subRes, attRes, stuRes] = await Promise.all([
-    db.from('attendance_submissions')
-      .select('id, class_id, status, submitted_at, confirmed_at')
-      .eq('school_id', schoolId)
-      .eq('date',      isoDate)
-      .in('class_id',  classIds),
-
-    db.from('daily_student_attendance')
-      .select('class_id, status')
-      .eq('school_id', schoolId)
-      .eq('date',      isoDate)
-      .in('class_id',  classIds),
-
-    db.from('students')
-      .select('class_id')
-      .eq('school_id', schoolId)
-      .eq('is_active', true)
-      .in('class_id',  classIds),
-  ]);
-
-  if (subRes.error) throw subRes.error;
-  if (attRes.error) throw attRes.error;
-  if (stuRes.error) throw stuRes.error;
-
-  const subMap = {};
-  for (const s of subRes.data ?? []) subMap[s.class_id] = s;
-
-  const attMap = {};
-  for (const a of attRes.data ?? []) {
-    if (!attMap[a.class_id]) {
-      attMap[a.class_id] = { present: 0, absent: 0, late: 0, excused: 0 };
+    const classIds = classRows.map(c => c.id);
+    // مدرسةٌ بلا صفوف: فراغٌ حقيقي لا فشل — يُخبَّأ كي تعرضه الواجهة دون اتصال
+    // كرسالة «لا توجد صفوف» بدل شاشة تعذُّر تحميل.
+    if (classIds.length === 0) {
+      _writeDatedCache(key, isoDate, []);
+      return [];
     }
-    attMap[a.class_id][a.status]++;
+
+    // مهلة واحدة تحكم الرحلات الثلاث المتوازية مجتمعةً.
+    const [subRes, attRes, stuRes] = await withTimeout(Promise.all([
+      db.from('attendance_submissions')
+        .select('id, class_id, status, submitted_at, confirmed_at')
+        .eq('school_id', schoolId)
+        .eq('date',      isoDate)
+        .in('class_id',  classIds),
+
+      db.from('daily_student_attendance')
+        .select('class_id, status')
+        .eq('school_id', schoolId)
+        .eq('date',      isoDate)
+        .in('class_id',  classIds),
+
+      db.from('students')
+        .select('class_id')
+        .eq('school_id', schoolId)
+        .eq('is_active', true)
+        .in('class_id',  classIds),
+    ]), OFFLINE_READ_TIMEOUT_MS);
+
+    if (subRes.error) throw subRes.error;
+    if (attRes.error) throw attRes.error;
+    if (stuRes.error) throw stuRes.error;
+
+    const subMap = {};
+    for (const s of subRes.data ?? []) subMap[s.class_id] = s;
+
+    const attMap = {};
+    for (const a of attRes.data ?? []) {
+      if (!attMap[a.class_id]) {
+        attMap[a.class_id] = { present: 0, absent: 0, late: 0, excused: 0 };
+      }
+      attMap[a.class_id][a.status]++;
+    }
+
+    const stuCount = {};
+    for (const s of stuRes.data ?? []) {
+      stuCount[s.class_id] = (stuCount[s.class_id] ?? 0) + 1;
+    }
+
+    summary = classRows.map(c => {
+      // Only the homeroom teacher / supervisor is the attendance source — never a
+      // subject teacher (أستاذ مادة), who has no attendance responsibility.
+      const ct = (c.class_teacher ?? []).find(t => t.role === 'homeroom' || t.role === 'supervisor');
+      return {
+        classId:       c.id,
+        displayName:   `الصف ${gradeNameAr(c.grade)} / شعبة ${c.section}`,
+        grade:         c.grade,
+        section:       c.section,
+        teacherName:   ct?.users?.full_name ?? '—',
+        teacherId:     ct?.teacher_id ?? null,
+        submission:    subMap[c.id] ?? null,
+        stats:         attMap[c.id] ?? { present: 0, absent: 0, late: 0, excused: 0 },
+        totalStudents: stuCount[c.id] ?? 0,
+      };
+    }).sort((a, b) => a.grade - b.grade || a.section.localeCompare(b.section));
+  } catch (err) {
+    const hit = _readDatedCache(key, isoDate);
+    if (hit) { console.warn('[Ruqi] كشوف اليوم من المخبأ', err); return hit; }
+    throw new NoCachedClassesError(err, NO_CACHE_MSG);
   }
 
-  const stuCount = {};
-  for (const s of stuRes.data ?? []) {
-    stuCount[s.class_id] = (stuCount[s.class_id] ?? 0) + 1;
-  }
-
-  return (classRows ?? []).map(c => {
-    // Only the homeroom teacher / supervisor is the attendance source — never a
-    // subject teacher (أستاذ مادة), who has no attendance responsibility.
-    const ct = (c.class_teacher ?? []).find(t => t.role === 'homeroom' || t.role === 'supervisor');
-    return {
-      classId:       c.id,
-      displayName:   `الصف ${gradeNameAr(c.grade)} / شعبة ${c.section}`,
-      grade:         c.grade,
-      section:       c.section,
-      teacherName:   ct?.users?.full_name ?? '—',
-      teacherId:     ct?.teacher_id ?? null,
-      submission:    subMap[c.id] ?? null,
-      stats:         attMap[c.id] ?? { present: 0, absent: 0, late: 0, excused: 0 },
-      totalStudents: stuCount[c.id] ?? 0,
-    };
-  }).sort((a, b) => a.grade - b.grade || a.section.localeCompare(b.section));
+  _writeDatedCache(key, isoDate, summary);
+  return summary;
 }
 
 // ─── School admin: confirm / reject a class submission ───────────────────────
@@ -4726,6 +4784,7 @@ const TENANT_CACHE_PREFIXES = [
   'nsams_sclasses_',  // صفوف المدرسة (بوّابة المدير)
   'nsams_steachers_', // كادر المدرسة (بوّابة المدير)
   'nsams_cteachers_', // معلّمو الصفّ المسندون
+  'nsams_ssum_',      // كشوف اليوم: أسماء المعلّمين وأعداد الطلاب لكل شعبة
   'nsams_school2_',   // ملفّ المدرسة: الاسم والإحداثيات والأعداد والتصنيف
   'nsams_draft_',     // مسودّات الحضور لكل صفّ ويوم — لم يكن ينظّفها شيء
   'nsams_profile_',   // ملفّ الدور المخبّأ للدخول دون اتصال
