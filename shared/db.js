@@ -1553,38 +1553,72 @@ async function bulkImportStudents({ schoolId, classId, rows, actorId }) {
 }
 
 // ─── Teacher: check submission status for a class + date ─────────────────────
+/* ⚠️ مخبأ مؤرَّخ لهاتين القراءتين، وهو إصلاح عطلين لا عطل واحد.
+   كانتا بلا مهلة ولا مخبأ وترميان عند أوّل فشل، وتُقرآن في Promise.all واحد مع
+   الطلاب — فرفضُ أيّهما دون اتصال كان يُسقط كشفَ الأسماء المخبّأ معهما، فلا
+   يستطيع المعلّم فتح صفٍّ لأخذ الحضور أوفلاين إطلاقاً رغم أنّ كلّ بنية
+   المسودّات والـoutbox مبنيّة لذلك.
+   والأخطر: بلا مخبأٍ يُفتَح الصفُّ على «الكل حاضر» افتراضاً لمعلّمٍ سبق أن
+   أرسل كشفه، فإن أعاد الإرسال محا غيابات اليوم — الكتابة upsert على
+   (student_id,date) فتستبدل ولا تُضيف.
+   ولأنّهما لم تعودا ترميان، صار الفشل الوحيد الممكن هو فشلُ الطلاب — وهو
+   الوحيد الذي يستحقّ إسقاط الشاشة.
+   التاريخ داخل القيمة لا في المفتاح: مدخلة واحدة لكل صفّ مهما طال الاستعمال. */
+const CLASS_SUB_CACHE_PFX = 'nsams_csub_';   // حالة كشف الصفّ لليوم
+const CLASS_ATT_CACHE_PFX = 'nsams_catt_';   // خريطة حضور الصفّ لليوم
+
 async function getClassSubmissionStatus(classId, date) {
   const isoDate = date instanceof Date ? localDateISO(date) : date;
+  const key     = CLASS_SUB_CACHE_PFX + classId;
 
-  const { data, error } = await db
-    .from('attendance_submissions')
-    .select('id, status, submitted_at, confirmed_by, confirmed_at, notes')
-    .eq('class_id', classId)
-    .eq('date',     isoDate)
-    .maybeSingle();
+  if (!isOnline()) return _readDatedCache(key, isoDate); // null = لم يُرسل بعد
 
-  if (error) throw error;
-  return data; // null = not yet submitted
+  try {
+    const { data, error } = await withTimeout(
+      db.from('attendance_submissions')
+        .select('id, status, submitted_at, confirmed_by, confirmed_at, notes')
+        .eq('class_id', classId)
+        .eq('date',     isoDate)
+        .maybeSingle(),
+      OFFLINE_READ_TIMEOUT_MS,
+    );
+    if (error) throw error;
+    _writeDatedCache(key, isoDate, data ?? null);
+    return data; // null = not yet submitted
+  } catch (err) {
+    console.warn('[Ruqi] حالة الكشف من المخبأ', err);
+    return _readDatedCache(key, isoDate);
+  }
 }
 
 // ─── Teacher: load existing attendance records for a class + date ─────────────
 // Returns an object: { [student_id]: { status, reason } }
 async function getClassAttendanceForDate(classId, date) {
   const isoDate = date instanceof Date ? localDateISO(date) : date;
+  const key     = CLASS_ATT_CACHE_PFX + classId;
 
-  const { data, error } = await db
-    .from('daily_student_attendance')
-    .select('student_id, status, reason')
-    .eq('class_id', classId)
-    .eq('date',     isoDate);
+  if (!isOnline()) return _readDatedCache(key, isoDate) ?? {};
 
-  if (error) throw error;
+  try {
+    const { data, error } = await withTimeout(
+      db.from('daily_student_attendance')
+        .select('student_id, status, reason')
+        .eq('class_id', classId)
+        .eq('date',     isoDate),
+      OFFLINE_READ_TIMEOUT_MS,
+    );
+    if (error) throw error;
 
-  const map = {};
-  for (const row of data ?? []) {
-    map[row.student_id] = { status: row.status, reason: row.reason ?? null };
+    const map = {};
+    for (const row of data ?? []) {
+      map[row.student_id] = { status: row.status, reason: row.reason ?? null };
+    }
+    _writeDatedCache(key, isoDate, map);
+    return map;
+  } catch (err) {
+    console.warn('[Ruqi] حضور الصفّ من المخبأ', err);
+    return _readDatedCache(key, isoDate) ?? {};
   }
-  return map;
 }
 
 // ─── Teacher: get attendance report for printing ──────────────────────────────
@@ -4785,6 +4819,8 @@ const TENANT_CACHE_PREFIXES = [
   'nsams_steachers_', // كادر المدرسة (بوّابة المدير)
   'nsams_cteachers_', // معلّمو الصفّ المسندون
   'nsams_ssum_',      // كشوف اليوم: أسماء المعلّمين وأعداد الطلاب لكل شعبة
+  'nsams_csub_',      // حالة كشف الصفّ لليوم
+  'nsams_catt_',      // حضور طلاب الصفّ لليوم — بيانات طلاب باسمهم
   'nsams_school2_',   // ملفّ المدرسة: الاسم والإحداثيات والأعداد والتصنيف
   'nsams_draft_',     // مسودّات الحضور لكل صفّ ويوم — لم يكن ينظّفها شيء
   'nsams_profile_',   // ملفّ الدور المخبّأ للدخول دون اتصال

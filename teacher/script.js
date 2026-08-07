@@ -79,8 +79,19 @@ function saveLocalDraft(classId, date, attendance, status = 'draft') {
     );
   } catch { /* quota — non-fatal */ }
 }
-function clearLocalDraft(classId, date) {
-  try { localStorage.removeItem(draftKey(classId, date)); } catch { /* ignore */ }
+/* كنسُ مسودّات الأيام الماضية، مرّةً عند الإقلاع — وهو الآن آليةُ التنظيف
+   الوحيدة. كان المحوُ فرديّاً معلّقاً على إعادة فتح الصفّ نفسه بعد المزامنة،
+   وقد أُلغي: مسودّةُ اليوم أحدث دائماً من أيّ لقطةٍ مخبّأة، فمحوُها هناك
+   إتلافُ عملٍ لم يُرسَل (تفصيله في openAttendanceView). أمّا مسودّةُ يومٍ مضى
+   فلا تُقرأ أبداً لأنّ المفتاح مؤرَّخ، فتبقى تشغل حصّة التخزين إلى الأبد.
+   Object.keys يعطي لقطةً ثابتة، فالحذف أثناء المرور آمن. */
+function sweepOldDrafts() {
+  const today = todayISO();          // YYYY-MM-DD — عشرة محارف ثابتة
+  try {
+    for (const k of Object.keys(localStorage)) {
+      if (k.startsWith(DRAFT_PFX) && k.slice(-10) !== today) localStorage.removeItem(k);
+    }
+  } catch { /* غير قاتل */ }
 }
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -443,6 +454,7 @@ btnLogoutOk.addEventListener('click', async () => {
 
 // ── App Init ──────────────────────────────────────────────────────────────────
 async function initApp() {
+  sweepOldDrafts();
   await RUQI_PERMISSIONS.init(S.user?.user?.id);
   RUQI_PERMISSIONS.applyToDom();
   showScreen('app');
@@ -734,29 +746,45 @@ async function openAttendanceView(cls) {
   const today = todayISO();
 
   try {
-    // Parallel: students + submission status + existing attendance
-    const [students, submission, existing] = await Promise.all([
+    /* allSettled لا all. كشف الأسماء وحده إلزامي — بلا أسماء لا شيء يُعرَض،
+       فرفضُه يستحقّ شاشة الخطأ. أمّا حالة الكشف وحضور اليوم فلهما مخبأ في
+       db.js ولا يرميان أصلاً؛ ومع ذلك لا يجوز أن يملك أيٌّ منهما سلطةَ إسقاط
+       الشاشة كلّها إن رمى يوماً — وهو بالضبط ما كان يحدث: Promise.all كان
+       يُلغي الطلابَ المخبّأين لأنّ شقيقاً لهم فشل، فيتعذّر أخذ الحضور أوفلاين. */
+    const [stuRes, subRes, attRes] = await Promise.allSettled([
       getClassStudents(cls.id),
       getClassSubmissionStatus(cls.id, today),
       getClassAttendanceForDate(cls.id, today),
     ]);
+    if (stuRes.status === 'rejected') throw stuRes.reason;
+
+    const students   = stuRes.value;
+    const submission = subRes.status === 'fulfilled' ? subRes.value : null;
+    const existing   = attRes.status === 'fulfilled' ? (attRes.value ?? {}) : {};
 
     S.students  = students;
 
-    const localDraft = loadLocalDraft(cls.id, today);
+    const localDraft  = loadLocalDraft(cls.id, today);
+    const hasExisting = Object.keys(existing).length > 0;
 
-    if (Object.keys(existing).length > 0) {
-      // DB has real records → authoritative. A local draft is now stale.
-      S.attendance = existing;
-      S.submission = submission;
-      clearLocalDraft(cls.id, today);
-    } else if (localDraft && localDraft.attendance) {
-      // No DB record yet, but an unsent local draft exists → restore it.
+    /* ⚠️ الأولوية معكوسة عمداً عمّا كانت، والمسودّة لم تعد تُمحى هنا.
+       كان الترتيب: سجلّ القاعدة أوّلاً ثمّ يُمحى ما في الجهاز. وقد صار سجلّ
+       القاعدة يأتي من المخبأ أحياناً، ومحوُ مسودّةٍ استناداً إلى لقطةٍ قد تكون
+       أقدم منها إتلافٌ لعملٍ لم يُرسَل بعد.
+       والمسودّة هنا ليست أقدم أبداً: لا تُكتب إلّا بفعلٍ صريح من المعلّم (حفظ
+       مؤقّت، أو رجوعٌ وفيه تعديل، أو إرسالٌ دون اتصال)، ولا أحد سواه يكتب
+       علامات هذا الصفّ في هذا اليوم — المدير يغيّر حالة الكشف لا العلامات. */
+    if (localDraft?.attendance) {
       S.attendance = localDraft.attendance;
-      // If we submitted while offline, the submission lives only locally as
-      // 'pending' until sync; reflect that so the banner is correct.
+      // أُرسل دون اتصال؟ الحالة تعيش محلياً بـ'pending' حتى المزامنة.
       S.submission = submission
         ?? (localDraft.status === 'pending' ? { status: 'pending' } : null);
+    } else if (hasExisting) {
+      S.attendance = existing;
+      /* وجودُ سجلّات يعني أنّ الكشف أُرسل: syncStudentAttendanceRecord يكتب
+         الحضورَ وصفَّ الإرسال معاً. فإن تعذّر جلب الحالة (مخبأ حالةٍ مفقود
+         دون اتصال) نستنتجها بدل أن نقول «لم يُرسل» فيُعيد المعلّم الإرسال. */
+      S.submission = submission ?? { status: 'pending' };
     } else {
       // First open today: everyone present by default; teacher flips absentees.
       S.attendance = {};
@@ -1077,8 +1105,14 @@ btnConfirmSubmit.addEventListener('click', async () => {
     const today = todayISO();
 
     if (result.synced) {
-      // DB now owns this sheet — drop the local draft.
-      clearLocalDraft(S.activeClass.id, today);
+      /* ⚠️ كان هنا محوٌ للنسخة المحلّية. القاعدة صارت تملك الكشف فعلاً، لكن محوَ
+         النسخة المحلّية يفتح ثغرة: مخبأ الحضور في db.js كُتب عند فتح الصفّ —
+         أي قبل هذا الإرسال — فهو لا يعرف العلامات الجديدة. فلو قُطع الاتصال ثمّ
+         أُعيد فتح الصفّ لظهر «الكل حاضر» افتراضاً لمعلّمٍ أرسل غياباته للتوّ،
+         فإن أعاد الإرسال محاها (upsert على student_id,date).
+         نُبقيها إذن بحالة 'pending' تماماً كفرع الأوفلاين أدناه — نفس ما في
+         القاعدة حرفياً — ويكنسها sweepOldDrafts في اليوم التالي. */
+      saveLocalDraft(S.activeClass.id, today, S.attendance, 'pending');
       toast('تم إرسال الكشف للمدير بنجاح', 'success');
       // Re-fetch the real status: the manager may have already acted on it.
       try {
