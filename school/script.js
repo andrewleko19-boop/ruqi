@@ -360,8 +360,33 @@ function toast(msg, type = 'info', ms = 3800) {
 
 // ── Screen switch ─────────────────────────────────────────────────────────────
 function showScreen(name) {
+  removeBootSplash();               // أول شاشة حقيقية تُرفع مؤشّر الإقلاع فوراً
   screenLogin.hidden = (name !== 'login');
   screenApp.hidden   = (name !== 'app');
+}
+
+// مؤشّر تحميل الإقلاع: يمنع وميض شاشة الدخول قبل حسم الجلسة — قد يستغرق فحصُها
+// ثوانيَ قليلة على شبكة «متصلة لكن ميتة». يُنشأ من JS فقط، فلو تعذّر تحميل
+// السكربت أصلاً تبقى شاشة الدخول ظاهرة كحالة تراجُع آمنة. يُرفع في showScreen بمجرّد
+// ظهور اللوحة (لا بعد اكتمال كل تحميلاتها) كي لا يحجب لوحةً جاهزة تحته.
+function showBootSplash() {
+  screenLogin.hidden = true;
+  let el = document.getElementById('boot-splash');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'boot-splash';
+    el.setAttribute('style',
+      'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;' +
+      'background:var(--clr-bg,#0f172a);z-index:9999');
+    el.innerHTML = '<span class="spinner" style="width:40px;height:40px"></span>';
+    document.body.appendChild(el);
+  }
+  el.hidden = false;
+  return el;
+}
+function removeBootSplash() {
+  const el = document.getElementById('boot-splash');
+  if (el) el.remove();
 }
 
 // ── Online / Offline ──────────────────────────────────────────────────────────
@@ -549,20 +574,35 @@ absentList.addEventListener('click', (e) => {
 
 // ── Submit Attendance ─────────────────────────────────────────────────────────
 btnSubmitAtt.addEventListener('click', async () => {
-  const studPresent = parseInt(inStuPresent.value, 10) || 0;
-  const studAbsent  = parseInt(inStuAbsent.value,  10) || 0;
+  const studPresent   = parseInt(inStuPresent.value,   10) || 0;
+  const studAbsent    = parseInt(inStuAbsent.value,    10) || 0;
+  const adminPresent  = parseInt(inAdminPresent.value,  10) || 0;
+  const adminAbsent   = parseInt(inAdminAbsent.value,   10) || 0;
+  const workerPresent = parseInt(inWorkerPresent.value, 10) || 0;
+  const workerAbsent  = parseInt(inWorkerAbsent.value,  10) || 0;
   const absentCount = S.absentTeachers.length;
   const total       = S.school?.totalTeachers ?? 0;
+
+  // منعُ إرسال سجلّ فارغ: teachers_present يُشتَقّ تلقائياً من عدد الكادر، فقد
+  // يبدو السجلّ «غير فارغ» رغم أنّ المدير لم يُدخِل شيئاً. نتحقّق ممّا أدخله
+  // فعلاً (الأعداد المكتوبة + المعلّمون المُعلَّمون غائبين). تحقّقٌ في الواجهة
+  // بالكامل فيعمل أوفلاين تماماً.
+  const anyEntered = studPresent || studAbsent || adminPresent || adminAbsent
+                  || workerPresent || workerAbsent || absentCount;
+  if (!anyEntered) {
+    toast('لم تُدخِل أيّ بيانات حضور — يرجى تعبئة الأعداد قبل الإرسال', 'warning', 4000);
+    return;
+  }
 
   const record = {
     school_id:        S.school.id,
     date:             todayISO(),
     teachers_present: Math.max(0, total - absentCount),
     teachers_absent:  absentCount,
-    admins_present:   parseInt(inAdminPresent.value,  10) || 0,
-    admins_absent:    parseInt(inAdminAbsent.value,   10) || 0,
-    workers_present:  parseInt(inWorkerPresent.value, 10) || 0,
-    workers_absent:   parseInt(inWorkerAbsent.value,  10) || 0,
+    admins_present:   adminPresent,
+    admins_absent:    adminAbsent,
+    workers_present:  workerPresent,
+    workers_absent:   workerAbsent,
     students_present: studPresent,
     // NOTE: daily_attendance has no students_absent column — do not send it,
     // or the upsert fails and silently falls back to the offline queue forever.
@@ -933,7 +973,7 @@ if (backNavBtn) {
 
 // ── App init ──────────────────────────────────────────────────────────────────
 async function initApp() {
-  await RUQI_PERMISSIONS.init();
+  await RUQI_PERMISSIONS.init(S.user?.user?.id);
   RUQI_PERMISSIONS.applyToDom();
   showScreen('app');
   history.replaceState({ tab: 'attendance', d: 0 }, '', '#attendance');
@@ -1042,6 +1082,7 @@ async function consumeNotifDeepLink() {
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 async function bootstrap() {
+  showBootSplash();
   try {
     const session = await getCurrentUser();
     if (session && session.role === 'school_admin') {
@@ -1055,6 +1096,8 @@ async function bootstrap() {
     if (session) { try { await logout(); } catch { /* ignore */ } }
   } catch (err) {
     console.warn('[Ruqi] bootstrap session check failed', err);
+  } finally {
+    removeBootSplash();  // شبكة أمان: fall-through يستدعي showScreen('login') الذي يرفعه أصلاً
   }
   showScreen('login');
 }
@@ -5235,16 +5278,28 @@ async function openStaffRecModal(rec) {
   _regEditId = rec?.id ?? null;
   if (staffRecTitle) staffRecTitle.textContent = rec ? 'تعديل بيانات كادر' : 'إضافة كادر جديد';
 
+  if (srSubjectWrap) srSubjectWrap.hidden = _regSegment !== 'teaching';
+  // الحقول التي تطلبها ورقة الجهاز التدريسي وحدها (§20.3)
+  if (srTeachExtra)  srTeachExtra.hidden  = _regSegment !== 'teaching';
+
+  // ⚠️ إظهار النافذة فوراً قبل جلب القوائم (تخصّصات/شهادات…). كان show بعد
+  //    awaitات getLookup، فعلى شبكة ميتة لا تظهر النافذة إطلاقاً. تُملأ القوائم
+  //    بعدها؛ وأوفلاين تبقى فارغة (.catch) بلا تعطيل بقيّة الحقول أو حجب النافذة.
+  hide(srError);
+  show(modalStaffRec);
+  if (!rec) modalStaffRec.querySelector('.sheet-body').scrollTop = 0;
+  document.body.style.overflow = 'hidden';
+
   const jobTitles = _regSegment === 'admin'
-    ? await getLookup('admin_role')
+    ? await getLookup('admin_role').catch(() => [])
     : _regSegment === 'teaching'
       ? ['معلم', 'مدرس', 'مدرس مساعد']
-      : await getLookup('support_job');
+      : await getLookup('support_job').catch(() => []);
 
   const [specs, certs, higher, minDocs, eduZones] = await Promise.all([
-    getLookup('specialization'), getLookup('certificate'),
-    getLookup('higher_degree'),  getLookup('ministerial_doc'),
-    getLookup('educational_zone'),
+    getLookup('specialization').catch(() => []), getLookup('certificate').catch(() => []),
+    getLookup('higher_degree').catch(() => []),  getLookup('ministerial_doc').catch(() => []),
+    getLookup('educational_zone').catch(() => []),
   ]);
 
   fillSel(srJobTitle, jobTitles);
@@ -5253,10 +5308,6 @@ async function openStaffRecModal(rec) {
   fillSel(srHigherDegree, higher, '— لا يوجد —');
   fillSel(srMinDoc, minDocs, '— لا يوجد —');
   fillSel(srEduZone, eduZones, '— لا يوجد —');
-
-  if (srSubjectWrap) srSubjectWrap.hidden = _regSegment !== 'teaching';
-  // الحقول التي تطلبها ورقة الجهاز التدريسي وحدها (§20.3)
-  if (srTeachExtra)  srTeachExtra.hidden  = _regSegment !== 'teaching';
 
   const textInputs = [srFullName, srNationalId, srMotherName, srDobDay, srDobMonth,
                       srDobYear, srStartDay, srStartMonth, srStartYear, srSubject, srPhone, srResZone, srNotes,
@@ -5321,11 +5372,6 @@ async function openStaffRecModal(rec) {
     _lockStaffPersonalFields(false);
     hide(srRegResult);
   }
-
-  hide(srError);
-  show(modalStaffRec);
-  if (!rec) modalStaffRec.querySelector('.sheet-body').scrollTop = 0;
-  document.body.style.overflow = 'hidden';
 }
 
 function _lockStaffPersonalFields(locked) {
@@ -5464,13 +5510,18 @@ async function openLeavesModal(rec) {
   const now = new Date();
   if (leavesMonthSel) leavesMonthSel.value = String(now.getMonth() + 1);
   if (leavesYearIn)   leavesYearIn.value   = String(now.getFullYear());
-  const types = await getLookup('leave_type');
-  fillSel(leaveTypeSel, types, '— نوع الإجازة —');
   if (leaveDaysIn) leaveDaysIn.value = '';
-  await loadLeavesForStaff();
+
+  // إظهار النافذة فوراً قبل طلبات الشبكة (نوع الإجازة + سجلّ الإجازات) كي لا
+  // تتعلّق دون ظهور على شبكة ميتة. تُملأ القائمة والسجلّ بعدها.
   hide(leavesError);
   show(modalLeaves);
   document.body.style.overflow = 'hidden';
+
+  let types = [];
+  try { types = await getLookup('leave_type'); } catch { /* أوفلاين: تبقى فارغة */ }
+  fillSel(leaveTypeSel, types, '— نوع الإجازة —');
+  await loadLeavesForStaff();
 }
 
 function closeLeavesModal() {
@@ -5754,22 +5805,49 @@ async function openAssignmentModal(asn) {
   _asnEditId = asn?.id ?? null;
   if (asnTitle) asnTitle.textContent = asn ? 'تعديل تكليف' : 'إضافة تكليف';
 
-  // Load classes + teacher accounts once per open (cheap, keeps data fresh).
+  // ⚠️ إظهار النافذة فوراً قبل أيّ طلب شبكة. كان show(modalAsn) بعد awaitات
+  //    الجلب، فعلى شبكة «متصلة لكن ميتة» لا تظهر النافذة إطلاقاً (لا سبِنر ولا
+  //    شيء). نُظهرها الآن بحقولها الثابتة، ثم تُملأ القوائم من المخبأ (فوراً
+  //    أوفلاين) أو الشبكة، وأيّ فشل يُنبّه بلا حجب.
+  asnKind.value = asn?.assignment_kind || _asnSegment;
+  CustomSelect.refresh(asnKind);
+  _renderAsnKindFields();
+
+  asnSection.value      = asn?.section        || '';
+  asnLessonCount.value  = asn?.lesson_count   ?? '';
+  asnStartDate.value    = asn?.start_date     || '';
+  asnCommenceDate.value = asn?.commence_date  || '';
+  asnAssignDate.value   = asn?.assignment_date|| '';
+  asnExecStart.value    = asn?.execution_start|| '';
+
+  // قوائم شبكية بحالة تحميل مؤقّتة كي لا تظهر فارغة قبل التعبئة.
+  asnClass.innerHTML = '<option value="">…جارٍ التحميل</option>';
+  asnUser.innerHTML  = '<option value="">…جارٍ التحميل</option>';
+  CustomSelect.refresh(asnClass);
+  CustomSelect.refresh(asnUser);
+
+  hide(asnFormError);
+  show(modalAsn);
+  if (!asn) modalAsn.querySelector('.sheet-body').scrollTop = 0;
+  document.body.style.overflow = 'hidden';
+
+  // Load classes + teacher accounts (from cache instantly when offline).
   try {
     [_asnClasses, _asnTeachers] = await Promise.all([
       NDB.getSchoolClasses(S.school.id),
       NDB.getTeachersBySchool(S.school.id),
     ]);
-  } catch (err) { console.warn('[Ruqi] openAssignmentModal load', err); }
-
-  // Kind
-  asnKind.value = asn?.assignment_kind || _asnSegment;
-  CustomSelect.refresh(asnKind);
-  _renderAsnKindFields();
+  } catch (err) {
+    console.warn('[Ruqi] openAssignmentModal load', err);
+    _asnClasses  = _asnClasses  || [];
+    _asnTeachers = _asnTeachers || [];
+    toast('تعذّر تحميل الصفوف/الكادر' + (navigator.onLine ? '' : ' — يحتاج اتصالاً'), 'warning');
+  }
 
   // Job title list depends on kind
   const listType = asnKind.value === 'technical' ? 'job_title' : 'school_admin_role';
-  const titles = await getLookup(listType);
+  let titles = [];
+  try { titles = await getLookup(listType); } catch { /* أوفلاين: تبقى فارغة */ }
   fillSel(asnJobTitle, titles);
   asnJobTitle.value = asn?.job_title || '';
   CustomSelect.refresh(asnJobTitle);
@@ -5788,19 +5866,8 @@ async function openAssignmentModal(asn) {
   CustomSelect.refresh(asnUser);
 
   // Subjects for the selected class
-  await _loadAsnSubjectsForClass(asn?.class_id || '', asn?.subject_ids || []);
-
-  asnSection.value      = asn?.section        || '';
-  asnLessonCount.value  = asn?.lesson_count   ?? '';
-  asnStartDate.value    = asn?.start_date     || '';
-  asnCommenceDate.value = asn?.commence_date  || '';
-  asnAssignDate.value   = asn?.assignment_date|| '';
-  asnExecStart.value    = asn?.execution_start|| '';
-
-  hide(asnFormError);
-  show(modalAsn);
-  if (!asn) modalAsn.querySelector('.sheet-body').scrollTop = 0;
-  document.body.style.overflow = 'hidden';
+  try { await _loadAsnSubjectsForClass(asn?.class_id || '', asn?.subject_ids || []); }
+  catch (err) { console.warn('[Ruqi] _loadAsnSubjectsForClass', err); }
 }
 
 function closeAssignmentModal() {

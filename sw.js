@@ -11,7 +11,7 @@
  *
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'ruqi-v129';
+const CACHE = 'ruqi-v130';
 
 /* ⚠️ التقسيم مقصود ويعالج عطلاً حقيقياً.
    كان التثبيت كلّه على Promise.allSettled — يبتلع فشل أي ملفّ ويُعلن النجاح —
@@ -109,19 +109,36 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // Supabase / fonts → network
 
-  // HTML navigations: prefer fresh, fall back to cache, then to shell.
+  // HTML navigations: serve the cached shell INSTANTLY, then refresh it in the
+  // background (stale-while-revalidate).
+  //
+  // ⚠️ كان network-first: ينتظر الشبكة ثمّ يسقط للمخبأ. على شبكة «متصلة لكن
+  //    ميتة» (راوتر بلا خطّ، واي‑فاي أسير) يتعلّق fetch ثوانيَ طويلة قبل السقوط
+  //    فيفتح التطبيق بعد ~15ث أو لا يفتح. cache-first يُلغي هذا الانتظار تماماً؛
+  //    ورفعُ CACHE مع مسح activate يمنع بقاء نسخة قديمة أكثر من تحميلة واحدة.
   if (req.mode === 'navigate') {
-    event.respondWith(
-      fetch(req)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
-          return res;
-        })
-        .catch(() =>
-          caches.match(req).then((hit) => hit || caches.match('./index.html'))
-        )
-    );
+    const url = new URL(req.url);
+    // أفضل قشرة مخبّأة لهذا التنقّل: index.html لمجلّد الطلب (كلّ بوّابة مخزّنة
+    // مسبقاً) كي يعمل حتى رابطٌ عميق يُفتَح أوّل مرّة دون اتصال. نبنيه من
+    // origin+pathname (بلا query) كي لا يُفسد رابطٌ عميق مثل school/?n=… المفتاحَ.
+    const shellPath = url.pathname.endsWith('/') ? url.pathname + 'index.html' : url.pathname;
+    const shellUrl  = url.origin + shellPath;
+    event.respondWith((async () => {
+      const cache  = await caches.open(CACHE);
+      const cached = (await cache.match(req))
+                  || (await cache.match(shellUrl))
+                  || (await cache.match('./index.html'));
+      // تحديث في الخلفية لا يحجب الاستجابة إطلاقاً. يعيد دائماً استجابةً صريحة
+      // (المخبأ إن وُجد وإلّا رسالة أوفلاين) كي لا يُمرَّر undefined لـrespondWith.
+      const network = fetch(req)
+        .then((res) => { cache.put(req, res.clone()); return res; })
+        .catch(() => cached || new Response(
+          'غير متوفّر دون اتصال',
+          { status: 504, statusText: 'Offline',
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
+        ));
+      return cached || network;
+    })());
     return;
   }
 

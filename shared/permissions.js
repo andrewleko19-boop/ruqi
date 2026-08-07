@@ -13,7 +13,7 @@
 // كل عنصر يحمل data-module="<مفتاح الوحدة>" يُخفى (hidden) تلقائياً إن كانت
 // الوحدة غير مفعّلة لدور المستخدم الحالي.
 
-import { supabase } from './db.js';
+import { supabase, withTimeout, getOfflineUserId } from './db.js';
 
 const LAYER = location.pathname.split('/').filter(Boolean).find(
   s => ['school', 'teacher', 'directorate', 'ministry', 'admin', 'parent'].includes(s)
@@ -43,22 +43,41 @@ function _cachedModules(userId) {
    اتصال) نستعمل آخر نتيجة مخبّأة لهذا المستخدم على هذا الجهاز؛ وعند غيابها
    نُظهر كل شيء (fail-open) كي لا تُحرَم شاشة تشغيلية من الظهور بسبب عطل في
    نظام العرض هذا وحده — هذا سقف واجهة، لا حاجز أمان. */
-async function init() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) { _enabled = null; return null; }
+// userId اختياري: تمرّره البوّابة (من الجلسة التي حسمتها أصلاً) لتخطّي getSession
+// نهائياً؛ وإلّا نستنتجه من الجلسة المحلية ثم من مؤشّر «آخر مستخدم» (توكن منتهٍ).
+// كل استدعاء شبكي مغلَّف بمهلة فلا يتعلّق initApp قبل إظهار اللوحة أوفلاين.
+async function init(userId) {
+  let uid = userId ?? null;
+  if (!uid) {
+    try {
+      const res = await withTimeout(supabase.auth.getSession(), 3500);
+      uid = res?.data?.session?.user?.id ?? null;
+    } catch { /* تعلّق التوكن → نُعامله كأوفلاين */ }
+  }
+  if (!uid) uid = getOfflineUserId();
+  if (!uid) { _enabled = null; return null; }
 
-  const { data, error } = await supabase.rpc('get_my_module_permissions');
+  // أوفلاين: استعمل آخر مصفوفة مخبّأة مباشرة بلا إهدار مهلة على شبكة غائبة.
+  if (!navigator.onLine) {
+    const cached = _cachedModules(uid);
+    _enabled = cached ? new Set(cached) : null;
+    return _enabled;
+  }
 
-  let keys;
+  let data = null, error = null;
+  try {
+    ({ data, error } = await withTimeout(supabase.rpc('get_my_module_permissions'), 4000));
+  } catch (e) { error = e; }
+
   if (error || !Array.isArray(data)) {
-    const cached = _cachedModules(session.user.id);
+    const cached = _cachedModules(uid);
     if (cached) { _enabled = new Set(cached); return _enabled; }
     _enabled = null; // لا مخبّأ ولا شبكة: لا نخفي شيئاً
     return null;
   }
 
-  keys = data.map(r => (typeof r === 'string' ? r : r.get_my_module_permissions ?? r.module_key));
-  _cacheModules(session.user.id, keys);
+  const keys = data.map(r => (typeof r === 'string' ? r : r.get_my_module_permissions ?? r.module_key));
+  _cacheModules(uid, keys);
   _enabled = new Set(keys);
   return _enabled;
 }
