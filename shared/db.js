@@ -467,6 +467,16 @@ async function login(identifier, password) {
   if (profileError) throw new Error("لا توجد صلاحية لقراءة بيانات المستخدم.");
   if (!profile) throw new Error("المستخدم غير مسجل في النظام.");
 
+  /* ⚠️ التخزين هنا لا في getCurrentUser وحدها. كان مسار الدخول اليدوي يجلب
+     الملفّ ثمّ يرميه، وكاتبُ المخبأ الوحيد هو getCurrentUser — وهي لا تُستدعى
+     في هذا المسار إطلاقاً. فمن سجّل دخوله ثمّ أغلق التطبيق وقطع الاتصال وجد
+     شاشةَ الدخول من جديد: الجلسة سليمة، لكن لا ملفَّ مخبّأ يسقط إليه الاستعلامُ
+     الفاشل، ولا مؤشّرَ «آخر مستخدم» بعد انتهاء التوكن. عملياً لم يكن الدخول
+     أوفلاين ينجح إلّا لمن أعاد تحميل التطبيق مرّةً وهو متصل — شرطٌ لا يعرفه أحد.
+     التخزين لا يمنح صلاحية: RLS يبقى الحَكم عند أوّل استعلام. */
+  _cacheProfile(userId, profile);
+  _cacheLastUser(userId, authData.user.email);
+
   return {
     user: { id: userId, email: authData.user.email, fullName: profile.full_name },
     role: profile.role,
@@ -3885,6 +3895,24 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+/* ─── حزام أمان لطبقة العرض (permissions) ────────────────────────────────────
+   بديلٌ يُظهر كل شيء، يُنشَر قبل تحميل shared/permissions.js وتَدهسه النسخةُ
+   الحقيقية فور تنفيذها. موضعه هنا لأنّ db.js هو الوحيد المضمون حضورُه: كل
+   بوّابة تُحمّله، وهو ضمن CRITICAL في sw.js — أيّ فشل في تخزينه يرفض تثبيت
+   العامل كلَّه فيبقى الكاش السليم السابق.
+
+   لماذا أصلاً: البوّابات تنادي RUQI_PERMISSIONS.init/isEnabled/applyToDom
+   مباشرةً بلا حارس، وأوّلها سطرٌ في initApp. فتعذّرُ تحميل ملفٍّ واحدٍ من طبقة
+   عرض كان يُسقط اللوحة بأكملها إلى شاشة الدخول. طبقةُ عرضٍ لا يجوز أن تملك هذه
+   السلطة؛ وfail-open هو بالضبط ما تفعله permissions.js نفسها عند تعذّر جلب
+   المصفوفة (تُظهر كل شيء وتترك RLS يحكم)، فالبديل يطابق عقدها لا يخالفه. */
+window.RUQI_PERMISSIONS ??= {
+  init:         async () => null,
+  isEnabled:    () => true,
+  applyToDom:   () => new Set(),
+  firstEnabled: (candidates) => candidates?.[0] ?? null,
+};
 
 window.RUQI_DB = {
   // Auth
