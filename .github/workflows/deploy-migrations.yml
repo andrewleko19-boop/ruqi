@@ -8,9 +8,12 @@ name: Deploy DB Migrations
 # ⚠️ لا نستعمل `supabase link`. أمر link يجلب مفاتيح الـAPI للمشروع ليخزّنها،
 #    ومنذ أن فعّل المشروع نظام المفاتيح الجديد (sb_publishable_/sb_secret_) صار
 #    ردّ الـAPI يحوي مفتاحاً بحقل inserted_at بصيغةٍ ترفضها الأداة، فيفشل link
-#    بـ«SchemaError ... inserted_at» — وهو عطلٌ في الأداة لا في المشروع، ولا
-#    تُصلحه نسخةٌ أقدم لأنّ المفاتيح هي ما تغيّر. الحلّ: تخطّي link نهائياً
-#    والاتصال المباشر بـ`db push --db-url`، فلا يُجلَب أيّ مفتاح أصلاً.
+#    بـ«SchemaError ... inserted_at» — عطلٌ في الأداة لا في المشروع. الحلّ:
+#    الاتصال المباشر بـ`db push --db-url` فلا يُجلَب أيّ مفتاح أصلاً.
+#
+#    ورابطُ الاتصال يُشتَقّ ذاتياً من الأسرار الموجودة (لا يحتاج سرّاً جديداً):
+#    منطقة المشروع من Management API، ثمّ خادم الـpooler، ثمّ كلمة المرور. ويبقى
+#    SUPABASE_DB_URL بديلاً يدوياً إن رغب أحدٌ بتزويده صراحةً.
 on:
   push:
     branches: [main]
@@ -37,16 +40,56 @@ jobs:
         with:
           version: latest
 
-      - name: Verify DB URL secret is present
+      - name: Push migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          DB_PASSWORD:  ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PROJECT_REF:  ${{ secrets.SUPABASE_PROJECT_REF }}
+          DB_URL_MANUAL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          if [ -z "${{ secrets.SUPABASE_DB_URL }}" ]; then
-            echo "::error::السرّ SUPABASE_DB_URL غير موجود. أضِفه من Supabase → Connect → Session pooler (سلسلة الاتصال كاملةً مع كلمة المرور)."
-            exit 1
+          set -uo pipefail
+
+          if [ -n "${DB_URL_MANUAL}" ]; then
+            echo "استعمال SUPABASE_DB_URL المزوّد يدوياً."
+            DB_URL="${DB_URL_MANUAL}"
+          else
+            echo "اشتقاق رابط الاتصال من الأسرار الموجودة…"
+
+            if [ -z "${PROJECT_REF}" ] || [ -z "${DB_PASSWORD}" ] || [ -z "${SUPABASE_ACCESS_TOKEN}" ]; then
+              echo "::error::نقص في الأسرار: يلزم SUPABASE_PROJECT_REF و SUPABASE_DB_PASSWORD و SUPABASE_ACCESS_TOKEN."
+              exit 1
+            fi
+
+            # منطقة المشروع من Management API (jq مثبّت مسبقاً على ubuntu-latest).
+            REGION=$(curl -sS \
+              -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+              "https://api.supabase.com/v1/projects/${PROJECT_REF}" \
+              | jq -r '.region // empty')
+            if [ -z "${REGION}" ]; then
+              echo "::error::تعذّر الحصول على منطقة المشروع من Management API. أضِف السرّ SUPABASE_DB_URL يدوياً (Supabase → Connect → Session pooler)."
+              exit 1
+            fi
+            echo "منطقة المشروع: ${REGION}"
+
+            # خادم الـpooler: البادئة قد تكون aws-0 أو aws-1 حسب عمر المشروع،
+            # فنجرّب كليهما ونأخذ ما يُحلّ اسمه فعلاً — بلا تخمين.
+            POOLER_HOST=""
+            for prefix in aws-0 aws-1; do
+              h="${prefix}-${REGION}.pooler.supabase.com"
+              if getent hosts "${h}" >/dev/null 2>&1; then POOLER_HOST="${h}"; break; fi
+            done
+            if [ -z "${POOLER_HOST}" ]; then
+              echo "::error::تعذّر تحليل اسم خادم الـpooler للمنطقة ${REGION}. أضِف السرّ SUPABASE_DB_URL يدوياً."
+              exit 1
+            fi
+            echo "خادم الـpooler: ${POOLER_HOST}"
+
+            # ترميز كلمة المرور لتأمين أيّ محرفٍ خاصّ داخل الرابط.
+            ENC_PW=$(python3 -c 'import urllib.parse,os;print(urllib.parse.quote(os.environ["DB_PASSWORD"],safe=""))')
+            # session pooler على المنفذ 5432 (يدعم DDL الكامل الذي تحتاجه الهجرات).
+            DB_URL="postgresql://postgres.${PROJECT_REF}:${ENC_PW}@${POOLER_HOST}:5432/postgres"
           fi
 
-      - name: Push migrations
-        # --db-url يتّصل مباشرةً بقاعدة البيانات عبر session pooler (IPv4، يدعم
-        # الـDDL الكامل الذي تحتاجه الهجرات). لا link، لا جلب مفاتيح، لا عطل.
-        # --include-all: يطبّق كلّ هجرةٍ غير مطبَّقة حتى لو كان ترتيبها أقدم من
-        # آخر ما في جدول السجلّ — لازمٌ للتطبيق الأول.
-        run: supabase db push --db-url "${{ secrets.SUPABASE_DB_URL }}" --include-all
+          # --include-all: يطبّق كلّ هجرةٍ غير مطبَّقة حتى لو كان ترتيبها أقدم من
+          # آخر ما في جدول السجلّ — لازمٌ للتطبيق الأول. الرابط لا يُطبَع أبداً.
+          supabase db push --db-url "${DB_URL}" --include-all
