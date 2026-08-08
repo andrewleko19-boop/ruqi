@@ -1,9 +1,16 @@
 name: Deploy DB Migrations
 
-# Applies Supabase SQL migrations to the linked project whenever any file under
+# Applies Supabase SQL migrations to the project whenever any file under
 # supabase/migrations/ changes on main. Without this, migrations only exist in
-# git — the running Postgres never gets them, so new tables/columns referenced
-# by the frontend return 404/42703 in the browser.
+# git — the running Postgres never gets them, so new tables/columns/functions
+# referenced by the frontend return 404/42703/42883 in the browser.
+#
+# ⚠️ لا نستعمل `supabase link`. أمر link يجلب مفاتيح الـAPI للمشروع ليخزّنها،
+#    ومنذ أن فعّل المشروع نظام المفاتيح الجديد (sb_publishable_/sb_secret_) صار
+#    ردّ الـAPI يحوي مفتاحاً بحقل inserted_at بصيغةٍ ترفضها الأداة، فيفشل link
+#    بـ«SchemaError ... inserted_at» — وهو عطلٌ في الأداة لا في المشروع، ولا
+#    تُصلحه نسخةٌ أقدم لأنّ المفاتيح هي ما تغيّر. الحلّ: تخطّي link نهائياً
+#    والاتصال المباشر بـ`db push --db-url`، فلا يُجلَب أيّ مفتاح أصلاً.
 on:
   push:
     branches: [main]
@@ -29,15 +36,17 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Link project
-        run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Verify DB URL secret is present
+        run: |
+          if [ -z "${{ secrets.SUPABASE_DB_URL }}" ]; then
+            echo "::error::السرّ SUPABASE_DB_URL غير موجود. أضِفه من Supabase → Connect → Session pooler (سلسلة الاتصال كاملةً مع كلمة المرور)."
+            exit 1
+          fi
+
       - name: Push migrations
-        run: supabase db push --include-all
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        # --db-url يتّصل مباشرةً بقاعدة البيانات عبر session pooler (IPv4، يدعم
+        # الـDDL الكامل الذي تحتاجه الهجرات). لا link، لا جلب مفاتيح، لا عطل.
+        # --include-all: يطبّق كلّ هجرةٍ غير مطبَّقة حتى لو كان ترتيبها أقدم من
+        # آخر ما في جدول السجلّ — لازمٌ للتطبيق الأول.
+        run: supabase db push --db-url "${{ secrets.SUPABASE_DB_URL }}" --include-all
