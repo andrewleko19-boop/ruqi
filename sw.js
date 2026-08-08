@@ -11,7 +11,7 @@
  *
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'ruqi-v133';
+const CACHE = 'ruqi-v134';
 
 /* ⚠️ التقسيم مقصود ويعالج عطلاً حقيقياً.
    كان التثبيت كلّه على Promise.allSettled — يبتلع فشل أي ملفّ ويُعلن النجاح —
@@ -87,6 +87,23 @@ const OPTIONAL = [
   './parent/style.css',
   './icons/apple-touch-icon-180.png',
   './icons/favicon-32.png',
+  './icons/favicon-16.png',
+  './icons/favicon.ico',
+  /* شاشات إقلاع iOS. بدونها يفتح التطبيق المثبّت دون اتصال على بياضٍ صامت
+     قبل ظهور القشرة — يبدو معطّلاً. أفضل-جهد عمداً (OPTIONAL لا CRITICAL):
+     تجميلٌ لا وظيفة، فلا يجوز أن يمنع فشلُ تنزيل صورةٍ تحديثَ العامل كلَّه. */
+  './icons/apple-touch-startup-image-828x1792.png',
+  './icons/apple-touch-startup-image-1125x2436.png',
+  './icons/apple-touch-startup-image-1170x2532.png',
+  './icons/apple-touch-startup-image-1179x2556.png',
+  './icons/apple-touch-startup-image-1206x2622.png',
+  './icons/apple-touch-startup-image-1284x2778.png',
+  './icons/apple-touch-startup-image-1290x2796.png',
+  './icons/apple-touch-startup-image-1320x2868.png',
+  './icons/apple-touch-startup-image-1536x2048.png',
+  './icons/apple-touch-startup-image-1620x2160.png',
+  './icons/apple-touch-startup-image-1668x2388.png',
+  './icons/apple-touch-startup-image-2048x2732.png',
 ];
 
 self.addEventListener('install', (event) => {

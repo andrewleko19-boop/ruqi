@@ -14,6 +14,39 @@ const LAYER = location.pathname.split('/').filter(Boolean).find(
 
 const AUTH_STORAGE_KEY = `nsams-auth-${LAYER}`;
 
+/* ⚠️ حزامٌ أخير تحت كل المهل الفرديّة.
+   withTimeout يحمي القراءات التي لها مخبأ فتسقط إليه، لكنّ عشرات الدوال
+   الأخرى بلا أيّ مهلة. وعلى شبكة «متصلة لكن ميتة» — راوتر بلا خطّ، واي‑فاي
+   أسير في مدرسة — لا يفشل fetch بل يبقى معلّقاً دقائقَ بمهلة المتصفّح
+   الافتراضية، فتتجمّد كلّ شاشة تنتظره بلا رسالة ولا زرّ. هذا يُنهي ذلك صنفاً
+   كاملاً بتعديلٍ واحد بدل تعديل خمسٍ وتسعين دالّة.
+   AbortController لا Promise.race: يُلغي الطلبَ فعلاً فيصل الخطأ إلى مستدعٍ
+   يعرض رسالةً مفهومة، بدل تحرير المنتظِر وترك الطلب يعمل في الخلفية.
+
+   على GET وحدها عمداً. إلغاءُ قراءةٍ لا يترك أثراً على الخادم؛ أمّا إلغاء
+   كتابةٍ (POST/PATCH/DELETE، وكلّ rpc) فيترك حالتَها ملتبسة: قد تكون تمّت على
+   الخادم بينما يرى العميل فشلاً فيُعيدها — واستيرادٌ جماعيّ مكرّر أسوأ بكثير
+   من انتظار. والكتابات محميّة أصلاً بطابور الـoutbox. */
+const NETWORK_READ_TIMEOUT_MS = 25000;
+
+function timedFetch(input, init) {
+  const method = (init?.method
+    ?? (typeof Request !== 'undefined' && input instanceof Request ? input.method : 'GET')
+  ).toUpperCase();
+  if (method !== 'GET') return fetch(input, init);
+
+  const ctrl  = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), NETWORK_READ_TIMEOUT_MS);
+
+  // إشارةُ إلغاءٍ من المستدعي (abortSignal في postgrest) تُحترَم لا تُدهَس.
+  const upstream = init?.signal;
+  if (upstream?.aborted) { clearTimeout(timer); return fetch(input, init); }
+  upstream?.addEventListener('abort', () => { clearTimeout(timer); ctrl.abort(); }, { once: true });
+
+  return fetch(input, { ...init, signal: ctrl.signal })
+    .finally(() => clearTimeout(timer));
+}
+
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     storageKey:       AUTH_STORAGE_KEY,
@@ -21,6 +54,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
   },
+  global: { fetch: timedFetch },
 });
 export { db as supabase };
 export { SUPABASE_URL as supabaseUrl };
@@ -648,14 +682,19 @@ async function getSchoolStatus(schoolId, date) {
 
 // School-admin: fetch today's submitted daily_attendance row (or null). Used to
 // restore the "submitted" confirmation state on reload and show audit details.
+// withTimeout: هذه على مسار الإقلاع — initApp ينتظرها بعد إظهار اللوحة، فتعلّقُها
+// يترك المدير أمام لوحةٍ نصف مرسومة. مهلةٌ قصيرة تعني «اعتبره غير مُرسَل» (وهو
+// ما يفعله المستدعي في catch أصلاً) بدل تجميدٍ صامت.
 async function getDailyAttendance(schoolId, date) {
   const iso = date instanceof Date ? localDateISO(date) : date;
-  const { data, error } = await db
-    .from("daily_attendance")
-    .select("teachers_present,teachers_absent,admins_present,admins_absent,workers_present,workers_absent,students_present,notes,submitted_at")
-    .eq("school_id", schoolId)
-    .eq("date", iso)
-    .maybeSingle();
+  const { data, error } = await withTimeout(
+    db.from("daily_attendance")
+      .select("teachers_present,teachers_absent,admins_present,admins_absent,workers_present,workers_absent,students_present,notes,submitted_at")
+      .eq("school_id", schoolId)
+      .eq("date", iso)
+      .maybeSingle(),
+    OFFLINE_READ_TIMEOUT_MS,
+  );
   if (error) throw error;
   return data; // null when not yet submitted
 }
@@ -721,15 +760,33 @@ async function createSchoolRequest(schoolId, directorateId, type, payload) {
 }
 
 // School-admin: list all requests for this school, newest first.
+const SCHOOL_REQUESTS_CACHE_PFX = 'nsams_sreq_';
+
 async function getSchoolRequests(schoolId) {
-  const { data, error } = await db
-    .from('school_requests')
-    .select('id, type, status, payload, review_reason, created_at, applied_at')
-    .eq('school_id', schoolId)
-    .order('created_at', { ascending: false })
-    .limit(100);
-  if (error) throw error;
-  return data ?? [];
+  const key = SCHOOL_REQUESTS_CACHE_PFX + schoolId;
+  if (!isOnline()) {
+    const hit = _readJSONCache(key);
+    if (hit) return hit;
+  }
+  let rows;
+  try {
+    const res = await withTimeout(
+      db.from('school_requests')
+        .select('id, type, status, payload, review_reason, created_at, applied_at')
+        .eq('school_id', schoolId)
+        .order('created_at', { ascending: false })
+        .limit(100),
+      OFFLINE_READ_TIMEOUT_MS,
+    );
+    if (res.error) throw res.error;
+    rows = res.data ?? [];
+  } catch (err) {
+    const hit = _readJSONCache(key);
+    if (hit) { console.warn('[Ruqi] طلبات المدرسة من المخبأ', err); return hit; }
+    throw err;
+  }
+  _writeJSONCache(key, rows);
+  return rows;
 }
 
 // Directorate: list pending/recent requests for a directorate (raw RLS select).
@@ -1991,19 +2048,43 @@ function staffStatusForLate(lateMinutes) {
 }
 
 // ── Personnel roster (admins / workers — no app login) ──
+/* ورقةٌ يعتمد عليها تبويبان (الكادر، وإعدادات المدرسة) عبر
+   getStaffAttendanceForDate و getFullStaffRoster — فتخبئتُها تُفيد الثلاثة.
+   نفس نمط getSchoolClasses المثبت: أوفلاين اقرأ فوراً، وأونلاين اجلب بمهلة
+   واسقط للمخبأ عند الفشل. القائمة مستقرّة (كادر المدرسة لا يتغيّر يومياً)
+   فلا تحتاج تأريخاً، بخلاف كشوف اليوم. */
+const SCHOOL_PERSONNEL_CACHE_PFX = 'nsams_spers_';
+
 async function getSchoolPersonnel(schoolId) {
-  const { data, error } = await db
-    .from('school_personnel')
-    .select('id, full_name, kind, national_id, is_active, staff_record_id')
-    .eq('school_id', schoolId)
-    .order('kind', { ascending: true })
-    .order('full_name', { ascending: true });
-  if (error) throw error;
-  return (data ?? []).map(p => ({
+  const key = SCHOOL_PERSONNEL_CACHE_PFX + schoolId;
+  if (!isOnline()) {
+    const hit = _readJSONCache(key);
+    if (hit) return hit;
+  }
+  let data;
+  try {
+    const res = await withTimeout(
+      db.from('school_personnel')
+        .select('id, full_name, kind, national_id, is_active, staff_record_id')
+        .eq('school_id', schoolId)
+        .order('kind', { ascending: true })
+        .order('full_name', { ascending: true }),
+      OFFLINE_READ_TIMEOUT_MS,
+    );
+    if (res.error) throw res.error;
+    data = res.data;
+  } catch (err) {
+    const hit = _readJSONCache(key);
+    if (hit) { console.warn('[Ruqi] كادر المدرسة (سجلّ) من المخبأ', err); return hit; }
+    throw err;
+  }
+  const mapped = (data ?? []).map(p => ({
     id: p.id, fullName: p.full_name, kind: p.kind,
     nationalId: p.national_id ?? null, isActive: p.is_active !== false,
     staffRecordId: p.staff_record_id ?? null,
   }));
+  _writeJSONCache(key, mapped);
+  return mapped;
 }
 
 async function addPersonnel({ schoolId, fullName, kind, nationalId = null }) {
@@ -2207,18 +2288,40 @@ async function getMyStaffAttendanceToday(teacherId) {
 // ── Manager view: every staff member for a date, grouped by category ──
 async function getStaffAttendanceForDate(schoolId, date) {
   const isoDate = date instanceof Date ? localDateISO(date) : date;
-  const [teachers, personnel, attRes] = await Promise.all([
+  /* allSettled لا all: الكادر والمعلّمون لهما مخبأ، فكان فشلُ استعلام الدوام
+     وحده يُلغيهما معاً ويُفرِغ التبويب — نفس علّة Promise.all في بوّابة المعلّم.
+     الآن يظهر الكادر بلا سجلّات دوام (فراغٌ صادق) بدل ألّا يظهر شيء. */
+  const STAFF_ATT_CACHE_PFX = 'nsams_satt_';
+  const attKey = STAFF_ATT_CACHE_PFX + schoolId;
+
+  const [tRes, pRes, aRes] = await Promise.allSettled([
     getTeachersBySchool(schoolId),
     getSchoolPersonnel(schoolId),
-    db.from('staff_attendance')
-      .select('id, kind, teacher_id, personnel_id, status, check_in_original, check_in_adjusted, check_out, late_minutes, source, adjust_reason, note')
-      .eq('school_id', schoolId)
-      .eq('date', isoDate),
+    isOnline()
+      ? withTimeout(
+          db.from('staff_attendance')
+            .select('id, kind, teacher_id, personnel_id, status, check_in_original, check_in_adjusted, check_out, late_minutes, source, adjust_reason, note')
+            .eq('school_id', schoolId)
+            .eq('date', isoDate),
+          OFFLINE_READ_TIMEOUT_MS,
+        )
+      : Promise.reject(new Error('offline')),
   ]);
-  if (attRes.error) throw attRes.error;
+
+  const teachers  = tRes.status === 'fulfilled' ? tRes.value : [];
+  const personnel = pRes.status === 'fulfilled' ? pRes.value : [];
+
+  // سجلّات الدوام مؤرَّخة كسجلّات الحضور: نسخةُ الأمس رقمٌ خاطئ لا بيانٌ قديم.
+  let attRows;
+  if (aRes.status === 'fulfilled' && !aRes.value.error) {
+    attRows = aRes.value.data ?? [];
+    _writeDatedCache(attKey, isoDate, attRows);
+  } else {
+    attRows = _readDatedCache(attKey, isoDate) ?? [];
+  }
 
   const byTeacher = {}, byPersonnel = {};
-  for (const r of attRes.data || []) {
+  for (const r of attRows) {
     if (r.teacher_id)        byTeacher[r.teacher_id]    = r;
     else if (r.personnel_id) byPersonnel[r.personnel_id] = r;
   }
@@ -3579,33 +3682,57 @@ if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
 
 // Unified roster: all teachers (from users) + admins/workers (from school_personnel),
 // merged with credential usernames for teachers.
+const STAFF_ROSTER_CACHE_PFX = 'nsams_sroster_';
+
 async function getFullStaffRoster(schoolId) {
-  const [teachersRes, credRes, personnel] = await Promise.all([
-    db.from('users')
-      .select('id, full_name')
-      .eq('role', 'teacher')
-      .eq('school_id', schoolId)
-      .order('full_name', { ascending: true }),
-    db.from('staff_credentials')
-      .select('user_id, username')
-      .eq('school_id', schoolId),
-    getSchoolPersonnel(schoolId),
-  ]);
-  if (teachersRes.error) throw teachersRes.error;
-  if (credRes.error)     throw credRes.error;
+  const key = STAFF_ROSTER_CACHE_PFX + schoolId;
+  if (!isOnline()) {
+    const hit = _readJSONCache(key);
+    if (hit) return hit;
+  }
 
-  const credMap = Object.fromEntries((credRes.data ?? []).map(c => [c.user_id, c.username]));
+  let roster;
+  try {
+    const [teachersRes, credRes, personnel] = await Promise.all([
+      withTimeout(
+        db.from('users')
+          .select('id, full_name')
+          .eq('role', 'teacher')
+          .eq('school_id', schoolId)
+          .order('full_name', { ascending: true }),
+        OFFLINE_READ_TIMEOUT_MS,
+      ),
+      withTimeout(
+        db.from('staff_credentials')
+          .select('user_id, username')
+          .eq('school_id', schoolId),
+        OFFLINE_READ_TIMEOUT_MS,
+      ),
+      getSchoolPersonnel(schoolId),
+    ]);
+    if (teachersRes.error) throw teachersRes.error;
+    if (credRes.error)     throw credRes.error;
 
-  const teachers = (teachersRes.data ?? []).map(t => ({
-    id: t.id, fullName: t.full_name, kind: 'teacher',
-    username: credMap[t.id] ?? null,
-  }));
+    const credMap = Object.fromEntries((credRes.data ?? []).map(c => [c.user_id, c.username]));
 
-  const others = personnel
-    .filter(p => p.isActive)
-    .map(p => ({ id: p.id, fullName: p.fullName, kind: p.kind, username: null }));
+    const teachers = (teachersRes.data ?? []).map(t => ({
+      id: t.id, fullName: t.full_name, kind: 'teacher',
+      username: credMap[t.id] ?? null,
+    }));
 
-  return [...teachers, ...others];
+    const others = personnel
+      .filter(p => p.isActive)
+      .map(p => ({ id: p.id, fullName: p.fullName, kind: p.kind, username: null }));
+
+    roster = [...teachers, ...others];
+  } catch (err) {
+    const hit = _readJSONCache(key);
+    if (hit) { console.warn('[Ruqi] سجلّ الكادر الكامل من المخبأ', err); return hit; }
+    throw err;
+  }
+
+  _writeJSONCache(key, roster);
+  return roster;
 }
 
 // ─── Holiday calendar ────────────────────────────────────────────────────────
@@ -4821,6 +4948,10 @@ const TENANT_CACHE_PREFIXES = [
   'nsams_ssum_',      // كشوف اليوم: أسماء المعلّمين وأعداد الطلاب لكل شعبة
   'nsams_csub_',      // حالة كشف الصفّ لليوم
   'nsams_catt_',      // حضور طلاب الصفّ لليوم — بيانات طلاب باسمهم
+  'nsams_spers_',     // سجلّ الكادر: أسماء وأرقام وطنية
+  'nsams_satt_',      // دوام الكادر لليوم
+  'nsams_sroster_',   // السجلّ الكامل مع أسماء المستخدمين
+  'nsams_sreq_',      // طلبات المدرسة (قد تحمل بيانات طلاب/كادر في payload)
   'nsams_school2_',   // ملفّ المدرسة: الاسم والإحداثيات والأعداد والتصنيف
   'nsams_draft_',     // مسودّات الحضور لكل صفّ ويوم — لم يكن ينظّفها شيء
   'nsams_profile_',   // ملفّ الدور المخبّأ للدخول دون اتصال

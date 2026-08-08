@@ -4045,6 +4045,13 @@ async function loadStaffDailyCounts() {
   if (!S.school?.id || !window.RUQI_DB?.computeStaffDailyCounts) return;
   try {
     const c = await window.RUQI_DB.computeStaffDailyCounts(S.school.id, todayISO());
+    /* ⚠️ لا تكتب أصفاراً. كانت هذه ترمي دون اتصال فتبقى الخانات كما تركها
+       المدير؛ وبعد أن صارت تسقط لمخبأ الدوام قد تعود بسجلّات فارغة — «لا نعرف»
+       لا «صفر». وكتابةُ صفرٍ هنا تُرسَل إلى المديرية كأنّها حقيقةُ اليوم.
+       نفس حارس loadClassSummaries؛ والصفر الحقيقي يُدخله المدير بيده. */
+    const anyStaff = c.admins.present + c.admins.absent
+                   + c.workers.present + c.workers.absent;
+    if (anyStaff === 0) return;
     if (inAdminPresent)  inAdminPresent.value  = c.admins.present;
     if (inAdminAbsent)   inAdminAbsent.value   = c.admins.absent;
     if (inWorkerPresent) inWorkerPresent.value = c.workers.present;
