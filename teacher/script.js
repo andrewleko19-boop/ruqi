@@ -255,21 +255,44 @@ const TOAST_ICONS = {
   info:    '#ic-alert-circle',
 };
 
+const _activeToasts = new Map();
+
 function toast(msg, type = 'info', ms = 3800) {
+  const key = type + ':' + msg;
+  const existing = _activeToasts.get(key);
+  if (existing) {
+    existing.count++;
+    existing.badge.textContent = '×' + existing.count;
+    existing.badge.hidden = false;
+    clearTimeout(existing.timer);
+    existing.timer = setTimeout(() => _dismissToast(key), ms);
+    return existing.el;
+  }
   const t = document.createElement('div');
   t.className = `toast toast-${type}`;
-  // Icon is a static, trusted template; the message is user/server-derived so
-  // it goes in via textContent to avoid HTML injection.
   t.innerHTML =
     `<svg class="icon icon-sm" style="flex-shrink:0"><use href="${TOAST_ICONS[type]}"/></svg>`;
   const span = document.createElement('span');
   span.textContent = msg;
   t.appendChild(span);
+  const badge = document.createElement('span');
+  badge.className = 'toast-badge';
+  badge.hidden = true;
+  t.appendChild(badge);
   toastZone.prepend(t);
-  setTimeout(() => {
-    t.classList.add('removing');
-    t.addEventListener('animationend', () => t.remove(), { once: true });
-  }, ms);
+  const timer = setTimeout(() => _dismissToast(key), ms);
+  _activeToasts.set(key, { el: t, badge, count: 1, timer });
+  return t;
+}
+
+function _dismissToast(key, instant) {
+  const entry = _activeToasts.get(key);
+  if (!entry) return;
+  clearTimeout(entry.timer);
+  _activeToasts.delete(key);
+  if (instant) { entry.el.remove(); return; }
+  entry.el.classList.add('removing');
+  entry.el.addEventListener('animationend', () => entry.el.remove(), { once: true });
 }
 
 // ── Screen / view routing ─────────────────────────────────────────────────────
@@ -303,12 +326,36 @@ function removeBootSplash() {
   if (el) el.remove();
 }
 
-function showView(name) {
+let _navDepth = 0;
+let _currentView = 'home';
+
+function showView(name, fromHistory) {
+  _currentView = name;
   viewHome.hidden   = name !== 'home';
   viewAtt.hidden    = name !== 'att';
   if (viewGrades)  viewGrades.hidden  = name !== 'grades';
   if (viewConduct) viewConduct.hidden = name !== 'conduct';
+  if (!fromHistory && name !== 'home') {
+    _navDepth++;
+    history.pushState({ view: name, d: _navDepth }, '', '#' + name);
+  }
 }
+
+window.addEventListener('popstate', e => {
+  _navDepth = e.state?.d ?? 0;
+  const view = e.state?.view;
+  if (view === 'home' || !view) {
+    if (S.isDirty && S.activeClass) {
+      saveLocalDraft(S.activeClass.id, todayISO(), S.attendance, 'draft');
+    }
+    S.activeClass = null; S.students = []; S.attendance = {};
+    S.submission = null; S.isDirty = false;
+    if (typeof G !== 'undefined') { G.class = null; G.students = []; G.subjects = []; G.marks = {}; G.dirty = false; }
+    if (typeof C !== 'undefined') { C.class = null; C.students = []; C.marks = {}; C.dirty = false; }
+    showView('home', true);
+    loadClasses();
+  }
+});
 
 // ── Connectivity ──────────────────────────────────────────────────────────────
 function updateConnUI() {
@@ -473,7 +520,9 @@ async function initApp() {
   await RUQI_PERMISSIONS.init(S.user?.user?.id);
   RUQI_PERMISSIONS.applyToDom();
   showScreen('app');
-  showView('home');
+  showView('home', true);
+  history.replaceState({ view: 'home', d: 0 }, '', '#home');
+  _navDepth = 0;
 
   hdrTeacherName.textContent = S.user?.user?.fullName ?? 'المعلم';
   hdrDate.textContent        = formatDateAr(todayISO());
@@ -1023,19 +1072,8 @@ modalReason.addEventListener('click', (e) => {
 });
 
 // ── Back button ───────────────────────────────────────────────────────────────
-btnBack.addEventListener('click', async () => {
-  if (S.isDirty && S.activeClass) {
-    // Persist locally so the teacher can resume — does NOT submit to the manager.
-    saveLocalDraft(S.activeClass.id, todayISO(), S.attendance, 'draft');
-  }
-  S.activeClass = null;
-  S.students    = [];
-  S.attendance  = {};
-  S.submission  = null;
-  S.isDirty     = false;
-  showView('home');
-  // Refresh class cards to reflect any status changes
-  await loadClasses();
+btnBack.addEventListener('click', () => {
+  history.back();
 });
 
 // ── Save Draft (local only) ───────────────────────────────────────────────────
@@ -1928,8 +1966,7 @@ btnSaveGrades.addEventListener('click', async () => {
 
 btnGradesBack.addEventListener('click', async () => {
   if (G.dirty && !(await askConfirm('يوجد درجات غير محفوظة. هل تريد الخروج وتجاهلها؟', 'خروج وتجاهل'))) return;
-  G.class = null; G.students = []; G.subjects = []; G.marks = {}; G.dirty = false;
-  showView('home');
+  history.back();
 });
 
 // ── Conduct (السلوك) entry ─────────────────────────────────────────────────────
@@ -2027,8 +2064,7 @@ btnSaveConduct.addEventListener('click', async () => {
 
 btnConductBack.addEventListener('click', async () => {
   if (C.dirty && !(await askConfirm('يوجد درجات سلوك غير محفوظة. هل تريد الخروج وتجاهلها؟', 'خروج وتجاهل'))) return;
-  C.class = null; C.students = []; C.marks = {}; C.dirty = false;
-  showView('home');
+  history.back();
 });
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────

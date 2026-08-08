@@ -1304,6 +1304,13 @@ select.field-input option:disabled { color: var(--clr-text-3); }
 .toast-info    { background: var(--clr-primary-int); }
 
 .toast.removing { animation: toastOut .2s var(--ease) forwards; }
+.toast-badge {
+  min-width: 20px; height: 20px; border-radius: 10px;
+  background: rgba(0,0,0,.25); color: #fff;
+  font-size: .75rem; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 6px; margin-inline-start: auto; flex-shrink: 0;
+}
 
 @keyframes toastIn  { from { opacity:0; transform:translateY(-10px) scale(.95); } to { opacity:1; transform:none; } }
 @keyframes toastOut { to   { opacity:0; transform:translateY(-10px) scale(.95); } }
@@ -2308,7 +2315,7 @@ select.csel-native {
 .confirm-modal-title { font-size: 1.1rem; font-weight: 700; margin: 0; }
 .confirm-modal-sub   { font-size: .9rem; color: var(--clr-text-3, #666); margin: 0 0 8px; }
 .confirm-modal-actions { display: flex; gap: 10px; margin-top: 4px; }
-.confirm-modal-actions .btn { flex: 1; }
+.confirm-modal-actions .btn { flex: 1; box-shadow: none; }
 
 /* ─── وثائق لا مانع (§23) ─────────────────────────────────────────────────── */
 /* البوابة المدرسية بهويّة فاتحة واحدة (لا :root داكن في هذا الملف)، فكل ما
