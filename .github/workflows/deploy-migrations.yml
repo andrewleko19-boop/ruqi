@@ -49,47 +49,63 @@ jobs:
         run: |
           set -uo pipefail
 
-          if [ -n "${DB_URL_MANUAL}" ]; then
-            echo "استعمال SUPABASE_DB_URL المزوّد يدوياً."
-            DB_URL="${DB_URL_MANUAL}"
-          else
-            echo "اشتقاق رابط الاتصال من الأسرار الموجودة…"
-
-            if [ -z "${PROJECT_REF}" ] || [ -z "${DB_PASSWORD}" ] || [ -z "${SUPABASE_ACCESS_TOKEN}" ]; then
-              echo "::error::نقص في الأسرار: يلزم SUPABASE_PROJECT_REF و SUPABASE_DB_PASSWORD و SUPABASE_ACCESS_TOKEN."
-              exit 1
-            fi
-
-            # منطقة المشروع من Management API (jq مثبّت مسبقاً على ubuntu-latest).
-            REGION=$(curl -sS \
-              -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
-              "https://api.supabase.com/v1/projects/${PROJECT_REF}" \
-              | jq -r '.region // empty')
-            if [ -z "${REGION}" ]; then
-              echo "::error::تعذّر الحصول على منطقة المشروع من Management API. أضِف السرّ SUPABASE_DB_URL يدوياً (Supabase → Connect → Session pooler)."
-              exit 1
-            fi
-            echo "منطقة المشروع: ${REGION}"
-
-            # خادم الـpooler: البادئة قد تكون aws-0 أو aws-1 حسب عمر المشروع،
-            # فنجرّب كليهما ونأخذ ما يُحلّ اسمه فعلاً — بلا تخمين.
-            POOLER_HOST=""
-            for prefix in aws-0 aws-1; do
-              h="${prefix}-${REGION}.pooler.supabase.com"
-              if getent hosts "${h}" >/dev/null 2>&1; then POOLER_HOST="${h}"; break; fi
-            done
-            if [ -z "${POOLER_HOST}" ]; then
-              echo "::error::تعذّر تحليل اسم خادم الـpooler للمنطقة ${REGION}. أضِف السرّ SUPABASE_DB_URL يدوياً."
-              exit 1
-            fi
-            echo "خادم الـpooler: ${POOLER_HOST}"
-
-            # ترميز كلمة المرور لتأمين أيّ محرفٍ خاصّ داخل الرابط.
-            ENC_PW=$(python3 -c 'import urllib.parse,os;print(urllib.parse.quote(os.environ["DB_PASSWORD"],safe=""))')
-            # session pooler على المنفذ 5432 (يدعم DDL الكامل الذي تحتاجه الهجرات).
-            DB_URL="postgresql://postgres.${PROJECT_REF}:${ENC_PW}@${POOLER_HOST}:5432/postgres"
-          fi
-
           # --include-all: يطبّق كلّ هجرةٍ غير مطبَّقة حتى لو كان ترتيبها أقدم من
           # آخر ما في جدول السجلّ — لازمٌ للتطبيق الأول. الرابط لا يُطبَع أبداً.
-          supabase db push --db-url "${DB_URL}" --include-all
+          push() { supabase db push --db-url "$1" --include-all; }
+
+          # مسارٌ يدويّ صريح إن زُوّد.
+          if [ -n "${DB_URL_MANUAL}" ]; then
+            echo "استعمال SUPABASE_DB_URL المزوّد يدوياً."
+            push "${DB_URL_MANUAL}"
+            exit $?
+          fi
+
+          echo "اشتقاق رابط الاتصال من الأسرار الموجودة…"
+          if [ -z "${PROJECT_REF}" ] || [ -z "${DB_PASSWORD}" ] || [ -z "${SUPABASE_ACCESS_TOKEN}" ]; then
+            echo "::error::نقص في الأسرار: يلزم SUPABASE_PROJECT_REF و SUPABASE_DB_PASSWORD و SUPABASE_ACCESS_TOKEN."
+            exit 1
+          fi
+
+          # منطقة المشروع من Management API (jq مثبّت مسبقاً على ubuntu-latest).
+          REGION=$(curl -sS \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            "https://api.supabase.com/v1/projects/${PROJECT_REF}" \
+            | jq -r '.region // empty')
+          if [ -z "${REGION}" ]; then
+            echo "::error::تعذّر الحصول على منطقة المشروع من Management API. أضِف السرّ SUPABASE_DB_URL يدوياً (Supabase → Connect → Session pooler)."
+            exit 1
+          fi
+          echo "منطقة المشروع: ${REGION}"
+
+          # ترميز كلمة المرور لتأمين أيّ محرفٍ خاصّ داخل الرابط.
+          ENC_PW=$(python3 -c 'import urllib.parse,os;print(urllib.parse.quote(os.environ["DB_PASSWORD"],safe=""))')
+
+          # ⚠️ عنقود الـpooler: البادئة aws-0/aws-1 (وأحياناً aws-2) — وكلاهما
+          # يُحلّ اسمه في DNS، لكنّ مستأجر المشروع مسجّلٌ على واحدٍ منها فقط. لا
+          # يكفي فحص DNS إذن؛ نجرّب الاتصال الفعلي بكلٍّ ونتوقّف على الذي يجد
+          # المستأجر. «tenant/user … not found» أو تعذّرُ الاتصال = العنقود
+          # الخطأ فنُكمل؛ وأيّ خطأٍ آخر بعد نجاح الاتصال خطأُ هجرةٍ حقيقيّ فنتوقّف.
+          applied=0
+          for prefix in aws-0 aws-1 aws-2; do
+            HOST="${prefix}-${REGION}.pooler.supabase.com"
+            echo "محاولة عبر ${HOST} …"
+            URL="postgresql://postgres.${PROJECT_REF}:${ENC_PW}@${HOST}:5432/postgres"
+            if OUT=$(push "${URL}" 2>&1); then
+              echo "${OUT}"
+              applied=1
+              break
+            fi
+            echo "${OUT}"
+            if echo "${OUT}" | grep -qiE "tenant/user .* not found|failed to connect|ENOTFOUND|no such host|could not translate host"; then
+              echo "→ العنقود ${prefix} ليس مستأجَر المشروع، أُكمل للتالي."
+              continue
+            fi
+            echo "::error::فشل db push بخطأٍ ليس اتصالاً (خطأ هجرةٍ محتمل). راجع المخرجات أعلاه."
+            exit 1
+          done
+
+          if [ "${applied}" != "1" ]; then
+            echo "::error::تعذّر إيجاد مستأجر المشروع على أيّ عنقود pooler للمنطقة ${REGION}. أضِف السرّ SUPABASE_DB_URL يدوياً من Supabase → Connect → Session pooler."
+            exit 1
+          fi
+          echo "✅ طُبّقت الهجرات بنجاح."
