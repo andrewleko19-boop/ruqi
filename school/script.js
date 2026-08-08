@@ -396,7 +396,23 @@ function updateConnUI() {
   connLabel.textContent = online ? 'متصل' : 'غير متصل';
   svgHref(connIcon, online ? '#ic-wifi' : '#ic-wifi-off');
   refreshPendingBar();
+  refreshStaleBar();
 }
+
+/* عمر ما يُعرض. المنطق في db.js (مصدر واحد للبوّابات الستّ) ويعيد '' حين تكون
+   البيانات لحظيةً فعلاً — فالشريط لا يظهر إلّا حين يعني شيئاً. مهمّ هنا تحديداً:
+   المدير يقرأ أعداد الحضور من هذه الشاشة ثمّ يُرسلها إلى المديرية. */
+const staleBar  = el('stale-bar');
+const staleText = el('stale-text');
+function refreshStaleBar() {
+  if (!staleBar || !staleText) return;
+  const txt = window.RUQI_DB?.formatDataAge?.() ?? '';
+  staleText.textContent = txt ? txt + ' — قد تكون هناك كشوف لم تصل بعد' : '';
+  staleBar.hidden = !txt;
+}
+
+// تحديثٌ دوري: العبور من «لحظية» إلى «قديمة» يحدث بمرور الوقت لا بحدثٍ يُنبّهنا.
+setInterval(refreshStaleBar, 60000);
 
 function refreshPendingBar() {
   const n = getPendingAttendance().length + getPendingReports().length;
@@ -1065,6 +1081,10 @@ async function initApp() {
   await loadClassSummaries();
   loadStaffDailyCounts();   // auto-fill admin/worker counts from the staff register
 
+  // بعد اكتمال التحميلات: الختم صار حديثاً إن نجحت، فيختفي الشريط بلا انتظار
+  // الدورة التالية؛ وإن فشلت وعادت من المخبأ يظهر فوراً.
+  refreshStaleBar();
+
   await consumeNotifDeepLink();
 }
 
@@ -1238,6 +1258,7 @@ async function loadClassSummaries() {
     if (clasSubFailed) show(clasSubFailed);
     else toast(errMessage(err, RW.loadSubsErr), 'error');
   }
+  refreshStaleBar();   // زرّ التحديث اليدوي يجب أن يُحدّث المؤشّر معه
 }
 
 // إعادة المحاولة يدوياً: أسرع من إعادة تحميل البوابة كلّها بعد عودة الشبكة.

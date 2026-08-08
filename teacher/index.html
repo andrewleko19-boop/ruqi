@@ -234,6 +234,14 @@
     </button>
   </div>
 
+  <!-- عمر البيانات المعروضة. شريط الاتصال يصف الشبكة لا ما تراه العين، وهما
+       يفترقان في الحالة الأخطر: شبكةٌ «متصلة لكن ميتة» تُبقي الشريط أخضر بينما
+       كلّ صفٍّ وكلّ اسمٍ معروض من المخبأ. لا يظهر إلّا حين تكون البيانات ليست لحظية. -->
+  <div id="stale-bar" class="stale-bar" hidden aria-live="polite">
+    <svg class="icon icon-sm"><use href="#ic-wifi-off"/></svg>
+    <span id="stale-text"></span>
+  </div>
+
   <!-- ── Home View: Class List ─────────────────────────────────────────────── -->
   <div id="view-home">
     <div class="page-body">

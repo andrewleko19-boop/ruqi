@@ -567,6 +567,21 @@ select.field-input option:disabled { color: var(--clr-text-3); }
   background: rgba(239,68,68,.35);
 }
 
+/* شريط عمر البيانات — معلومةٌ لا إنذار، فلونه محايد أهدأ من شريط المزامنة
+   البرتقالي: «ما تراه من ١٠:٤٥» ليس عطلاً يستدعي فزعاً بل حقيقةً يجب أن تُقال. */
+.stale-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px var(--page-px, 14px);
+  background: #F1F5F9;
+  border-bottom: 1px solid #E2E8F0;
+  color: #64748B;
+  font-size: .75rem;
+  font-weight: 600;
+}
+.stale-bar[hidden] { display: none; }
+
 /* Header buttons */
 .hdr-btn {
   width: 44px;

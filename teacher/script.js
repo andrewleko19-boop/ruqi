@@ -317,7 +317,22 @@ function updateConnUI() {
   connLabel.textContent = online ? 'متصل' : 'غير متصل';
   svgHref(connIcon, online ? '#ic-wifi' : '#ic-wifi-off');
   refreshPendingBar();
+  refreshStaleBar();
 }
+
+/* عمر ما يُعرض. المنطق في db.js (مصدر واحد للبوّابات الستّ) ويعيد '' حين تكون
+   البيانات لحظيةً فعلاً — فالشريط لا يظهر إلّا حين يعني شيئاً. */
+const staleBar  = $('stale-bar');
+const staleText = $('stale-text');
+function refreshStaleBar() {
+  if (!staleBar || !staleText) return;
+  const txt = window.RUQI_DB?.formatDataAge?.() ?? '';
+  staleText.textContent = txt ? txt + ' — قد تكون هناك تغييرات لم تصل بعد' : '';
+  staleBar.hidden = !txt;
+}
+
+// تحديثٌ دوري: العبور من «لحظية» إلى «قديمة» يحدث بمرور الوقت لا بحدثٍ يُنبّهنا.
+setInterval(refreshStaleBar, 60000);
 
 function refreshPendingBar() {
   const n = getPendingStudentAttendance().length
@@ -468,6 +483,10 @@ async function initApp() {
   await loadDutyCard();
   await doSync();
   initNotificationsTeacher(S.user.user.id);
+
+  // بعد اكتمال التحميلات: الختم صار حديثاً إن نجحت فيختفي الشريط بلا انتظار
+  // الدورة التالية؛ وإن عادت من المخبأ يظهر فوراً.
+  refreshStaleBar();
 }
 
 // ── Load Classes ──────────────────────────────────────────────────────────────

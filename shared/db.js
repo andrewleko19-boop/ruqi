@@ -44,7 +44,49 @@ function timedFetch(input, init) {
   upstream?.addEventListener('abort', () => { clearTimeout(timer); ctrl.abort(); }, { once: true });
 
   return fetch(input, { ...init, signal: ctrl.signal })
+    .then((res) => { if (res.ok) _stampServerRead(); return res; })
     .finally(() => clearTimeout(timer));
+}
+
+/* ⚠️ «متى آخر مرّة وصلنا فيها الخادم فعلاً» — وهو سؤالٌ لا يجيب عنه شريطُ
+   الاتصال. الشريط يصف الشبكة لا ما تراه العين، والاثنان يفترقان في الحالة
+   الأخطر بالضبط: على شبكة «متصلة لكن ميتة» يبقى الشريط «متصل» أخضرَ بينما كلّ
+   رقمٍ معروض خرج من المخبأ — فيُقرَّر على بياناتٍ قديمة ويُرسَل إلى المديرية.
+   والمخابئ كلّها تُكتب عند نجاح قراءةٍ حيّة، فزمنُ آخر قراءةٍ ناجحة هو عمرُ ما
+   يُعرض. يُختم هنا لا في كل دالّة: نقطةٌ واحدة يمرّ بها كلّ طلب.
+   يُحفظ في التخزين كي ينجو من إعادة التحميل — مديرٌ يفتح اللوحة دون اتصال
+   يجب أن يعرف عمر ما يراه لا أن يظنّه لحظياً. */
+const FRESH_STAMP_KEY = 'nsams_fresh_' + LAYER;
+let _lastStampWrite = 0;
+
+function _stampServerRead() {
+  const now = Date.now();
+  // خنقٌ بسيط: لوحةٌ واحدة تُطلق عشرات الطلبات، ولا معنى لكتابةٍ متزامنة لكلٍّ
+  // منها حين تكفي دقّةُ عشر ثوانٍ لعرضٍ بالدقائق.
+  if (now - _lastStampWrite < 10000) return;
+  _lastStampWrite = now;
+  try { localStorage.setItem(FRESH_STAMP_KEY, String(now)); } catch { /* غير قاتل */ }
+}
+
+function getLastServerReadAt() {
+  try { return Number(localStorage.getItem(FRESH_STAMP_KEY)) || null; }
+  catch { return null; }
+}
+
+/* نصّ عمر البيانات، مصدرٌ واحد للبوّابات الستّ (كما errMessage).
+   يعيد '' حين تكون البيانات لحظيةً فعلاً، كي لا يصير المؤشّر ضجيجاً دائماً
+   يتعلّم المستخدم تجاهله — فلا يراه إلّا حين يعني شيئاً. */
+function formatDataAge() {
+  const at = getLastServerReadAt();
+  if (!at) return '';
+  if (isOnline() && Date.now() - at < 90 * 1000) return '';
+
+  const d    = new Date(at);
+  const time = d.toLocaleTimeString('ar-SY', { hour: '2-digit', minute: '2-digit' });
+  // تاريخٌ صريح حين لا تكون البيانات من اليوم: «١٠:٤٥» وحدها تُقرأ كأنّها اليوم.
+  return localDateISO(d) === localDateISO()
+    ? `آخر تحديث ${time}`
+    : `آخر تحديث ${d.toLocaleDateString('ar-SY', { day: 'numeric', month: 'long' })} — ${time}`;
 }
 
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -4143,6 +4185,10 @@ window.RUQI_DB = {
   // رسائل المستخدم — مصدر واحد لترجمة الأخطاء في البوّابات الستّ
   errMessage,
   isNetworkError,
+
+  // طزاجة البيانات — نفس المنطق للبوّابات الستّ بدل ستّ نسخ منه
+  getLastServerReadAt,
+  formatDataAge,
 
   // Schools
   getSchools,
