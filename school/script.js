@@ -343,7 +343,19 @@ const TOAST_ICONS = {
   info:    '#ic-alert-circle',
 };
 
+const _activeToasts = new Map();
+
 function toast(msg, type = 'info', ms = 3800) {
+  const key = type + ':' + msg;
+  const existing = _activeToasts.get(key);
+  if (existing) {
+    existing.count++;
+    existing.badge.textContent = '×' + existing.count;
+    existing.badge.hidden = false;
+    clearTimeout(existing.timer);
+    existing.timer = setTimeout(() => _dismissToast(key), ms);
+    return existing.el;
+  }
   const t = document.createElement('div');
   t.className = `toast toast-${type}`;
   t.innerHTML =
@@ -351,11 +363,24 @@ function toast(msg, type = 'info', ms = 3800) {
   const span = document.createElement('span');
   span.textContent = msg;
   t.appendChild(span);
+  const badge = document.createElement('span');
+  badge.className = 'toast-badge';
+  badge.hidden = true;
+  t.appendChild(badge);
   toastZone.prepend(t);
-  setTimeout(() => {
-    t.classList.add('removing');
-    t.addEventListener('animationend', () => t.remove(), { once: true });
-  }, ms);
+  const timer = setTimeout(() => _dismissToast(key), ms);
+  _activeToasts.set(key, { el: t, badge, count: 1, timer });
+  return t;
+}
+
+function _dismissToast(key, instant) {
+  const entry = _activeToasts.get(key);
+  if (!entry) return;
+  clearTimeout(entry.timer);
+  _activeToasts.delete(key);
+  if (instant) { entry.el.remove(); return; }
+  entry.el.classList.add('removing');
+  entry.el.addEventListener('animationend', () => entry.el.remove(), { once: true });
 }
 
 // ── Screen switch ─────────────────────────────────────────────────────────────
@@ -444,9 +469,10 @@ async function doSync() {
   if (syncing) return;
   syncing = true;
   syncIcon.classList.add('syncing');
-  toast('جاري المزامنة…', 'info', 1500);
+  toast('جاري المزامنة…', 'info', 8000);
   try {
     const { attendance, reports } = await syncPending();
+    _dismissToast('info:جاري المزامنة…', true);
     const total = attendance.synced + reports.synced;
     if (total > 0) {
       toast(`تمت مزامنة ${total} سجل بنجاح`, 'success');
@@ -455,6 +481,7 @@ async function doSync() {
     }
     refreshPendingBar();
   } catch (err) {
+    _dismissToast('info:جاري المزامنة…', true);
     console.warn('[Ruqi] sync error', err);
     toast('تعذّرت المزامنة', 'error');
   } finally {
@@ -849,10 +876,10 @@ const modalConfirmLogout = el('modal-confirm-logout');
 const btnLogoutCancel    = el('btn-logout-cancel');
 const btnLogoutOk        = el('btn-logout-ok');
 
-btnLogout.addEventListener('click', () => { modalConfirmLogout.hidden = false; });
-btnLogoutCancel.addEventListener('click', () => { modalConfirmLogout.hidden = true; });
+btnLogout.addEventListener('click', () => { modalConfirmLogout.hidden = false; _pushModalHistory(); });
+btnLogoutCancel.addEventListener('click', () => _closeModalViaUI(() => { modalConfirmLogout.hidden = true; }));
 modalConfirmLogout.addEventListener('click', e => {
-  if (e.target === modalConfirmLogout) modalConfirmLogout.hidden = true;
+  if (e.target === modalConfirmLogout) _closeModalViaUI(() => { modalConfirmLogout.hidden = true; });
 });
 btnLogoutOk.addEventListener('click', async () => {
   modalConfirmLogout.hidden = true;
@@ -917,20 +944,37 @@ const formPwd      = el('form-pwd');
 const pwdUserInfo  = el('pwd-user-info');
 const pwdMsg       = el('pwd-msg');
 
+let _modalHistoryActive = false;
+
+function _pushModalHistory() {
+  _modalHistoryActive = true;
+  _navDepth++;
+  history.pushState({ modal: true, d: _navDepth }, '');
+}
+
+function _closeModalViaUI(closeFn) {
+  closeFn();
+  if (_modalHistoryActive) {
+    _modalHistoryActive = false;
+    history.back();
+  }
+}
+
 function openPwdDrawer() {
   pwdUserInfo.textContent = S.user?.user?.email ?? '';
   formPwd.reset();
   pwdMsg.hidden = true;
   pwdMsg.className = 'pwd-msg';
   pwdOverlay.hidden = false;
+  _pushModalHistory();
   setTimeout(() => el('pwd-current')?.focus(), 50);
 }
 function closePwdDrawer() { pwdOverlay.hidden = true; }
 
 btnChangePwd.addEventListener('click', openPwdDrawer);
-btnClosePwd.addEventListener('click', closePwdDrawer);
-pwdOverlay.addEventListener('click', e => { if (e.target === pwdOverlay) closePwdDrawer(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !pwdOverlay.hidden) closePwdDrawer(); });
+btnClosePwd.addEventListener('click', () => _closeModalViaUI(closePwdDrawer));
+pwdOverlay.addEventListener('click', e => { if (e.target === pwdOverlay) _closeModalViaUI(closePwdDrawer); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !pwdOverlay.hidden) _closeModalViaUI(closePwdDrawer); });
 
 formPwd.addEventListener('submit', async e => {
   e.preventDefault();
@@ -978,6 +1022,13 @@ function pushTabHistory(tabName) {
 
 window.addEventListener('popstate', e => {
   _navDepth = e.state?.d ?? 0;
+  if (_modalHistoryActive) {
+    _modalHistoryActive = false;
+    if (!pwdOverlay.hidden) closePwdDrawer();
+    if (!modalConfirmLogout.hidden) modalConfirmLogout.hidden = true;
+    if (!modalAsk.hidden) settleAsk(false);
+    return;
+  }
   if (backNavBtn) backNavBtn.hidden = (_navDepth === 0);
   const tab = e.state?.tab;
   if (tab) switchTab(tab, true);
