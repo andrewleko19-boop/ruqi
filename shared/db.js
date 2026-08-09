@@ -4122,7 +4122,9 @@ async function parentGetHolidays(year) {
 async function parentGetAbsenceExcuses(studentId) {
   const { data, error } = await db
     .from('absence_excuses')
-    .select('id, date, reason, photo_url, status, created_at')
+    // review_note: ملاحظة المدرسة عند القبول/الرفض. كانت غير مُختارة إطلاقاً،
+    // فيرى الوليّ «مرفوض» بلا أيّ سبب — والسبب مكتوبٌ في قاعدة البيانات.
+    .select('id, date, reason, photo_url, status, review_note, created_at')
     .eq('student_id', studentId)
     .order('date', { ascending: false });
   if (error) throw error;

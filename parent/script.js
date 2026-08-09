@@ -71,6 +71,7 @@ const S = {
   holidays: [],
   excuses: [],
   excuseDate: null,   // date being excused (YYYY-MM-DD)
+  dayModalDate: null, // اليوم المعروض في بطاقة التفاصيل
   excusePhotoDataUri: null,
   activeSemester: 1,
   activeView: 'att',
@@ -173,6 +174,14 @@ const inpExcuseDate       = $('inp-excuse-date');
 const modalConfirmLogout     = $('modal-confirm-logout');
 const btnConfirmLogoutOk     = $('btn-confirm-logout-ok');
 const btnConfirmLogoutCancel = $('btn-confirm-logout-cancel');
+
+// Day Detail Modal
+const modalDay      = $('modal-day');
+const dayDateLabel  = $('day-date-label');
+const dayBadge      = $('day-badge');
+const dayRows       = $('day-rows');
+const btnDayClose   = $('btn-day-close');
+const btnDayExcuse  = $('btn-day-excuse');
 
 // Excuse Modal
 const modalExcuse      = $('modal-excuse');
@@ -660,7 +669,7 @@ function renderMonthCalendar() {
   monthTitle.textContent = new Date(y, m, 1).toLocaleDateString('ar-SY', { year: 'numeric', month: 'long' });
 
   const attMap = {};
-  S.attendance.forEach(r => attMap[r.date] = r.status);
+  S.attendance.forEach(r => attMap[r.date] = r);
   const excusedDates = new Set(S.excuses.map(e => e.date));
   const holidayDates = new Set(
     S.holidays
@@ -686,7 +695,9 @@ function renderMonthCalendar() {
     const dayOfWeek = new Date(y, m, d).getDay();
     const isWeekend = dayOfWeek === 5 || dayOfWeek === 6; // Fri/Sat
     const isToday = iso === today;
-    const status = attMap[iso];
+    // الحالة تدخل في اسم صنفٍ — تُقيَّد بالقيم المعروفة قبل الحقن (كما في renderExcuses).
+    const raw = attMap[iso]?.status;
+    const status = ATT_STATUSES.includes(raw) ? raw : null;
     const isHoliday = holidayDates.has(iso);
     const hasExcuse = excusedDates.has(iso);
 
@@ -697,19 +708,20 @@ function renderMonthCalendar() {
 
     let dotHtml = '';
     if (isHoliday) {
-      dotHtml = '<div class="cal-day-dot cal-day-dot--holiday" title="عطلة رسمية"></div>';
+      dotHtml = '<span class="cal-day-dot cal-day-dot--holiday"></span>';
     } else if (status) {
-      const dotCls = `cal-day-dot cal-day-dot--${status}`;
-      dotHtml = `<div class="${dotCls}"></div>`;
+      dotHtml = `<span class="cal-day-dot cal-day-dot--${status}"></span>`;
+      // علامةٌ لا زرّ: الخليّة كلّها صارت هدف اللمس، وإجراءُ العذر داخل بطاقة
+      // التفاصيل — زرٌّ داخل زرٍّ HTML غير صالح، والهدف الصغير يصعب لمسه.
       if (status === 'absent' && !hasExcuse && !isWeekend) {
-        dotHtml += `<button class="cal-day-excuse-btn" data-date="${iso}" type="button" title="تقديم عذر">عذر</button>`;
+        dotHtml += '<span class="cal-day-flag">عذر؟</span>';
       }
     }
 
-    html += `<div class="${cls}">
+    html += `<button type="button" class="${cls}" data-date="${iso}">
       <span class="cal-day-num">${d}</span>
       ${dotHtml}
-    </div>`;
+    </button>`;
   }
 
   html += '</div>';
@@ -723,15 +735,14 @@ function renderMonthCalendar() {
   sumExcused.textContent = counts.excused;
   sumLate.textContent    = counts.late;
   attSummary.hidden = false;
-
-  // Excuse button listeners (event delegation)
-  monthCalendar.querySelectorAll('.cal-day-excuse-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      openExcuseModal(btn.dataset.date);
-    });
-  });
 }
+
+// تفويضٌ على الحاوية الثابتة: renderMonthCalendar يستبدل محتواها كلَّ شهر،
+// فالمستمع هنا يبقى بلا إعادة ربطٍ في كلّ رسم.
+monthCalendar.addEventListener('click', e => {
+  const cell = e.target.closest('.cal-day[data-date]');
+  if (cell) openDayModal(cell.dataset.date);
+});
 
 btnPrevMonth.addEventListener('click', async () => {
   S.viewMonth = new Date(S.viewMonth.getFullYear(), S.viewMonth.getMonth() - 1, 1);
@@ -743,6 +754,64 @@ btnNextMonth.addEventListener('click', async () => {
   if (next > new Date(now.getFullYear(), now.getMonth(), 1)) return; // don't go into future
   S.viewMonth = next;
   await loadAttendanceForMonth();
+});
+
+// ── تفاصيل اليوم ──────────────────────────────────────────────────────────
+const ATT_STATUSES  = ['present', 'absent', 'excused', 'late'];
+const STATUS_LABEL  = { present: 'حاضر', absent: 'غائب', excused: 'غياب مبرَّر', late: 'متأخّر' };
+const EXCUSE_LABEL  = { pending: 'بانتظار المراجعة', accepted: 'مقبول', rejected: 'مرفوض' };
+
+function openDayModal(iso) {
+  const row       = S.attendance.find(r => r.date === iso);
+  const excuse    = S.excuses.find(x => x.date === iso);
+  const holiday   = S.holidays.find(h => h.date === iso);
+  const dow       = new Date(iso + 'T00:00:00').getDay();
+  const isWeekend = dow === 5 || dow === 6;
+  const status    = ATT_STATUSES.includes(row?.status) ? row.status : null;
+
+  dayDateLabel.textContent = formatDate(iso);
+
+  let badgeText, badgeCls;
+  if (holiday)        { badgeText = 'عطلة رسمية';            badgeCls = 'holiday'; }
+  else if (status)    { badgeText = STATUS_LABEL[status];    badgeCls = status; }
+  else if (isWeekend) { badgeText = 'عطلة نهاية الأسبوع';    badgeCls = 'weekend'; }
+  else                { badgeText = 'لا يوجد سجل لهذا اليوم'; badgeCls = 'none'; }
+  dayBadge.textContent = badgeText;
+  dayBadge.className   = 'day-badge day-badge--' + badgeCls;
+
+  const rows = [];
+  if (holiday?.name)  rows.push(['المناسبة', holiday.name]);
+  if (row?.reason)    rows.push(['ملاحظة المدرسة', row.reason]);
+  if (excuse) {
+    rows.push(['حالة العذر', EXCUSE_LABEL[excuse.status] ?? EXCUSE_LABEL.pending]);
+    if (excuse.reason)      rows.push(['نص العذر', excuse.reason]);
+    if (excuse.review_note) rows.push(['ردّ المدرسة', excuse.review_note]);
+  }
+  dayRows.innerHTML = rows.map(([k, v]) =>
+    `<div class="day-row"><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(String(v))}</dd></div>`).join('');
+  dayRows.hidden = rows.length === 0;
+
+  S.dayModalDate  = iso;
+  btnDayExcuse.hidden = !(status === 'absent' && !excuse && !isWeekend && !holiday);
+
+  modalDay.hidden = false;
+  pushModalHistory();
+}
+
+function closeDayModal() { modalDay.hidden = true; }
+function dismissDayModal() { closeDayModal(); popModalHistory(); }
+
+btnDayClose.addEventListener('click', dismissDayModal);
+modalDay.addEventListener('click', e => { if (e.target === modalDay) dismissDayModal(); });
+
+/* الانتقال من بطاقة اليوم إلى نافذة العذر يُسلّمها سجلَّ التاريخ نفسه بدل سحبٍ
+   ثمّ دفعٍ فوريّ: history.back غير متزامن، فالدفع بعده مباشرةً سباقٌ سلوكُه
+   يختلف بين المتصفّحات. بإعادة الاستعمال يبقى العمق صحيحاً وزرُّ الرجوع يغلق
+   نافذة العذر ويعود للتقويم. */
+btnDayExcuse.addEventListener('click', () => {
+  const iso = S.dayModalDate;
+  closeDayModal();
+  openExcuseModal(iso, true);
 });
 
 // ── Grades ────────────────────────────────────────────────────────────────
@@ -807,21 +876,64 @@ function renderGrades(semester) {
   gradesTable.hidden = false;
 
   let totalM = 0, totalMx = 0;
-  gradesTbody.innerHTML = subjects.map(s => {
+  gradesTbody.innerHTML = subjects.map((s, i) => {
     totalM  += s.totalMark;
     totalMx += s.totalMax;
-    const pct = s.totalMax > 0 ? Math.round(s.totalMark / s.totalMax * 100) : '—';
-    return `<tr>
-      <td>${escapeHtml(s.name)}</td>
+    const pct = s.totalMax > 0 ? Math.round(s.totalMark / s.totalMax * 100) : null;
+
+    /* تفصيل المكوّنات (شفهي/نشاط/اختبار…): كان يُجمَع في رقمٍ واحد فلا يعرف
+       الوليّ أين نقطة ضعف ابنه. البيانات مجلوبةٌ أصلاً في components. */
+    const comps = s.components
+      .filter(c => c.component?.name)
+      .sort((a, b) => (a.component.sort_order ?? 99) - (b.component.sort_order ?? 99));
+    const expandable = comps.length > 1;
+    const detailId   = 'gd-' + i;
+
+    const detail = expandable ? `<tr class="grade-detail" id="${detailId}" hidden>
+        <td colspan="4">
+          <ul class="comp-list">${comps.map(c => {
+            const mk = c.mark ?? 0;
+            const mx = c.component.max_mark ?? 0;
+            const w  = mx > 0 ? Math.min(100, Math.round(mk / mx * 100)) : 0;
+            return `<li class="comp-item">
+              <span class="comp-name">${escapeHtml(c.component.name)}</span>
+              <span class="comp-val">${mk} / ${mx}</span>
+              <span class="comp-track"><span class="comp-fill" style="width:${w}%"></span></span>
+            </li>`;
+          }).join('')}</ul>
+        </td>
+      </tr>` : '';
+
+    const nameCell = expandable
+      ? `<button type="button" class="subj-toggle" data-target="${detailId}" aria-expanded="false" aria-controls="${detailId}">
+           <span class="subj-name">${escapeHtml(s.name)}</span>
+           <span class="grade-chev" aria-hidden="true"></span>
+         </button>`
+      : escapeHtml(s.name);
+
+    return `<tr class="grade-row${i % 2 ? ' is-alt' : ''}">
+      <td class="subj-cell">${nameCell}</td>
       <td>${s.totalMark}</td>
       <td>${s.totalMax}</td>
-      <td>${pct}${typeof pct === 'number' ? '%' : ''}</td>
-    </tr>`;
+      <td>${pct === null ? '—' : pct + '%'}</td>
+    </tr>${detail}`;
   }).join('');
 
   totalMax.textContent = totalMx;
   totalPct.textContent = totalMx > 0 ? Math.round(totalM / totalMx * 100) + '%' : '—';
 }
+
+// طيّ/بسط تفصيل المادّة — تفويضٌ على الجسم الثابت، فالمحتوى يُعاد رسمه مع كلّ فصل.
+gradesTbody.addEventListener('click', e => {
+  const btn = e.target.closest('.subj-toggle');
+  if (!btn) return;
+  const detail = document.getElementById(btn.dataset.target);
+  if (!detail) return;
+  const willOpen = detail.hidden;
+  detail.hidden = !willOpen;
+  btn.setAttribute('aria-expanded', String(willOpen));
+  btn.classList.toggle('is-open', willOpen);
+});
 
 tabS1.addEventListener('click', () => {
   S.activeSemester = 1;
@@ -920,6 +1032,7 @@ function renderExcuses() {
       <div class="excuse-body">
         <div class="excuse-date">${escapeHtml(formatDate(e.date))}</div>
         <div class="excuse-reason">${escapeHtml(e.reason)}</div>
+        ${e.review_note ? `<div class="excuse-note">ردّ المدرسة: ${escapeHtml(e.review_note)}</div>` : ''}
       </div>
       <span class="excuse-status-label excuse-status-label--${status}">${escapeHtml(statusLabel[status])}</span>
     </li>
@@ -977,6 +1090,7 @@ window.addEventListener('popstate', e => {
     // يُفتح من داخل نافذة العذر فيجب أن يُغلق قبلها).
     if (!modalPhotoSource.hidden)      { dismissPhotoSourceModal();  return; }
     if (!modalExcuse.hidden)           { dismissExcuseModal();       return; }
+    if (!modalDay.hidden)              { dismissDayModal();          return; }
     if (!modalConfirmLogout.hidden)    { dismissLogoutModal();       return; }
     const view = e.state?.view;
     if (view) navigateToView(view, true);
@@ -1027,7 +1141,7 @@ inpExcuseDate.addEventListener('change', () => {
 });
 
 // ── Excuse Modal ──────────────────────────────────────────────────────────
-function openExcuseModal(date) {
+function openExcuseModal(date, reuseHistory) {
   S.excuseDate = date;
   S.excusePhotoDataUri = null;
   excuseDateLabel.textContent = 'غياب بتاريخ: ' + formatDate(date);
@@ -1039,7 +1153,7 @@ function openExcuseModal(date) {
   photoRemoveBtn.hidden = true;
   photoPreview.src = '';
   modalExcuse.hidden = false;
-  pushModalHistory();
+  if (!reuseHistory) pushModalHistory();
   excuseReason.focus();
 }
 

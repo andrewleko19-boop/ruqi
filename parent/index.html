@@ -364,6 +364,23 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════ مودال تفاصيل اليوم ═══════════════════════════ -->
+<!-- التقويم كان يعرض نقاطاً ملوّنة فقط: الوليّ يرى أنّ ابنه غاب ولا يعرف السبب
+     ولا حالة العذر. سبب الغياب مجلوبٌ من قاعدة البيانات أصلاً ولم يكن يُعرض. -->
+<div id="modal-day" class="modal-overlay modal-overlay--sm" hidden role="dialog" aria-modal="true" aria-labelledby="day-modal-title">
+  <div class="modal-sheet modal-sheet--sm">
+    <div class="modal-drag-handle"></div>
+    <h2 id="day-modal-title" class="modal-title">تفاصيل اليوم</h2>
+    <p class="modal-subtitle" id="day-date-label"></p>
+    <div class="day-badge" id="day-badge"></div>
+    <dl class="day-rows" id="day-rows" hidden></dl>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-outline" id="btn-day-close">إغلاق</button>
+      <button type="button" class="btn btn-primary" id="btn-day-excuse" hidden>تقديم عذر</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════════════════════ مودال تأكيد الخروج ════════════════════════════ -->
 <div id="modal-confirm-logout" class="modal-overlay modal-overlay--sm" hidden role="dialog" aria-modal="true" aria-labelledby="confirm-logout-title">
   <div class="modal-sheet modal-sheet--sm">
