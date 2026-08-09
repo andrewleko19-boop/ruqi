@@ -157,7 +157,9 @@ async function sendWebPush(
   });
   if (!res.ok && res.status !== 201) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Push failed ${res.status}: ${text}`);
+    const err = new Error(`Push failed ${res.status}: ${text}`);
+    (err as any).statusCode = res.status;
+    throw err;
   }
 }
 
@@ -242,16 +244,31 @@ Deno.serve(async (req) => {
     );
 
     const sent   = results.filter((r) => r.status === "fulfilled").length;
-    const errors = results
-      .filter((r): r is PromiseRejectedResult => r.status === "rejected")
-      .map((r) => String(r.reason?.message ?? r.reason));
+    const errors: string[] = [];
+    const gone: string[] = [];
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (r.status === "rejected") {
+        errors.push(String(r.reason?.message ?? r.reason));
+        if ((r.reason as any)?.statusCode === 410) gone.push(subs[i].endpoint);
+      }
+    }
     if (errors.length) console.error("[send-push] failures:", errors);
+
+    if (gone.length) {
+      const { error: delErr } = await admin
+        .from("push_subscriptions")
+        .delete()
+        .in("endpoint", gone);
+      if (delErr) console.error("[send-push] cleanup failed:", delErr.message);
+      else console.log(`[send-push] cleaned ${gone.length} expired subscription(s)`);
+    }
 
     await admin.from("notifications")
       .update({ push_sent_at: new Date().toISOString() })
       .eq("id", notificationId);
 
-    return json({ ok: true, sent, total: subs.length, errors });
+    return json({ ok: true, sent, total: subs.length, errors, cleaned: gone.length });
   } catch (e) {
     console.error("[send-push]", e);
     return json({ error: String((e as Error)?.message ?? e) }, 500);
