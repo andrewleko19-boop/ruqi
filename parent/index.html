@@ -281,9 +281,13 @@
             تقديم عذر
           </button>
         </div>
+        <!-- قائمةُ أيام الغياب الفعلية لا حقلُ تاريخٍ حرّ: الحقل الخام كان يعرض
+             التاريخ مشوّهاً داخل السياق العربيّ، ويسمح باختيار يومٍ لم يغب فيه
+             الابن أو يومٍ له عذرٌ قائم — فيفشل الإرسال بعد كتابة السبب كاملاً. -->
         <div id="excuse-date-picker-wrap" class="excuse-date-picker-wrap" hidden>
-          <label for="inp-excuse-date" class="field-label">اختر يوم الغياب</label>
-          <input type="date" id="inp-excuse-date" class="field-input" dir="ltr">
+          <label for="sel-excuse-date" class="field-label">اختر يوم الغياب</label>
+          <select id="sel-excuse-date" class="field-input"></select>
+          <p id="excuse-date-hint" class="excuse-date-hint" hidden></p>
         </div>
         <div id="excuses-empty" class="empty-msg" hidden>لم تُقدِّم أي أعذار بعد</div>
         <ul id="excuses-list" class="excuses-list" hidden></ul>

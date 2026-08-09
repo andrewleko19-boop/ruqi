@@ -4106,9 +4106,11 @@ async function parentRestoreSession() {
   return session ?? null;
 }
 
-async function parentGetHolidays(year) {
-  const from = `${year}-01-01`;
-  const to   = `${year}-12-31`;
+/* النطاق صريحٌ لا سنةٌ ميلادية: العام الدراسيّ السوريّ يمتدّ أيلول→آب فيعبر
+   رأس السنة، والوزارة تُدخل عطل العام القادم مسبقاً. حصرُ الاستعلام في السنة
+   الميلادية الجارية كان يُسقط عطلةَ كانون الثاني القادمة من القائمة والتقويم
+   معاً — يراها المشرف مُدخَلة ولا يراها وليّ الأمر إطلاقاً. */
+async function parentGetHolidays(from, to) {
   const { data, error } = await db
     .from('school_holidays')
     .select('date, name')
@@ -4201,6 +4203,40 @@ async function parentGetExcusePhotoUrl(stored, ttlSeconds = 300) {
     console.warn('[Ruqi] تعذّر توقيع رابط صورة العذر', e);
     return null;
   }
+}
+
+/* ── جانب المدرسة من أعذار الغياب ──────────────────────────────────────────
+   كان الوليّ يرفع العذر ولا يقرؤه أحد: لا استعلامَ ولا واجهةَ مراجعةٍ في أيّ
+   بوّابة، فتبقى الأعذار 'pending' إلى الأبد. RLS تحصر الصفوف بمدرسة المستدعي
+   (school_admin_read_excuses)، وeq('school_id') هنا حزامٌ ثانٍ لا بديل عنها. */
+async function schoolListAbsenceExcuses(schoolId, { status = null, limit = 200 } = {}) {
+  let q = db
+    .from('absence_excuses')
+    .select('id, student_id, date, reason, photo_url, status, review_note, created_at, ' +
+            'student:student_id(id, full_name, class:class_id(grade, section))')
+    .eq('school_id', schoolId)
+    // المعلَّق أوّلاً ثمّ الأحدث: ما ينتظر قراراً يتصدّر بلا فرزٍ يدويّ.
+    .order('status', { ascending: true })
+    .order('date',   { ascending: false })
+    .limit(limit);
+  if (status) q = q.eq('status', status);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data ?? [];
+}
+
+/* القرار عبر RPC لا UPDATE مباشر: السياسة تحكم أيَّ الصفوف تُحدَّث لا أيَّ
+   الأعمدة، فمديرٌ يملك UPDATE على أعذار مدرسته يستطيع تغيير تاريخ العذر أو
+   سببه — تزويرُ مستندٍ قدّمه وليّ الأمر. والدالّة تقلب سجلَّ الحضور إلى
+   'excused' في المعاملة نفسها فلا يُحتسب اليوم غياباً بعد قبول عذره. */
+async function schoolReviewAbsenceExcuse(excuseId, decision, note) {
+  const { error } = await db.rpc('school_review_excuse', {
+    p_excuse_id: excuseId,
+    p_decision:  decision,
+    p_note:      note || null,
+  });
+  if (error) throw error;
+  return true;
 }
 
 // Canonical HTML escaper for safe interpolation of user/DB text into innerHTML.
@@ -4472,6 +4508,11 @@ window.RUQI_DB = {
   parentResubmitAbsenceExcuse,
   parentUploadExcusePhoto,
   parentGetExcusePhotoUrl,
+
+  // مراجعة الأعذار من بوّابة المدرسة (توقيعُ رابط الصورة يمرّ بالدالّة نفسها —
+  // السياسة school_admin_read_excuse_photos هي ما يسمح للمدير بالتوقيع).
+  schoolListAbsenceExcuses,
+  schoolReviewAbsenceExcuse,
 
   // السجل الوطني — المرحلة 2
   lookupNationalStudent,

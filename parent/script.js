@@ -68,6 +68,7 @@ const S = {
   activeStudent: null,
   viewMonth: new Date(),
   attendance: [],     // current month attendance records
+  yearAttendance: [], // حضور العام الدراسيّ كاملاً — للبطاقة ولمُنتقي أيام العذر
   grades: { s1: [], s2: [] },
   allGrades: [],
   holidays: [],
@@ -173,7 +174,8 @@ const excusesEmpty        = $('excuses-empty');
 const excusesList         = $('excuses-list');
 const btnNewExcuseMore    = $('btn-new-excuse-more');
 const excuseDatePickerWrap = $('excuse-date-picker-wrap');
-const inpExcuseDate       = $('inp-excuse-date');
+const selExcuseDate       = $('sel-excuse-date');
+const excuseDateHint      = $('excuse-date-hint');
 
 // Logout Confirm Modal
 const modalConfirmLogout     = $('modal-confirm-logout');
@@ -555,6 +557,9 @@ async function switchChild(idx) {
   S.allGrades = [];
   S.excuses = [];
   S.attendance = [];
+  // بلا هذا يبقى غيابُ الابن السابق في مُنتقي «تقديم عذر» حتى تنتهي بطاقةُ
+  // الملخّص من الجلب — فيُعرض على الوليّ يومُ غيابِ ابنٍ ويُقدَّم عذرٌ لآخر.
+  S.yearAttendance = [];
   document.querySelectorAll('.child-pill').forEach((p, i) => p.classList.toggle('active', i === idx));
   await loadActiveStudentData();
 }
@@ -619,6 +624,9 @@ async function loadStudentSummary() {
       () => parentGetStudentAttendanceYear(stu.id, year));
     rows = data ?? [];
   } catch { rows = []; }
+  // يخدم أيضاً مُنتقي «تقديم عذر»: الأيام المعروضة هناك أيامُ غيابٍ حقيقية
+  // مقروءةٌ من السجلّ، لا تواريخُ يكتبها الوليّ بيده.
+  S.yearAttendance = rows;
 
   const c = { present: 0, absent: 0, excused: 0, late: 0 };
   rows.forEach(r => { if (c[r.status] !== undefined) c[r.status]++; });
@@ -658,16 +666,13 @@ async function loadAttendanceForMonth() {
   const m   = S.viewMonth.getMonth() + 1;
   const sid = S.activeStudent.id;
   const ym  = `${y}-${String(m).padStart(2,'0')}`;
-  const [attRows, excuseRows, holidayRows] = await Promise.allSettled([
+  const [attRows, excuseRows] = await Promise.allSettled([
     readCached(`nsams_patt_${sid}_${ym}`, () => parentGetStudentAttendance(sid, y, m)),
     readCached(`nsams_pexc_${sid}`,       () => parentGetAbsenceExcuses(sid)),
-    S.holidays.length
-      ? Promise.resolve({ data: S.holidays })
-      : readCached(`nsams_phol_${y}`,     () => parentGetHolidays(y)),
+    ensureHolidays().catch(() => []),   // العطل زينةٌ للتقويم لا شرطٌ لعرضه
   ]);
   S.attendance = attRows.value?.data   ?? [];
   S.excuses    = excuseRows.value?.data ?? [];
-  if (holidayRows.value?.data) S.holidays = holidayRows.value.data;
   renderMonthCalendar();
 }
 
@@ -967,16 +972,38 @@ tabS2.addEventListener('click', () => {
 });
 
 // ── Holidays ──────────────────────────────────────────────────────────────
+/* أسماء الأشهر الشاميّة — هي المستعملة في بوّابات المدرسة والمديرية ولوحة
+   المشرف. كانت هذه البوّابة وحدها تكتب «يناير/فبراير»، فتظهر العطلة نفسها
+   باسمَي شهرٍ مختلفَين لوليّ الأمر وللمشرف. */
+const AR_MONTHS = ['كانون الثاني','شباط','آذار','نيسان','أيار','حزيران',
+                   'تموز','آب','أيلول','تشرين الأول','تشرين الثاني','كانون الأول'];
+
+/* نافذةُ العطل: من مطلع العام الدراسيّ الجاري إلى نهاية الذي يليه.
+   تُدخَل عطل العام القادم قبل بدايته، ويتصفّح الوليّ شهوراً إلى الخلف — فنافذةٌ
+   بعرض عامَين دراسيَّين تغطّي الحالتين بجلبةٍ واحدة. */
+function holidayWindow() {
+  const start = Number(getAcademicYear().split('-')[0]);
+  return { from: `${start}-09-01`, to: `${start + 2}-08-31`, key: `${start}_${start + 2}` };
+}
+
+/* جلبةٌ واحدة تخدم التقويمَ وقائمةَ العطل معاً. كان التقويم يجلب بسنة الشهر
+   المعروض والقائمةُ بالسنة الجارية بمفتاحَي مخبأٍ مختلفَين، فإن سبق أحدهما
+   الآخر بقيت S.holidays مملوءةً بنطاقٍ لا يخصّ الشهرَ المعروض. */
+async function ensureHolidays() {
+  if (S.holidays.length) return S.holidays;
+  const w = holidayWindow();
+  const { data } = await readCached(
+    `nsams_phol_${w.key}`, () => parentGetHolidays(w.from, w.to));
+  S.holidays = data ?? [];
+  return S.holidays;
+}
+
 async function loadHolidays() {
   holidaysLoading.hidden = false;
   holidaysList.hidden = true;
   holidaysEmpty.hidden = true;
   try {
-    const year = new Date().getFullYear();
-    const { data: holidays } = await readCached(
-      `nsams_phol_${year}`, () => parentGetHolidays(year));
-    S.holidays = holidays;
-    renderHolidays(holidays);
+    renderHolidays(await ensureHolidays());
   } catch (err) {
     holidaysEmpty.textContent = 'تعذَّر تحميل العطل';
     holidaysEmpty.hidden = false;
@@ -986,21 +1013,29 @@ async function loadHolidays() {
 }
 
 function renderHolidays(holidays) {
-  if (!holidays.length) { holidaysEmpty.hidden = false; return; }
+  if (!holidays.length) {
+    holidaysEmpty.textContent = 'لا توجد عطل مُدخلة';
+    holidaysEmpty.hidden = false;
+    holidaysList.hidden = true;
+    return;
+  }
+  holidaysEmpty.hidden = true;
   holidaysList.hidden = false;
-  const AR_MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
 
-  let currentMonth = -1;
+  let currentKey = '';
   holidaysList.innerHTML = holidays.map(h => {
     const d = new Date(h.date + 'T00:00:00');
-    const m = d.getMonth();
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
     let monthHeader = '';
-    if (m !== currentMonth) {
-      currentMonth = m;
-      monthHeader = `<li class="holiday-month-header">${AR_MONTHS[m]} ${d.getFullYear()}</li>`;
+    if (key !== currentKey) {
+      currentKey = key;
+      monthHeader = `<li class="holiday-month-header">${AR_MONTHS[d.getMonth()]} ${d.getFullYear()}</li>`;
     }
+    // أرقامٌ عربيّةٌ هنديّة كبقية بطاقات البوّابة، واسمُ الشهر من الجدول الصريح
+    // لا من ICU — بعض أجهزة أندرويد تحمل بيانات لغةٍ منقوصة فتعود إلى «يناير».
+    const day = d.toLocaleDateString('ar-SY', { day: 'numeric' });
     return `${monthHeader}<li class="holiday-item">
-      <span class="holiday-date">${d.toLocaleDateString('ar-SY', { day: 'numeric', month: 'short' })}</span>
+      <span class="holiday-date">${day} ${AR_MONTHS[d.getMonth()]}</span>
       <span class="holiday-name">${escapeHtml(h.name || 'عطلة رسمية')}</span>
     </li>`;
   }).join('');
@@ -1152,16 +1187,43 @@ btnConfirmLogoutOk.addEventListener('click', async () => {
 });
 
 // ── Excuse from More Tab ──────────────────────────────────────────────────
+/* الأيام المتاحة للتقديم: غيابٌ مسجَّلٌ فعلاً لم يُقدَّم عنه عذرٌ بعد. المرفوض
+   ليس منها — طريقُه «تعديل وإعادة التقديم» من بطاقته في القائمة، لأنّ قيد
+   unique(student_id, date) يمنع إدراج عذرٍ ثانٍ لليوم نفسه. */
+function eligibleExcuseDates() {
+  const taken = new Set(S.excuses.map(e => e.date));
+  return (S.yearAttendance ?? [])
+    .filter(r => r.status === 'absent' && !taken.has(r.date))
+    .map(r => r.date)
+    .sort((a, b) => b.localeCompare(a));   // الأحدث أوّلاً
+}
+
 btnNewExcuseMore.addEventListener('click', () => {
+  const dates = eligibleExcuseDates();
   excuseDatePickerWrap.hidden = false;
-  const today = localISO(new Date());
-  inpExcuseDate.max = today;
-  inpExcuseDate.value = today;
-  inpExcuseDate.focus();
+
+  if (!dates.length) {
+    selExcuseDate.hidden = true;
+    excuseDateHint.hidden = false;
+    // التمييز مهمّ: «لا غياب» و«كلّ غياباتك مُغطّاة» حالتان مختلفتان تماماً.
+    excuseDateHint.textContent = S.excuses.length
+      ? 'كلّ أيام الغياب المسجَّلة قُدِّم عنها عذر. لتعديل عذرٍ مرفوض استخدم زرّ «تعديل وإعادة التقديم» في بطاقته.'
+      : 'لا توجد أيام غياب مسجَّلة على ابنك حتى الآن.';
+    return;
+  }
+
+  selExcuseDate.hidden  = false;
+  excuseDateHint.hidden = false;
+  excuseDateHint.textContent = 'تُعرض أيام الغياب المسجَّلة التي لم يُقدَّم عنها عذر بعد.';
+  selExcuseDate.innerHTML =
+    '<option value="">— اختر اليوم —</option>' +
+    dates.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(formatDate(d))}</option>`).join('');
+  selExcuseDate.value = '';
+  selExcuseDate.focus();
 });
 
-inpExcuseDate.addEventListener('change', () => {
-  const d = inpExcuseDate.value;
+selExcuseDate.addEventListener('change', () => {
+  const d = selExcuseDate.value;
   if (!d) return;
   excuseDatePickerWrap.hidden = true;
   openExcuseModal(d);

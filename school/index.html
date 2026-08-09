@@ -462,6 +462,34 @@
         <div class="dskel" style="height:48px;border-radius:10px;opacity:.4"></div>
       </div>
     </div>
+
+    <!-- أعذار أولياء الأمور — النصف المستقبِل من الميزة. كان الوليّ يرفع
+         التقرير الطبّي ولا يراه أحد في أيّ بوّابة. -->
+    <div class="status-card-mockup">
+      <div class="status-header-row">
+        <div class="status-icon-grad">
+          <svg class="icon icon-lg"><use href="#ic-inbox"/></svg>
+        </div>
+        <div>
+          <div class="status-title-lg">أعذار الغياب الواردة</div>
+          <div class="status-date-sm">مُقدَّمة من أولياء الأمور عبر البوّابة</div>
+        </div>
+        <span id="excuses-pending-badge" class="excuses-badge" hidden>0</span>
+      </div>
+
+      <div class="excuses-filter" role="group" aria-label="تصفية الأعذار">
+        <button type="button" class="excuses-filter-btn is-active" data-exc-filter="pending">بانتظار المراجعة</button>
+        <button type="button" class="excuses-filter-btn" data-exc-filter="accepted">مقبولة</button>
+        <button type="button" class="excuses-filter-btn" data-exc-filter="rejected">مرفوضة</button>
+        <button type="button" class="excuses-filter-btn" data-exc-filter="">الكل</button>
+      </div>
+
+      <div id="excuses-review-list" class="excuses-review-list">
+        <div class="dskel" style="height:64px;border-radius:10px"></div>
+        <div class="dskel" style="height:64px;border-radius:10px;opacity:.6"></div>
+      </div>
+      <p id="excuses-review-empty" class="excuses-review-empty" hidden>لا توجد أعذار في هذه الحالة</p>
+    </div>
   </main><!-- /view-absence -->
 
   <!-- ═══ VIEW: التقارير (Summary Reports) ═══════════════════════════════════ -->
@@ -3429,6 +3457,58 @@
 
 <!-- Generic yes/no modal — replaces the native confirm() calls throughout this
      portal. Distinct from #modal-confirm-logout, which has its own copy. -->
+<!-- ── نافذة: مراجعة عذر غياب واردٍ من وليّ الأمر ─────────────────────────── -->
+<div id="modal-excuse-review" class="overlay" hidden aria-modal="true" role="dialog" aria-label="مراجعة عذر غياب">
+  <div class="sheet sheet-sm">
+    <div class="sheet-handle"></div>
+    <div class="sheet-hdr">
+      <div class="sheet-title">
+        <svg class="icon"><use href="#ic-inbox"/></svg>
+        <span>مراجعة عذر غياب</span>
+      </div>
+      <button class="icon-btn" id="btn-close-excuse-review" aria-label="إغلاق">
+        <svg class="icon"><use href="#ic-x"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <dl class="exc-rows">
+        <div class="exc-row"><dt>الطالب</dt><dd id="exc-rv-student">—</dd></div>
+        <div class="exc-row"><dt>الصف</dt><dd id="exc-rv-class">—</dd></div>
+        <div class="exc-row"><dt>تاريخ الغياب</dt><dd id="exc-rv-date">—</dd></div>
+        <div class="exc-row"><dt>الحالة</dt><dd id="exc-rv-status">—</dd></div>
+      </dl>
+
+      <div class="field-group">
+        <label for="exc-rv-reason">السبب المُقدَّم</label>
+        <p id="exc-rv-reason" class="exc-reason-box">—</p>
+      </div>
+
+      <!-- المرفق يُفتح برابطٍ موقَّت قصير الأجل؛ الدلو خاصّ (تقرير طبّي لقاصر). -->
+      <div class="field-group" id="exc-rv-photo-wrap" hidden>
+        <label>المرفق</label>
+        <!-- href يُملأ برابطٍ موقَّت عند الفتح؛ الحاوية تبقى مخفيّةً إن تعذّر
+             التوقيع فلا يُنقر هذا البديل إطلاقاً. -->
+        <a id="exc-rv-photo-link" class="exc-photo-link" href="#" target="_blank" rel="noopener noreferrer">
+          <img id="exc-rv-photo" class="exc-photo" alt="مرفق العذر">
+        </a>
+      </div>
+
+      <div class="field-group">
+        <label for="exc-rv-note">ملاحظة المدرسة <span class="exc-note-hint">(إلزامية عند الرفض)</span></label>
+        <textarea id="exc-rv-note" class="field-input" rows="2"
+                  placeholder="مثال: التقرير غير واضح، يُرجى إرفاق صورة أوضح"></textarea>
+      </div>
+
+      <p id="exc-rv-err" class="exc-rv-err" hidden></p>
+
+      <div class="confirm-modal-actions">
+        <button type="button" class="btn btn-outline" id="btn-exc-reject">رفض</button>
+        <button type="button" class="btn btn-primary" id="btn-exc-accept">قبول العذر</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── ورقة الفهرس: كل أقسام البيان ونسب اكتمالها ────────────────────────── -->
 <div id="modal-stmt-index" class="overlay" hidden aria-modal="true" role="dialog" aria-label="فهرس أقسام البيان">
   <div class="sheet sheet-sm">

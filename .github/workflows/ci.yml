@@ -58,7 +58,32 @@ jobs:
         with:
           deno-version: v2.x
 
+      # الاستيراد يأتي من esm.sh — وهي CDN طرفٍ ثالث تسقط أحياناً (رأينا 522
+      # من Cloudflare يُفشل بناءً سليماً تماماً). التخبئة تجعل البناءات التالية
+      # لا تلمس الشبكة أصلاً ما دامت الاستيرادات لم تتغيّر.
+      - name: Cache Deno dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/deno
+          key: deno-${{ runner.os }}-${{ hashFiles('supabase/functions/*/index.ts') }}
+          restore-keys: |
+            deno-${{ runner.os }}-
+
       - name: Type-check every edge function
         # deno check resolves the https:// imports (supabase-js) and validates the
         # Deno globals, catching type errors before `supabase functions deploy`.
-        run: deno check supabase/functions/*/index.ts
+        #
+        # يُعاد المحاولة ثلاثاً: مع مخبأٍ باردٍ وCDN متعثّرة يفشل الجلب لا الكود،
+        # وإفشالُ البناء لسببٍ شبكيّ عابر يُخفي نتيجةَ الفحص الحقيقية.
+        run: |
+          for attempt in 1 2 3; do
+            if deno check supabase/functions/*/index.ts; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::deno check failed (attempt $attempt/3) — retrying after backoff"
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "::error::deno check failed after 3 attempts"
+          exit 1

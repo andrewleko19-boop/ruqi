@@ -839,3 +839,11 @@ input, textarea, select { font-family: inherit; }
   padding: 0 4px; transition: color var(--transition);
 }
 .push-banner-close:hover { color: var(--clr-text); }
+
+/* تلميح مُنتقي يوم الغياب — يشرح لماذا القائمة قصيرة أو فارغة */
+.excuse-date-hint {
+  margin: 6px 0 0;
+  font-size: .78rem;
+  line-height: 1.6;
+  color: #64748b;
+}

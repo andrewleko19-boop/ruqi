@@ -1027,6 +1027,7 @@ window.addEventListener('popstate', e => {
     if (!pwdOverlay.hidden) closePwdDrawer();
     if (!modalConfirmLogout.hidden) modalConfirmLogout.hidden = true;
     if (!modalAsk.hidden) settleAsk(false);
+    if (!el('modal-excuse-review')?.hidden) closeExcuseReview();
     return;
   }
   if (backNavBtn) backNavBtn.hidden = (_navDepth === 0);
@@ -1371,6 +1372,8 @@ function buildClassRow(s) {
 async function loadAbsenceView() {
   const listEl = el('absence-history-list');
   if (!listEl) return;
+  // الأعذار مستقلّة عن ملخّصات اليوم — تُحمَّل بالتوازي ولا يُسقطها فشلُها.
+  loadExcusesReview();
   if (Object.keys(_summaryByClass).length === 0) {
     await loadClassSummaries();
   }
@@ -1396,6 +1399,199 @@ async function loadAbsenceView() {
         </div>
       </div>`).join('');
 }
+
+/* ── أعذار الغياب الواردة من أولياء الأمور ─────────────────────────────────
+   النصف المستقبِل من الميزة. قبل هذا كان الوليّ يرفع تقريراً طبّياً فيستقرّ
+   الصفّ 'pending' بلا مراجِعٍ في أيّ بوّابة — ميزةٌ كاملةٌ في نصفها المرسِل
+   ومعدومةٌ في نصفها المستقبِل. */
+const EXC_STATUS_AR   = { pending: 'بانتظار المراجعة', accepted: 'مقبول', rejected: 'مرفوض' };
+const EXC_STATUS_PILL = { pending: 'pill-pending', accepted: 'pill-done', rejected: 'pill-rejected' };
+
+let _excFilter  = 'pending';
+let _excuses    = [];
+let _excActive  = null;
+let _excBusy    = false;
+
+function excFormatDate(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.getDate()} ${MONTH_SHORT[d.getMonth() + 1]} ${d.getFullYear()}`;
+}
+
+async function loadExcusesReview() {
+  const listEl = el('excuses-review-list');
+  if (!listEl) return;
+  const sid = schoolId();
+  if (!sid) return;
+  try {
+    _excuses = await window.RUQI_DB.schoolListAbsenceExcuses(sid, {
+      status: _excFilter || null,
+    });
+    renderExcusesReview();
+  } catch (err) {
+    listEl.innerHTML = '';
+    const emptyEl = el('excuses-review-empty');
+    if (emptyEl) {
+      emptyEl.textContent = 'تعذّر تحميل الأعذار';
+      emptyEl.hidden = false;
+    }
+  }
+  refreshExcusesBadge();
+}
+
+/* العدّاد يُحسب باستعلامٍ مستقلّ لا من _excuses: هذه الأخيرة مُصفّاة بالحالة
+   المعروضة، فلو حُسب منها لاختفى عدّاد «بانتظار المراجعة» لحظة تصفّح المقبولة. */
+async function refreshExcusesBadge() {
+  const badge = el('excuses-pending-badge');
+  if (!badge) return;
+  const sid = schoolId();
+  if (!sid) return;
+  try {
+    const pending = _excFilter === 'pending'
+      ? _excuses
+      : await window.RUQI_DB.schoolListAbsenceExcuses(sid, { status: 'pending' });
+    badge.textContent = String(pending.length);
+    badge.hidden = pending.length === 0;
+  } catch {
+    badge.hidden = true;
+  }
+}
+
+function renderExcusesReview() {
+  const listEl  = el('excuses-review-list');
+  const emptyEl = el('excuses-review-empty');
+  if (!listEl) return;
+
+  if (!_excuses.length) {
+    listEl.innerHTML = '';
+    if (emptyEl) {
+      emptyEl.textContent = 'لا توجد أعذار في هذه الحالة';
+      emptyEl.hidden = false;
+    }
+    return;
+  }
+  if (emptyEl) emptyEl.hidden = true;
+
+  listEl.innerHTML = _excuses.map(e => {
+    const st  = EXC_STATUS_AR[e.status] ? e.status : 'pending';
+    const cls = e.student?.class
+      ? `${gradeNameLabel(e.student.class.grade)} ${e.student.class.section ?? ''}`.trim()
+      : '—';
+    return `
+      <button type="button" class="excuse-rv-row" data-exc-id="${escapeHtml(e.id)}">
+        <div class="excuse-rv-main">
+          <span class="excuse-rv-name">${escapeHtml(e.student?.full_name ?? 'طالب')}</span>
+          <span class="excuse-rv-meta">${escapeHtml(cls)} · ${escapeHtml(excFormatDate(e.date))}</span>
+          <span class="excuse-rv-reason">${escapeHtml(e.reason ?? '')}</span>
+        </div>
+        <div class="excuse-rv-side">
+          ${e.photo_url ? '<svg class="icon excuse-rv-clip"><use href="#ic-camera"/></svg>' : ''}
+          <span class="class-pill ${EXC_STATUS_PILL[st]}">${escapeHtml(EXC_STATUS_AR[st])}</span>
+        </div>
+      </button>`;
+  }).join('');
+}
+
+el('excuses-review-list')?.addEventListener('click', e => {
+  const row = e.target.closest('.excuse-rv-row');
+  if (!row) return;
+  const exc = _excuses.find(x => x.id === row.dataset.excId);
+  if (exc) openExcuseReview(exc);
+});
+
+document.querySelectorAll('.excuses-filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    _excFilter = btn.dataset.excFilter ?? '';
+    document.querySelectorAll('.excuses-filter-btn')
+      .forEach(b => b.classList.toggle('is-active', b === btn));
+    loadExcusesReview();
+  });
+});
+
+function openExcuseReview(exc) {
+  _excActive = exc;
+  const st = EXC_STATUS_AR[exc.status] ? exc.status : 'pending';
+  el('exc-rv-student').textContent = exc.student?.full_name ?? '—';
+  el('exc-rv-class').textContent   = exc.student?.class
+    ? `${gradeNameLabel(exc.student.class.grade)} ${exc.student.class.section ?? ''}`.trim() : '—';
+  el('exc-rv-date').textContent    = excFormatDate(exc.date);
+  el('exc-rv-status').textContent  = EXC_STATUS_AR[st];
+  el('exc-rv-reason').textContent  = exc.reason ?? '—';
+  el('exc-rv-note').value          = exc.review_note ?? '';
+  el('exc-rv-err').hidden          = true;
+
+  // المقبول والمرفوض يبقيان قابلَين للتغيير: القرار الخاطئ يُصحَّح، والدالّة
+  // تعيد سجلَّ الحضور إلى ما كان عند العدول عن قبول.
+  el('btn-exc-accept').textContent = st === 'accepted' ? 'مقبول ✓' : 'قبول العذر';
+  el('btn-exc-reject').textContent = st === 'rejected' ? 'مرفوض ✓' : 'رفض';
+
+  const wrap = el('exc-rv-photo-wrap');
+  const img  = el('exc-rv-photo');
+  const link = el('exc-rv-photo-link');
+  if (exc.photo_url) {
+    wrap.hidden = false;
+    img.removeAttribute('src');
+    const forId = exc.id;
+    // التوقيع غير متزامن — الحارس يمنع وصول رابطٍ متأخّر إلى نافذةٍ فُتحت على
+    // عذرٍ آخر أو أُغلقت.
+    window.RUQI_DB.parentGetExcusePhotoUrl(exc.photo_url).then(url => {
+      if (_excActive?.id !== forId) return;
+      if (url) { img.src = url; link.href = url; }
+      else     { wrap.hidden = true; }
+    });
+  } else {
+    wrap.hidden = true;
+  }
+
+  el('modal-excuse-review').hidden = false;
+  _pushModalHistory();
+}
+
+function closeExcuseReview() {
+  el('modal-excuse-review').hidden = true;
+  _excActive = null;
+}
+
+el('btn-close-excuse-review')?.addEventListener('click',
+  () => _closeModalViaUI(closeExcuseReview));
+el('modal-excuse-review')?.addEventListener('click', e => {
+  if (e.target === el('modal-excuse-review')) _closeModalViaUI(closeExcuseReview);
+});
+
+async function submitExcuseDecision(decision) {
+  if (!_excActive || _excBusy) return;
+  const note = el('exc-rv-note').value.trim();
+  const errEl = el('exc-rv-err');
+  // الرفض بلا سبب يترك الوليّ أمام «مرفوض» مجرّدة لا يعرف كيف يصحّحها — وهي
+  // الحلقة المسدودة التي فُتحت أصلاً بإعادة التقديم. الخادم يفرضها أيضاً.
+  if (decision === 'rejected' && !note) {
+    errEl.textContent = 'يُرجى كتابة سبب الرفض — يراه وليّ الأمر ليصحّح العذر.';
+    errEl.hidden = false;
+    return;
+  }
+  _excBusy = true;
+  el('btn-exc-accept').disabled = true;
+  el('btn-exc-reject').disabled = true;
+  try {
+    await window.RUQI_DB.schoolReviewAbsenceExcuse(_excActive.id, decision, note);
+    _closeModalViaUI(closeExcuseReview);
+    toast(decision === 'accepted' ? 'قُبِل العذر وسُجِّل اليوم بعذر ✓' : 'رُفِض العذر', 'success');
+    // القبول يقلب اليوم إلى 'excused'، فملخّصات الصفوف المعروضة صارت قديمة.
+    // loadAbsenceView تُعيد تحميل قائمة الأعذار أيضاً، فلا تُستدعى مرّتين.
+    _summaryByClass = {};
+    await loadAbsenceView();
+  } catch (err) {
+    errEl.textContent = errMessage(err, 'تعذّر حفظ القرار.');
+    errEl.hidden = false;
+  } finally {
+    _excBusy = false;
+    el('btn-exc-accept').disabled = false;
+    el('btn-exc-reject').disabled = false;
+  }
+}
+
+el('btn-exc-accept')?.addEventListener('click', () => submitExcuseDecision('accepted'));
+el('btn-exc-reject')?.addEventListener('click', () => submitExcuseDecision('rejected'));
 
 async function loadSummaryReports() {
   const bodyEl  = el('summary-reports-body');
