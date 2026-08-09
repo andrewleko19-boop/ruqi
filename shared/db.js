@@ -4071,6 +4071,25 @@ async function parentGetStudentAttendance(studentId, year, month) {
   return data ?? [];
 }
 
+/* حضور الابن على مدى العام الدراسي كلّه (لا شهراً واحداً). تلزم لبطاقة الملخّص
+   وعدّاد الغياب: نسبةُ حضورٍ شهريةٌ وحدها لا تقول للوليّ أين ابنُه من حدّ الإنذار.
+   العام الدراسي السوري يبدأ في أيلول، فالمدى من 09-01 حتى 08-31 التالية. */
+async function parentGetStudentAttendanceYear(studentId, academicYear) {
+  const startYear = parseInt(String(academicYear).slice(0, 4), 10);
+  if (!Number.isFinite(startYear)) return [];
+  const from = `${startYear}-09-01`;
+  const to   = `${startYear + 1}-08-31`;
+  const { data, error } = await db
+    .from('daily_student_attendance')
+    .select('date, status, reason')
+    .eq('student_id', studentId)
+    .gte('date', from)
+    .lte('date', to)
+    .order('date');
+  if (error) throw error;
+  return data ?? [];
+}
+
 async function parentGetStudentGrades(studentId, academicYear) {
   const { data, error } = await db
     .from('student_grades')
@@ -4406,6 +4425,7 @@ window.RUQI_DB = {
   parentRestoreSession,
   parentGetMyStudents,
   parentGetStudentAttendance,
+  parentGetStudentAttendanceYear,
   parentGetStudentGrades,
   parentGetHolidays,
   parentGetAbsenceExcuses,
@@ -4438,6 +4458,11 @@ window.RUQI_DB = {
 
   // تنظيف مخابئ المستأجِر عند الخروج
   purgeTenantCaches,
+
+  // أدوات الصمود أوفلاين — تُستعمل في البوّابات التي تحمّل db.js عبر window
+  // (لا عبر import) كي يبقى حارسُ «تعذّر تحميل db.js» فيها عاملاً.
+  withTimeout,
+  isOnline,
 
   // الاستيراد الجماعي من لوحة المديرية — §24
   getSchoolClassesForDirectorate,
@@ -5003,6 +5028,13 @@ const TENANT_CACHE_PREFIXES = [
   'nsams_profile_',   // ملفّ الدور المخبّأ للدخول دون اتصال
   'nsams_lastuser_',  // مؤشّر «آخر مستخدم» — يُمسح كي لا يُحيي دخولاً أوفلاين بعد الخروج
   'nsams_setup_done_',
+  // بوّابة ولي الأمر: أسماء الأبناء وصفوفهم وغياباتهم ودرجاتهم وأعذارهم.
+  // الهاتف يتناوب عليه أهلٌ مختلفون فعلياً (جهاز العائلة)، فهذه بيانات مستأجِر.
+  'nsams_pstu_',      // قائمة الأبناء المرتبطين بالوليّ
+  'nsams_patt_',      // حضور الابن لشهرٍ بعينه
+  'nsams_pgrades_',   // درجات الابن لسنةٍ دراسية
+  'nsams_pexc_',      // أعذار الغياب المقدَّمة
+  'nsams_phol_',      // العطل الرسمية (لا تخصّ طالباً بعينه لكنّها تتبع الجلسة)
 ];
 
 async function purgeTenantCaches() {

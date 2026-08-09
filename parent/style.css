@@ -230,6 +230,16 @@ input, textarea, select { font-family: inherit; }
 .app-header .btn-icon { color: rgba(255,255,255,.8); }
 .app-header .btn-icon:hover { background: rgba(255,255,255,.15); }
 
+/* ── شريط انعدام الاتصال ────────────────────────────────────────────────── */
+.offline-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px;
+  background: var(--clr-warn-lt); color: #92400e;
+  border-bottom: 1px solid #fcd9a8;
+  font-size: .8rem; font-weight: 600;
+}
+.offline-bar svg { width: 16px; height: 16px; flex-shrink: 0; }
+
 /* ── Children Bar ───────────────────────────────────────────────────────── */
 .children-bar {
   background: var(--clr-surface);
@@ -296,6 +306,57 @@ input, textarea, select { font-family: inherit; }
 .section-title {
   font-size: 1rem; font-weight: 700; color: var(--clr-primary); margin-bottom: 4px;
 }
+
+/* ── بطاقة ملخّص الطالب ─────────────────────────────────────────────────── */
+.stu-card {
+  background: var(--clr-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.stu-card-head { display: flex; align-items: center; gap: 12px; }
+.stu-avatar {
+  width: 46px; height: 46px; border-radius: 50%;
+  background: var(--clr-primary-lt); color: var(--clr-primary);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.25rem; font-weight: 800; flex-shrink: 0;
+}
+.stu-ident { min-width: 0; }
+.stu-name {
+  font-size: 1.05rem; font-weight: 800; color: var(--clr-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.stu-meta {
+  font-size: .8rem; color: var(--clr-muted); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.stu-stats {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  border-top: 1px solid var(--clr-border); padding-top: 12px;
+}
+.stu-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.stu-stat-val { font-size: 1.2rem; font-weight: 800; line-height: 1.1; }
+.stu-stat-lbl { font-size: .72rem; color: var(--clr-muted); font-weight: 600; }
+
+/* شريط الاقتراب من حدّ الغياب — يتلوّن تدرّجاً كي يُقرأ قبل قراءة الرقم. */
+.stu-warn { display: flex; flex-direction: column; gap: 6px; }
+.stu-warn-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: .78rem; font-weight: 700; color: var(--clr-muted);
+}
+.stu-warn-count { font-variant-numeric: tabular-nums; color: var(--clr-text); }
+.stu-warn-track {
+  height: 7px; border-radius: 4px; background: #e2e8f0; overflow: hidden;
+}
+.stu-warn-fill {
+  height: 100%; width: 0; border-radius: 4px;
+  background: var(--clr-present); transition: width var(--transition);
+}
+.stu-warn.is-warn   .stu-warn-fill { background: var(--clr-late); }
+.stu-warn.is-warn   .stu-warn-head { color: #92400e; }
+.stu-warn.is-danger .stu-warn-fill { background: var(--clr-absent); }
+.stu-warn.is-danger .stu-warn-head { color: var(--clr-absent); }
 
 /* ── Month Nav ──────────────────────────────────────────────────────────── */
 .month-nav {
@@ -544,11 +605,20 @@ input, textarea, select { font-family: inherit; }
   pointer-events: none;
 }
 .toast {
+  display: flex; align-items: center; gap: 10px;
   padding: 12px 16px; border-radius: var(--radius-md);
   font-size: .875rem; font-weight: 600;
   box-shadow: var(--shadow-md);
   animation: toast-in .2s ease;
   pointer-events: auto;
+}
+/* عدّاد التكرار: بديلُ تكديس بطاقاتٍ متطابقة تغطّي الشاشة. */
+.toast-badge {
+  min-width: 20px; height: 20px; border-radius: 10px;
+  background: rgba(0,0,0,.22); color: #fff;
+  font-size: .75rem; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 6px; margin-inline-start: auto; flex-shrink: 0;
 }
 .toast--success { background: #27ae60; color: #fff; }
 .toast--error   { background: var(--clr-danger); color: #fff; }

@@ -11,6 +11,7 @@ const {
   parentRestoreSession,
   parentGetMyStudents,
   parentGetStudentAttendance,
+  parentGetStudentAttendanceYear,
   parentGetStudentGrades,
   parentGetHolidays,
   parentGetAbsenceExcuses,
@@ -20,7 +21,42 @@ const {
   registerPushSubscription,
   escapeHtml,
   errMessage,
+  withTimeout,
+  isOnline,
 } = window.RUQI_DB;
+
+// ── مخبأ محلّي ────────────────────────────────────────────────────────────
+// بوّابة ولي الأمر كانت الوحيدة بلا أيّ مخبأ: كلّ شاشة تتطلّب شبكة حيّة، فتظهر
+// فارغةً في المدرسة/المواصلات حيث التغطية ضعيفة. المفاتيح كلّها ضمن
+// TENANT_CACHE_PREFIXES في db.js فتُمحى عند الخروج (هاتف العائلة مشترَك).
+const CACHE_TTL_MS = 6000;   // مهلة القراءة قبل السقوط للمخبأ
+
+function cacheRead(key) {
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }
+  catch { return null; }
+}
+function cacheWrite(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); }
+  catch { /* حصة التخزين ممتلئة — غير قاتل */ }
+}
+
+/* اقرأ من الشبكة بمهلة، واسقُط للمخبأ عند الفشل أو انعدام الاتصال.
+   يعيد { data, fromCache } — الواجهة تحتاج تمييزهما لتعرض شريط «بيانات محفوظة». */
+async function readCached(key, fetcher, fallback = []) {
+  if (!isOnline()) {
+    const hit = cacheRead(key);
+    return { data: hit ?? fallback, fromCache: hit !== null };
+  }
+  try {
+    const data = await withTimeout(fetcher(), CACHE_TTL_MS);
+    cacheWrite(key, data);
+    return { data, fromCache: false };
+  } catch (err) {
+    const hit = cacheRead(key);
+    if (hit !== null) return { data: hit, fromCache: true };
+    throw err;
+  }
+}
 
 // ── State ─────────────────────────────────────────────────────────────────
 const S = {
@@ -38,6 +74,7 @@ const S = {
   excusePhotoDataUri: null,
   activeSemester: 1,
   activeView: 'att',
+  userId: null,       // معرّف الوليّ — يدخل في مفاتيح المخبأ (هاتف العائلة مشترَك)
 };
 
 // ── DOM Refs ──────────────────────────────────────────────────────────────
@@ -82,6 +119,19 @@ const viewGrades   = $('view-grades');
 const viewCalendar = $('view-calendar');
 const viewMore     = $('view-more');
 const allViews     = [viewAtt, viewGrades, viewCalendar, viewMore];
+
+// Student summary card
+const stuCard      = $('stu-card');
+const stuAvatar    = $('stu-avatar');
+const stuName      = $('stu-name');
+const stuMeta      = $('stu-meta');
+const stuAttPct    = $('stu-att-pct');
+const stuAbsTotal  = $('stu-abs-total');
+const stuExcTotal  = $('stu-exc-total');
+const stuWarn      = $('stu-warn');
+const stuWarnText  = $('stu-warn-text');
+const stuWarnCount = $('stu-warn-count');
+const stuWarnFill  = $('stu-warn-fill');
 
 // Attendance
 const monthCalendar = $('month-calendar');
@@ -152,9 +202,31 @@ const toastsContainer = $('toasts');
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function showScreen(name) {
+  removeBootSplash();               // أوّل شاشة حقيقية تُزيل مؤشّر الإقلاع
   scrLogin.hidden = name !== 'login';
   scrOtp.hidden   = name !== 'otp';
   scrApp.hidden   = name !== 'app';
+}
+
+/* مؤشّر إقلاع يمنع وميض شاشة الدخول قبل حسم الجلسة: parentRestoreSession قد
+   تستغرق ثوانيَ على شبكة «متصلة لكن ميتة»، وكانت شاشة الدخول تظهر خلالها ثمّ
+   تُستبدَل باللوحة. يُنشأ من JS فقط، فلو تعذّر السكربت تبقى شاشة الدخول كتراجُع. */
+function showBootSplash() {
+  scrLogin.hidden = true;
+  let el = document.getElementById('boot-splash');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'boot-splash';
+    el.setAttribute('style',
+      'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;' +
+      'background:var(--clr-bg,#f0f4fa);z-index:9999');
+    el.innerHTML = '<div class="spinner spinner-lg"></div>';
+    document.body.appendChild(el);
+  }
+  el.hidden = false;
+}
+function removeBootSplash() {
+  document.getElementById('boot-splash')?.remove();
 }
 
 function showView(name) {
@@ -168,13 +240,51 @@ function showView(name) {
   });
 }
 
+const _activeToasts = new Map();
+
 function toast(msg, type = 'info', duration = 3000) {
+  // تكرارُ نفس الرسالة يزيد عدّاداً على البطاقة القائمة بدل تكديس بطاقاتٍ تغطّي
+  // الشاشة (ضغطُ زرٍّ مرّاتٍ متتالية كان يملأ الشاشة برسائل متطابقة).
+  const key = type + ':' + msg;
+  const existing = _activeToasts.get(key);
+  if (existing) {
+    existing.count++;
+    existing.badge.textContent = '×' + existing.count;
+    existing.badge.hidden = false;
+    clearTimeout(existing.timer);
+    existing.timer = setTimeout(() => dismissToast(key), duration);
+    return existing.el;
+  }
   const el = document.createElement('div');
   el.className = `toast toast--${type}`;
-  el.textContent = msg;
+  const span = document.createElement('span');
+  span.textContent = msg;
+  el.appendChild(span);
+  const badge = document.createElement('span');
+  badge.className = 'toast-badge';
+  badge.hidden = true;
+  el.appendChild(badge);
   toastsContainer.appendChild(el);
-  setTimeout(() => el.remove(), duration);
+  const timer = setTimeout(() => dismissToast(key), duration);
+  _activeToasts.set(key, { el, badge, count: 1, timer });
+  return el;
 }
+
+function dismissToast(key) {
+  const entry = _activeToasts.get(key);
+  if (!entry) return;
+  clearTimeout(entry.timer);
+  _activeToasts.delete(key);
+  entry.el.remove();
+}
+
+// ── شريط انعدام الاتصال ───────────────────────────────────────────────────
+const offlineBar = $('offline-bar');
+function refreshOfflineBar() {
+  if (offlineBar) offlineBar.hidden = isOnline();
+}
+window.addEventListener('online',  refreshOfflineBar);
+window.addEventListener('offline', refreshOfflineBar);
 
 function setBusy(spinEl, labelEl, busy) {
   spinEl.hidden = !busy;
@@ -337,13 +447,28 @@ async function loadApp() {
   }
   window.RUQI_PERMISSIONS.applyToDom();
 
+  refreshOfflineBar();
+  // بذرة التاريخ: التبويب الافتراضي عمقه صفر، فأيّ تنقّلٍ بعده يُدفع فوقه
+  // ويعيده زرُّ الرجوع بدل الخروج من البوّابة.
+  history.replaceState({ view: S.activeView, d: 0 }, '', '#' + S.activeView);
+  _navDepth = 0;
+
+  // مفاتيح المخبأ تحمل معرّف الوليّ: هاتف العائلة قد يتناوب عليه وليّان، وبلا
+  // ذلك يرى الثاني أسماء أبناء الأوّل أوفلاين قبل وصول بياناته.
   try {
-    const students = await parentGetMyStudents();
+    const sess = await withTimeout(parentRestoreSession(), 4000);
+    S.userId = sess?.user?.id ?? null;
+  } catch { /* يبقى null — المفاتيح تصير محايدة */ }
+
+  try {
+    const { data: students, fromCache } =
+      await readCached(`nsams_pstu_${S.userId ?? 'anon'}`, parentGetMyStudents);
     S.students = students;
     if (!students.length) {
       noStudents.hidden = false;
       return;
     }
+    if (fromCache) toast('تُعرض بيانات محفوظة على الجهاز', 'info');
     S.activeIdx = 0;
     S.activeStudent = students[0];
     renderChildrenBar();
@@ -423,6 +548,7 @@ async function loadActiveStudentData() {
     S.viewMonth = new Date();
     await Promise.allSettled([
       loadAttendanceForMonth(),
+      loadStudentSummary(),
       loadSchoolInfo(),
     ]);
     showView(S.activeView);
@@ -433,18 +559,98 @@ async function loadActiveStudentData() {
   }
 }
 
+// ── بطاقة ملخّص الطالب ────────────────────────────────────────────────────
+/* ⚠️ حدود الغياب مبدئية وتحتاج إقرار الوزارة قبل الاعتماد الرسمي. وُضعت في
+   جدولٍ واحد ليُعدَّل رقمٌ واحد لكلّ مرحلة حين يصدر القرار، بلا لمس المنطق. */
+const ABSENCE_LIMITS = { primary: 15, lower: 15, upper: 20, default: 15 };
+
+function stageOf(grade) {
+  const g = parseInt(grade, 10);
+  if (!Number.isFinite(g)) return 'default';
+  if (g <= 6) return 'primary';   // الحلقة الأولى
+  if (g <= 9) return 'lower';     // الحلقة الثانية
+  return 'upper';                 // الثانوي
+}
+
+function daysAr(n) {
+  if (n === 1) return 'يوم واحد';
+  if (n === 2) return 'يومان';
+  if (n >= 3 && n <= 10) return n + ' أيام';
+  return n + ' يوماً';
+}
+
+async function loadStudentSummary() {
+  const stu = S.activeStudent;
+  if (!stu) return;
+
+  // الهوية — كانت مجلوبةً من قاعدة البيانات ولا تُعرض أبداً: الوليّ لم يكن يعرف
+  // حتى في أيّ صفٍّ ابنُه.
+  stuName.textContent   = stu.full_name || 'طالب';
+  stuAvatar.textContent = (stu.full_name || '؟').trim().charAt(0);
+  const bits = [];
+  if (stu.class?.name)      bits.push(stu.class.name);
+  else if (stu.class?.grade) bits.push('الصف ' + stu.class.grade);
+  if (stu.class?.section)   bits.push('شعبة ' + stu.class.section);
+  if (stu.school?.name)     bits.push(stu.school.name);
+  stuMeta.textContent = bits.join(' · ');
+  stuCard.hidden = false;
+
+  const year = getAcademicYear ? getAcademicYear() : getCurrentAcademicYear();
+  let rows = [];
+  try {
+    const { data } = await readCached(`nsams_patt_${stu.id}_Y${year}`,
+      () => parentGetStudentAttendanceYear(stu.id, year));
+    rows = data ?? [];
+  } catch { rows = []; }
+
+  const c = { present: 0, absent: 0, excused: 0, late: 0 };
+  rows.forEach(r => { if (c[r.status] !== undefined) c[r.status]++; });
+  const recorded = c.present + c.absent + c.excused + c.late;
+  const attended = c.present + c.late;
+
+  if (recorded) {
+    const pct = Math.round(attended / recorded * 100);
+    stuAttPct.textContent = pct + '%';
+    stuAttPct.className = 'stu-stat-val ' +
+      (pct >= 90 ? 'val-present' : pct >= 75 ? 'val-late' : 'val-absent');
+  } else {
+    stuAttPct.textContent = '—';
+    stuAttPct.className = 'stu-stat-val';
+  }
+  stuAbsTotal.textContent = c.absent;
+  stuExcTotal.textContent = c.excused;
+
+  // موقع الابن من حدّ الإنذار — الغياب غير المبرَّر وحده يُحتسب.
+  const limit = ABSENCE_LIMITS[stageOf(stu.class?.grade)] ?? ABSENCE_LIMITS.default;
+  const used  = c.absent;
+  const left  = Math.max(0, limit - used);
+  stuWarnCount.textContent = `${used} / ${limit}`;
+  stuWarnText.textContent  = used >= limit
+    ? 'بلغ حدّ الغياب — يُرجى مراجعة المدرسة'
+    : `يتبقّى ${daysAr(left)} قبل بلوغ حدّ الغياب`;
+  const ratio = limit > 0 ? Math.min(100, Math.round(used / limit * 100)) : 0;
+  stuWarnFill.style.width = ratio + '%';
+  stuWarn.classList.toggle('is-danger', used >= limit);
+  stuWarn.classList.toggle('is-warn',   used < limit && left <= 3);
+  stuWarn.hidden = false;
+}
+
 // ── Attendance ────────────────────────────────────────────────────────────
 async function loadAttendanceForMonth() {
-  const y = S.viewMonth.getFullYear();
-  const m = S.viewMonth.getMonth() + 1;
+  const y   = S.viewMonth.getFullYear();
+  const m   = S.viewMonth.getMonth() + 1;
+  const sid = S.activeStudent.id;
+  const ym  = `${y}-${String(m).padStart(2,'0')}`;
   const [attRows, excuseRows, holidayRows] = await Promise.allSettled([
-    parentGetStudentAttendance(S.activeStudent.id, y, m),
-    parentGetAbsenceExcuses(S.activeStudent.id),
-    S.holidays.length ? Promise.resolve(S.holidays) : parentGetHolidays(y),
+    readCached(`nsams_patt_${sid}_${ym}`, () => parentGetStudentAttendance(sid, y, m)),
+    readCached(`nsams_pexc_${sid}`,       () => parentGetAbsenceExcuses(sid)),
+    S.holidays.length
+      ? Promise.resolve({ data: S.holidays })
+      : readCached(`nsams_phol_${y}`,     () => parentGetHolidays(y)),
   ]);
-  S.attendance = attRows.value ?? [];
-  S.excuses = excuseRows.value ?? [];
-  if (holidayRows.value) S.holidays = holidayRows.value;
+  S.attendance = attRows.value?.data   ?? [];
+  S.excuses    = excuseRows.value?.data ?? [];
+  if (holidayRows.value?.data) S.holidays = holidayRows.value.data;
   renderMonthCalendar();
 }
 
@@ -547,7 +753,10 @@ async function loadGrades() {
   gradesEmpty.hidden = true;
   try {
     const year = getAcademicYear ? getAcademicYear() : getCurrentAcademicYear();
-    const grades = await parentGetStudentGrades(S.activeStudent.id, year);
+    const sid  = S.activeStudent.id;
+    const { data: grades } = await readCached(
+      `nsams_pgrades_${sid}_${year}`,
+      () => parentGetStudentGrades(sid, year));
     S.allGrades = grades;
     S.grades.s1 = grades.filter(g => g.semester === 1);
     S.grades.s2 = grades.filter(g => g.semester === 2);
@@ -636,7 +845,8 @@ async function loadHolidays() {
   holidaysEmpty.hidden = true;
   try {
     const year = new Date().getFullYear();
-    const holidays = await parentGetHolidays(year);
+    const { data: holidays } = await readCached(
+      `nsams_phol_${year}`, () => parentGetHolidays(year));
     S.holidays = holidays;
     renderHolidays(holidays);
   } catch (err) {
@@ -685,8 +895,11 @@ function loadSchoolInfo() {
 
 async function loadExcuses() {
   if (S.excuses.length || !S.activeStudent) return;
+  const sid = S.activeStudent.id;
   try {
-    S.excuses = await parentGetAbsenceExcuses(S.activeStudent.id);
+    const { data } = await readCached(`nsams_pexc_${sid}`,
+      () => parentGetAbsenceExcuses(sid));
+    S.excuses = data;
   } catch { /* silent */ }
   renderExcuses();
 }
@@ -714,26 +927,77 @@ function renderExcuses() {
   }).join('');
 }
 
-// ── Navigation ────────────────────────────────────────────────────────────
+// ── Navigation + تاريخ المتصفّح ───────────────────────────────────────────
+// بلا هذه الطبقة كان زرّ الرجوع في الجهاز يخرج من البوّابة كلّها من أيّ تبويب
+// أو نافذة — نفس العلّة التي أُصلحت في بوّابتَي المدرسة والمعلّم.
+let _navDepth    = 0;
+let _modalDepth  = 0;
+let _inPopstate  = false;
+let _pendingBack = 0;
+
+function pushModalHistory() {
+  _modalDepth++;
+  _navDepth++;
+  history.pushState({ modal: _modalDepth, d: _navDepth }, '');
+}
+
+/* يُستدعى من كلّ مسار إغلاقٍ للنافذة.
+   • أثناء popstate: يكتفي بتصحيح العدّاد، فالمتصفّح سحب السجلّ أصلاً — بلا هذا
+     الحارس يتراجع التاريخ مرّتين.
+   • خارجه: يسحب السجلّ بنفسه ويُعلِّم الحدثَ الناتج ليُتجاهَل (_pendingBack).
+     بلا هذا التعليم كان إغلاق نافذةٍ فوق أخرى يُغلق الاثنتين: إغلاق «مصدر
+     الصورة» يستدعي history.back فيرى المعالجُ نافذةَ العذر مفتوحةً فيغلقها. */
+function popModalHistory() {
+  if (_inPopstate) { _modalDepth = Math.max(0, _modalDepth - 1); return; }
+  if (_modalDepth > 0) { _modalDepth--; _pendingBack++; history.back(); }
+}
+
+async function navigateToView(view, fromHistory) {
+  showView(view);
+  if (!fromHistory) {
+    _navDepth++;
+    history.pushState({ view, d: _navDepth }, '', '#' + view);
+  }
+  if (view === 'grades' && !S.allGrades.length) await loadGrades();
+  if (view === 'calendar') await loadHolidays();
+  if (view === 'more') { loadSchoolInfo(); await loadExcuses(); renderExcuses(); }
+}
+
 document.querySelectorAll('.nav-btn').forEach(btn => {
-  btn.addEventListener('click', async () => {
-    const view = btn.dataset.view;
-    showView(view);
-    if (view === 'grades' && !S.allGrades.length) await loadGrades();
-    if (view === 'calendar') await loadHolidays();
-    if (view === 'more') { loadSchoolInfo(); await loadExcuses(); renderExcuses(); }
-  });
+  btn.addEventListener('click', () => navigateToView(btn.dataset.view));
+});
+
+window.addEventListener('popstate', e => {
+  _inPopstate = true;
+  try {
+    _navDepth = e.state?.d ?? 0;
+    // حدثٌ ناتج عن إغلاقٍ يدويّ سحبَ السجلّ بنفسه — استُهلك، فلا يُغلق شيئاً آخر.
+    if (_pendingBack > 0) { _pendingBack--; return; }
+    // النافذة المفتوحة فعلياً هي ما يغلقه الرجوع — الأعلى أوّلاً (مصدر الصورة
+    // يُفتح من داخل نافذة العذر فيجب أن يُغلق قبلها).
+    if (!modalPhotoSource.hidden)      { dismissPhotoSourceModal();  return; }
+    if (!modalExcuse.hidden)           { dismissExcuseModal();       return; }
+    if (!modalConfirmLogout.hidden)    { dismissLogoutModal();       return; }
+    const view = e.state?.view;
+    if (view) navigateToView(view, true);
+  } finally {
+    _inPopstate = false;
+  }
 });
 
 // ── Logout ────────────────────────────────────────────────────────────────
+function dismissLogoutModal() {
+  modalConfirmLogout.hidden = true;
+  popModalHistory();
+}
+
 btnLogout.addEventListener('click', () => {
   modalConfirmLogout.hidden = false;
+  pushModalHistory();
 });
-btnConfirmLogoutCancel.addEventListener('click', () => {
-  modalConfirmLogout.hidden = true;
-});
+btnConfirmLogoutCancel.addEventListener('click', dismissLogoutModal);
 modalConfirmLogout.addEventListener('click', e => {
-  if (e.target === modalConfirmLogout) modalConfirmLogout.hidden = true;
+  if (e.target === modalConfirmLogout) dismissLogoutModal();
 });
 btnConfirmLogoutOk.addEventListener('click', async () => {
   modalConfirmLogout.hidden = true;
@@ -775,6 +1039,7 @@ function openExcuseModal(date) {
   photoRemoveBtn.hidden = true;
   photoPreview.src = '';
   modalExcuse.hidden = false;
+  pushModalHistory();
   excuseReason.focus();
 }
 
@@ -784,8 +1049,13 @@ function closeExcuseModal() {
   S.excusePhotoDataUri = null;
 }
 
-btnExcuseCancel.addEventListener('click', closeExcuseModal);
-modalExcuse.addEventListener('click', e => { if (e.target === modalExcuse) closeExcuseModal(); });
+function dismissExcuseModal() {
+  closeExcuseModal();
+  popModalHistory();
+}
+
+btnExcuseCancel.addEventListener('click', dismissExcuseModal);
+modalExcuse.addEventListener('click', e => { if (e.target === modalExcuse) dismissExcuseModal(); });
 
 // Photo Upload
 photoUploadArea.addEventListener('click', () => {
@@ -803,20 +1073,25 @@ photoRemoveBtn.addEventListener('click', e => {
 
 function showPhotoSourceModal() {
   modalPhotoSource.hidden = false;
+  pushModalHistory();
 }
 function hidePhotoSourceModal() {
   modalPhotoSource.hidden = true;
 }
-btnPhotoSourceCancel.addEventListener('click', hidePhotoSourceModal);
-modalPhotoSource.addEventListener('click', e => { if (e.target === modalPhotoSource) hidePhotoSourceModal(); });
+function dismissPhotoSourceModal() {
+  hidePhotoSourceModal();
+  popModalHistory();
+}
+btnPhotoSourceCancel.addEventListener('click', dismissPhotoSourceModal);
+modalPhotoSource.addEventListener('click', e => { if (e.target === modalPhotoSource) dismissPhotoSourceModal(); });
 
 btnUseCamera.addEventListener('click', () => {
-  hidePhotoSourceModal();
+  dismissPhotoSourceModal();
   inputCamera.value = '';
   inputCamera.click();
 });
 btnUseGallery.addEventListener('click', () => {
-  hidePhotoSourceModal();
+  dismissPhotoSourceModal();
   inputGallery.value = '';
   inputGallery.click();
 });
@@ -857,7 +1132,7 @@ formExcuse.addEventListener('submit', async e => {
     const stu = S.activeStudent;
     await parentSubmitAbsenceExcuse(stu.id, stu.school_id, S.excuseDate, reason, photoUrl);
     toast('تم إرسال العذر بنجاح ✓', 'success');
-    closeExcuseModal();
+    dismissExcuseModal();
     // Refresh excuses list
     S.excuses = [];
     S.allGrades = []; // invalidate so next open re-fetches
@@ -873,9 +1148,12 @@ formExcuse.addEventListener('submit', async e => {
 });
 
 // ── Entry ─────────────────────────────────────────────────────────────────
+showBootSplash();
 (async () => {
   try {
-    const session = await parentRestoreSession();
+    // withTimeout: على شبكة «متصلة لكن ميتة» كان استرجاعُ الجلسة يتعلّق فيبقى
+    // الوليّ أمام شاشةٍ ساكنة. بعد المهلة نُعامله كغير مسجَّل ونعرض الدخول.
+    const session = await withTimeout(parentRestoreSession(), 6000);
     if (session) {
       showScreen('app');
       await loadApp();
