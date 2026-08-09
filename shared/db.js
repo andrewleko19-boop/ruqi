@@ -4176,8 +4176,31 @@ async function parentUploadExcusePhoto(dataUri) {
     .from(EXCUSE_BUCKET)
     .upload(path, bytes, { contentType: mime, upsert: false });
   if (error) throw error;
-  const { data } = db.storage.from(EXCUSE_BUCKET).getPublicUrl(path);
-  return data.publicUrl;
+  /* يُعاد المسار لا رابطٌ عامّ: الدلو صار خاصّاً (هجرة 20260809000200) لأنّ
+     الرابط العامّ الدائم يكشف تقريراً طبّياً لقاصر لكلّ من يحصل عليه. القراءة
+     تمرّ بـparentGetExcusePhotoUrl التي توقّع رابطاً موقّتاً. */
+  return path;
+}
+
+/* رابطٌ موقَّتٌ لعرض صورة العذر. يقبل مسار التخزين، ويقبل أيضاً رابطاً عامّاً
+   قديماً كاملاً احتياطاً (الهجرة وحّدت الصفوف، لكنّ مخبأ الجهاز قد يحمل الشكل
+   القديم حتى أوّل تحديث). يعيد null عند تعذّر التوقيع فتُخفي الواجهة الصورة
+   بدل أن تعرض إطاراً مكسوراً. */
+async function parentGetExcusePhotoUrl(stored, ttlSeconds = 300) {
+  if (!stored) return null;
+  const m = /\/excuse-photos\/(.+)$/.exec(stored);
+  const path = (m ? m[1] : stored).replace(/^\/+/, '');
+  if (!path) return null;
+  try {
+    const { data, error } = await db.storage
+      .from(EXCUSE_BUCKET)
+      .createSignedUrl(path, ttlSeconds);
+    if (error) throw error;
+    return data?.signedUrl ?? null;
+  } catch (e) {
+    console.warn('[Ruqi] تعذّر توقيع رابط صورة العذر', e);
+    return null;
+  }
 }
 
 // Canonical HTML escaper for safe interpolation of user/DB text into innerHTML.
@@ -4448,6 +4471,7 @@ window.RUQI_DB = {
   parentSubmitAbsenceExcuse,
   parentResubmitAbsenceExcuse,
   parentUploadExcusePhoto,
+  parentGetExcusePhotoUrl,
 
   // السجل الوطني — المرحلة 2
   lookupNationalStudent,

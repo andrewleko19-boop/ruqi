@@ -18,6 +18,7 @@ const {
   parentSubmitAbsenceExcuse,
   parentResubmitAbsenceExcuse,
   parentUploadExcusePhoto,
+  parentGetExcusePhotoUrl,
   getAcademicYear,
   registerPushSubscription,
   escapeHtml,
@@ -1191,12 +1192,20 @@ function openExcuseModal(date, reuseHistory, excuse) {
   excuseReasonErr.hidden = true;
   excuseSubmitErr.hidden = true;
 
-  // الصورة القائمة تُعرض كما هي؛ إزالتُها تُرسل null فيمحوها الخادم.
+  // الصورة القائمة تُعرض برابطٍ موقَّت (الدلو خاصّ)؛ إزالتُها تُرسل null فيمحوها
+  // الخادم. التوقيع غير متزامن، والحارس يمنع وصولَ رابطٍ متأخّرٍ إلى نافذةٍ
+  // أُغلقت أو فُتحت على عذرٍ آخر.
   if (excuse?.photo_url) {
-    photoPreview.src = excuse.photo_url;
+    photoPreview.removeAttribute('src');
     photoPreview.hidden = false;
     photoPlaceholder.hidden = true;
     photoRemoveBtn.hidden = false;
+    const forId = excuse.id;
+    parentGetExcusePhotoUrl(excuse.photo_url).then(url => {
+      if (S.editingExcuseId !== forId) return;
+      if (url) photoPreview.src = url;
+      else { photoPreview.hidden = true; photoPlaceholder.hidden = false; photoRemoveBtn.hidden = true; }
+    });
   } else {
     photoPreview.hidden = true;
     photoPreview.src = '';

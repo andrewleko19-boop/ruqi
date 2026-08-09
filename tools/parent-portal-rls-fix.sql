@@ -103,9 +103,13 @@ create policy authenticated_read_holidays
   using (true);
 
 -- 5. دلو الصور — ضمان الوجود والسياسات
+-- ⚠️ خاصّ لا عامّ: الصور تقارير طبّية لقاصرين، والرابط العامّ الدائم يفتحها
+--    لكلّ من يحصل عليه بلا تسجيل دخول. القراءة عبر روابط موقّعة وسياساتِ
+--    القراءة في هجرة 20260809000200_private_excuse_photos.sql.
+--    كان هذا السطر يفرض public=true، فإعادةُ تشغيل الملفّ كانت تنقض الهجرة صامتةً.
 insert into storage.buckets (id, name, public)
-values ('excuse-photos', 'excuse-photos', true)
-on conflict (id) do update set public = true;
+values ('excuse-photos', 'excuse-photos', false)
+on conflict (id) do update set public = false;
 
 drop policy if exists parent_upload_excuse_photos on storage.objects;
 create policy parent_upload_excuse_photos
