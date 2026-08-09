@@ -281,14 +281,6 @@
             تقديم عذر
           </button>
         </div>
-        <!-- قائمةُ أيام الغياب الفعلية لا حقلُ تاريخٍ حرّ: الحقل الخام كان يعرض
-             التاريخ مشوّهاً داخل السياق العربيّ، ويسمح باختيار يومٍ لم يغب فيه
-             الابن أو يومٍ له عذرٌ قائم — فيفشل الإرسال بعد كتابة السبب كاملاً. -->
-        <div id="excuse-date-picker-wrap" class="excuse-date-picker-wrap" hidden>
-          <label for="sel-excuse-date" class="field-label">اختر يوم الغياب</label>
-          <select id="sel-excuse-date" class="field-input"></select>
-          <p id="excuse-date-hint" class="excuse-date-hint" hidden></p>
-        </div>
         <div id="excuses-empty" class="empty-msg" hidden>لم تُقدِّم أي أعذار بعد</div>
         <ul id="excuses-list" class="excuses-list" hidden></ul>
       </div>
@@ -399,6 +391,17 @@
 </div>
 
 <!-- ═════════════════════════ مودال اختيار مصدر الصورة ════════════════════════ -->
+<!-- اختيار يوم الغياب — نافذةٌ داخل التطبيق لا <select>. القائمة الأصلية كانت
+     تفتح مُنتقي النظام (حوار أندرويد) فتخرج من هوية البوّابة تماماً. -->
+<div id="modal-excuse-date" class="modal-overlay modal-overlay--sm" hidden role="dialog" aria-modal="true" aria-label="اختر يوم الغياب">
+  <div class="modal-sheet modal-sheet--sm">
+    <h2 class="modal-title">اختر يوم الغياب</h2>
+    <p id="excuse-date-hint" class="modal-subtitle"></p>
+    <div id="excuse-date-list" class="date-choice-list"></div>
+    <button type="button" class="btn btn-outline btn-full" id="btn-excuse-date-cancel">إلغاء</button>
+  </div>
+</div>
+
 <div id="modal-photo-source" class="modal-overlay modal-overlay--sm" hidden role="dialog" aria-modal="true" aria-label="اختر مصدر الصورة">
   <div class="modal-sheet modal-sheet--sm">
     <h2 class="modal-title">إرفاق صورة</h2>

@@ -664,6 +664,13 @@ select.field-input option:disabled { color: var(--clr-text-3); }
   position: relative;
   z-index: 18;
 }
+/* السحب السالب أعلاه يخصّ البطاقة الأولى وحدها — يُدخلها تحت انحناء الرأس.
+   وهو ينطبق على كلّ بطاقةٍ في القسم، فكانت البطاقة الثانية تُسحب 28px داخل
+   التي قبلها وتتداخل معها. أيّ بطاقةٍ تالية تأخذ فاصلاً موجباً بدل السحب. */
+.status-card-mockup + .status-card-mockup {
+  margin-top: 16px;
+  z-index: auto;
+}
 .csub-row[hidden] { display: none; }
 
 .status-header-row {
@@ -2441,12 +2448,20 @@ select.csel-native {
   display: flex; align-items: center; justify-content: center;
 }
 
+/* شبكةٌ لا التفافٌ حرّ: بالالتفاف كانت «الكل» تسقط وحدها في سطرٍ ثانٍ فتبدو
+   زلّةً لا تصميماً. صفّان متساويان مهما طالت التسميات. */
 .excuses-filter {
-  display: flex; flex-wrap: wrap; gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
   margin: 12px 0 10px;
 }
+@media (min-width: 560px) {
+  .excuses-filter { grid-template-columns: repeat(4, 1fr); }
+}
 .excuses-filter-btn {
-  padding: 6px 12px;
+  padding: 7px 10px;
+  text-align: center;
   border: 1px solid #e2e8f0;
   border-radius: 999px;
   background: #fff; color: #475569;

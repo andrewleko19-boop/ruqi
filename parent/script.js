@@ -173,9 +173,10 @@ const schoolPhoneLink     = $('school-phone-link');
 const excusesEmpty        = $('excuses-empty');
 const excusesList         = $('excuses-list');
 const btnNewExcuseMore    = $('btn-new-excuse-more');
-const excuseDatePickerWrap = $('excuse-date-picker-wrap');
-const selExcuseDate       = $('sel-excuse-date');
+const modalExcuseDate     = $('modal-excuse-date');
+const excuseDateList      = $('excuse-date-list');
 const excuseDateHint      = $('excuse-date-hint');
+const btnExcuseDateCancel = $('btn-excuse-date-cancel');
 
 // Logout Confirm Modal
 const modalConfirmLogout     = $('modal-confirm-logout');
@@ -1152,6 +1153,7 @@ window.addEventListener('popstate', e => {
     // يُفتح من داخل نافذة العذر فيجب أن يُغلق قبلها).
     if (!modalPhotoSource.hidden)      { dismissPhotoSourceModal();  return; }
     if (!modalExcuse.hidden)           { dismissExcuseModal();       return; }
+    if (!modalExcuseDate.hidden)       { dismissExcuseDateModal();   return; }
     if (!modalDay.hidden)              { dismissDayModal();          return; }
     if (!modalConfirmLogout.hidden)    { dismissLogoutModal();       return; }
     const view = e.state?.view;
@@ -1200,33 +1202,41 @@ function eligibleExcuseDates() {
 
 btnNewExcuseMore.addEventListener('click', () => {
   const dates = eligibleExcuseDates();
-  excuseDatePickerWrap.hidden = false;
 
   if (!dates.length) {
-    selExcuseDate.hidden = true;
-    excuseDateHint.hidden = false;
     // التمييز مهمّ: «لا غياب» و«كلّ غياباتك مُغطّاة» حالتان مختلفتان تماماً.
     excuseDateHint.textContent = S.excuses.length
       ? 'كلّ أيام الغياب المسجَّلة قُدِّم عنها عذر. لتعديل عذرٍ مرفوض استخدم زرّ «تعديل وإعادة التقديم» في بطاقته.'
       : 'لا توجد أيام غياب مسجَّلة على ابنك حتى الآن.';
-    return;
+    excuseDateList.innerHTML = '';
+  } else {
+    excuseDateHint.textContent = 'أيام الغياب المسجَّلة التي لم يُقدَّم عنها عذر بعد.';
+    excuseDateList.innerHTML = dates.map(d =>
+      `<button type="button" class="date-choice" data-date="${escapeHtml(d)}">
+         <span class="date-choice-label">${escapeHtml(formatDate(d))}</span>
+         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+       </button>`).join('');
   }
 
-  selExcuseDate.hidden  = false;
-  excuseDateHint.hidden = false;
-  excuseDateHint.textContent = 'تُعرض أيام الغياب المسجَّلة التي لم يُقدَّم عنها عذر بعد.';
-  selExcuseDate.innerHTML =
-    '<option value="">— اختر اليوم —</option>' +
-    dates.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(formatDate(d))}</option>`).join('');
-  selExcuseDate.value = '';
-  selExcuseDate.focus();
+  modalExcuseDate.hidden = false;
+  pushModalHistory();
 });
 
-selExcuseDate.addEventListener('change', () => {
-  const d = selExcuseDate.value;
-  if (!d) return;
-  excuseDatePickerWrap.hidden = true;
-  openExcuseModal(d);
+function closeExcuseDateModal() { modalExcuseDate.hidden = true; }
+function dismissExcuseDateModal() { closeExcuseDateModal(); popModalHistory(); }
+
+btnExcuseDateCancel.addEventListener('click', dismissExcuseDateModal);
+modalExcuseDate.addEventListener('click', e => {
+  if (e.target === modalExcuseDate) dismissExcuseDateModal();
+});
+
+/* الانتقال يُسلّم نافذةَ العذر سجلَّ التاريخ نفسه بدل سحبٍ ثمّ دفعٍ فوريّ —
+   نفس علّة السباق الموثّقة في زرّ «تقديم عذر» ببطاقة اليوم. */
+excuseDateList.addEventListener('click', e => {
+  const btn = e.target.closest('.date-choice');
+  if (!btn) return;
+  closeExcuseDateModal();
+  openExcuseModal(btn.dataset.date, true);
 });
 
 // ── Excuse Modal ──────────────────────────────────────────────────────────

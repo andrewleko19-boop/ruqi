@@ -757,24 +757,6 @@ input, textarea, select { font-family: inherit; }
 }
 .btn-submit-excuse svg { width: 15px; height: 15px; flex-shrink: 0; }
 
-/* ── Excuse Date Picker Wrap ────────────────────────────────────────────── */
-.excuse-date-picker-wrap {
-  background: var(--clr-surface); border-radius: var(--radius-md);
-  padding: 14px 16px; box-shadow: var(--shadow-sm);
-  border: 1.5px solid var(--clr-border);
-  display: flex; flex-direction: column; gap: 8px;
-}
-.excuse-date-picker-wrap .field-label { margin-bottom: 0; }
-/* Native date inputs render their value LTR; inside the RTL page the day/month/
-   year segments get reordered into a garbled string. Isolate the bidi context
-   and pin the field (and its internal edit fields) to LTR so it reads dd/mm/yyyy. */
-#inp-excuse-date {
-  direction: ltr;
-  unicode-bidi: isolate;
-  text-align: left;
-}
-#inp-excuse-date::-webkit-datetime-edit { direction: ltr; unicode-bidi: isolate; text-align: left; }
-
 /* ── Children Pills (active is clearer) ─────────────────────────────────── */
 .child-pill.active {
   background: var(--clr-primary); color: #fff; border-color: var(--clr-primary);
@@ -840,10 +822,27 @@ input, textarea, select { font-family: inherit; }
 }
 .push-banner-close:hover { color: var(--clr-text); }
 
-/* تلميح مُنتقي يوم الغياب — يشرح لماذا القائمة قصيرة أو فارغة */
-.excuse-date-hint {
-  margin: 6px 0 0;
-  font-size: .78rem;
-  line-height: 1.6;
-  color: #64748b;
+/* ── مُنتقي يوم الغياب ─────────────────────────────────────────────────────
+   نافذةٌ داخل التطبيق بدل <select>: الأخيرة تفتح حوار النظام في أندرويد
+   فتخرج من هوية البوّابة، وتعرض التاريخ بترتيبٍ مشوّه في السياق العربيّ. */
+.date-choice-list {
+  display: flex; flex-direction: column; gap: 8px;
+  margin: 14px 0 16px;
+  max-height: 46dvh; overflow-y: auto;
 }
+.date-choice {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%;
+  padding: 13px 14px;
+  border: 1.5px solid var(--clr-border);
+  border-radius: var(--radius-md);
+  background: var(--clr-surface);
+  font-family: inherit; font-size: .9rem; font-weight: 600;
+  color: var(--clr-text);
+  text-align: start;
+  transition: all var(--transition);
+}
+.date-choice:hover  { border-color: var(--clr-primary); color: var(--clr-primary); background: var(--clr-primary-lt); }
+.date-choice:active { transform: scale(.985); }
+.date-choice svg { width: 17px; height: 17px; flex-shrink: 0; opacity: .5; }
+.date-choice-label { min-width: 0; }
