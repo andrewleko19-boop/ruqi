@@ -230,6 +230,16 @@ input, textarea, select { font-family: inherit; }
 .app-header .btn-icon { color: rgba(255,255,255,.8); }
 .app-header .btn-icon:hover { background: rgba(255,255,255,.15); }
 
+/* ── شريط انعدام الاتصال ────────────────────────────────────────────────── */
+.offline-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px;
+  background: var(--clr-warn-lt); color: #92400e;
+  border-bottom: 1px solid #fcd9a8;
+  font-size: .8rem; font-weight: 600;
+}
+.offline-bar svg { width: 16px; height: 16px; flex-shrink: 0; }
+
 /* ── Children Bar ───────────────────────────────────────────────────────── */
 .children-bar {
   background: var(--clr-surface);
@@ -297,6 +307,57 @@ input, textarea, select { font-family: inherit; }
   font-size: 1rem; font-weight: 700; color: var(--clr-primary); margin-bottom: 4px;
 }
 
+/* ── بطاقة ملخّص الطالب ─────────────────────────────────────────────────── */
+.stu-card {
+  background: var(--clr-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.stu-card-head { display: flex; align-items: center; gap: 12px; }
+.stu-avatar {
+  width: 46px; height: 46px; border-radius: 50%;
+  background: var(--clr-primary-lt); color: var(--clr-primary);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.25rem; font-weight: 800; flex-shrink: 0;
+}
+.stu-ident { min-width: 0; }
+.stu-name {
+  font-size: 1.05rem; font-weight: 800; color: var(--clr-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.stu-meta {
+  font-size: .8rem; color: var(--clr-muted); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.stu-stats {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  border-top: 1px solid var(--clr-border); padding-top: 12px;
+}
+.stu-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.stu-stat-val { font-size: 1.2rem; font-weight: 800; line-height: 1.1; }
+.stu-stat-lbl { font-size: .72rem; color: var(--clr-muted); font-weight: 600; }
+
+/* شريط الاقتراب من حدّ الغياب — يتلوّن تدرّجاً كي يُقرأ قبل قراءة الرقم. */
+.stu-warn { display: flex; flex-direction: column; gap: 6px; }
+.stu-warn-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: .78rem; font-weight: 700; color: var(--clr-muted);
+}
+.stu-warn-count { font-variant-numeric: tabular-nums; color: var(--clr-text); }
+.stu-warn-track {
+  height: 7px; border-radius: 4px; background: #e2e8f0; overflow: hidden;
+}
+.stu-warn-fill {
+  height: 100%; width: 0; border-radius: 4px;
+  background: var(--clr-present); transition: width var(--transition);
+}
+.stu-warn.is-warn   .stu-warn-fill { background: var(--clr-late); }
+.stu-warn.is-warn   .stu-warn-head { color: #92400e; }
+.stu-warn.is-danger .stu-warn-fill { background: var(--clr-absent); }
+.stu-warn.is-danger .stu-warn-head { color: var(--clr-absent); }
+
 /* ── Month Nav ──────────────────────────────────────────────────────────── */
 .month-nav {
   display: flex; align-items: center; justify-content: space-between;
@@ -335,13 +396,20 @@ input, textarea, select { font-family: inherit; }
   overflow: hidden; white-space: nowrap;
 }
 .cal-days { display: grid; grid-template-columns: repeat(7, 1fr); }
+/* الخليّة زرٌّ فعليّ: كامل مساحتها هدف لمسٍ يفتح تفاصيل اليوم. */
 .cal-day {
   border: .5px solid var(--clr-border);
   min-height: 42px; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 3px;
   padding: 4px 2px;
+  background: none; font: inherit; color: inherit;
+  width: 100%; cursor: pointer;
+  transition: background var(--transition);
 }
-.cal-day--empty { background: #f9fafb; }
+.cal-day:hover:not(.cal-day--empty) { background: var(--clr-primary-lt); }
+.cal-day:active:not(.cal-day--empty) { background: #dbeafe; }
+.cal-day:focus-visible { outline: 2px solid var(--clr-primary); outline-offset: -2px; }
+.cal-day--empty { background: #f9fafb; cursor: default; }
 .cal-day--today .cal-day-num { font-weight: 900; text-decoration: underline; }
 .cal-day--weekend { background: #fafafa; }
 .cal-day-num { font-size: .8rem; color: var(--clr-text); }
@@ -359,11 +427,32 @@ input, textarea, select { font-family: inherit; }
 .cal-day--has-excuse .cal-day-dot--absent {
   box-shadow: none; background: var(--clr-excused);
 }
-.cal-day-excuse-btn {
+/* علامة «يحتاج عذراً» — بصريّة فقط، والإجراء داخل بطاقة تفاصيل اليوم. */
+.cal-day-flag {
   font-size: .62rem; color: var(--clr-danger); font-weight: 700;
   background: rgba(192,57,43,.08); border-radius: 4px;
-  padding: 1px 3px; cursor: pointer; border: none;
-  line-height: 1.3;
+  padding: 1px 3px; line-height: 1.3;
+}
+
+/* ── بطاقة تفاصيل اليوم ─────────────────────────────────────────────────── */
+.day-badge {
+  align-self: center;
+  padding: 6px 14px; border-radius: 20px;
+  font-size: .85rem; font-weight: 700;
+  background: #f1f5f9; color: var(--clr-muted);
+}
+.day-badge--present { background: #e8f8f0; color: var(--clr-present); }
+.day-badge--absent  { background: var(--clr-danger-lt); color: var(--clr-absent); }
+.day-badge--excused { background: #eaf3fa; color: var(--clr-excused); }
+.day-badge--late    { background: var(--clr-warn-lt); color: #92400e; }
+.day-badge--holiday { background: #f4ecf9; color: #7d3c98; }
+
+.day-rows { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+.day-row { display: flex; flex-direction: column; gap: 2px; }
+.day-row dt { font-size: .74rem; font-weight: 700; color: var(--clr-muted); }
+.day-row dd {
+  font-size: .875rem; color: var(--clr-text); line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 /* ── Attendance Summary ─────────────────────────────────────────────────── */
@@ -461,6 +550,11 @@ input, textarea, select { font-family: inherit; }
 .excuse-body { flex: 1; min-width: 0; }
 .excuse-date { font-size: .8rem; color: var(--clr-muted); margin-bottom: 2px; }
 .excuse-reason { font-size: .9rem; color: var(--clr-text); word-break: break-word; }
+.excuse-note {
+  font-size: .78rem; color: var(--clr-muted); margin-top: 4px;
+  padding-inline-start: 8px; border-inline-start: 2px solid var(--clr-border);
+  word-break: break-word;
+}
 .excuse-status-label {
   font-size: .75rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;
 }
@@ -544,11 +638,20 @@ input, textarea, select { font-family: inherit; }
   pointer-events: none;
 }
 .toast {
+  display: flex; align-items: center; gap: 10px;
   padding: 12px 16px; border-radius: var(--radius-md);
   font-size: .875rem; font-weight: 600;
   box-shadow: var(--shadow-md);
   animation: toast-in .2s ease;
   pointer-events: auto;
+}
+/* عدّاد التكرار: بديلُ تكديس بطاقاتٍ متطابقة تغطّي الشاشة. */
+.toast-badge {
+  min-width: 20px; height: 20px; border-radius: 10px;
+  background: rgba(0,0,0,.22); color: #fff;
+  font-size: .75rem; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 6px; margin-inline-start: auto; flex-shrink: 0;
 }
 .toast--success { background: #27ae60; color: #fff; }
 .toast--error   { background: var(--clr-danger); color: #fff; }
@@ -582,8 +685,48 @@ input, textarea, select { font-family: inherit; }
 .grades-content {
   border-radius: var(--radius-md);
 }
-.grades-table tbody tr:nth-child(even) td { background: #f9fbfa; }
-.grades-table tbody tr:hover td { background: var(--clr-primary-lt); }
+/* التخطيط المتناوب بصنفٍ لا بـnth-child: صفوف التفصيل المخفيّة تدخل في العدّ
+   فتكسر التناوب. الصنف يُوضع على صفوف المواد وحدها في renderGrades. */
+.grades-table tbody tr.grade-row.is-alt > td { background: #f9fbfa; }
+.grades-table tbody tr.grade-row:hover > td { background: var(--clr-primary-lt); }
+
+/* ── تفصيل درجات المادّة ────────────────────────────────────────────────── */
+.subj-cell { padding: 0 !important; }
+.subj-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; padding: 10px 12px;
+  font: inherit; font-weight: 600; color: inherit; text-align: right;
+  cursor: pointer;
+}
+.subj-toggle:focus-visible { outline: 2px solid var(--clr-primary); outline-offset: -2px; }
+.grade-chev {
+  width: 0; height: 0; flex-shrink: 0;
+  border-inline-start: 4px solid transparent;
+  border-inline-end:   4px solid transparent;
+  border-top: 5px solid var(--clr-muted);
+  transition: transform var(--transition);
+}
+.subj-toggle.is-open .grade-chev { transform: rotate(180deg); }
+
+.grade-detail > td { padding: 0 !important; background: #f8fafc !important; }
+.comp-list {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 14px; margin: 0;
+}
+.comp-item {
+  display: grid; grid-template-columns: 1fr auto; gap: 3px 10px;
+  align-items: center; text-align: right;
+}
+.comp-name { font-size: .8rem; font-weight: 600; color: var(--clr-text); }
+.comp-val  {
+  font-size: .8rem; font-weight: 700; color: var(--clr-muted);
+  font-variant-numeric: tabular-nums;
+}
+.comp-track {
+  grid-column: 1 / -1;
+  height: 5px; border-radius: 3px; background: #e2e8f0; overflow: hidden;
+}
+.comp-fill { display: block; height: 100%; border-radius: 3px; background: var(--clr-primary); }
 
 /* ── Excuses Section Header ─────────────────────────────────────────────── */
 .excuses-section-header {

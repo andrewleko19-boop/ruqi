@@ -107,6 +107,17 @@
     <ul class="children-pills" id="children-pills" role="list" aria-label="الأبناء"></ul>
   </div>
 
+  <!-- ───── شريط انعدام الاتصال ───── -->
+  <div class="offline-bar" id="offline-bar" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+      <line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0119 12.55"/>
+      <path d="M5 12.55a10.94 10.94 0 015.17-2.39"/><path d="M10.71 5.05A16 16 0 0122.58 9"/>
+      <path d="M1.42 9a15.91 15.91 0 014.7-2.88"/><path d="M8.53 16.11a6 6 0 016.95 0"/>
+      <line x1="12" y1="20" x2="12.01" y2="20"/>
+    </svg>
+    <span>لا يوجد اتصال — تُعرض آخر بيانات محفوظة على الجهاز</span>
+  </div>
+
   <!-- ───── شريط تفعيل إشعارات الغياب (مخفي افتراضياً) ───── -->
   <div class="push-banner" id="push-banner" hidden>
     <span class="push-banner-text">فعّل إشعارات الغياب لتصلك تنبيهات فور تسجيل غياب ابنك.</span>
@@ -148,6 +159,40 @@
 
     <!-- ─── شاشة الغيابات ─── -->
     <div id="view-att" class="view" hidden>
+
+      <!-- بطاقة ملخّص الطالب: أوّل ما يراه الوليّ — صفّ ابنه ونسبة حضوره وموقعه
+           من حدّ الإنذار في نظرةٍ واحدة، بلا تنقّلٍ بين التبويبات. -->
+      <section class="stu-card" id="stu-card" hidden aria-label="ملخّص الطالب">
+        <div class="stu-card-head">
+          <div class="stu-avatar" id="stu-avatar" aria-hidden="true"></div>
+          <div class="stu-ident">
+            <div class="stu-name" id="stu-name">—</div>
+            <div class="stu-meta" id="stu-meta"></div>
+          </div>
+        </div>
+        <div class="stu-stats">
+          <div class="stu-stat">
+            <span class="stu-stat-val" id="stu-att-pct">—</span>
+            <span class="stu-stat-lbl">نسبة الحضور</span>
+          </div>
+          <div class="stu-stat">
+            <span class="stu-stat-val val-absent" id="stu-abs-total">—</span>
+            <span class="stu-stat-lbl">أيام الغياب</span>
+          </div>
+          <div class="stu-stat">
+            <span class="stu-stat-val val-excused" id="stu-exc-total">—</span>
+            <span class="stu-stat-lbl">مبرَّر</span>
+          </div>
+        </div>
+        <div class="stu-warn" id="stu-warn" hidden>
+          <div class="stu-warn-head">
+            <span id="stu-warn-text"></span>
+            <span class="stu-warn-count" id="stu-warn-count"></span>
+          </div>
+          <div class="stu-warn-track"><div class="stu-warn-fill" id="stu-warn-fill"></div></div>
+        </div>
+      </section>
+
       <div class="view-header">
         <div class="month-nav">
           <button class="btn-icon" id="btn-prev-month" aria-label="الشهر السابق">
@@ -316,6 +361,23 @@
         </button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ مودال تفاصيل اليوم ═══════════════════════════ -->
+<!-- التقويم كان يعرض نقاطاً ملوّنة فقط: الوليّ يرى أنّ ابنه غاب ولا يعرف السبب
+     ولا حالة العذر. سبب الغياب مجلوبٌ من قاعدة البيانات أصلاً ولم يكن يُعرض. -->
+<div id="modal-day" class="modal-overlay modal-overlay--sm" hidden role="dialog" aria-modal="true" aria-labelledby="day-modal-title">
+  <div class="modal-sheet modal-sheet--sm">
+    <div class="modal-drag-handle"></div>
+    <h2 id="day-modal-title" class="modal-title">تفاصيل اليوم</h2>
+    <p class="modal-subtitle" id="day-date-label"></p>
+    <div class="day-badge" id="day-badge"></div>
+    <dl class="day-rows" id="day-rows" hidden></dl>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-outline" id="btn-day-close">إغلاق</button>
+      <button type="button" class="btn btn-primary" id="btn-day-excuse" hidden>تقديم عذر</button>
+    </div>
   </div>
 </div>
 
