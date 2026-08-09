@@ -328,6 +328,7 @@
     <div class="modal-drag-handle"></div>
     <h2 id="excuse-modal-title" class="modal-title">تقديم عذر غياب</h2>
     <p class="modal-subtitle" id="excuse-date-label"></p>
+    <p class="excuse-reject-note" id="excuse-reject-note" hidden></p>
     <form id="form-excuse" novalidate>
       <div class="field-group">
         <label for="excuse-reason" class="field-label">سبب الغياب <span class="required-star">*</span></label>
@@ -356,7 +357,7 @@
       <div class="modal-actions">
         <button type="button" class="btn btn-outline" id="btn-excuse-cancel">إلغاء</button>
         <button type="submit" class="btn btn-primary" id="btn-excuse-submit">
-          <span class="btn-label">إرسال العذر</span>
+          <span class="btn-label" id="excuse-submit-label">إرسال العذر</span>
           <span class="spinner" id="spin-excuse" hidden></span>
         </button>
       </div>

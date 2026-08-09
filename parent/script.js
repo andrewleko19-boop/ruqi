@@ -16,6 +16,7 @@ const {
   parentGetHolidays,
   parentGetAbsenceExcuses,
   parentSubmitAbsenceExcuse,
+  parentResubmitAbsenceExcuse,
   parentUploadExcusePhoto,
   getAcademicYear,
   registerPushSubscription,
@@ -72,7 +73,10 @@ const S = {
   excuses: [],
   excuseDate: null,   // date being excused (YYYY-MM-DD)
   dayModalDate: null, // اليوم المعروض في بطاقة التفاصيل
+  dayModalExcuse: null, // عذر ذلك اليوم إن وُجد (لتمييز زرّ التعديل)
   excusePhotoDataUri: null,
+  editingExcuseId: null,   // غير null ⇒ وضع تعديل عذرٍ مرفوض لا تقديمٍ جديد
+  excusePhotoUrl: null,    // صورة العذر القائمة عند التعديل (تبقى ما لم تُزَل)
   activeSemester: 1,
   activeView: 'att',
   userId: null,       // معرّف الوليّ — يدخل في مفاتيح المخبأ (هاتف العائلة مشترَك)
@@ -186,6 +190,9 @@ const btnDayExcuse  = $('btn-day-excuse');
 // Excuse Modal
 const modalExcuse      = $('modal-excuse');
 const formExcuse       = $('form-excuse');
+const excuseModalTitle = $('excuse-modal-title');
+const excuseSubmitLabel = $('excuse-submit-label');
+const excuseRejectNote = $('excuse-reject-note');
 const excuseDateLabel  = $('excuse-date-label');
 const excuseReason     = $('excuse-reason');
 const excuseReasonErr  = $('excuse-reason-err');
@@ -670,7 +677,9 @@ function renderMonthCalendar() {
 
   const attMap = {};
   S.attendance.forEach(r => attMap[r.date] = r);
-  const excusedDates = new Set(S.excuses.map(e => e.date));
+  // العذر المرفوض لا يُحتسب عذراً: اليوم يعود محتاجاً إجراءً، فتظهر علامة
+  // «عذر؟» ويبقى وهجُ الغياب الأحمر بدل أن يبدو اليوم مُسوّىً.
+  const excusedDates = new Set(S.excuses.filter(e => e.status !== 'rejected').map(e => e.date));
   const holidayDates = new Set(
     S.holidays
       .filter(h => { const d = new Date(h.date + 'T00:00:00'); return d.getFullYear() === y && d.getMonth() === m; })
@@ -791,8 +800,13 @@ function openDayModal(iso) {
     `<div class="day-row"><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(String(v))}</dd></div>`).join('');
   dayRows.hidden = rows.length === 0;
 
-  S.dayModalDate  = iso;
-  btnDayExcuse.hidden = !(status === 'absent' && !excuse && !isWeekend && !holiday);
+  S.dayModalDate = iso;
+  S.dayModalExcuse = excuse ?? null;
+  // عذرٌ مرفوض ⇒ طريقٌ للتصحيح بدل طريقٍ مسدود. المقبول والمعلَّق لا إجراء لهما.
+  const canSubmit = status === 'absent' && !excuse && !isWeekend && !holiday;
+  const canEdit   = excuse?.status === 'rejected';
+  btnDayExcuse.hidden = !(canSubmit || canEdit);
+  btnDayExcuse.textContent = canEdit ? 'تعديل العذر' : 'تقديم عذر';
 
   modalDay.hidden = false;
   pushModalHistory();
@@ -809,9 +823,10 @@ modalDay.addEventListener('click', e => { if (e.target === modalDay) dismissDayM
    يختلف بين المتصفّحات. بإعادة الاستعمال يبقى العمق صحيحاً وزرُّ الرجوع يغلق
    نافذة العذر ويعود للتقويم. */
 btnDayExcuse.addEventListener('click', () => {
-  const iso = S.dayModalDate;
+  const iso     = S.dayModalDate;
+  const rejected = S.dayModalExcuse?.status === 'rejected' ? S.dayModalExcuse : null;
   closeDayModal();
-  openExcuseModal(iso, true);
+  openExcuseModal(iso, true, rejected);
 });
 
 // ── Grades ────────────────────────────────────────────────────────────────
@@ -1033,12 +1048,23 @@ function renderExcuses() {
         <div class="excuse-date">${escapeHtml(formatDate(e.date))}</div>
         <div class="excuse-reason">${escapeHtml(e.reason)}</div>
         ${e.review_note ? `<div class="excuse-note">ردّ المدرسة: ${escapeHtml(e.review_note)}</div>` : ''}
+        ${status === 'rejected'
+          ? `<button type="button" class="excuse-edit-btn" data-excuse-id="${escapeHtml(e.id)}">تعديل وإعادة التقديم</button>`
+          : ''}
       </div>
       <span class="excuse-status-label excuse-status-label--${status}">${escapeHtml(statusLabel[status])}</span>
     </li>
   `;
   }).join('');
 }
+
+// تفويضٌ على القائمة الثابتة — محتواها يُعاد رسمه مع كلّ تحديث.
+excusesList.addEventListener('click', e => {
+  const btn = e.target.closest('.excuse-edit-btn');
+  if (!btn) return;
+  const excuse = S.excuses.find(x => x.id === btn.dataset.excuseId);
+  if (excuse) openExcuseModal(excuse.date, false, excuse);
+});
 
 // ── Navigation + تاريخ المتصفّح ───────────────────────────────────────────
 // بلا هذه الطبقة كان زرّ الرجوع في الجهاز يخرج من البوّابة كلّها من أيّ تبويب
@@ -1141,17 +1167,43 @@ inpExcuseDate.addEventListener('change', () => {
 });
 
 // ── Excuse Modal ──────────────────────────────────────────────────────────
-function openExcuseModal(date, reuseHistory) {
+/* excuse مُمرَّرٌ ⇒ وضع تعديل: يُعبَّأ السبب والصورة القائمان، ويُستدعى عند
+   الإرسال مسارُ إعادة التقديم بدل الإدراج. */
+function openExcuseModal(date, reuseHistory, excuse) {
   S.excuseDate = date;
   S.excusePhotoDataUri = null;
-  excuseDateLabel.textContent = 'غياب بتاريخ: ' + formatDate(date);
-  excuseReason.value = '';
+  S.editingExcuseId = excuse?.id ?? null;
+  S.excusePhotoUrl  = excuse?.photo_url ?? null;
+
+  excuseModalTitle.textContent = excuse ? 'تعديل العذر وإعادة تقديمه' : 'تقديم عذر غياب';
+  excuseSubmitLabel.textContent = excuse ? 'إعادة التقديم' : 'إرسال العذر';
+  excuseDateLabel.textContent   = 'غياب بتاريخ: ' + formatDate(date);
+
+  // سببُ الرفض أمام عينَي الوليّ وهو يصحّح — لا في شاشةٍ سابقة يتذكّرها.
+  if (excuse?.review_note) {
+    excuseRejectNote.textContent = 'سبب الرفض: ' + excuse.review_note;
+    excuseRejectNote.hidden = false;
+  } else {
+    excuseRejectNote.hidden = true;
+  }
+
+  excuseReason.value = excuse?.reason ?? '';
   excuseReasonErr.hidden = true;
   excuseSubmitErr.hidden = true;
-  photoPreview.hidden = true;
-  photoPlaceholder.hidden = false;
-  photoRemoveBtn.hidden = true;
-  photoPreview.src = '';
+
+  // الصورة القائمة تُعرض كما هي؛ إزالتُها تُرسل null فيمحوها الخادم.
+  if (excuse?.photo_url) {
+    photoPreview.src = excuse.photo_url;
+    photoPreview.hidden = false;
+    photoPlaceholder.hidden = true;
+    photoRemoveBtn.hidden = false;
+  } else {
+    photoPreview.hidden = true;
+    photoPreview.src = '';
+    photoPlaceholder.hidden = false;
+    photoRemoveBtn.hidden = true;
+  }
+
   modalExcuse.hidden = false;
   if (!reuseHistory) pushModalHistory();
   excuseReason.focus();
@@ -1161,6 +1213,8 @@ function closeExcuseModal() {
   modalExcuse.hidden = true;
   S.excuseDate = null;
   S.excusePhotoDataUri = null;
+  S.editingExcuseId = null;
+  S.excusePhotoUrl = null;
 }
 
 function dismissExcuseModal() {
@@ -1173,12 +1227,14 @@ modalExcuse.addEventListener('click', e => { if (e.target === modalExcuse) dismi
 
 // Photo Upload
 photoUploadArea.addEventListener('click', () => {
-  if (S.excusePhotoDataUri) return; // already has photo, click remove instead
+  // صورةٌ معروضة (جديدة أو قائمة من عذرٍ سابق) ⇒ الإزالة أوّلاً لا الاستبدال.
+  if (S.excusePhotoDataUri || S.excusePhotoUrl) return;
   showPhotoSourceModal();
 });
 photoRemoveBtn.addEventListener('click', e => {
   e.stopPropagation();
   S.excusePhotoDataUri = null;
+  S.excusePhotoUrl = null;     // الإزالة تصل الخادم كـnull فيمحو الصورة القديمة
   photoPreview.hidden = true;
   photoPreview.src = '';
   photoPlaceholder.hidden = false;
@@ -1239,19 +1295,25 @@ formExcuse.addEventListener('submit', async e => {
   setBusy(spinExcuse, btnExcuseSubmit.querySelector('.btn-label'), true);
   btnExcuseSubmit.disabled = true;
   try {
-    let photoUrl = null;
+    // الصورة القائمة تبقى ما لم تُزَل؛ ورفعُ صورةٍ جديدة يَجُبّها.
+    let photoUrl = S.excusePhotoUrl;
     if (S.excusePhotoDataUri) {
       photoUrl = await parentUploadExcusePhoto(S.excusePhotoDataUri);
     }
-    const stu = S.activeStudent;
-    await parentSubmitAbsenceExcuse(stu.id, stu.school_id, S.excuseDate, reason, photoUrl);
-    toast('تم إرسال العذر بنجاح ✓', 'success');
+    if (S.editingExcuseId) {
+      await parentResubmitAbsenceExcuse(S.editingExcuseId, reason, photoUrl);
+      toast('أُعيد تقديم العذر ✓', 'success');
+    } else {
+      const stu = S.activeStudent;
+      await parentSubmitAbsenceExcuse(stu.id, stu.school_id, S.excuseDate, reason, photoUrl);
+      toast('تم إرسال العذر بنجاح ✓', 'success');
+    }
     dismissExcuseModal();
-    // Refresh excuses list
+    // loadAttendanceForMonth يعيد جلب الحضور والأعذار معاً من الشبكة ويحدّث
+    // المخبأ، فلا حاجة لاستدعاء loadExcuses (وحارسُها يمنعها بعده أصلاً).
     S.excuses = [];
-    S.allGrades = []; // invalidate so next open re-fetches
     await loadAttendanceForMonth();
-    if (S.activeView === 'more') await loadExcuses();
+    renderExcuses();
   } catch (err) {
     excuseSubmitErr.textContent = errMessage(err, 'تعذّر إرسال العذر.');
     excuseSubmitErr.hidden = false;

@@ -4148,6 +4148,20 @@ async function parentSubmitAbsenceExcuse(studentId, schoolId, date, reason, phot
   return true;
 }
 
+/* إعادة تقديم عذرٍ رُفِض. عبر RPC لا UPDATE مباشر: قيد unique(student_id,date)
+   يمنع إدراج عذرٍ ثانٍ لليوم نفسه، وسياسةُ UPDATE لا تُثبّت الأعمدة فكان وليّ
+   أمرٍ يملك ابنين يستطيع نقلَ عذرٍ إلى يومٍ أو ابنٍ آخر. الدالّة تعدّل السبب
+   والصورة فقط وتعيد الحالة إلى 'pending'. photoUrl صريح: null يزيل الصورة. */
+async function parentResubmitAbsenceExcuse(excuseId, reason, photoUrl) {
+  const { error } = await db.rpc('parent_resubmit_excuse', {
+    p_excuse_id: excuseId,
+    p_reason:    reason,
+    p_photo_url: photoUrl || null,
+  });
+  if (error) throw error;
+  return true;
+}
+
 async function parentUploadExcusePhoto(dataUri) {
   const m = /^data:([^;]+);base64,(.*)$/s.exec(dataUri);
   if (!m) return dataUri;
@@ -4432,6 +4446,7 @@ window.RUQI_DB = {
   parentGetHolidays,
   parentGetAbsenceExcuses,
   parentSubmitAbsenceExcuse,
+  parentResubmitAbsenceExcuse,
   parentUploadExcusePhoto,
 
   // السجل الوطني — المرحلة 2
