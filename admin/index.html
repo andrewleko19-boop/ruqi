@@ -765,9 +765,16 @@
         </button>
       </div>
       <div id="holiday-modal-error" class="error-msg hidden"></div>
+      <!-- ثلاث خانات لا <input type="date">: الأخير يعرض بترتيب لغة المتصفّح،
+           فيقرأ الشهرَ يوماً على الإنجليزية (mm/dd/yyyy). كُتب 8/12/2026 قاصداً
+           ٨ كانون الأول فحُفظ ١٢ آب — تاريخٌ خاطئ يُحفظ بصمت بلا أيّ تنبيه. -->
       <div class="form-group">
-        <label for="hm-date">التاريخ *</label>
-        <input type="date" id="hm-date" />
+        <label for="hm-day">التاريخ *</label>
+        <div class="date-row">
+          <input id="hm-day"   type="text" inputmode="numeric" maxlength="2" placeholder="يوم"  aria-label="اليوم" />
+          <input id="hm-month" type="text" inputmode="numeric" maxlength="2" placeholder="شهر"  aria-label="الشهر" />
+          <input id="hm-year"  type="text" inputmode="numeric" maxlength="4" placeholder="سنة"  aria-label="السنة" class="date-year" />
+        </div>
       </div>
       <div class="form-group">
         <label for="hm-name">اسم العطلة *</label>

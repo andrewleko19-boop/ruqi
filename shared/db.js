@@ -4101,6 +4101,20 @@ async function parentGetStudentGrades(studentId, academicYear) {
   return data ?? [];
 }
 
+/* درجة السلوك (0..100) — صفٌّ واحد للطالب في العام الدراسيّ. سياسة
+   parent_read_linked_conduct تحصرها بأبناء المستدعي. تعيد null إن لم تُدخَل
+   بعد، فتعرض الواجهة «—» بدل صفرٍ يُقرأ حكماً على الطالب. */
+async function parentGetStudentConduct(studentId, academicYear) {
+  const { data, error } = await db
+    .from('student_conduct')
+    .select('mark')
+    .eq('student_id',    studentId)
+    .eq('academic_year', academicYear)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.mark ?? null;
+}
+
 async function parentRestoreSession() {
   const { data: { session } } = await db.auth.getSession();
   return session ?? null;
@@ -4502,6 +4516,7 @@ window.RUQI_DB = {
   parentGetStudentAttendance,
   parentGetStudentAttendanceYear,
   parentGetStudentGrades,
+  parentGetStudentConduct,
   parentGetHolidays,
   parentGetAbsenceExcuses,
   parentSubmitAbsenceExcuse,
@@ -5115,6 +5130,7 @@ const TENANT_CACHE_PREFIXES = [
   'nsams_pstu_',      // قائمة الأبناء المرتبطين بالوليّ
   'nsams_patt_',      // حضور الابن لشهرٍ بعينه
   'nsams_pgrades_',   // درجات الابن لسنةٍ دراسية
+  'nsams_pcond_',     // درجة سلوك الابن — هاتف العائلة مشترَك، فتُمحى كالبقيّة
   'nsams_pexc_',      // أعذار الغياب المقدَّمة
   'nsams_phol_',      // العطل الرسمية (لا تخصّ طالباً بعينه لكنّها تتبع الجلسة)
 ];

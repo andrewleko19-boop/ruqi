@@ -331,8 +331,12 @@ input, textarea, select { font-family: inherit; }
   font-size: .8rem; color: var(--clr-muted); margin-top: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* خمس إحصاءات: ثلاثٌ في الصفّ على الهاتف الضيّق، وخمسٌ حين يتّسع — بشبكةٍ
+   متجاوبة تلقائياً بدل عددٍ ثابت كان يقصّ البطاقتين الأخيرتين. */
 .stu-stats {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+  gap: 8px 4px;
   border-top: 1px solid var(--clr-border); padding-top: 12px;
 }
 .stu-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
@@ -494,6 +498,9 @@ input, textarea, select { font-family: inherit; }
 }
 .grades-table td { padding: 10px 12px; border-bottom: 1px solid var(--clr-border); text-align: center; }
 .grades-table td:first-child { text-align: right; font-weight: 600; }
+/* الترويسة تتبع محاذاة عمودها: «المادة» كانت في وسط عمودٍ محتواه على اليمين،
+   فتبدو معلّقةً فوق فراغٍ لا فوق أسماء المواد. */
+.grades-table th:first-child { text-align: right; }
 .grades-table tfoot td {
   background: var(--clr-primary-lt); font-weight: 700; color: var(--clr-primary);
   border-bottom: none;
@@ -846,3 +853,15 @@ input, textarea, select { font-family: inherit; }
 .date-choice:active { transform: scale(.985); }
 .date-choice svg { width: 17px; height: 17px; flex-shrink: 0; opacity: .5; }
 .date-choice-label { min-width: 0; }
+
+/* ── شارة الاتصال في الرأس ─────────────────────────────────────────────── */
+.conn-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-inline-start: auto; margin-inline-end: 8px;
+  padding: 5px 11px; border-radius: 999px;
+  font-size: .75rem; font-weight: 600;
+  background: rgba(255,255,255,.18); color: #fff;
+  white-space: nowrap;
+}
+.conn-pill svg { width: 14px; height: 14px; flex-shrink: 0; }
+.conn-pill[data-state="offline"] { background: rgba(0,0,0,.28); opacity: .9; }

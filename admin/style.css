@@ -958,3 +958,14 @@ tbody tr.is-off td:not(.row-actions-cell) { opacity: .5; }
   .perm-chip { padding: 5px; }
   .section-header { padding: 14px; }
 }
+
+/* ── صفّ التاريخ: يوم / شهر / سنة ────────────────────────────────────────
+   ثلاث خانات بدل <input type="date">: الأخير يعرض بترتيب لغة المتصفّح فيقرأ
+   الشهرَ يوماً على الإنجليزية، فيُحفظ تاريخٌ خاطئ بصمت. الترتيب هنا صريحٌ
+   بنائبٍ مكتوب في كلّ خانة، فلا التباس. */
+.date-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.4fr;
+  gap: 8px;
+}
+.date-row input { text-align: center; }

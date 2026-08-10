@@ -166,7 +166,9 @@ const holidayModalError = document.getElementById('holiday-modal-error');
 const holidayModalClose = document.getElementById('holiday-modal-close');
 const holidayModalCancel= document.getElementById('holiday-modal-cancel');
 const holidayModalSave  = document.getElementById('holiday-modal-save');
-const hmDate            = document.getElementById('hm-date');
+const hmDay             = document.getElementById('hm-day');
+const hmMonth           = document.getElementById('hm-month');
+const hmYear            = document.getElementById('hm-year');
 const hmName            = document.getElementById('hm-name');
 const delHolidayModal   = document.getElementById('delete-holiday-modal');
 const delHolidayName    = document.getElementById('del-holiday-name');
@@ -1140,12 +1142,34 @@ async function loadHolidays() {
 }
 
 function openAddHoliday() {
-  hmDate.value = '';
+  hmDay.value = ''; hmMonth.value = ''; hmYear.value = '';
   hmName.value = '';
   clearError(holidayModalError);
   show(holidayModal);
-  hmDate.focus();
+  hmDay.focus();
 }
+
+/* يبني YYYY-MM-DD من الخانات الثلاث، ويتحقّق أنّ اليوم موجودٌ فعلاً في شهره
+   (٣١ شباط يُرفض). يعيد null مع رسالةٍ عند أيّ خلل. */
+function readHolidayDate() {
+  const d = parseInt(hmDay.value,   10);
+  const m = parseInt(hmMonth.value, 10);
+  const y = parseInt(hmYear.value,  10);
+  if (!Number.isInteger(d) || !Number.isInteger(m) || !Number.isInteger(y)) return null;
+  if (m < 1 || m > 12 || d < 1 || d > 31 || y < 2000 || y > 2100) return null;
+  const dt = new Date(y, m - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null;
+  return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+/* الانتقال التلقائي بين الخانات — يوم ⇽ شهر ⇽ سنة، ورقمٌ فقط. */
+[[hmDay, hmMonth], [hmMonth, hmYear]].forEach(([from, to]) => {
+  from.addEventListener('input', () => {
+    from.value = from.value.replace(/[^0-9]/g, '');
+    if (from.value.length >= 2) to.focus();
+  });
+});
+hmYear.addEventListener('input', () => { hmYear.value = hmYear.value.replace(/[^0-9]/g, ''); });
 
 function closeHolidayModal() { hide(holidayModal); }
 holidayModalClose.addEventListener('click', closeHolidayModal);
@@ -1154,9 +1178,9 @@ addHolidayBtn.addEventListener('click', openAddHoliday);
 
 holidayModalSave.addEventListener('click', async () => {
   clearError(holidayModalError);
-  const date = hmDate.value;
+  const date = readHolidayDate();
   const name = hmName.value.trim();
-  if (!date) { showError(holidayModalError, 'التاريخ مطلوب.'); return; }
+  if (!date) { showError(holidayModalError, 'التاريخ غير صالح — أدخل اليوم والشهر والسنة بأرقام صحيحة.'); return; }
   if (!name) { showError(holidayModalError, 'اسم العطلة مطلوب.'); return; }
 
   holidayModalSave.disabled = true;

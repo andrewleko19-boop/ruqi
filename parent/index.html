@@ -95,6 +95,15 @@
       </svg>
       <span class="header-title">بوابة ولي الأمر</span>
     </div>
+    <!-- شارةُ اتصالٍ دائمة كبقيّة البوّابات. كان الشريط التحذيريّ يظهر عند
+         الانقطاع فقط، فلا يعرف الوليّ وهو يقرأ رقماً أهو حيٌّ أم من المخبأ. -->
+    <span class="conn-pill" id="conn-pill" data-state="online">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M5 12.55a11 11 0 0114 0"/><path d="M8.5 16.1a6 6 0 017 0"/>
+        <path d="M2 8.82a15 15 0 0120 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
+      </svg>
+      <span id="conn-pill-text">متصل</span>
+    </span>
     <button type="button" class="btn-icon" id="btn-logout" aria-label="تسجيل الخروج" title="تسجيل الخروج">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
@@ -126,6 +135,48 @@
       <button type="button" class="push-banner-close" id="push-banner-close" aria-label="إغلاق">&times;</button>
     </div>
   </div>
+
+  <!-- بطاقة ملخّص الطالب — خارج التبويبات: هويّةُ الابن ومعدّلُه وسلوكه وحضورُه
+       تخصّ البوّابة كلّها. كانت داخل تبويب الغيابات وحده، فلا يرى الوليّ في
+       الدرجات أو التقويم اسمَ ابنه ولا صفَّه إطلاقاً. -->
+  <section class="stu-card" id="stu-card" hidden aria-label="ملخّص الطالب">
+    <div class="stu-card-head">
+      <div class="stu-avatar" id="stu-avatar" aria-hidden="true"></div>
+      <div class="stu-ident">
+        <div class="stu-name" id="stu-name">—</div>
+        <div class="stu-meta" id="stu-meta"></div>
+      </div>
+    </div>
+    <div class="stu-stats">
+      <div class="stu-stat">
+        <span class="stu-stat-val" id="stu-att-pct">—</span>
+        <span class="stu-stat-lbl">نسبة الحضور</span>
+      </div>
+      <div class="stu-stat">
+        <span class="stu-stat-val" id="stu-avg">—</span>
+        <span class="stu-stat-lbl">المعدّل العام</span>
+      </div>
+      <div class="stu-stat">
+        <span class="stu-stat-val" id="stu-conduct">—</span>
+        <span class="stu-stat-lbl">السلوك</span>
+      </div>
+      <div class="stu-stat">
+        <span class="stu-stat-val val-absent" id="stu-abs-total">—</span>
+        <span class="stu-stat-lbl">أيام الغياب</span>
+      </div>
+      <div class="stu-stat">
+        <span class="stu-stat-val val-excused" id="stu-exc-total">—</span>
+        <span class="stu-stat-lbl">مبرَّر</span>
+      </div>
+    </div>
+    <div class="stu-warn" id="stu-warn" hidden>
+      <div class="stu-warn-head">
+        <span id="stu-warn-text"></span>
+        <span class="stu-warn-count" id="stu-warn-count"></span>
+      </div>
+      <div class="stu-warn-track"><div class="stu-warn-fill" id="stu-warn-fill"></div></div>
+    </div>
+  </section>
 
   <!-- ───── منطقة المحتوى ───── -->
   <main class="app-main" id="app-main">
@@ -159,39 +210,6 @@
 
     <!-- ─── شاشة الغيابات ─── -->
     <div id="view-att" class="view" hidden>
-
-      <!-- بطاقة ملخّص الطالب: أوّل ما يراه الوليّ — صفّ ابنه ونسبة حضوره وموقعه
-           من حدّ الإنذار في نظرةٍ واحدة، بلا تنقّلٍ بين التبويبات. -->
-      <section class="stu-card" id="stu-card" hidden aria-label="ملخّص الطالب">
-        <div class="stu-card-head">
-          <div class="stu-avatar" id="stu-avatar" aria-hidden="true"></div>
-          <div class="stu-ident">
-            <div class="stu-name" id="stu-name">—</div>
-            <div class="stu-meta" id="stu-meta"></div>
-          </div>
-        </div>
-        <div class="stu-stats">
-          <div class="stu-stat">
-            <span class="stu-stat-val" id="stu-att-pct">—</span>
-            <span class="stu-stat-lbl">نسبة الحضور</span>
-          </div>
-          <div class="stu-stat">
-            <span class="stu-stat-val val-absent" id="stu-abs-total">—</span>
-            <span class="stu-stat-lbl">أيام الغياب</span>
-          </div>
-          <div class="stu-stat">
-            <span class="stu-stat-val val-excused" id="stu-exc-total">—</span>
-            <span class="stu-stat-lbl">مبرَّر</span>
-          </div>
-        </div>
-        <div class="stu-warn" id="stu-warn" hidden>
-          <div class="stu-warn-head">
-            <span id="stu-warn-text"></span>
-            <span class="stu-warn-count" id="stu-warn-count"></span>
-          </div>
-          <div class="stu-warn-track"><div class="stu-warn-fill" id="stu-warn-fill"></div></div>
-        </div>
-      </section>
 
       <div class="view-header">
         <div class="month-nav">

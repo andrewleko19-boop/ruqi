@@ -13,6 +13,7 @@ const {
   parentGetStudentAttendance,
   parentGetStudentAttendanceYear,
   parentGetStudentGrades,
+  parentGetStudentConduct,
   parentGetHolidays,
   parentGetAbsenceExcuses,
   parentSubmitAbsenceExcuse,
@@ -135,6 +136,8 @@ const stuMeta      = $('stu-meta');
 const stuAttPct    = $('stu-att-pct');
 const stuAbsTotal  = $('stu-abs-total');
 const stuExcTotal  = $('stu-exc-total');
+const stuAvg       = $('stu-avg');
+const stuConduct   = $('stu-conduct');
 const stuWarn      = $('stu-warn');
 const stuWarnText  = $('stu-warn-text');
 const stuWarnCount = $('stu-warn-count');
@@ -299,9 +302,16 @@ function dismissToast(key) {
 }
 
 // ── شريط انعدام الاتصال ───────────────────────────────────────────────────
-const offlineBar = $('offline-bar');
+const offlineBar   = $('offline-bar');
+const connPill     = $('conn-pill');
+const connPillText = $('conn-pill-text');
 function refreshOfflineBar() {
-  if (offlineBar) offlineBar.hidden = isOnline();
+  const on = isOnline();
+  if (connPill) {
+    connPill.dataset.state = on ? 'online' : 'offline';
+    connPillText.textContent = on ? 'متصل' : 'غير متصل';
+  }
+  if (offlineBar) offlineBar.hidden = on;
 }
 window.addEventListener('online',  refreshOfflineBar);
 window.addEventListener('offline', refreshOfflineBar);
@@ -602,6 +612,60 @@ function daysAr(n) {
   return n + ' يوماً';
 }
 
+/* المعدّل العام + اتجاهه، ودرجة السلوك.
+   الاتجاه يقارن معدّل الفصل الثاني بالأوّل — ولا يظهر ما لم يكتمل الفصلان،
+   فسهمُ هبوطٍ مبنيٌّ على فصلٍ لم تُدخَل درجاتُه كلُّها بعد يُفزع بلا سبب. */
+async function loadAcademicSummary(stu, year) {
+  const sem = { 1: { m: 0, x: 0 }, 2: { m: 0, x: 0 } };
+  try {
+    const { data: grades } = await readCached(
+      `nsams_pgrades_${stu.id}_${year}`, () => parentGetStudentGrades(stu.id, year));
+    (grades ?? []).forEach(g => {
+      const s = sem[g.semester];
+      if (!s) return;
+      s.m += (g.mark ?? 0);
+      s.x += (g.component?.max_mark ?? g.subject?.max_total ?? 0);
+    });
+  } catch { /* البطاقة تبقى بـ«—» */ }
+
+  const totM = sem[1].m + sem[2].m;
+  const totX = sem[1].x + sem[2].x;
+  if (totX > 0) {
+    const pct = Math.round(totM / totX * 100);
+    stuAvg.textContent = pct + '%';
+    stuAvg.className   = 'stu-stat-val ' +
+      (pct >= 75 ? 'val-present' : pct >= 50 ? 'val-late' : 'val-absent');
+
+    if (sem[1].x > 0 && sem[2].x > 0) {
+      const p1 = sem[1].m / sem[1].x * 100;
+      const p2 = sem[2].m / sem[2].x * 100;
+      const d  = Math.round(p2 - p1);
+      // فرقٌ أقلّ من نقطةٍ ليس اتجاهاً — تذبذبُ تقريبٍ لا صعودَ ولا هبوط.
+      if (d >= 1)      stuAvg.textContent = `${pct}% ▲`;
+      else if (d <= -1) stuAvg.textContent = `${pct}% ▼`;
+      stuAvg.title = d === 0 ? 'مستقرّ بين الفصلين'
+        : `${d > 0 ? 'ارتفاع' : 'انخفاض'} ${Math.abs(d)} نقطة عن الفصل الأول`;
+    }
+  } else {
+    stuAvg.textContent = '—';
+    stuAvg.className   = 'stu-stat-val';
+  }
+
+  try {
+    const { data: mark } = await readCached(
+      `nsams_pcond_${stu.id}_${year}`, () => parentGetStudentConduct(stu.id, year));
+    if (mark == null) { stuConduct.textContent = '—'; stuConduct.className = 'stu-stat-val'; }
+    else {
+      stuConduct.textContent = `${mark}/100`;
+      stuConduct.className   = 'stu-stat-val ' +
+        (mark >= 75 ? 'val-present' : mark >= 60 ? 'val-late' : 'val-absent');
+    }
+  } catch {
+    stuConduct.textContent = '—';
+    stuConduct.className   = 'stu-stat-val';
+  }
+}
+
 async function loadStudentSummary() {
   const stu = S.activeStudent;
   if (!stu) return;
@@ -645,6 +709,8 @@ async function loadStudentSummary() {
   }
   stuAbsTotal.textContent = c.absent;
   stuExcTotal.textContent = c.excused;
+
+  loadAcademicSummary(stu, year);
 
   // موقع الابن من حدّ الإنذار — الغياب غير المبرَّر وحده يُحتسب.
   const limit = ABSENCE_LIMITS[stageOf(stu.class?.grade)] ?? ABSENCE_LIMITS.default;
@@ -887,7 +953,12 @@ function renderGrades(semester) {
     bySubject[key].totalMax  += (g.component?.max_mark ?? g.subject?.max_total ?? 0);
   });
 
-  const subjects = Object.values(bySubject).sort((a, b) => a.order - b.order);
+  /* ترتيبٌ حاسم لا يعتمد على ترتيب صفوف الاستعلام: المواد بلا sort_order كانت
+     تتساوى كلُّها عند 99، فيبقى ترتيبُها ترتيبَ ما أعادته قاعدة البيانات — وهو
+     غير مضمون، فيختلف بين الفصلين. المادةُ نفسها كانت تقفز مكانها بين الفصل
+     الأول والثاني أمام وليّ الأمر. الاسم فاصلٌ ثانٍ يثبّت الترتيب دائماً. */
+  const subjects = Object.values(bySubject).sort((a, b) =>
+    (a.order - b.order) || a.name.localeCompare(b.name, 'ar'));
 
   if (!subjects.length) {
     gradesTable.hidden = true;
