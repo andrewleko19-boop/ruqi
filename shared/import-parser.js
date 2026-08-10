@@ -72,6 +72,13 @@
     const nowYear = new Date().getFullYear();
     if (!(yr >= 1900 && yr <= nowYear)) return null;
     if (!(mo >= 1 && mo <= 12) || !(dy >= 1 && dy <= 31)) return null;
+    /* فحص التقويم الحقيقي: «٣١ شباط» يجتاز فحص المدى أعلاه لكنه ليس تاريخاً.
+       بدونه يمرّ الصفّ إلى القاعدة فيفشل الإدراج بخطأ Postgres غامض على الدفعة
+       كلّها، بدل رسالةٍ عربية تشير إلى السطر وتُصلَح في ثانية. */
+    const probe = new Date(Date.UTC(yr, mo - 1, dy));
+    if (probe.getUTCFullYear() !== yr || probe.getUTCMonth() !== mo - 1 || probe.getUTCDate() !== dy) {
+      return null;
+    }
     return `${yr}-${pad2(mo)}-${pad2(dy)}`;
   }
 

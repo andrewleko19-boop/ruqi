@@ -36,9 +36,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      # ⚠️ الإصدار مثبَّتٌ عمداً ولا يُترك على `latest`. مع `latest` يجلب كلُّ تشغيلٍ
+      #    أحدثَ إصدارٍ صدر لتوّه، فإصدارٌ كاسرٌ واحد من Supabase يوقف النشر فجأةً
+      #    دون أن يتغيّر شيءٌ في هذا المستودع — وتشخيصُ عطلٍ كهذا مكلفٌ لأنّ الكود
+      #    نفسه سليم. الترقية تصير قراراً واعياً: بدّل الرقم وراقب التشغيل.
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.113.0
 
       - name: Push migrations
         env:

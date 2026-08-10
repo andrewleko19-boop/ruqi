@@ -1,6 +1,6 @@
 # Ruqi — النظام الوطني لإدارة المدارس
 
-> An offline-first, Arabic (RTL) PWA that connects the four tiers of a national school system — **teacher → school → directorate → ministry** — around one shared source of truth for daily attendance and field reports. Built with vanilla JS, no framework, no build step, on top of Supabase.
+> An offline-first, Arabic (RTL) PWA that connects the four tiers of a national school system — **teacher → school → directorate → ministry** — around one shared source of truth for daily attendance and field reports, with a parent portal on the other side of it and an admin console behind it. Built with vanilla JS, no framework, no build step, on top of Supabase.
 
 <p align="center">
   <img src="docs/screenshots/splash.png" alt="Ruqi splash" width="280">
@@ -19,7 +19,7 @@
 ## 📑 Table of contents
 
 - [What it is](#-what-it-is)
-- [The four portals](#-the-four-portals)
+- [The six portals](#-the-six-portals)
 - [Screenshots](#-screenshots)
 - [Tech stack & decisions](#-tech-stack--decisions)
 - [Architecture at a glance](#-architecture-at-a-glance)
@@ -49,12 +49,12 @@ It is **multi-page by design**: a small landing page routes each kind of user in
 - 🌍 **Arabic-first, RTL** UI (Cairo font), Syria-timezone aware date handling.
 - 📡 **Offline-first:** attendance and reports are written to a local queue first and synced to Supabase when the connection returns — nothing is lost on a dropped link.
 - 🗺️ **Live directorate map** via Leaflet + OpenStreetMap tiles.
-- 📲 **Installable PWA** with a Service Worker app shell (`ruqi-v1`) and a separate auth session per portal.
+- 📲 **Installable PWA** with a versioned Service Worker app shell and a separate auth session per portal.
 - 🔐 **Auth:** Supabase email/password, with per-layer session storage so a school login and a directorate login can coexist on one device.
 
 ---
 
-## 🧭 The four portals
+## 🧭 The six portals
 
 | Portal | Path | Who it's for | What it does |
 |---|---|---|---|
@@ -62,8 +62,10 @@ It is **multi-page by design**: a small landing page routes each kind of user in
 | **School** | `/school/` | School admins | Students, classes, teacher-to-class assignments, daily attendance status, and emergency report submission with photo upload. |
 | **Directorate** | `/directorate/` | Governorate education offices | Map + dashboard of all schools in the directorate: attendance status, today's summary, and the regional report inbox (open / acknowledged / resolved). |
 | **Ministry** | `/ministry/` | Ministry of Education | National dashboard: per-governorate attendance summary and aggregate counts. |
+| **Parent** | `/parent/` | Parents and guardians | Their own children's attendance, grades, conduct and the school calendar; submits an excuse (with a photo of the medical report) for a recorded absence. Signs in by phone + OTP, not email/password. |
+| **Admin** | `/admin/` | System administrators | Provisioning and the module-permission matrix: which role may reach which module in which portal. |
 
-The root `index.html` is just the launcher that links to the four portals.
+The root `index.html` is just the launcher that links to the portals.
 
 ---
 
@@ -199,17 +201,22 @@ The anon key is safe to ship — RLS enforces all access control server-side.
 
 ```
 ruqi/
-├── index.html                 # Landing page — links to the four portals
+├── index.html                 # Landing page — links to the portals
 ├── manifest.json              # PWA manifest (theme, icons, display: standalone)
-├── sw.js                      # Service Worker (network-first nav, SWR assets, ruqi-v1)
+├── sw.js                      # Service Worker (network-first nav, SWR assets, versioned cache)
 ├── shared/
-│   └── db.js                  # Shared data layer: Supabase + auth + offline queues + aggregations
+│   ├── db.js                  # Shared data layer: Supabase + auth + offline queues + aggregations
+│   └── import-parser.js       # Roster import: file reading, header matching, tolerant parsing
 ├── teacher/                   # Teacher portal (index.html / script.js / style.css)
 ├── school/                    # School portal
 ├── directorate/               # Directorate portal (+ Leaflet map)
 ├── ministry/                  # Ministry portal
+├── parent/                    # Parent portal (phone + OTP sign-in)
+├── admin/                     # Admin console (provisioning, module permissions)
 ├── icons/                     # PWA icons (added separately)
-├── tools/                     # CI checks: js-syntax, manifest, versions
+├── tests/                     # Unit tests (node --test) — `npm test`
+├── tools/                     # CI checks: js-syntax, manifest, versions; rls-audit
+├── supabase/                  # Edge Functions + SQL migrations
 ├── .github/workflows/         # CI, deploy, Lighthouse
 └── docs/
     ├── ARCHITECTURE.md        # Deep-dive: sync, aggregation, RLS, threat model

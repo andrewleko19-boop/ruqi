@@ -21,12 +21,14 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      # ⚠️ الإصدار مثبَّتٌ عمداً ولا يُترك على `latest` — انظر التعليق نفسه في
+      #    deploy-migrations.yml. الرقم هنا يجب أن يبقى مطابقاً لما هناك.
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.113.0
         env:
           # Authenticated requests raise GitHub's API limit 60/hr -> 5000/hr,
-          # so resolving the latest CLI release no longer rate-limits.
+          # so downloading the CLI release no longer rate-limits.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Deploy admin-create-user
         run: supabase functions deploy admin-create-user --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --no-verify-jwt

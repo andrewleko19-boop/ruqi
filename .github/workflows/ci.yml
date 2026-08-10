@@ -44,6 +44,9 @@ jobs:
       - name: db.js import/export consistency
         run: node tools/check-db-imports.mjs
 
+      - name: Unit tests
+        run: npm test
+
   edge-functions:
     name: Type-check Supabase Edge Functions (Deno)
     runs-on: ubuntu-latest
