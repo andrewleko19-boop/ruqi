@@ -571,6 +571,9 @@ async function switchChild(idx) {
   // بلا هذا يبقى غيابُ الابن السابق في مُنتقي «تقديم عذر» حتى تنتهي بطاقةُ
   // الملخّص من الجلب — فيُعرض على الوليّ يومُ غيابِ ابنٍ ويُقدَّم عذرٌ لآخر.
   S.yearAttendance = [];
+  S.activeSemester = 1;
+  tabS1.classList.add('tab-active');
+  tabS2.classList.remove('tab-active');
   document.querySelectorAll('.child-pill').forEach((p, i) => p.classList.toggle('active', i === idx));
   await loadActiveStudentData();
 }
@@ -584,7 +587,7 @@ async function loadActiveStudentData() {
       loadStudentSummary(),
       loadSchoolInfo(),
     ]);
-    showView(S.activeView);
+    await navigateToView(S.activeView, true);
   } catch (err) {
     toast('تعذَّر تحميل البيانات', 'error');
   } finally {
