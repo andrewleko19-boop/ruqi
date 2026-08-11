@@ -71,14 +71,14 @@ VALUES
 ON CONFLICT DO NOTHING;
 
 -- حضور يومي (مستوى المدرسة)
-INSERT INTO public.daily_attendance (id, school_id, date, total_students,
-  present_count, absent_count, submitted_by)
+INSERT INTO public.daily_attendance (id, school_id, date,
+  students_present, students_absent, submitted_by)
 VALUES
   ('da000000-0000-0000-0000-00000000000a',
-   'a0000000-0000-0000-0000-00000000000a', CURRENT_DATE, 2, 2, 0,
+   'a0000000-0000-0000-0000-00000000000a', CURRENT_DATE, 2, 0,
    '11111111-1111-1111-1111-111111111111'),
   ('da000000-0000-0000-0000-00000000000b',
-   'b0000000-0000-0000-0000-00000000000b', CURRENT_DATE, 2, 1, 1,
+   'b0000000-0000-0000-0000-00000000000b', CURRENT_DATE, 1, 1,
    '22222222-2222-2222-2222-222222222222')
 ON CONFLICT DO NOTHING;
 

@@ -73,16 +73,19 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
 
 
 
+DO $ruqi_idem$ BEGIN
 CREATE TYPE "public"."report_status" AS ENUM (
     'open',
     'acknowledged',
     'resolved'
 );
+EXCEPTION WHEN duplicate_object THEN NULL; END $ruqi_idem$;
 
 
 ALTER TYPE "public"."report_status" OWNER TO "postgres";
 
 
+DO $ruqi_idem$ BEGIN
 CREATE TYPE "public"."report_type" AS ENUM (
     'security_threat',
     'infrastructure_damage',
@@ -91,11 +94,13 @@ CREATE TYPE "public"."report_type" AS ENUM (
     'teacher_shortage',
     'other'
 );
+EXCEPTION WHEN duplicate_object THEN NULL; END $ruqi_idem$;
 
 
 ALTER TYPE "public"."report_type" OWNER TO "postgres";
 
 
+DO $ruqi_idem$ BEGIN
 CREATE TYPE "public"."student_status" AS ENUM (
     'active',
     'transferred',
@@ -103,11 +108,13 @@ CREATE TYPE "public"."student_status" AS ENUM (
     'graduated',
     'struck_off'
 );
+EXCEPTION WHEN duplicate_object THEN NULL; END $ruqi_idem$;
 
 
 ALTER TYPE "public"."student_status" OWNER TO "postgres";
 
 
+DO $ruqi_idem$ BEGIN
 CREATE TYPE "public"."user_role" AS ENUM (
     'school_admin',
     'directorate_user',
@@ -115,6 +122,7 @@ CREATE TYPE "public"."user_role" AS ENUM (
     'teacher',
     'parent'
 );
+EXCEPTION WHEN duplicate_object THEN NULL; END $ruqi_idem$;
 
 
 ALTER TYPE "public"."user_role" OWNER TO "postgres";
@@ -4424,560 +4432,698 @@ CREATE OR REPLACE VIEW "public"."v_class_daily_summary" AS
 ALTER VIEW "public"."v_class_daily_summary" OWNER TO "postgres";
 
 
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."absence_excuses"
     ADD CONSTRAINT "absence_excuses_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."absence_excuses"
     ADD CONSTRAINT "absence_excuses_student_id_date_key" UNIQUE ("student_id", "date");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."admin_credentials"
     ADD CONSTRAINT "admin_credentials_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."attendance_submissions"
     ADD CONSTRAINT "attendance_submissions_class_id_date_key" UNIQUE ("class_id", "date");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."attendance_submissions"
     ADD CONSTRAINT "attendance_submissions_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."audit_log"
     ADD CONSTRAINT "audit_log_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."class_attendance"
     ADD CONSTRAINT "class_attendance_daily_attendance_id_class_id_key" UNIQUE ("daily_attendance_id", "class_id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."class_attendance"
     ADD CONSTRAINT "class_attendance_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."class_teacher"
     ADD CONSTRAINT "class_teacher_class_teacher_year_key" UNIQUE ("class_id", "teacher_id", "academic_year");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."class_teacher"
     ADD CONSTRAINT "class_teacher_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."classes"
     ADD CONSTRAINT "classes_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."classes"
     ADD CONSTRAINT "classes_school_id_grade_section_academic_year_key" UNIQUE ("school_id", "grade", "section", "academic_year");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."classes"
     ADD CONSTRAINT "classes_school_id_grade_section_key" UNIQUE ("school_id", "grade", "section");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."daily_attendance"
     ADD CONSTRAINT "daily_attendance_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."daily_attendance"
     ADD CONSTRAINT "daily_attendance_school_id_date_key" UNIQUE ("school_id", "date");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."daily_student_attendance"
     ADD CONSTRAINT "daily_student_attendance_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."daily_student_attendance"
     ADD CONSTRAINT "daily_student_attendance_student_id_date_key" UNIQUE ("student_id", "date");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."directorates"
     ADD CONSTRAINT "directorates_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."emergency_reports"
     ADD CONSTRAINT "emergency_reports_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."emergency_reports"
     ADD CONSTRAINT "emergency_reports_receipt_number_key" UNIQUE ("receipt_number");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."grace_proposals"
     ADD CONSTRAINT "grace_proposals_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."grade_pass_rules"
     ADD CONSTRAINT "grade_pass_rules_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."lookup_lists"
     ADD CONSTRAINT "lookup_lists_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."modules"
     ADD CONSTRAINT "modules_pkey" PRIMARY KEY ("key");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."monthly_statement_changes"
     ADD CONSTRAINT "monthly_statement_changes_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."monthly_statement_rosters"
     ADD CONSTRAINT "monthly_statement_rosters_pkey" PRIMARY KEY ("statement_id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."monthly_statements"
     ADD CONSTRAINT "monthly_statements_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."national_staff_registry"
     ADD CONSTRAINT "national_staff_registry_national_id_key" UNIQUE ("national_id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."national_staff_registry"
     ADD CONSTRAINT "national_staff_registry_pkey" PRIMARY KEY ("self_number");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."national_students_registry"
     ADD CONSTRAINT "national_students_registry_pkey" PRIMARY KEY ("national_id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."notifications"
     ADD CONSTRAINT "notifications_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."parent_links"
     ADD CONSTRAINT "parent_links_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."parent_links"
     ADD CONSTRAINT "parent_links_user_id_student_id_key" UNIQUE ("user_id", "student_id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."parent_otps"
     ADD CONSTRAINT "parent_otps_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."periodic_reports"
     ADD CONSTRAINT "periodic_reports_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."push_subscriptions"
     ADD CONSTRAINT "push_subscriptions_endpoint_key" UNIQUE ("endpoint");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."push_subscriptions"
     ADD CONSTRAINT "push_subscriptions_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."registry_lookup_audit"
     ADD CONSTRAINT "registry_lookup_audit_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."result_sheets"
     ADD CONSTRAINT "result_sheets_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."role_module_permissions"
     ADD CONSTRAINT "role_module_permissions_pkey" PRIMARY KEY ("role_key", "module_key");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."school_building"
     ADD CONSTRAINT "school_building_pkey" PRIMARY KEY ("school_id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."school_holidays"
     ADD CONSTRAINT "school_holidays_date_key" UNIQUE ("date");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."school_holidays"
     ADD CONSTRAINT "school_holidays_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."school_personnel"
     ADD CONSTRAINT "school_personnel_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."school_requests"
     ADD CONSTRAINT "school_requests_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."schools"
     ADD CONSTRAINT "schools_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_assignments"
     ADD CONSTRAINT "staff_assignments_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_attendance"
     ADD CONSTRAINT "staff_attendance_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_credentials"
     ADD CONSTRAINT "staff_credentials_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_credentials"
     ADD CONSTRAINT "staff_credentials_username_key" UNIQUE ("username");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_leaves"
     ADD CONSTRAINT "staff_leaves_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_records"
     ADD CONSTRAINT "staff_records_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."student_conduct"
     ADD CONSTRAINT "student_conduct_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."student_conduct"
     ADD CONSTRAINT "student_conduct_student_id_academic_year_key" UNIQUE ("student_id", "academic_year");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."student_grace"
     ADD CONSTRAINT "student_grace_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."student_grades"
     ADD CONSTRAINT "student_grades_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."student_grades"
     ADD CONSTRAINT "student_grades_student_id_component_id_semester_academic_ye_key" UNIQUE ("student_id", "component_id", "semester", "academic_year");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."students"
     ADD CONSTRAINT "students_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."subject_catalog_components"
     ADD CONSTRAINT "subject_catalog_components_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."subject_catalog"
     ADD CONSTRAINT "subject_catalog_name_key" UNIQUE ("name");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."subject_catalog"
     ADD CONSTRAINT "subject_catalog_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."subject_components"
     ADD CONSTRAINT "subject_components_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."subjects"
     ADD CONSTRAINT "subjects_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."sync_state"
     ADD CONSTRAINT "sync_state_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."sync_state"
     ADD CONSTRAINT "sync_state_user_id_device_id_table_name_key" UNIQUE ("user_id", "device_id", "table_name");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."teacher_daily_attendance"
     ADD CONSTRAINT "teacher_daily_attendance_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."teacher_daily_attendance"
     ADD CONSTRAINT "teacher_daily_attendance_teacher_id_date_key" UNIQUE ("teacher_id", "date");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."transfer_documents"
     ADD CONSTRAINT "transfer_documents_pkey" PRIMARY KEY ("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."users"
     ADD CONSTRAINT "users_pkey" PRIMARY KEY ("id");
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+CREATE INDEX IF NOT EXISTS "absence_excuses_photo_url_idx" ON "public"."absence_excuses" USING "btree" ("photo_url") WHERE ("photo_url" IS NOT NULL);
 
 
 
-CREATE INDEX "absence_excuses_photo_url_idx" ON "public"."absence_excuses" USING "btree" ("photo_url") WHERE ("photo_url" IS NOT NULL);
+CREATE INDEX IF NOT EXISTS "absence_excuses_school_date_idx" ON "public"."absence_excuses" USING "btree" ("school_id", "date" DESC);
 
 
 
-CREATE INDEX "absence_excuses_school_date_idx" ON "public"."absence_excuses" USING "btree" ("school_id", "date" DESC);
+CREATE INDEX IF NOT EXISTS "grace_proposals_class_idx" ON "public"."grace_proposals" USING "btree" ("class_id", "academic_year", "status");
 
 
 
-CREATE INDEX "grace_proposals_class_idx" ON "public"."grace_proposals" USING "btree" ("class_id", "academic_year", "status");
+CREATE INDEX IF NOT EXISTS "idx_att_sub_updated" ON "public"."attendance_submissions" USING "btree" ("updated_at") WHERE ("deleted_at" IS NULL);
 
 
 
-CREATE INDEX "idx_att_sub_updated" ON "public"."attendance_submissions" USING "btree" ("updated_at") WHERE ("deleted_at" IS NULL);
+CREATE INDEX IF NOT EXISTS "idx_class_attendance_daily" ON "public"."class_attendance" USING "btree" ("daily_attendance_id");
 
 
 
-CREATE INDEX "idx_class_attendance_daily" ON "public"."class_attendance" USING "btree" ("daily_attendance_id");
+CREATE INDEX IF NOT EXISTS "idx_ct_teacher" ON "public"."class_teacher" USING "btree" ("teacher_id");
 
 
 
-CREATE INDEX "idx_ct_teacher" ON "public"."class_teacher" USING "btree" ("teacher_id");
+CREATE INDEX IF NOT EXISTS "idx_daily_attendance_school" ON "public"."daily_attendance" USING "btree" ("school_id", "date" DESC);
 
 
 
-CREATE INDEX "idx_daily_attendance_school" ON "public"."daily_attendance" USING "btree" ("school_id", "date" DESC);
+CREATE INDEX IF NOT EXISTS "idx_dsa_class_date" ON "public"."daily_student_attendance" USING "btree" ("class_id", "date");
 
 
 
-CREATE INDEX "idx_dsa_class_date" ON "public"."daily_student_attendance" USING "btree" ("class_id", "date");
+CREATE INDEX IF NOT EXISTS "idx_dsa_school_date" ON "public"."daily_student_attendance" USING "btree" ("school_id", "date");
 
 
 
-CREATE INDEX "idx_dsa_school_date" ON "public"."daily_student_attendance" USING "btree" ("school_id", "date");
+CREATE INDEX IF NOT EXISTS "idx_dsa_updated" ON "public"."daily_student_attendance" USING "btree" ("updated_at") WHERE ("deleted_at" IS NULL);
 
 
 
-CREATE INDEX "idx_dsa_updated" ON "public"."daily_student_attendance" USING "btree" ("updated_at") WHERE ("deleted_at" IS NULL);
+CREATE INDEX IF NOT EXISTS "idx_reports_school" ON "public"."emergency_reports" USING "btree" ("school_id", "created_at" DESC);
 
 
 
-CREATE INDEX "idx_reports_school" ON "public"."emergency_reports" USING "btree" ("school_id", "created_at" DESC);
+CREATE INDEX IF NOT EXISTS "idx_reports_status" ON "public"."emergency_reports" USING "btree" ("status");
 
 
 
-CREATE INDEX "idx_reports_status" ON "public"."emergency_reports" USING "btree" ("status");
+CREATE INDEX IF NOT EXISTS "idx_school_req_dir_status" ON "public"."school_requests" USING "btree" ("directorate_id", "status", "created_at" DESC);
 
 
 
-CREATE INDEX "idx_school_req_dir_status" ON "public"."school_requests" USING "btree" ("directorate_id", "status", "created_at" DESC);
+CREATE INDEX IF NOT EXISTS "idx_school_req_school" ON "public"."school_requests" USING "btree" ("school_id", "created_at" DESC);
 
 
 
-CREATE INDEX "idx_school_req_school" ON "public"."school_requests" USING "btree" ("school_id", "created_at" DESC);
+CREATE INDEX IF NOT EXISTS "idx_schools_directorate" ON "public"."schools" USING "btree" ("directorate_id");
 
 
 
-CREATE INDEX "idx_schools_directorate" ON "public"."schools" USING "btree" ("directorate_id");
+CREATE INDEX IF NOT EXISTS "idx_staff_att_updated" ON "public"."staff_attendance" USING "btree" ("updated_at") WHERE ("deleted_at" IS NULL);
 
 
 
-CREATE INDEX "idx_staff_att_updated" ON "public"."staff_attendance" USING "btree" ("updated_at") WHERE ("deleted_at" IS NULL);
+CREATE INDEX IF NOT EXISTS "idx_student_conduct_updated" ON "public"."student_conduct" USING "btree" ("updated_at") WHERE ("deleted_at" IS NULL);
 
 
 
-CREATE INDEX "idx_student_conduct_updated" ON "public"."student_conduct" USING "btree" ("updated_at") WHERE ("deleted_at" IS NULL);
+CREATE INDEX IF NOT EXISTS "idx_student_grades_updated" ON "public"."student_grades" USING "btree" ("updated_at") WHERE ("deleted_at" IS NULL);
 
 
 
-CREATE INDEX "idx_student_grades_updated" ON "public"."student_grades" USING "btree" ("updated_at") WHERE ("deleted_at" IS NULL);
+CREATE INDEX IF NOT EXISTS "idx_students_class" ON "public"."students" USING "btree" ("class_id");
 
 
 
-CREATE INDEX "idx_students_class" ON "public"."students" USING "btree" ("class_id");
+CREATE INDEX IF NOT EXISTS "idx_students_school" ON "public"."students" USING "btree" ("school_id");
 
 
 
-CREATE INDEX "idx_students_school" ON "public"."students" USING "btree" ("school_id");
+CREATE INDEX IF NOT EXISTS "idx_students_updated" ON "public"."students" USING "btree" ("updated_at") WHERE ("deleted_at" IS NULL);
 
 
 
-CREATE INDEX "idx_students_updated" ON "public"."students" USING "btree" ("updated_at") WHERE ("deleted_at" IS NULL);
+CREATE INDEX IF NOT EXISTS "idx_sub_school_date" ON "public"."attendance_submissions" USING "btree" ("school_id", "date");
 
 
 
-CREATE INDEX "idx_sub_school_date" ON "public"."attendance_submissions" USING "btree" ("school_id", "date");
+CREATE INDEX IF NOT EXISTS "idx_users_directorate" ON "public"."users" USING "btree" ("directorate_id");
 
 
 
-CREATE INDEX "idx_users_directorate" ON "public"."users" USING "btree" ("directorate_id");
+CREATE INDEX IF NOT EXISTS "idx_users_role" ON "public"."users" USING "btree" ("role");
 
 
 
-CREATE INDEX "idx_users_role" ON "public"."users" USING "btree" ("role");
+CREATE INDEX IF NOT EXISTS "idx_users_school" ON "public"."users" USING "btree" ("school_id");
 
 
 
-CREATE INDEX "idx_users_school" ON "public"."users" USING "btree" ("school_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "lookup_lists_uniq" ON "public"."lookup_lists" USING "btree" ("list_type", "value", COALESCE("directorate_id", '00000000-0000-0000-0000-000000000000'::"uuid"));
 
 
 
-CREATE UNIQUE INDEX "lookup_lists_uniq" ON "public"."lookup_lists" USING "btree" ("list_type", "value", COALESCE("directorate_id", '00000000-0000-0000-0000-000000000000'::"uuid"));
+CREATE UNIQUE INDEX IF NOT EXISTS "monthly_statements_school_period" ON "public"."monthly_statements" USING "btree" ("school_id", "year", "month");
 
 
 
-CREATE UNIQUE INDEX "monthly_statements_school_period" ON "public"."monthly_statements" USING "btree" ("school_id", "year", "month");
+CREATE INDEX IF NOT EXISTS "parent_otps_ip_time_idx" ON "public"."parent_otps" USING "btree" ("ip_hash", "created_at");
 
 
 
-CREATE INDEX "parent_otps_ip_time_idx" ON "public"."parent_otps" USING "btree" ("ip_hash", "created_at");
+CREATE INDEX IF NOT EXISTS "parent_otps_phone_idx" ON "public"."parent_otps" USING "btree" ("phone", "expires_at");
 
 
 
-CREATE INDEX "parent_otps_phone_idx" ON "public"."parent_otps" USING "btree" ("phone", "expires_at");
+CREATE INDEX IF NOT EXISTS "registry_lookup_audit_user_time_idx" ON "public"."registry_lookup_audit" USING "btree" ("user_id", "created_at" DESC);
 
 
 
-CREATE INDEX "registry_lookup_audit_user_time_idx" ON "public"."registry_lookup_audit" USING "btree" ("user_id", "created_at" DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS "result_sheets_class_term" ON "public"."result_sheets" USING "btree" ("class_id", "academic_year", "term");
 
 
 
-CREATE UNIQUE INDEX "result_sheets_class_term" ON "public"."result_sheets" USING "btree" ("class_id", "academic_year", "term");
+CREATE INDEX IF NOT EXISTS "school_personnel_school_active_idx" ON "public"."school_personnel" USING "btree" ("school_id", "is_active");
 
 
 
-CREATE INDEX "school_personnel_school_active_idx" ON "public"."school_personnel" USING "btree" ("school_id", "is_active");
+CREATE UNIQUE INDEX IF NOT EXISTS "school_personnel_staff_record_uidx" ON "public"."school_personnel" USING "btree" ("staff_record_id") WHERE ("staff_record_id" IS NOT NULL);
 
 
 
-CREATE UNIQUE INDEX "school_personnel_staff_record_uidx" ON "public"."school_personnel" USING "btree" ("staff_record_id") WHERE ("staff_record_id" IS NOT NULL);
+CREATE INDEX IF NOT EXISTS "schools_active_idx" ON "public"."schools" USING "btree" ("directorate_id") WHERE ("archived_at" IS NULL);
 
 
 
-CREATE INDEX "schools_active_idx" ON "public"."schools" USING "btree" ("directorate_id") WHERE ("archived_at" IS NULL);
+CREATE INDEX IF NOT EXISTS "staff_assignments_school" ON "public"."staff_assignments" USING "btree" ("school_id", "academic_year") WHERE ("active" = true);
 
 
 
-CREATE INDEX "staff_assignments_school" ON "public"."staff_assignments" USING "btree" ("school_id", "academic_year") WHERE ("active" = true);
+CREATE UNIQUE INDEX IF NOT EXISTS "staff_att_personnel_date" ON "public"."staff_attendance" USING "btree" ("personnel_id", "date");
 
 
 
-CREATE UNIQUE INDEX "staff_att_personnel_date" ON "public"."staff_attendance" USING "btree" ("personnel_id", "date");
+CREATE UNIQUE INDEX IF NOT EXISTS "staff_att_teacher_date" ON "public"."staff_attendance" USING "btree" ("teacher_id", "date");
 
 
 
-CREATE UNIQUE INDEX "staff_att_teacher_date" ON "public"."staff_attendance" USING "btree" ("teacher_id", "date");
+CREATE INDEX IF NOT EXISTS "staff_leaves_school_period" ON "public"."staff_leaves" USING "btree" ("school_id", "year", "month");
 
 
 
-CREATE INDEX "staff_leaves_school_period" ON "public"."staff_leaves" USING "btree" ("school_id", "year", "month");
+CREATE UNIQUE INDEX IF NOT EXISTS "staff_leaves_unique_period" ON "public"."staff_leaves" USING "btree" ("staff_id", "leave_type", "month", "year");
 
 
 
-CREATE UNIQUE INDEX "staff_leaves_unique_period" ON "public"."staff_leaves" USING "btree" ("staff_id", "leave_type", "month", "year");
+CREATE INDEX IF NOT EXISTS "staff_records_school_type" ON "public"."staff_records" USING "btree" ("school_id", "staff_type") WHERE ("active" = true);
 
 
 
-CREATE INDEX "staff_records_school_type" ON "public"."staff_records" USING "btree" ("school_id", "staff_type") WHERE ("active" = true);
+CREATE INDEX IF NOT EXISTS "stmt_changes_statement" ON "public"."monthly_statement_changes" USING "btree" ("statement_id");
 
 
 
-CREATE INDEX "stmt_changes_statement" ON "public"."monthly_statement_changes" USING "btree" ("statement_id");
+CREATE INDEX IF NOT EXISTS "stmt_rosters_school" ON "public"."monthly_statement_rosters" USING "btree" ("school_id");
 
 
 
-CREATE INDEX "stmt_rosters_school" ON "public"."monthly_statement_rosters" USING "btree" ("school_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "student_conduct_uniq" ON "public"."student_conduct" USING "btree" ("student_id", "academic_year");
 
 
 
-CREATE UNIQUE INDEX "student_conduct_uniq" ON "public"."student_conduct" USING "btree" ("student_id", "academic_year");
+CREATE UNIQUE INDEX IF NOT EXISTS "student_grace_uniq" ON "public"."student_grace" USING "btree" ("student_id", "class_id", "academic_year", COALESCE("subject_id", '00000000-0000-0000-0000-000000000000'::"uuid"));
 
 
 
-CREATE UNIQUE INDEX "student_grace_uniq" ON "public"."student_grace" USING "btree" ("student_id", "class_id", "academic_year", COALESCE("subject_id", '00000000-0000-0000-0000-000000000000'::"uuid"));
+CREATE INDEX IF NOT EXISTS "student_grades_class_idx" ON "public"."student_grades" USING "btree" ("class_id", "academic_year");
 
 
 
-CREATE INDEX "student_grades_class_idx" ON "public"."student_grades" USING "btree" ("class_id", "academic_year");
+CREATE UNIQUE INDEX IF NOT EXISTS "students_natid_school" ON "public"."students" USING "btree" ("school_id", "national_id") WHERE (("national_id" IS NOT NULL) AND "is_active");
 
 
 
-CREATE UNIQUE INDEX "students_natid_school" ON "public"."students" USING "btree" ("school_id", "national_id") WHERE (("national_id" IS NOT NULL) AND "is_active");
+CREATE INDEX IF NOT EXISTS "students_parent_phone_idx" ON "public"."students" USING "btree" ("parent_phone") WHERE ("parent_phone" IS NOT NULL);
 
 
 
-CREATE INDEX "students_parent_phone_idx" ON "public"."students" USING "btree" ("parent_phone") WHERE ("parent_phone" IS NOT NULL);
+CREATE INDEX IF NOT EXISTS "subject_components_subject_idx" ON "public"."subject_components" USING "btree" ("subject_id");
 
 
 
-CREATE INDEX "subject_components_subject_idx" ON "public"."subject_components" USING "btree" ("subject_id");
+CREATE INDEX IF NOT EXISTS "subjects_school_grade_idx" ON "public"."subjects" USING "btree" ("school_id", "grade");
 
 
 
-CREATE INDEX "subjects_school_grade_idx" ON "public"."subjects" USING "btree" ("school_id", "grade");
+CREATE INDEX IF NOT EXISTS "transfer_docs_from_school_idx" ON "public"."transfer_documents" USING "btree" ("from_school_id", "issued_at" DESC);
 
 
 
-CREATE INDEX "transfer_docs_from_school_idx" ON "public"."transfer_documents" USING "btree" ("from_school_id", "issued_at" DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS "transfer_docs_outgoing_uidx" ON "public"."transfer_documents" USING "btree" ("to_school_id", "academic_year", "outgoing_number");
 
 
 
-CREATE UNIQUE INDEX "transfer_docs_outgoing_uidx" ON "public"."transfer_documents" USING "btree" ("to_school_id", "academic_year", "outgoing_number");
+CREATE UNIQUE INDEX IF NOT EXISTS "transfer_docs_pending_uidx" ON "public"."transfer_documents" USING "btree" ("student_national_id") WHERE ("status" = 'pending'::"text");
 
 
 
-CREATE UNIQUE INDEX "transfer_docs_pending_uidx" ON "public"."transfer_documents" USING "btree" ("student_national_id") WHERE ("status" = 'pending'::"text");
-
-
-
-CREATE INDEX "transfer_docs_to_school_idx" ON "public"."transfer_documents" USING "btree" ("to_school_id", "issued_at" DESC);
+CREATE INDEX IF NOT EXISTS "transfer_docs_to_school_idx" ON "public"."transfer_documents" USING "btree" ("to_school_id", "issued_at" DESC);
 
 
 
@@ -5081,504 +5227,703 @@ CREATE OR REPLACE TRIGGER "trg_reports_updated" BEFORE UPDATE ON "public"."emerg
 
 
 
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."absence_excuses"
     ADD CONSTRAINT "absence_excuses_reviewed_by_fkey" FOREIGN KEY ("reviewed_by") REFERENCES "public"."users"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."absence_excuses"
     ADD CONSTRAINT "absence_excuses_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."absence_excuses"
     ADD CONSTRAINT "absence_excuses_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."students"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."absence_excuses"
     ADD CONSTRAINT "absence_excuses_submitted_by_fkey" FOREIGN KEY ("submitted_by") REFERENCES "auth"."users"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."admin_credentials"
     ADD CONSTRAINT "admin_credentials_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."admin_credentials"
     ADD CONSTRAINT "admin_credentials_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."attendance_submissions"
     ADD CONSTRAINT "attendance_submissions_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "public"."classes"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."attendance_submissions"
     ADD CONSTRAINT "attendance_submissions_confirmed_by_fkey" FOREIGN KEY ("confirmed_by") REFERENCES "public"."users"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."attendance_submissions"
     ADD CONSTRAINT "attendance_submissions_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."attendance_submissions"
     ADD CONSTRAINT "attendance_submissions_submitted_by_fkey" FOREIGN KEY ("submitted_by") REFERENCES "public"."users"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."class_attendance"
     ADD CONSTRAINT "class_attendance_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "public"."classes"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."class_attendance"
     ADD CONSTRAINT "class_attendance_daily_attendance_id_fkey" FOREIGN KEY ("daily_attendance_id") REFERENCES "public"."daily_attendance"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."class_teacher"
     ADD CONSTRAINT "class_teacher_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "public"."classes"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."class_teacher"
     ADD CONSTRAINT "class_teacher_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "public"."users"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."classes"
     ADD CONSTRAINT "classes_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."daily_attendance"
     ADD CONSTRAINT "daily_attendance_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."daily_attendance"
     ADD CONSTRAINT "daily_attendance_submitted_by_fkey" FOREIGN KEY ("submitted_by") REFERENCES "public"."users"("id") ON DELETE SET NULL;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."daily_student_attendance"
     ADD CONSTRAINT "daily_student_attendance_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "public"."classes"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."daily_student_attendance"
     ADD CONSTRAINT "daily_student_attendance_recorded_by_fkey" FOREIGN KEY ("recorded_by") REFERENCES "public"."users"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."daily_student_attendance"
     ADD CONSTRAINT "daily_student_attendance_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."daily_student_attendance"
     ADD CONSTRAINT "daily_student_attendance_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."students"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."emergency_reports"
     ADD CONSTRAINT "emergency_reports_resolved_by_fkey" FOREIGN KEY ("resolved_by") REFERENCES "public"."users"("id") ON DELETE SET NULL;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."emergency_reports"
     ADD CONSTRAINT "emergency_reports_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."emergency_reports"
     ADD CONSTRAINT "emergency_reports_submitted_by_fkey" FOREIGN KEY ("submitted_by") REFERENCES "public"."users"("id") ON DELETE SET NULL;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."grace_proposals"
     ADD CONSTRAINT "grace_proposals_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "public"."classes"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."grace_proposals"
     ADD CONSTRAINT "grace_proposals_decided_by_fkey" FOREIGN KEY ("decided_by") REFERENCES "auth"."users"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."grace_proposals"
     ADD CONSTRAINT "grace_proposals_proposed_by_fkey" FOREIGN KEY ("proposed_by") REFERENCES "auth"."users"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."grace_proposals"
     ADD CONSTRAINT "grace_proposals_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."grace_proposals"
     ADD CONSTRAINT "grace_proposals_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."students"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."lookup_lists"
     ADD CONSTRAINT "lookup_lists_directorate_id_fkey" FOREIGN KEY ("directorate_id") REFERENCES "public"."directorates"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."monthly_statement_changes"
     ADD CONSTRAINT "monthly_statement_changes_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."monthly_statement_changes"
     ADD CONSTRAINT "monthly_statement_changes_staff_id_fkey" FOREIGN KEY ("staff_id") REFERENCES "public"."staff_records"("id") ON DELETE SET NULL;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."monthly_statement_changes"
     ADD CONSTRAINT "monthly_statement_changes_statement_id_fkey" FOREIGN KEY ("statement_id") REFERENCES "public"."monthly_statements"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."monthly_statement_rosters"
     ADD CONSTRAINT "monthly_statement_rosters_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."monthly_statement_rosters"
     ADD CONSTRAINT "monthly_statement_rosters_statement_id_fkey" FOREIGN KEY ("statement_id") REFERENCES "public"."monthly_statements"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."monthly_statements"
     ADD CONSTRAINT "monthly_statements_reviewed_by_fkey" FOREIGN KEY ("reviewed_by") REFERENCES "auth"."users"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."monthly_statements"
     ADD CONSTRAINT "monthly_statements_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."notifications"
     ADD CONSTRAINT "notifications_recipient_id_fkey" FOREIGN KEY ("recipient_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."parent_links"
     ADD CONSTRAINT "parent_links_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."students"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."parent_links"
     ADD CONSTRAINT "parent_links_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."push_subscriptions"
     ADD CONSTRAINT "push_subscriptions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."registry_lookup_audit"
     ADD CONSTRAINT "registry_lookup_audit_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."result_sheets"
     ADD CONSTRAINT "result_sheets_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "public"."classes"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."result_sheets"
     ADD CONSTRAINT "result_sheets_issued_by_fkey" FOREIGN KEY ("issued_by") REFERENCES "auth"."users"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."result_sheets"
     ADD CONSTRAINT "result_sheets_reviewed_by_fkey" FOREIGN KEY ("reviewed_by") REFERENCES "auth"."users"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."result_sheets"
     ADD CONSTRAINT "result_sheets_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."role_module_permissions"
     ADD CONSTRAINT "role_module_permissions_module_key_fkey" FOREIGN KEY ("module_key") REFERENCES "public"."modules"("key") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."school_building"
     ADD CONSTRAINT "school_building_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."school_holidays"
     ADD CONSTRAINT "school_holidays_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."school_personnel"
     ADD CONSTRAINT "school_personnel_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."school_personnel"
     ADD CONSTRAINT "school_personnel_staff_record_id_fkey" FOREIGN KEY ("staff_record_id") REFERENCES "public"."staff_records"("id") ON DELETE SET NULL;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."school_requests"
     ADD CONSTRAINT "school_requests_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "auth"."users"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."school_requests"
     ADD CONSTRAINT "school_requests_reviewed_by_fkey" FOREIGN KEY ("reviewed_by") REFERENCES "auth"."users"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."school_requests"
     ADD CONSTRAINT "school_requests_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."schools"
     ADD CONSTRAINT "schools_directorate_id_fkey" FOREIGN KEY ("directorate_id") REFERENCES "public"."directorates"("id") ON DELETE RESTRICT;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_assignments"
     ADD CONSTRAINT "staff_assignments_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "public"."classes"("id") ON DELETE SET NULL;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_assignments"
     ADD CONSTRAINT "staff_assignments_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_assignments"
     ADD CONSTRAINT "staff_assignments_staff_id_fkey" FOREIGN KEY ("staff_id") REFERENCES "public"."staff_records"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_assignments"
     ADD CONSTRAINT "staff_assignments_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE SET NULL;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_attendance"
     ADD CONSTRAINT "staff_attendance_adjusted_by_fkey" FOREIGN KEY ("adjusted_by") REFERENCES "public"."users"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_attendance"
     ADD CONSTRAINT "staff_attendance_personnel_id_fkey" FOREIGN KEY ("personnel_id") REFERENCES "public"."school_personnel"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_attendance"
     ADD CONSTRAINT "staff_attendance_recorded_by_fkey" FOREIGN KEY ("recorded_by") REFERENCES "public"."users"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_attendance"
     ADD CONSTRAINT "staff_attendance_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_attendance"
     ADD CONSTRAINT "staff_attendance_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "public"."users"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_credentials"
     ADD CONSTRAINT "staff_credentials_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_leaves"
     ADD CONSTRAINT "staff_leaves_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_leaves"
     ADD CONSTRAINT "staff_leaves_staff_id_fkey" FOREIGN KEY ("staff_id") REFERENCES "public"."staff_records"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_records"
     ADD CONSTRAINT "staff_records_registry_self_number_fkey" FOREIGN KEY ("registry_self_number") REFERENCES "public"."national_staff_registry"("self_number") ON UPDATE CASCADE ON DELETE SET NULL;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."staff_records"
     ADD CONSTRAINT "staff_records_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."student_conduct"
     ADD CONSTRAINT "student_conduct_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "public"."classes"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."student_conduct"
     ADD CONSTRAINT "student_conduct_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."student_conduct"
     ADD CONSTRAINT "student_conduct_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."students"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."student_grace"
     ADD CONSTRAINT "student_grace_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "public"."classes"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."student_grace"
     ADD CONSTRAINT "student_grace_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."student_grace"
     ADD CONSTRAINT "student_grace_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."students"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."student_grace"
     ADD CONSTRAINT "student_grace_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "public"."subjects"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."student_grades"
     ADD CONSTRAINT "student_grades_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "public"."classes"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."student_grades"
     ADD CONSTRAINT "student_grades_component_id_fkey" FOREIGN KEY ("component_id") REFERENCES "public"."subject_components"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."student_grades"
     ADD CONSTRAINT "student_grades_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."student_grades"
     ADD CONSTRAINT "student_grades_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."students"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."student_grades"
     ADD CONSTRAINT "student_grades_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "public"."subjects"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."students"
     ADD CONSTRAINT "students_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "public"."classes"("id") ON DELETE SET NULL;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."students"
     ADD CONSTRAINT "students_registry_national_id_fkey" FOREIGN KEY ("registry_national_id") REFERENCES "public"."national_students_registry"("national_id") ON UPDATE CASCADE ON DELETE SET NULL;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."students"
     ADD CONSTRAINT "students_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."subject_catalog_components"
     ADD CONSTRAINT "subject_catalog_components_catalog_id_fkey" FOREIGN KEY ("catalog_id") REFERENCES "public"."subject_catalog"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."subject_components"
     ADD CONSTRAINT "subject_components_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "public"."subjects"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."subjects"
     ADD CONSTRAINT "subjects_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."sync_state"
     ADD CONSTRAINT "sync_state_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."teacher_daily_attendance"
     ADD CONSTRAINT "teacher_daily_attendance_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."teacher_daily_attendance"
     ADD CONSTRAINT "teacher_daily_attendance_teacher_id_fkey" FOREIGN KEY ("teacher_id") REFERENCES "public"."users"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."transfer_documents"
     ADD CONSTRAINT "transfer_documents_from_school_id_fkey" FOREIGN KEY ("from_school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."transfer_documents"
     ADD CONSTRAINT "transfer_documents_issued_by_fkey" FOREIGN KEY ("issued_by") REFERENCES "auth"."users"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."transfer_documents"
     ADD CONSTRAINT "transfer_documents_processed_by_fkey" FOREIGN KEY ("processed_by") REFERENCES "auth"."users"("id");
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."transfer_documents"
     ADD CONSTRAINT "transfer_documents_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."students"("id") ON DELETE SET NULL;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."transfer_documents"
     ADD CONSTRAINT "transfer_documents_to_class_id_fkey" FOREIGN KEY ("to_class_id") REFERENCES "public"."classes"("id") ON DELETE SET NULL;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."transfer_documents"
     ADD CONSTRAINT "transfer_documents_to_school_id_fkey" FOREIGN KEY ("to_school_id") REFERENCES "public"."schools"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."users"
     ADD CONSTRAINT "users_directorate_id_fkey" FOREIGN KEY ("directorate_id") REFERENCES "public"."directorates"("id") ON DELETE SET NULL;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."users"
     ADD CONSTRAINT "users_id_fkey" FOREIGN KEY ("id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
+DO $ruqi_idem$ BEGIN
 ALTER TABLE ONLY "public"."users"
     ADD CONSTRAINT "users_school_id_fkey" FOREIGN KEY ("school_id") REFERENCES "public"."schools"("id") ON DELETE SET NULL;
-
-
-
+EXCEPTION WHEN duplicate_object THEN NULL;
+  WHEN duplicate_table THEN NULL;
+  WHEN invalid_table_definition THEN NULL;
+END $ruqi_idem$;
 ALTER TABLE "public"."absence_excuses" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "admin_cred_directorate_select" ON "public"."admin_credentials";
 CREATE POLICY "admin_cred_directorate_select" ON "public"."admin_credentials" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM (("public"."users" "target"
      JOIN "public"."schools" "s" ON (("s"."id" = "target"."school_id")))
@@ -5587,6 +5932,7 @@ CREATE POLICY "admin_cred_directorate_select" ON "public"."admin_credentials" FO
 
 
 
+DROP POLICY IF EXISTS "admin_cred_ministry_select" ON "public"."admin_credentials";
 CREATE POLICY "admin_cred_ministry_select" ON "public"."admin_credentials" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'ministry_user'::"public"."user_role")))));
@@ -5602,30 +5948,36 @@ ALTER TABLE "public"."attendance_submissions" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."audit_log" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "audit_log_insert" ON "public"."audit_log";
 CREATE POLICY "audit_log_insert" ON "public"."audit_log" FOR INSERT TO "authenticated" WITH CHECK (("school_id" = "public"."current_user_school_id"()));
 
 
 
+DROP POLICY IF EXISTS "audit_log_ministry_select" ON "public"."audit_log";
 CREATE POLICY "audit_log_ministry_select" ON "public"."audit_log" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'ministry_user'::"public"."user_role")))));
 
 
 
+DROP POLICY IF EXISTS "audit_log_select" ON "public"."audit_log";
 CREATE POLICY "audit_log_select" ON "public"."audit_log" FOR SELECT TO "authenticated" USING ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'school_admin'::"public"."user_role"))))));
 
 
 
+DROP POLICY IF EXISTS "authenticated_read_holidays" ON "public"."school_holidays";
 CREATE POLICY "authenticated_read_holidays" ON "public"."school_holidays" FOR SELECT TO "authenticated" USING (true);
 
 
 
+DROP POLICY IF EXISTS "ca_teacher_read" ON "public"."class_attendance";
 CREATE POLICY "ca_teacher_read" ON "public"."class_attendance" FOR SELECT TO "authenticated" USING ((("public"."current_user_role"() = 'teacher'::"public"."user_role") AND "public"."teaches_class"("class_id")));
 
 
 
+DROP POLICY IF EXISTS "ca_teacher_write" ON "public"."class_attendance";
 CREATE POLICY "ca_teacher_write" ON "public"."class_attendance" TO "authenticated" USING ((("public"."current_user_role"() = 'teacher'::"public"."user_role") AND "public"."teaches_class"("class_id"))) WITH CHECK ((("public"."current_user_role"() = 'teacher'::"public"."user_role") AND "public"."teaches_class"("class_id")));
 
 
@@ -5636,10 +5988,12 @@ ALTER TABLE "public"."class_attendance" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."class_teacher" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "class_teacher_admin_write" ON "public"."class_teacher";
 CREATE POLICY "class_teacher_admin_write" ON "public"."class_teacher" TO "authenticated" USING ((("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND "public"."class_in_my_school"("class_id"))) WITH CHECK ((("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND "public"."class_in_my_school"("class_id")));
 
 
 
+DROP POLICY IF EXISTS "class_teacher_read" ON "public"."class_teacher";
 CREATE POLICY "class_teacher_read" ON "public"."class_teacher" FOR SELECT TO "authenticated" USING ((("teacher_id" = "auth"."uid"()) OR (("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND "public"."class_in_my_school"("class_id"))));
 
 
@@ -5647,30 +6001,37 @@ CREATE POLICY "class_teacher_read" ON "public"."class_teacher" FOR SELECT TO "au
 ALTER TABLE "public"."classes" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "classes_admin_write" ON "public"."classes";
 CREATE POLICY "classes_admin_write" ON "public"."classes" TO "authenticated" USING ((("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"()))) WITH CHECK ((("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"())));
 
 
 
+DROP POLICY IF EXISTS "classes_read" ON "public"."classes";
 CREATE POLICY "classes_read" ON "public"."classes" FOR SELECT TO "authenticated" USING ((("public"."current_user_role"() = 'ministry_user'::"public"."user_role") OR (("public"."current_user_role"() = 'directorate_user'::"public"."user_role") AND "public"."school_in_my_directorate"("school_id")) OR (("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"())) OR (("public"."current_user_role"() = 'teacher'::"public"."user_role") AND "public"."teaches_class"("id"))));
 
 
 
+DROP POLICY IF EXISTS "conduct_admin_read" ON "public"."student_conduct";
 CREATE POLICY "conduct_admin_read" ON "public"."student_conduct" FOR SELECT TO "authenticated" USING (("school_id" = "public"."current_user_school_id"()));
 
 
 
+DROP POLICY IF EXISTS "conduct_read" ON "public"."student_conduct";
 CREATE POLICY "conduct_read" ON "public"."student_conduct" FOR SELECT TO "authenticated" USING (((("public"."current_user_role"() = 'teacher'::"public"."user_role") AND "public"."teaches_class"("class_id")) OR (("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"())) OR (("public"."current_user_role"() = 'directorate_user'::"public"."user_role") AND "public"."school_in_my_directorate"("school_id")) OR ("public"."current_user_role"() = 'ministry_user'::"public"."user_role")));
 
 
 
+DROP POLICY IF EXISTS "conduct_teacher_write" ON "public"."student_conduct";
 CREATE POLICY "conduct_teacher_write" ON "public"."student_conduct" TO "authenticated" USING ((("public"."current_user_role"() = 'teacher'::"public"."user_role") AND "public"."teaches_class"("class_id"))) WITH CHECK ((("public"."current_user_role"() = 'teacher'::"public"."user_role") AND "public"."teaches_class"("class_id") AND ("recorded_by" = "auth"."uid"())));
 
 
 
+DROP POLICY IF EXISTS "da_admin_write" ON "public"."daily_attendance";
 CREATE POLICY "da_admin_write" ON "public"."daily_attendance" TO "authenticated" USING ((("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"()))) WITH CHECK ((("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"())));
 
 
 
+DROP POLICY IF EXISTS "da_read" ON "public"."daily_attendance";
 CREATE POLICY "da_read" ON "public"."daily_attendance" FOR SELECT TO "authenticated" USING (((("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"())) OR (("public"."current_user_role"() = 'directorate_user'::"public"."user_role") AND ("school_id" IN ( SELECT "school"."id"
    FROM "public"."schools" "school"
   WHERE ("school"."directorate_id" = "public"."current_user_directorate_id"())))) OR ("public"."current_user_role"() = 'ministry_user'::"public"."user_role")));
@@ -5683,6 +6044,7 @@ ALTER TABLE "public"."daily_attendance" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."daily_student_attendance" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "directorate_user: class_attendance in directorate" ON "public"."class_attendance";
 CREATE POLICY "directorate_user: class_attendance in directorate" ON "public"."class_attendance" FOR SELECT TO "authenticated" USING ((("public"."current_user_role"() = 'directorate_user'::"public"."user_role") AND ("daily_attendance_id" IN ( SELECT "da"."id"
    FROM ("public"."daily_attendance" "da"
      JOIN "public"."schools" "s" ON (("s"."id" = "da"."school_id")))
@@ -5690,6 +6052,7 @@ CREATE POLICY "directorate_user: class_attendance in directorate" ON "public"."c
 
 
 
+DROP POLICY IF EXISTS "directorate_user: reports in directorate" ON "public"."emergency_reports";
 CREATE POLICY "directorate_user: reports in directorate" ON "public"."emergency_reports" TO "authenticated" USING ((("public"."current_user_role"() = 'directorate_user'::"public"."user_role") AND ("school_id" IN ( SELECT "schools"."id"
    FROM "public"."schools"
   WHERE ("schools"."directorate_id" = "public"."current_user_directorate_id"())))));
@@ -5699,18 +6062,21 @@ CREATE POLICY "directorate_user: reports in directorate" ON "public"."emergency_
 ALTER TABLE "public"."directorates" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "directorates_read" ON "public"."directorates";
 CREATE POLICY "directorates_read" ON "public"."directorates" FOR SELECT TO "authenticated" USING ((("public"."current_user_role"() = 'ministry_user'::"public"."user_role") OR (("public"."current_user_role"() = 'directorate_user'::"public"."user_role") AND ("id" = "public"."current_user_directorate_id"())) OR (("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("id" = ( SELECT "school"."directorate_id"
    FROM "public"."schools" "school"
   WHERE ("school"."id" = "public"."current_user_school_id"()))))));
 
 
 
+DROP POLICY IF EXISTS "dsa_read" ON "public"."daily_student_attendance";
 CREATE POLICY "dsa_read" ON "public"."daily_student_attendance" FOR SELECT TO "authenticated" USING (((("public"."current_user_role"() = 'teacher'::"public"."user_role") AND "public"."teaches_class"("class_id")) OR (("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"())) OR (("public"."current_user_role"() = 'directorate_user'::"public"."user_role") AND ("school_id" IN ( SELECT "school"."id"
    FROM "public"."schools" "school"
   WHERE ("school"."directorate_id" = "public"."current_user_directorate_id"())))) OR ("public"."current_user_role"() = 'ministry_user'::"public"."user_role")));
 
 
 
+DROP POLICY IF EXISTS "dsa_teacher_write" ON "public"."daily_student_attendance";
 CREATE POLICY "dsa_teacher_write" ON "public"."daily_student_attendance" TO "authenticated" USING ((("public"."current_user_role"() = 'teacher'::"public"."user_role") AND "public"."teaches_class"("class_id"))) WITH CHECK ((("public"."current_user_role"() = 'teacher'::"public"."user_role") AND "public"."teaches_class"("class_id") AND ("recorded_by" = "auth"."uid"()) AND ("date" = CURRENT_DATE) AND (NOT (EXISTS ( SELECT 1
    FROM "public"."attendance_submissions" "s"
   WHERE (("s"."class_id" = "daily_student_attendance"."class_id") AND ("s"."date" = "daily_student_attendance"."date") AND ("s"."status" = 'confirmed'::"text")))))));
@@ -5720,10 +6086,12 @@ CREATE POLICY "dsa_teacher_write" ON "public"."daily_student_attendance" TO "aut
 ALTER TABLE "public"."emergency_reports" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "grace_admin_all" ON "public"."student_grace";
 CREATE POLICY "grace_admin_all" ON "public"."student_grace" TO "authenticated" USING (("school_id" = "public"."current_user_school_id"())) WITH CHECK (("school_id" = "public"."current_user_school_id"()));
 
 
 
+DROP POLICY IF EXISTS "grace_prop_admin_rw" ON "public"."grace_proposals";
 CREATE POLICY "grace_prop_admin_rw" ON "public"."grace_proposals" TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'school_admin'::"public"."user_role") AND ("u"."school_id" = "grace_proposals"."school_id"))))) WITH CHECK ((EXISTS ( SELECT 1
@@ -5732,6 +6100,7 @@ CREATE POLICY "grace_prop_admin_rw" ON "public"."grace_proposals" TO "authentica
 
 
 
+DROP POLICY IF EXISTS "grace_prop_teacher_rw" ON "public"."grace_proposals";
 CREATE POLICY "grace_prop_teacher_rw" ON "public"."grace_proposals" TO "authenticated" USING ((("proposed_by" = "auth"."uid"()) AND "public"."teaches_class"("class_id"))) WITH CHECK ((("proposed_by" = "auth"."uid"()) AND "public"."teaches_class"("class_id")));
 
 
@@ -5742,10 +6111,12 @@ ALTER TABLE "public"."grace_proposals" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."grade_pass_rules" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "grade_pass_rules_select" ON "public"."grade_pass_rules";
 CREATE POLICY "grade_pass_rules_select" ON "public"."grade_pass_rules" FOR SELECT TO "authenticated" USING (true);
 
 
 
+DROP POLICY IF EXISTS "grade_pass_rules_write" ON "public"."grade_pass_rules";
 CREATE POLICY "grade_pass_rules_write" ON "public"."grade_pass_rules" TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'ministry_user'::"public"."user_role"))))) WITH CHECK ((EXISTS ( SELECT 1
@@ -5754,6 +6125,7 @@ CREATE POLICY "grade_pass_rules_write" ON "public"."grade_pass_rules" TO "authen
 
 
 
+DROP POLICY IF EXISTS "holidays_ministry_write" ON "public"."school_holidays";
 CREATE POLICY "holidays_ministry_write" ON "public"."school_holidays" TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'ministry_user'::"public"."user_role"))))) WITH CHECK ((EXISTS ( SELECT 1
@@ -5762,10 +6134,12 @@ CREATE POLICY "holidays_ministry_write" ON "public"."school_holidays" TO "authen
 
 
 
+DROP POLICY IF EXISTS "holidays_read" ON "public"."school_holidays";
 CREATE POLICY "holidays_read" ON "public"."school_holidays" FOR SELECT TO "authenticated" USING (true);
 
 
 
+DROP POLICY IF EXISTS "lookup_authenticated_select" ON "public"."lookup_lists";
 CREATE POLICY "lookup_authenticated_select" ON "public"."lookup_lists" FOR SELECT TO "authenticated" USING (("active" = true));
 
 
@@ -5773,6 +6147,7 @@ CREATE POLICY "lookup_authenticated_select" ON "public"."lookup_lists" FOR SELEC
 ALTER TABLE "public"."lookup_lists" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "lookup_ministry_write" ON "public"."lookup_lists";
 CREATE POLICY "lookup_ministry_write" ON "public"."lookup_lists" TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'ministry_user'::"public"."user_role"))))) WITH CHECK ((EXISTS ( SELECT 1
@@ -5781,30 +6156,37 @@ CREATE POLICY "lookup_ministry_write" ON "public"."lookup_lists" TO "authenticat
 
 
 
+DROP POLICY IF EXISTS "ministry: all attendance" ON "public"."daily_attendance";
 CREATE POLICY "ministry: all attendance" ON "public"."daily_attendance" TO "authenticated" USING (("public"."current_user_role"() = 'ministry_user'::"public"."user_role"));
 
 
 
+DROP POLICY IF EXISTS "ministry: all class_attendance" ON "public"."class_attendance";
 CREATE POLICY "ministry: all class_attendance" ON "public"."class_attendance" TO "authenticated" USING (("public"."current_user_role"() = 'ministry_user'::"public"."user_role"));
 
 
 
+DROP POLICY IF EXISTS "ministry: all classes" ON "public"."classes";
 CREATE POLICY "ministry: all classes" ON "public"."classes" TO "authenticated" USING (("public"."current_user_role"() = 'ministry_user'::"public"."user_role"));
 
 
 
+DROP POLICY IF EXISTS "ministry: all directorates" ON "public"."directorates";
 CREATE POLICY "ministry: all directorates" ON "public"."directorates" TO "authenticated" USING (("public"."current_user_role"() = 'ministry_user'::"public"."user_role"));
 
 
 
+DROP POLICY IF EXISTS "ministry: all reports" ON "public"."emergency_reports";
 CREATE POLICY "ministry: all reports" ON "public"."emergency_reports" TO "authenticated" USING (("public"."current_user_role"() = 'ministry_user'::"public"."user_role"));
 
 
 
+DROP POLICY IF EXISTS "ministry: all schools" ON "public"."schools";
 CREATE POLICY "ministry: all schools" ON "public"."schools" TO "authenticated" USING (("public"."current_user_role"() = 'ministry_user'::"public"."user_role"));
 
 
 
+DROP POLICY IF EXISTS "ministry_users_all_staff_registry" ON "public"."national_staff_registry";
 CREATE POLICY "ministry_users_all_staff_registry" ON "public"."national_staff_registry" TO "authenticated" USING ((( SELECT "users"."role"
    FROM "public"."users"
   WHERE ("users"."id" = "auth"."uid"())) = 'ministry_user'::"public"."user_role")) WITH CHECK ((( SELECT "users"."role"
@@ -5813,6 +6195,7 @@ CREATE POLICY "ministry_users_all_staff_registry" ON "public"."national_staff_re
 
 
 
+DROP POLICY IF EXISTS "ministry_users_all_students_registry" ON "public"."national_students_registry";
 CREATE POLICY "ministry_users_all_students_registry" ON "public"."national_students_registry" TO "authenticated" USING ((( SELECT "users"."role"
    FROM "public"."users"
   WHERE ("users"."id" = "auth"."uid"())) = 'ministry_user'::"public"."user_role")) WITH CHECK ((( SELECT "users"."role"
@@ -5824,6 +6207,7 @@ CREATE POLICY "ministry_users_all_students_registry" ON "public"."national_stude
 ALTER TABLE "public"."modules" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "modules_ministry_all" ON "public"."modules";
 CREATE POLICY "modules_ministry_all" ON "public"."modules" TO "authenticated" USING (("public"."current_user_role"() = 'ministry_user'::"public"."user_role")) WITH CHECK (("public"."current_user_role"() = 'ministry_user'::"public"."user_role"));
 
 
@@ -5843,14 +6227,17 @@ ALTER TABLE "public"."national_staff_registry" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."national_students_registry" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "no_direct_access_staff_registry" ON "public"."national_staff_registry";
 CREATE POLICY "no_direct_access_staff_registry" ON "public"."national_staff_registry" FOR SELECT TO "authenticated" USING (false);
 
 
 
+DROP POLICY IF EXISTS "no_direct_access_students_registry" ON "public"."national_students_registry";
 CREATE POLICY "no_direct_access_students_registry" ON "public"."national_students_registry" FOR SELECT TO "authenticated" USING (false);
 
 
 
+DROP POLICY IF EXISTS "notif_owner" ON "public"."notifications";
 CREATE POLICY "notif_owner" ON "public"."notifications" TO "authenticated" USING (("recipient_id" = "auth"."uid"())) WITH CHECK (("recipient_id" = "auth"."uid"()));
 
 
@@ -5858,6 +6245,7 @@ CREATE POLICY "notif_owner" ON "public"."notifications" TO "authenticated" USING
 ALTER TABLE "public"."notifications" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "parent_insert_excuse" ON "public"."absence_excuses";
 CREATE POLICY "parent_insert_excuse" ON "public"."absence_excuses" FOR INSERT TO "authenticated" WITH CHECK (("public"."current_user_is_parent"() AND (EXISTS ( SELECT 1
    FROM "public"."parent_links" "pl"
   WHERE (("pl"."user_id" = "auth"."uid"()) AND ("pl"."student_id" = "absence_excuses"."student_id"))))));
@@ -5870,10 +6258,12 @@ ALTER TABLE "public"."parent_links" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."parent_otps" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "parent_otps_no_access" ON "public"."parent_otps";
 CREATE POLICY "parent_otps_no_access" ON "public"."parent_otps" TO "authenticated" USING (false);
 
 
 
+DROP POLICY IF EXISTS "parent_read_components" ON "public"."subject_components";
 CREATE POLICY "parent_read_components" ON "public"."subject_components" FOR SELECT TO "authenticated" USING (("public"."current_user_is_parent"() AND (EXISTS ( SELECT 1
    FROM (("public"."subjects" "sub"
      JOIN "public"."parent_links" "pl" ON (true))
@@ -5882,44 +6272,52 @@ CREATE POLICY "parent_read_components" ON "public"."subject_components" FOR SELE
 
 
 
+DROP POLICY IF EXISTS "parent_read_linked_attendance" ON "public"."daily_student_attendance";
 CREATE POLICY "parent_read_linked_attendance" ON "public"."daily_student_attendance" FOR SELECT TO "authenticated" USING (("public"."current_user_is_parent"() AND (EXISTS ( SELECT 1
    FROM "public"."parent_links" "pl"
   WHERE (("pl"."user_id" = "auth"."uid"()) AND ("pl"."student_id" = "daily_student_attendance"."student_id"))))));
 
 
 
+DROP POLICY IF EXISTS "parent_read_linked_conduct" ON "public"."student_conduct";
 CREATE POLICY "parent_read_linked_conduct" ON "public"."student_conduct" FOR SELECT TO "authenticated" USING (("public"."current_user_is_parent"() AND (EXISTS ( SELECT 1
    FROM "public"."parent_links" "pl"
   WHERE (("pl"."user_id" = "auth"."uid"()) AND ("pl"."student_id" = "student_conduct"."student_id"))))));
 
 
 
+DROP POLICY IF EXISTS "parent_read_linked_grades" ON "public"."student_grades";
 CREATE POLICY "parent_read_linked_grades" ON "public"."student_grades" FOR SELECT TO "authenticated" USING (("public"."current_user_is_parent"() AND (EXISTS ( SELECT 1
    FROM "public"."parent_links" "pl"
   WHERE (("pl"."user_id" = "auth"."uid"()) AND ("pl"."student_id" = "student_grades"."student_id"))))));
 
 
 
+DROP POLICY IF EXISTS "parent_read_linked_school" ON "public"."schools";
 CREATE POLICY "parent_read_linked_school" ON "public"."schools" FOR SELECT TO "authenticated" USING (("public"."current_user_is_parent"() AND "public"."parent_is_linked_to_school"("id")));
 
 
 
+DROP POLICY IF EXISTS "parent_read_linked_students" ON "public"."students";
 CREATE POLICY "parent_read_linked_students" ON "public"."students" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."parent_links" "pl"
   WHERE (("pl"."student_id" = "students"."id") AND ("pl"."user_id" = "auth"."uid"())))));
 
 
 
+DROP POLICY IF EXISTS "parent_read_own_excuses" ON "public"."absence_excuses";
 CREATE POLICY "parent_read_own_excuses" ON "public"."absence_excuses" FOR SELECT TO "authenticated" USING (("public"."current_user_is_parent"() AND (EXISTS ( SELECT 1
    FROM "public"."parent_links" "pl"
   WHERE (("pl"."user_id" = "auth"."uid"()) AND ("pl"."student_id" = "absence_excuses"."student_id"))))));
 
 
 
+DROP POLICY IF EXISTS "parent_read_own_links" ON "public"."parent_links";
 CREATE POLICY "parent_read_own_links" ON "public"."parent_links" FOR SELECT TO "authenticated" USING (("user_id" = "auth"."uid"()));
 
 
 
+DROP POLICY IF EXISTS "parent_read_subjects" ON "public"."subjects";
 CREATE POLICY "parent_read_subjects" ON "public"."subjects" FOR SELECT TO "authenticated" USING (("public"."current_user_is_parent"() AND (EXISTS ( SELECT 1
    FROM ("public"."parent_links" "pl"
      JOIN "public"."students" "s" ON (("s"."id" = "pl"."student_id")))
@@ -5930,12 +6328,14 @@ CREATE POLICY "parent_read_subjects" ON "public"."subjects" FOR SELECT TO "authe
 ALTER TABLE "public"."periodic_reports" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "pr_select" ON "public"."periodic_reports";
 CREATE POLICY "pr_select" ON "public"."periodic_reports" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND (("u"."role" = 'ministry_user'::"public"."user_role") OR (("u"."role" = 'directorate_user'::"public"."user_role") AND ("periodic_reports"."scope" = 'directorate'::"text") AND ("u"."directorate_id" = "periodic_reports"."scope_id")))))));
 
 
 
+DROP POLICY IF EXISTS "ps_owner" ON "public"."push_subscriptions";
 CREATE POLICY "ps_owner" ON "public"."push_subscriptions" TO "authenticated" USING (("user_id" = "auth"."uid"())) WITH CHECK (("user_id" = "auth"."uid"()));
 
 
@@ -5946,16 +6346,19 @@ ALTER TABLE "public"."push_subscriptions" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."registry_lookup_audit" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "registry_lookup_audit_ministry_select" ON "public"."registry_lookup_audit";
 CREATE POLICY "registry_lookup_audit_ministry_select" ON "public"."registry_lookup_audit" FOR SELECT TO "authenticated" USING ((( SELECT "users"."role"
    FROM "public"."users"
   WHERE ("users"."id" = "auth"."uid"())) = 'ministry_user'::"public"."user_role"));
 
 
 
+DROP POLICY IF EXISTS "reports_admin_insert" ON "public"."emergency_reports";
 CREATE POLICY "reports_admin_insert" ON "public"."emergency_reports" FOR INSERT TO "authenticated" WITH CHECK ((("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"())));
 
 
 
+DROP POLICY IF EXISTS "reports_read" ON "public"."emergency_reports";
 CREATE POLICY "reports_read" ON "public"."emergency_reports" FOR SELECT TO "authenticated" USING (((("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"())) OR (("public"."current_user_role"() = 'directorate_user'::"public"."user_role") AND ("school_id" IN ( SELECT "school"."id"
    FROM "public"."schools" "school"
   WHERE ("school"."directorate_id" = "public"."current_user_directorate_id"())))) OR ("public"."current_user_role"() = 'ministry_user'::"public"."user_role")));
@@ -5965,6 +6368,7 @@ CREATE POLICY "reports_read" ON "public"."emergency_reports" FOR SELECT TO "auth
 ALTER TABLE "public"."result_sheets" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "rmp_ministry_all" ON "public"."role_module_permissions";
 CREATE POLICY "rmp_ministry_all" ON "public"."role_module_permissions" TO "authenticated" USING (("public"."current_user_role"() = 'ministry_user'::"public"."user_role")) WITH CHECK (("public"."current_user_role"() = 'ministry_user'::"public"."user_role"));
 
 
@@ -5972,6 +6376,7 @@ CREATE POLICY "rmp_ministry_all" ON "public"."role_module_permissions" TO "authe
 ALTER TABLE "public"."role_module_permissions" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "rs_dir_select" ON "public"."result_sheets";
 CREATE POLICY "rs_dir_select" ON "public"."result_sheets" FOR SELECT TO "authenticated" USING (((EXISTS ( SELECT 1
    FROM "public"."schools" "s"
   WHERE (("s"."id" = "result_sheets"."school_id") AND ("s"."directorate_id" = "public"."current_user_directorate_id"())))) AND (EXISTS ( SELECT 1
@@ -5980,6 +6385,7 @@ CREATE POLICY "rs_dir_select" ON "public"."result_sheets" FOR SELECT TO "authent
 
 
 
+DROP POLICY IF EXISTS "rs_dir_update" ON "public"."result_sheets";
 CREATE POLICY "rs_dir_update" ON "public"."result_sheets" FOR UPDATE TO "authenticated" USING (((EXISTS ( SELECT 1
    FROM "public"."schools" "s"
   WHERE (("s"."id" = "result_sheets"."school_id") AND ("s"."directorate_id" = "public"."current_user_directorate_id"())))) AND ("status" = ANY (ARRAY['submitted'::"text", 'approved'::"text"])) AND (EXISTS ( SELECT 1
@@ -5988,30 +6394,35 @@ CREATE POLICY "rs_dir_update" ON "public"."result_sheets" FOR UPDATE TO "authent
 
 
 
+DROP POLICY IF EXISTS "rs_ministry_select" ON "public"."result_sheets";
 CREATE POLICY "rs_ministry_select" ON "public"."result_sheets" FOR SELECT TO "authenticated" USING ((("status" = 'issued'::"text") AND (EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'ministry_user'::"public"."user_role"))))));
 
 
 
+DROP POLICY IF EXISTS "rs_school_insert" ON "public"."result_sheets";
 CREATE POLICY "rs_school_insert" ON "public"."result_sheets" FOR INSERT TO "authenticated" WITH CHECK ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'school_admin'::"public"."user_role"))))));
 
 
 
+DROP POLICY IF EXISTS "rs_school_select" ON "public"."result_sheets";
 CREATE POLICY "rs_school_select" ON "public"."result_sheets" FOR SELECT TO "authenticated" USING ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'school_admin'::"public"."user_role"))))));
 
 
 
+DROP POLICY IF EXISTS "rs_school_update" ON "public"."result_sheets";
 CREATE POLICY "rs_school_update" ON "public"."result_sheets" FOR UPDATE TO "authenticated" USING ((("school_id" = "public"."current_user_school_id"()) AND ("status" = ANY (ARRAY['draft'::"text", 'rejected'::"text"])) AND (EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'school_admin'::"public"."user_role")))))) WITH CHECK ((("school_id" = "public"."current_user_school_id"()) AND ("status" = ANY (ARRAY['draft'::"text", 'submitted'::"text"]))));
 
 
 
+DROP POLICY IF EXISTS "sa_admin_all" ON "public"."staff_attendance";
 CREATE POLICY "sa_admin_all" ON "public"."staff_attendance" TO "authenticated" USING ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'school_admin'::"public"."user_role")))))) WITH CHECK ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
@@ -6020,40 +6431,49 @@ CREATE POLICY "sa_admin_all" ON "public"."staff_attendance" TO "authenticated" U
 
 
 
+DROP POLICY IF EXISTS "sa_teacher_ins" ON "public"."staff_attendance";
 CREATE POLICY "sa_teacher_ins" ON "public"."staff_attendance" FOR INSERT WITH CHECK (("teacher_id" = "auth"."uid"()));
 
 
 
+DROP POLICY IF EXISTS "sa_teacher_insert" ON "public"."staff_attendance";
 CREATE POLICY "sa_teacher_insert" ON "public"."staff_attendance" FOR INSERT TO "authenticated" WITH CHECK ((("teacher_id" = "auth"."uid"()) AND ("source" = 'self'::"text")));
 
 
 
+DROP POLICY IF EXISTS "sa_teacher_sel" ON "public"."staff_attendance";
 CREATE POLICY "sa_teacher_sel" ON "public"."staff_attendance" FOR SELECT USING (("teacher_id" = "auth"."uid"()));
 
 
 
+DROP POLICY IF EXISTS "sa_teacher_select" ON "public"."staff_attendance";
 CREATE POLICY "sa_teacher_select" ON "public"."staff_attendance" FOR SELECT TO "authenticated" USING (("teacher_id" = "auth"."uid"()));
 
 
 
+DROP POLICY IF EXISTS "sa_teacher_upd" ON "public"."staff_attendance";
 CREATE POLICY "sa_teacher_upd" ON "public"."staff_attendance" FOR UPDATE USING (("teacher_id" = "auth"."uid"())) WITH CHECK (("teacher_id" = "auth"."uid"()));
 
 
 
+DROP POLICY IF EXISTS "sa_teacher_update" ON "public"."staff_attendance";
 CREATE POLICY "sa_teacher_update" ON "public"."staff_attendance" FOR UPDATE TO "authenticated" USING (("teacher_id" = "auth"."uid"())) WITH CHECK (("teacher_id" = "auth"."uid"()));
 
 
 
+DROP POLICY IF EXISTS "school_admin: own school class_attendance" ON "public"."class_attendance";
 CREATE POLICY "school_admin: own school class_attendance" ON "public"."class_attendance" TO "authenticated" USING ((("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("daily_attendance_id" IN ( SELECT "daily_attendance"."id"
    FROM "public"."daily_attendance"
   WHERE ("daily_attendance"."school_id" = "public"."current_user_school_id"())))));
 
 
 
+DROP POLICY IF EXISTS "school_admin: own school reports" ON "public"."emergency_reports";
 CREATE POLICY "school_admin: own school reports" ON "public"."emergency_reports" TO "authenticated" USING ((("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"())));
 
 
 
+DROP POLICY IF EXISTS "school_admin_read_excuses" ON "public"."absence_excuses";
 CREATE POLICY "school_admin_read_excuses" ON "public"."absence_excuses" FOR SELECT TO "authenticated" USING ((("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"())));
 
 
@@ -6061,6 +6481,7 @@ CREATE POLICY "school_admin_read_excuses" ON "public"."absence_excuses" FOR SELE
 ALTER TABLE "public"."school_building" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "school_building_dir_sel" ON "public"."school_building";
 CREATE POLICY "school_building_dir_sel" ON "public"."school_building" FOR SELECT TO "authenticated" USING (((EXISTS ( SELECT 1
    FROM "public"."schools" "s"
   WHERE (("s"."id" = "school_building"."school_id") AND ("s"."directorate_id" = "public"."current_user_directorate_id"())))) AND (EXISTS ( SELECT 1
@@ -6069,6 +6490,7 @@ CREATE POLICY "school_building_dir_sel" ON "public"."school_building" FOR SELECT
 
 
 
+DROP POLICY IF EXISTS "school_building_school_admin" ON "public"."school_building";
 CREATE POLICY "school_building_school_admin" ON "public"."school_building" TO "authenticated" USING ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'school_admin'::"public"."user_role")))))) WITH CHECK ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
@@ -6083,18 +6505,22 @@ ALTER TABLE "public"."school_holidays" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."school_personnel" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "school_req_admin_insert" ON "public"."school_requests";
 CREATE POLICY "school_req_admin_insert" ON "public"."school_requests" FOR INSERT TO "authenticated" WITH CHECK (("school_id" = "public"."current_user_school_id"()));
 
 
 
+DROP POLICY IF EXISTS "school_req_admin_select" ON "public"."school_requests";
 CREATE POLICY "school_req_admin_select" ON "public"."school_requests" FOR SELECT TO "authenticated" USING (("school_id" = "public"."current_user_school_id"()));
 
 
 
+DROP POLICY IF EXISTS "school_req_dir_select" ON "public"."school_requests";
 CREATE POLICY "school_req_dir_select" ON "public"."school_requests" FOR SELECT TO "authenticated" USING (("directorate_id" = "public"."current_user_directorate_id"()));
 
 
 
+DROP POLICY IF EXISTS "school_req_dir_update" ON "public"."school_requests";
 CREATE POLICY "school_req_dir_update" ON "public"."school_requests" FOR UPDATE TO "authenticated" USING (("directorate_id" = "public"."current_user_directorate_id"()));
 
 
@@ -6105,10 +6531,12 @@ ALTER TABLE "public"."school_requests" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."schools" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "schools_admin_update" ON "public"."schools";
 CREATE POLICY "schools_admin_update" ON "public"."schools" FOR UPDATE TO "authenticated" USING (("id" = "public"."current_user_school_id"())) WITH CHECK (("id" = "public"."current_user_school_id"()));
 
 
 
+DROP POLICY IF EXISTS "schools_directorate_insert" ON "public"."schools";
 CREATE POLICY "schools_directorate_insert" ON "public"."schools" FOR INSERT TO "authenticated" WITH CHECK ((("directorate_id" = ( SELECT "users"."directorate_id"
    FROM "public"."users"
   WHERE ("users"."id" = "auth"."uid"()))) AND (EXISTS ( SELECT 1
@@ -6117,6 +6545,7 @@ CREATE POLICY "schools_directorate_insert" ON "public"."schools" FOR INSERT TO "
 
 
 
+DROP POLICY IF EXISTS "schools_directorate_select" ON "public"."schools";
 CREATE POLICY "schools_directorate_select" ON "public"."schools" FOR SELECT TO "authenticated" USING ((("directorate_id" = ( SELECT "users"."directorate_id"
    FROM "public"."users"
   WHERE ("users"."id" = "auth"."uid"()))) AND (EXISTS ( SELECT 1
@@ -6125,6 +6554,7 @@ CREATE POLICY "schools_directorate_select" ON "public"."schools" FOR SELECT TO "
 
 
 
+DROP POLICY IF EXISTS "schools_directorate_update" ON "public"."schools";
 CREATE POLICY "schools_directorate_update" ON "public"."schools" FOR UPDATE TO "authenticated" USING ((("directorate_id" = ( SELECT "users"."directorate_id"
    FROM "public"."users"
   WHERE ("users"."id" = "auth"."uid"()))) AND (EXISTS ( SELECT 1
@@ -6137,18 +6567,21 @@ CREATE POLICY "schools_directorate_update" ON "public"."schools" FOR UPDATE TO "
 
 
 
+DROP POLICY IF EXISTS "schools_ministry_insert" ON "public"."schools";
 CREATE POLICY "schools_ministry_insert" ON "public"."schools" FOR INSERT TO "authenticated" WITH CHECK ((EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'ministry_user'::"public"."user_role")))));
 
 
 
+DROP POLICY IF EXISTS "schools_ministry_select" ON "public"."schools";
 CREATE POLICY "schools_ministry_select" ON "public"."schools" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'ministry_user'::"public"."user_role")))));
 
 
 
+DROP POLICY IF EXISTS "schools_ministry_update" ON "public"."schools";
 CREATE POLICY "schools_ministry_update" ON "public"."schools" FOR UPDATE TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'ministry_user'::"public"."user_role"))))) WITH CHECK ((EXISTS ( SELECT 1
@@ -6157,16 +6590,19 @@ CREATE POLICY "schools_ministry_update" ON "public"."schools" FOR UPDATE TO "aut
 
 
 
+DROP POLICY IF EXISTS "schools_read" ON "public"."schools";
 CREATE POLICY "schools_read" ON "public"."schools" FOR SELECT TO "authenticated" USING ((("public"."current_user_role"() = 'ministry_user'::"public"."user_role") OR (("public"."current_user_role"() = 'directorate_user'::"public"."user_role") AND ("directorate_id" = "public"."current_user_directorate_id"())) OR (("public"."current_user_role"() = ANY (ARRAY['school_admin'::"public"."user_role", 'teacher'::"public"."user_role"])) AND ("id" = "public"."current_user_school_id"()))));
 
 
 
+DROP POLICY IF EXISTS "sg_teacher_read" ON "public"."student_grades";
 CREATE POLICY "sg_teacher_read" ON "public"."student_grades" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."class_teacher" "ct"
   WHERE (("ct"."teacher_id" = "auth"."uid"()) AND ("ct"."class_id" = "student_grades"."class_id") AND ("ct"."role" = ANY (ARRAY['homeroom'::"text", 'subject'::"text"]))))));
 
 
 
+DROP POLICY IF EXISTS "sg_teacher_write" ON "public"."student_grades";
 CREATE POLICY "sg_teacher_write" ON "public"."student_grades" TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."class_teacher" "ct"
   WHERE (("ct"."teacher_id" = "auth"."uid"()) AND ("ct"."class_id" = "student_grades"."class_id") AND ("ct"."role" = ANY (ARRAY['homeroom'::"text", 'subject'::"text"])) AND ("student_grades"."subject_id" = ANY ("ct"."subject_ids")))))) WITH CHECK ((EXISTS ( SELECT 1
@@ -6175,6 +6611,7 @@ CREATE POLICY "sg_teacher_write" ON "public"."student_grades" TO "authenticated"
 
 
 
+DROP POLICY IF EXISTS "sp_admin_all" ON "public"."school_personnel";
 CREATE POLICY "sp_admin_all" ON "public"."school_personnel" TO "authenticated" USING (("school_id" = "public"."current_user_school_id"())) WITH CHECK (("school_id" = "public"."current_user_school_id"()));
 
 
@@ -6182,6 +6619,7 @@ CREATE POLICY "sp_admin_all" ON "public"."school_personnel" TO "authenticated" U
 ALTER TABLE "public"."staff_assignments" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "staff_assignments_school_admin" ON "public"."staff_assignments";
 CREATE POLICY "staff_assignments_school_admin" ON "public"."staff_assignments" TO "authenticated" USING ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'school_admin'::"public"."user_role")))))) WITH CHECK ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
@@ -6193,6 +6631,7 @@ CREATE POLICY "staff_assignments_school_admin" ON "public"."staff_assignments" T
 ALTER TABLE "public"."staff_attendance" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "staff_cred_admin" ON "public"."staff_credentials";
 CREATE POLICY "staff_cred_admin" ON "public"."staff_credentials" TO "authenticated" USING ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'school_admin'::"public"."user_role")))))) WITH CHECK ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
@@ -6207,6 +6646,7 @@ ALTER TABLE "public"."staff_credentials" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."staff_leaves" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "staff_leaves_directorate_sel" ON "public"."staff_leaves";
 CREATE POLICY "staff_leaves_directorate_sel" ON "public"."staff_leaves" FOR SELECT TO "authenticated" USING (((EXISTS ( SELECT 1
    FROM "public"."schools" "s"
   WHERE (("s"."id" = "staff_leaves"."school_id") AND ("s"."directorate_id" = "public"."current_user_directorate_id"())))) AND (EXISTS ( SELECT 1
@@ -6215,6 +6655,7 @@ CREATE POLICY "staff_leaves_directorate_sel" ON "public"."staff_leaves" FOR SELE
 
 
 
+DROP POLICY IF EXISTS "staff_leaves_school_admin" ON "public"."staff_leaves";
 CREATE POLICY "staff_leaves_school_admin" ON "public"."staff_leaves" TO "authenticated" USING ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'school_admin'::"public"."user_role")))))) WITH CHECK ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
@@ -6226,6 +6667,7 @@ CREATE POLICY "staff_leaves_school_admin" ON "public"."staff_leaves" TO "authent
 ALTER TABLE "public"."staff_records" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "staff_records_school_admin" ON "public"."staff_records";
 CREATE POLICY "staff_records_school_admin" ON "public"."staff_records" TO "authenticated" USING ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'school_admin'::"public"."user_role")))))) WITH CHECK ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
@@ -6234,6 +6676,7 @@ CREATE POLICY "staff_records_school_admin" ON "public"."staff_records" TO "authe
 
 
 
+DROP POLICY IF EXISTS "stmt_changes_dir_sel" ON "public"."monthly_statement_changes";
 CREATE POLICY "stmt_changes_dir_sel" ON "public"."monthly_statement_changes" FOR SELECT TO "authenticated" USING (((EXISTS ( SELECT 1
    FROM "public"."schools" "s"
   WHERE (("s"."id" = "monthly_statement_changes"."school_id") AND ("s"."directorate_id" = "public"."current_user_directorate_id"())))) AND (EXISTS ( SELECT 1
@@ -6242,6 +6685,7 @@ CREATE POLICY "stmt_changes_dir_sel" ON "public"."monthly_statement_changes" FOR
 
 
 
+DROP POLICY IF EXISTS "stmt_changes_school_admin" ON "public"."monthly_statement_changes";
 CREATE POLICY "stmt_changes_school_admin" ON "public"."monthly_statement_changes" TO "authenticated" USING ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'school_admin'::"public"."user_role")))))) WITH CHECK ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
@@ -6250,6 +6694,7 @@ CREATE POLICY "stmt_changes_school_admin" ON "public"."monthly_statement_changes
 
 
 
+DROP POLICY IF EXISTS "stmt_dir_select" ON "public"."monthly_statements";
 CREATE POLICY "stmt_dir_select" ON "public"."monthly_statements" FOR SELECT TO "authenticated" USING (((EXISTS ( SELECT 1
    FROM "public"."schools" "s"
   WHERE (("s"."id" = "monthly_statements"."school_id") AND ("s"."directorate_id" = "public"."current_user_directorate_id"())))) AND (EXISTS ( SELECT 1
@@ -6258,6 +6703,7 @@ CREATE POLICY "stmt_dir_select" ON "public"."monthly_statements" FOR SELECT TO "
 
 
 
+DROP POLICY IF EXISTS "stmt_dir_update" ON "public"."monthly_statements";
 CREATE POLICY "stmt_dir_update" ON "public"."monthly_statements" FOR UPDATE TO "authenticated" USING (((EXISTS ( SELECT 1
    FROM "public"."schools" "s"
   WHERE (("s"."id" = "monthly_statements"."school_id") AND ("s"."directorate_id" = "public"."current_user_directorate_id"())))) AND ("status" = 'submitted'::"text") AND (EXISTS ( SELECT 1
@@ -6266,6 +6712,7 @@ CREATE POLICY "stmt_dir_update" ON "public"."monthly_statements" FOR UPDATE TO "
 
 
 
+DROP POLICY IF EXISTS "stmt_rosters_dir_sel" ON "public"."monthly_statement_rosters";
 CREATE POLICY "stmt_rosters_dir_sel" ON "public"."monthly_statement_rosters" FOR SELECT TO "authenticated" USING (((EXISTS ( SELECT 1
    FROM ("public"."monthly_statements" "ms"
      JOIN "public"."schools" "s" ON (("s"."id" = "ms"."school_id")))
@@ -6275,6 +6722,7 @@ CREATE POLICY "stmt_rosters_dir_sel" ON "public"."monthly_statement_rosters" FOR
 
 
 
+DROP POLICY IF EXISTS "stmt_rosters_school_admin" ON "public"."monthly_statement_rosters";
 CREATE POLICY "stmt_rosters_school_admin" ON "public"."monthly_statement_rosters" TO "authenticated" USING ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'school_admin'::"public"."user_role")))))) WITH CHECK ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
@@ -6283,18 +6731,21 @@ CREATE POLICY "stmt_rosters_school_admin" ON "public"."monthly_statement_rosters
 
 
 
+DROP POLICY IF EXISTS "stmt_school_insert" ON "public"."monthly_statements";
 CREATE POLICY "stmt_school_insert" ON "public"."monthly_statements" FOR INSERT TO "authenticated" WITH CHECK ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'school_admin'::"public"."user_role"))))));
 
 
 
+DROP POLICY IF EXISTS "stmt_school_select" ON "public"."monthly_statements";
 CREATE POLICY "stmt_school_select" ON "public"."monthly_statements" FOR SELECT TO "authenticated" USING ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'school_admin'::"public"."user_role"))))));
 
 
 
+DROP POLICY IF EXISTS "stmt_school_update" ON "public"."monthly_statements";
 CREATE POLICY "stmt_school_update" ON "public"."monthly_statements" FOR UPDATE TO "authenticated" USING ((("school_id" = "public"."current_user_school_id"()) AND ("status" = ANY (ARRAY['draft'::"text", 'rejected'::"text"])) AND (EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'school_admin'::"public"."user_role")))))) WITH CHECK ((("school_id" = "public"."current_user_school_id"()) AND ("status" = ANY (ARRAY['draft'::"text", 'submitted'::"text"]))));
@@ -6310,10 +6761,12 @@ ALTER TABLE "public"."student_grace" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."student_grades" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "student_grades_read" ON "public"."student_grades";
 CREATE POLICY "student_grades_read" ON "public"."student_grades" FOR SELECT USING (("school_id" = "public"."current_user_school_id"()));
 
 
 
+DROP POLICY IF EXISTS "student_grades_teacher_write" ON "public"."student_grades";
 CREATE POLICY "student_grades_teacher_write" ON "public"."student_grades" USING ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
    FROM "public"."class_teacher" "ct"
   WHERE (("ct"."class_id" = "student_grades"."class_id") AND ("ct"."teacher_id" = "auth"."uid"())))))) WITH CHECK ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
@@ -6325,10 +6778,12 @@ CREATE POLICY "student_grades_teacher_write" ON "public"."student_grades" USING 
 ALTER TABLE "public"."students" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "students_admin_write" ON "public"."students";
 CREATE POLICY "students_admin_write" ON "public"."students" TO "authenticated" USING ((("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"()))) WITH CHECK ((("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"())));
 
 
 
+DROP POLICY IF EXISTS "students_read" ON "public"."students";
 CREATE POLICY "students_read" ON "public"."students" FOR SELECT TO "authenticated" USING (((("public"."current_user_role"() = 'teacher'::"public"."user_role") AND "public"."teaches_class"("class_id")) OR (("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"())) OR (("public"."current_user_role"() = 'directorate_user'::"public"."user_role") AND ("school_id" IN ( SELECT "school"."id"
    FROM "public"."schools" "school"
   WHERE ("school"."directorate_id" = "public"."current_user_directorate_id"())))) OR ("public"."current_user_role"() = 'ministry_user'::"public"."user_role")));
@@ -6338,10 +6793,12 @@ CREATE POLICY "students_read" ON "public"."students" FOR SELECT TO "authenticate
 ALTER TABLE "public"."subject_catalog" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "subject_catalog_comp_select" ON "public"."subject_catalog_components";
 CREATE POLICY "subject_catalog_comp_select" ON "public"."subject_catalog_components" FOR SELECT TO "authenticated" USING (true);
 
 
 
+DROP POLICY IF EXISTS "subject_catalog_comp_write" ON "public"."subject_catalog_components";
 CREATE POLICY "subject_catalog_comp_write" ON "public"."subject_catalog_components" TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'ministry_user'::"public"."user_role"))))) WITH CHECK ((EXISTS ( SELECT 1
@@ -6353,10 +6810,12 @@ CREATE POLICY "subject_catalog_comp_write" ON "public"."subject_catalog_componen
 ALTER TABLE "public"."subject_catalog_components" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "subject_catalog_select" ON "public"."subject_catalog";
 CREATE POLICY "subject_catalog_select" ON "public"."subject_catalog" FOR SELECT TO "authenticated" USING (("active" = true));
 
 
 
+DROP POLICY IF EXISTS "subject_catalog_write" ON "public"."subject_catalog";
 CREATE POLICY "subject_catalog_write" ON "public"."subject_catalog" TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'ministry_user'::"public"."user_role"))))) WITH CHECK ((EXISTS ( SELECT 1
@@ -6368,12 +6827,14 @@ CREATE POLICY "subject_catalog_write" ON "public"."subject_catalog" TO "authenti
 ALTER TABLE "public"."subject_components" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "subject_components_read" ON "public"."subject_components";
 CREATE POLICY "subject_components_read" ON "public"."subject_components" FOR SELECT USING ((EXISTS ( SELECT 1
    FROM "public"."subjects" "s"
   WHERE (("s"."id" = "subject_components"."subject_id") AND ("s"."school_id" = "public"."current_user_school_id"())))));
 
 
 
+DROP POLICY IF EXISTS "subject_components_write" ON "public"."subject_components";
 CREATE POLICY "subject_components_write" ON "public"."subject_components" USING (((EXISTS ( SELECT 1
    FROM "public"."subjects" "s"
   WHERE (("s"."id" = "subject_components"."subject_id") AND ("s"."school_id" = "public"."current_user_school_id"())))) AND (EXISTS ( SELECT 1
@@ -6389,10 +6850,12 @@ CREATE POLICY "subject_components_write" ON "public"."subject_components" USING 
 ALTER TABLE "public"."subjects" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "subjects_read" ON "public"."subjects";
 CREATE POLICY "subjects_read" ON "public"."subjects" FOR SELECT USING (("school_id" = "public"."current_user_school_id"()));
 
 
 
+DROP POLICY IF EXISTS "subjects_write" ON "public"."subjects";
 CREATE POLICY "subjects_write" ON "public"."subjects" USING ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
    FROM "public"."users" "u"
   WHERE (("u"."id" = "auth"."uid"()) AND ("u"."role" = 'school_admin'::"public"."user_role")))))) WITH CHECK ((("school_id" = "public"."current_user_school_id"()) AND (EXISTS ( SELECT 1
@@ -6401,20 +6864,24 @@ CREATE POLICY "subjects_write" ON "public"."subjects" USING ((("school_id" = "pu
 
 
 
+DROP POLICY IF EXISTS "subs_admin_update" ON "public"."attendance_submissions";
 CREATE POLICY "subs_admin_update" ON "public"."attendance_submissions" FOR UPDATE TO "authenticated" USING ((("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"()))) WITH CHECK ((("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"())));
 
 
 
+DROP POLICY IF EXISTS "subs_read" ON "public"."attendance_submissions";
 CREATE POLICY "subs_read" ON "public"."attendance_submissions" FOR SELECT TO "authenticated" USING (((("public"."current_user_role"() = 'teacher'::"public"."user_role") AND "public"."teaches_class"("class_id")) OR (("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"())) OR (("public"."current_user_role"() = 'directorate_user'::"public"."user_role") AND ("school_id" IN ( SELECT "school"."id"
    FROM "public"."schools" "school"
   WHERE ("school"."directorate_id" = "public"."current_user_directorate_id"())))) OR ("public"."current_user_role"() = 'ministry_user'::"public"."user_role")));
 
 
 
+DROP POLICY IF EXISTS "subs_teacher_insert" ON "public"."attendance_submissions";
 CREATE POLICY "subs_teacher_insert" ON "public"."attendance_submissions" FOR INSERT TO "authenticated" WITH CHECK ((("public"."current_user_role"() = 'teacher'::"public"."user_role") AND ("submitted_by" = "auth"."uid"()) AND ("date" = CURRENT_DATE) AND "public"."teaches_class"("class_id")));
 
 
 
+DROP POLICY IF EXISTS "subs_teacher_update" ON "public"."attendance_submissions";
 CREATE POLICY "subs_teacher_update" ON "public"."attendance_submissions" FOR UPDATE TO "authenticated" USING ((("public"."current_user_role"() = 'teacher'::"public"."user_role") AND "public"."teaches_class"("class_id") AND ("status" <> 'confirmed'::"text"))) WITH CHECK ((("public"."current_user_role"() = 'teacher'::"public"."user_role") AND "public"."teaches_class"("class_id")));
 
 
@@ -6422,24 +6889,29 @@ CREATE POLICY "subs_teacher_update" ON "public"."attendance_submissions" FOR UPD
 ALTER TABLE "public"."sync_state" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "sync_state_self" ON "public"."sync_state";
 CREATE POLICY "sync_state_self" ON "public"."sync_state" USING (("user_id" = "auth"."uid"())) WITH CHECK (("user_id" = "auth"."uid"()));
 
 
 
+DROP POLICY IF EXISTS "tda_read" ON "public"."teacher_daily_attendance";
 CREATE POLICY "tda_read" ON "public"."teacher_daily_attendance" FOR SELECT TO "authenticated" USING ((("teacher_id" = "auth"."uid"()) OR (("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"())) OR (("public"."current_user_role"() = 'directorate_user'::"public"."user_role") AND ("school_id" IN ( SELECT "school"."id"
    FROM "public"."schools" "school"
   WHERE ("school"."directorate_id" = "public"."current_user_directorate_id"())))) OR ("public"."current_user_role"() = 'ministry_user'::"public"."user_role")));
 
 
 
+DROP POLICY IF EXISTS "tda_teacher_write" ON "public"."teacher_daily_attendance";
 CREATE POLICY "tda_teacher_write" ON "public"."teacher_daily_attendance" TO "authenticated" USING (("teacher_id" = "auth"."uid"())) WITH CHECK (("teacher_id" = "auth"."uid"()));
 
 
 
+DROP POLICY IF EXISTS "tdoc_dir_select" ON "public"."transfer_documents";
 CREATE POLICY "tdoc_dir_select" ON "public"."transfer_documents" FOR SELECT TO "authenticated" USING ((("public"."current_user_role"() = 'directorate_user'::"public"."user_role") AND ("public"."school_in_my_directorate"("from_school_id") OR "public"."school_in_my_directorate"("to_school_id"))));
 
 
 
+DROP POLICY IF EXISTS "tdoc_parties_select" ON "public"."transfer_documents";
 CREATE POLICY "tdoc_parties_select" ON "public"."transfer_documents" FOR SELECT TO "authenticated" USING ((("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND (("from_school_id" = "public"."current_user_school_id"()) OR ("to_school_id" = "public"."current_user_school_id"()))));
 
 
@@ -6447,6 +6919,7 @@ CREATE POLICY "tdoc_parties_select" ON "public"."transfer_documents" FOR SELECT 
 ALTER TABLE "public"."teacher_daily_attendance" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "teacher_select_att" ON "public"."daily_student_attendance";
 CREATE POLICY "teacher_select_att" ON "public"."daily_student_attendance" FOR SELECT USING ((EXISTS ( SELECT 1
    FROM "public"."class_teacher" "ct"
   WHERE (("ct"."class_id" = "daily_student_attendance"."class_id") AND ("ct"."teacher_id" = "auth"."uid"())))));
@@ -6459,18 +6932,22 @@ ALTER TABLE "public"."transfer_documents" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."users" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "users_directorate_select_principals" ON "public"."users";
 CREATE POLICY "users_directorate_select_principals" ON "public"."users" FOR SELECT TO "authenticated" USING ((("role" = 'school_admin'::"public"."user_role") AND "public"."is_principal_in_my_directorate"("school_id")));
 
 
 
+DROP POLICY IF EXISTS "users_select_directorate" ON "public"."users";
 CREATE POLICY "users_select_directorate" ON "public"."users" FOR SELECT TO "authenticated" USING ((("public"."current_user_role"() = 'ministry_user'::"public"."user_role") OR (("public"."current_user_role"() = 'directorate_user'::"public"."user_role") AND ("directorate_id" = "public"."current_user_directorate_id"()))));
 
 
 
+DROP POLICY IF EXISTS "users_select_school" ON "public"."users";
 CREATE POLICY "users_select_school" ON "public"."users" FOR SELECT TO "authenticated" USING ((("public"."current_user_role"() = 'school_admin'::"public"."user_role") AND ("school_id" = "public"."current_user_school_id"())));
 
 
 
+DROP POLICY IF EXISTS "users_select_self" ON "public"."users";
 CREATE POLICY "users_select_self" ON "public"."users" FOR SELECT TO "authenticated" USING (("id" = "auth"."uid"()));
 
 
