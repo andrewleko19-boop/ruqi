@@ -47,6 +47,44 @@ jobs:
       - name: Unit tests
         run: npm test
 
+  rls-isolation:
+    name: RLS tenant-isolation test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # الإصدار مثبَّتٌ ومطابقٌ لبقية السيور — انظر tools/check-versions.mjs.
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.113.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Start local Supabase
+        run: supabase start -x realtime,imgproxy,edge-runtime,logflare,vector,pgbouncer
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install RLS audit dependencies
+        run: npm install --no-audit --no-fund
+        working-directory: tools/rls-audit
+
+      - name: Run RLS SQL isolation test
+        run: node rls-sql-test.mjs
+        working-directory: tools/rls-audit
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup
+
   edge-functions:
     name: Type-check Supabase Edge Functions (Deno)
     runs-on: ubuntu-latest
