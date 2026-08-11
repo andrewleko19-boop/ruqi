@@ -1,7 +1,10 @@
--- بيانات بذر لاختبار RLS محلياً عبر supabase start.
--- يُنشئ مديريةً ومدرستين ومديرَين وطلاباً وفصولاً وحضوراً — الحدّ الأدنى
--- الذي يحتاجه rls-sql-test.mjs ليُثبت أن كل مدرسة معزولة عن الأخرى.
+-- بيانات بذر لاختبار RLS ولتشغيل جميع البوابات محلياً عبر supabase start.
+-- يُنشئ مديريةً ومدرستين وحسابات تجريبية لكل الأدوار: مديران مدرسيان
+-- ومستخدم مديرية ومستخدم وزارة ومعلمان وربطُ وليّ أمر، مع طلاب وفصول
+-- وحضور. الحدّ الأدنى الذي يحتاجه rls-sql-test.mjs + شاشة دخول لكل بوابة.
+--
 -- كل عبارة idempotent (ON CONFLICT DO NOTHING) — يُعاد تشغيله بأمان.
+-- كلمة المرور الموحّدة للحسابات التجريبية: TestPass123!
 
 -- مديرية
 INSERT INTO public.directorates (id, name, governorate)
@@ -17,7 +20,7 @@ VALUES
    'مدرسة باء الاختبارية', 'primary')
 ON CONFLICT DO NOTHING;
 
--- مستخدمان في auth.users (مفتاح أجنبي لـ public.users)
+-- مستخدمو auth.users (لكل بوابة). كلمة المرور واحدة: TestPass123!
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
   email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 VALUES
@@ -30,18 +33,45 @@ VALUES
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
    'admin-b@ruqi-test.local',
    extensions.crypt('TestPass123!', extensions.gen_salt('bf')),
+   now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()),
+  ('33333333-3333-3333-3333-333333333333',
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+   'ministry@ruqi-test.local',
+   extensions.crypt('TestPass123!', extensions.gen_salt('bf')),
+   now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()),
+  ('44444444-4444-4444-4444-444444444444',
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+   'directorate@ruqi-test.local',
+   extensions.crypt('TestPass123!', extensions.gen_salt('bf')),
+   now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()),
+  ('55555555-5555-5555-5555-555555555555',
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+   'teacher-a@ruqi-test.local',
+   extensions.crypt('TestPass123!', extensions.gen_salt('bf')),
+   now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()),
+  ('66666666-6666-6666-6666-666666666666',
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+   'teacher-b@ruqi-test.local',
+   extensions.crypt('TestPass123!', extensions.gen_salt('bf')),
    now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now())
 ON CONFLICT DO NOTHING;
 
--- مديرا مدرسة
-INSERT INTO public.users (id, full_name, role, school_id, permission_role)
+-- صفوف public.users المطابقة (parent لا يدخل هنا — يستعمل OTP)
+INSERT INTO public.users
+  (id, full_name, role, school_id, directorate_id, permission_role)
 VALUES
-  ('11111111-1111-1111-1111-111111111111',
-   'مدير مدرسة ألف', 'school_admin',
-   'a0000000-0000-0000-0000-00000000000a', 'school_admin'),
-  ('22222222-2222-2222-2222-222222222222',
-   'مدير مدرسة باء', 'school_admin',
-   'b0000000-0000-0000-0000-00000000000b', 'school_admin')
+  ('11111111-1111-1111-1111-111111111111', 'مدير مدرسة ألف',
+   'school_admin', 'a0000000-0000-0000-0000-00000000000a', NULL, 'school_admin'),
+  ('22222222-2222-2222-2222-222222222222', 'مدير مدرسة باء',
+   'school_admin', 'b0000000-0000-0000-0000-00000000000b', NULL, 'school_admin'),
+  ('33333333-3333-3333-3333-333333333333', 'موظف الوزارة',
+   'ministry_user', NULL, NULL, 'ministry_staff'),
+  ('44444444-4444-4444-4444-444444444444', 'موظف المديرية',
+   'directorate_user', NULL, 'd0000000-0000-0000-0000-000000000001', 'directorate_staff'),
+  ('55555555-5555-5555-5555-555555555555', 'معلم مدرسة ألف',
+   'teacher', 'a0000000-0000-0000-0000-00000000000a', NULL, 'teacher'),
+  ('66666666-6666-6666-6666-666666666666', 'معلم مدرسة باء',
+   'teacher', 'b0000000-0000-0000-0000-00000000000b', NULL, 'teacher')
 ON CONFLICT DO NOTHING;
 
 -- فصل لكل مدرسة
@@ -53,21 +83,28 @@ VALUES
    'b0000000-0000-0000-0000-00000000000b', 'أول أ', '1', 'أ', '2025-2026')
 ON CONFLICT DO NOTHING;
 
+-- ربط المعلم بالفصل (بوابة المعلم تعرض فصولاً حسب هذا الجدول)
+INSERT INTO public.class_teacher (class_id, teacher_id)
+VALUES
+  ('ca000000-0000-0000-0000-00000000000a', '55555555-5555-5555-5555-555555555555'),
+  ('cb000000-0000-0000-0000-00000000000b', '66666666-6666-6666-6666-666666666666')
+ON CONFLICT DO NOTHING;
+
 -- طالبان لكل مدرسة
-INSERT INTO public.students (id, school_id, class_id, full_name, gender)
+INSERT INTO public.students (id, school_id, class_id, full_name, gender, parent_phone)
 VALUES
   ('5a000000-0000-0000-0000-000000000001',
    'a0000000-0000-0000-0000-00000000000a',
-   'ca000000-0000-0000-0000-00000000000a', 'طالب ألف-1', 'male'),
+   'ca000000-0000-0000-0000-00000000000a', 'طالب ألف-1', 'male',  '+963900000001'),
   ('5a000000-0000-0000-0000-000000000002',
    'a0000000-0000-0000-0000-00000000000a',
-   'ca000000-0000-0000-0000-00000000000a', 'طالبة ألف-2', 'female'),
+   'ca000000-0000-0000-0000-00000000000a', 'طالبة ألف-2', 'female', '+963900000002'),
   ('5b000000-0000-0000-0000-000000000001',
    'b0000000-0000-0000-0000-00000000000b',
-   'cb000000-0000-0000-0000-00000000000b', 'طالب باء-1', 'male'),
+   'cb000000-0000-0000-0000-00000000000b', 'طالب باء-1', 'male',  '+963900000003'),
   ('5b000000-0000-0000-0000-000000000002',
    'b0000000-0000-0000-0000-00000000000b',
-   'cb000000-0000-0000-0000-00000000000b', 'طالبة باء-2', 'female')
+   'cb000000-0000-0000-0000-00000000000b', 'طالبة باء-2', 'female', '+963900000004')
 ON CONFLICT DO NOTHING;
 
 -- حضور يومي (مستوى المدرسة)
@@ -127,10 +164,10 @@ INSERT INTO public.staff_attendance
 VALUES
   ('5f000000-0000-0000-0000-00000000000a',
    'a0000000-0000-0000-0000-00000000000a',
-   CURRENT_DATE, 'teacher', '11111111-1111-1111-1111-111111111111',
+   CURRENT_DATE, 'teacher', '55555555-5555-5555-5555-555555555555',
    'present', '11111111-1111-1111-1111-111111111111'),
   ('5f000000-0000-0000-0000-00000000000b',
    'b0000000-0000-0000-0000-00000000000b',
-   CURRENT_DATE, 'teacher', '22222222-2222-2222-2222-222222222222',
+   CURRENT_DATE, 'teacher', '66666666-6666-6666-6666-666666666666',
    'present', '22222222-2222-2222-2222-222222222222')
 ON CONFLICT DO NOTHING;
