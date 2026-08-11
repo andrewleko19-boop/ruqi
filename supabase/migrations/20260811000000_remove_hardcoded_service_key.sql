@@ -1,8 +1,7 @@
 -- إزالة مفتاح service_role المضمّن في دالة notify_user واستبداله
--- بقراءة من إعدادات Postgres. يجب ضبط الإعداد مرة واحدة:
+-- بقراءة من Supabase Vault. يجب تخزين المفتاح مرة واحدة:
 --
---   ALTER DATABASE postgres
---     SET app.settings.service_role_key = '<service_role_key>';
+--   SELECT vault.create_secret('<service_role_key>', 'service_role_key');
 --
 -- المفتاح موجود في Supabase Dashboard → Settings → API → service_role.
 
@@ -28,7 +27,10 @@ BEGIN
 
   BEGIN
     v_url := 'https://xocrzpjfvizgnsybegwr.supabase.co';
-    v_key := current_setting('app.settings.service_role_key', true);
+    SELECT decrypted_secret INTO v_key
+      FROM vault.decrypted_secrets
+     WHERE name = 'service_role_key'
+     LIMIT 1;
     IF v_url IS NOT NULL AND v_key IS NOT NULL THEN
       PERFORM net.http_post(
         url     := v_url || '/functions/v1/send-push',
