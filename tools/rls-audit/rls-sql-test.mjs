@@ -50,9 +50,15 @@ async function asUser(c, userId, sql, params = []) {
 
 export async function runSqlRlsTests(report) {
   requireEnv(['DATABASE_URL']);
+  // Supabase-hosted Postgres يفرض SSL، والـpg يطلبه بدون شهادة. أمّا
+  // supabase start محلياً فيُشغّل Postgres عادياً بلا SSL، فيُفشل
+  // الاتصال بـ«The server does not support SSL». نُعطّله للمضيف المحلي.
+  const url = process.env.DATABASE_URL;
+  const isLocal = /@(127\.0\.0\.1|localhost)[:/]/.test(url);
   const c = new pg.Client({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }, statement_timeout: 20000,
+    connectionString: url,
+    ssl: isLocal ? false : { rejectUnauthorized: false },
+    statement_timeout: 20000,
   });
   await c.connect();
   const sec = report.section('١ب) عزل RLS — طريقة SQL بديلة (بلا ALTER ROLE، آمنة/مُلغاة)');
