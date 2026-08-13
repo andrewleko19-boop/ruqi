@@ -199,10 +199,13 @@ function formatDateAr(iso) {
   });
 }
 
+// String(str) وحدها تطبع «null» نصّاً على الشاشة حين يكون الحقل فارغاً في
+// القاعدة؛ ?? '' تجعله فراغاً. وتهريب ' يمنع الخروج من سمةٍ بعلامةٍ مفردة.
 function escapeHtml(str) {
-  return String(str)
+  return String(str ?? '')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
 }
 
 function svgHref(el, href) { el.setAttribute('href', href); }

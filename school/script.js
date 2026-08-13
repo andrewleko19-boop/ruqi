@@ -591,12 +591,18 @@ function renderAbsentList() {
   refreshTeacherUI();
 }
 
+/* تقبل null/undefined وغير النصوص. تُستدعى من عشرات مواضع العرض على حقولٍ تسمح
+   القاعدة بأن تكون فارغة (staff_credentials.password مثلاً بلا NOT NULL)، وكانت
+   قيمةٌ واحدة فارغة تُسقط الكشف كلّه بـ TypeError على .replace — فيبدو التبويب
+   معطوباً بالكامل بدل أن ينقصه حقلٌ واحد. الحارس هنا يُنهي الصنف كلّه بموضع
+   واحد. وتهريب ' مقصود: قيمةٌ داخل سمةٍ بعلامةٍ مفردة تخرج منها بدونه. */
 function escapeHtml(str) {
-  return str
+  return String(str ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function addAbsentTeacher() {
@@ -5084,16 +5090,25 @@ function renderCredentials() {
   hide(el('cred-empty'));
   credListEl.innerHTML = _credList.map(c => {
     const name = _teacherNames[c.userId] || '—';
+    /* password يقبل NULL في القاعدة: حساباتٌ أُنشئت قبل حفظ النسخة الظاهرة، أو
+       غُيّرت كلمتها من جهة المعلم. لا تُعرَض «••••••••» كاذبةً توهم المدير أنّ
+       لديه كلمةً يمكنه إعطاؤها — يُقال له صراحةً إنّها غير محفوظة، ويُخفى زرّا
+       الإظهار والنسخ لأنّهما بلا معنى، ويبقى «تغيير كلمة المرور» وهو الحلّ. */
+    const hasPw = c.password != null && c.password !== '';
     return (
       `<li class="cred-row" data-uid="${escapeHtml(c.userId)}">` +
         `<div class="cred-main">` +
           `<div class="cred-name">${escapeHtml(name)}</div>` +
           `<div class="cred-line">اسم المستخدم: <code>${escapeHtml(c.username)}</code></div>` +
-          `<div class="cred-line">كلمة المرور: <code class="cred-pw" data-pw="${escapeHtml(c.password)}">••••••••</code></div>` +
+          (hasPw
+            ? `<div class="cred-line">كلمة المرور: <code class="cred-pw" data-pw="${escapeHtml(c.password)}">••••••••</code></div>`
+            : `<div class="cred-line cred-line-muted">كلمة المرور غير محفوظة — استعمل «تغيير كلمة المرور» لتعيين واحدة جديدة.</div>`) +
         `</div>` +
         `<div class="cred-acts">` +
-          `<button class="icon-btn-sm" data-act="reveal" title="إظهار/إخفاء"><svg class="icon icon-sm"><use href="#ic-eye"/></svg></button>` +
-          `<button class="icon-btn-sm" data-act="copy" title="نسخ"><svg class="icon icon-sm"><use href="#ic-clipboard"/></svg></button>` +
+          (hasPw
+            ? `<button class="icon-btn-sm" data-act="reveal" title="إظهار/إخفاء"><svg class="icon icon-sm"><use href="#ic-eye"/></svg></button>` +
+              `<button class="icon-btn-sm" data-act="copy" title="نسخ"><svg class="icon icon-sm"><use href="#ic-clipboard"/></svg></button>`
+            : '') +
           `<button class="icon-btn-sm" data-act="reset" title="تغيير كلمة المرور"><svg class="icon icon-sm"><use href="#ic-edit"/></svg></button>` +
           `<button class="icon-btn-sm danger" data-act="delete" title="حذف الحساب"><svg class="icon icon-sm"><use href="#ic-trash"/></svg></button>` +
         `</div>` +
@@ -5108,10 +5123,12 @@ credListEl.addEventListener('click', async (e) => {
   const cred = _credList.find(c => c.userId === uid); if (!cred) return;
   const pwNode = row.querySelector('.cred-pw');
   if (btn.dataset.act === 'reveal') {
+    if (!pwNode) return;            // صفٌّ بلا كلمة محفوظة: لا عقدة يُظهرها
     const shown = pwNode.dataset.shown === '1';
     pwNode.textContent = shown ? '••••••••' : pwNode.dataset.pw;
     pwNode.dataset.shown = shown ? '0' : '1';
   } else if (btn.dataset.act === 'copy') {
+    if (!cred.password) return toast('لا توجد كلمة مرور محفوظة لهذا الحساب', 'warning');
     try { await navigator.clipboard.writeText(cred.password); toast('تم نسخ كلمة المرور', 'success'); }
     catch { toast('تعذّر النسخ', 'error'); }
   } else if (btn.dataset.act === 'reset') {
