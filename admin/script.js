@@ -1241,9 +1241,15 @@ const LIST_TYPE_LABELS = {
   ministerial_doc:    'الوثائق / الموافقات',
   support_job:        'الأعمال المساندة',
   educational_zone:   'المناطق التعليمية (لكل مديرية)',
+  school_complex:     'المجمّعات التربوية (لكل مديرية)',
   job_title:          'الصفة الوظيفية — التكليف الفني',
   school_admin_role:  'الصفة الإدارية — التكليف الإداري',
 };
+
+// قوائم تخصّ مديريةً بعينها: مجمّعات اللاذقية لا تعني حمص، فيُشترط اختيار
+// المديرية قبل العرض ويُختم كل عنصر بمعرّفها. البقية عامّة (directorate_id فارغ).
+const PER_DIRECTORATE_LISTS = new Set(['educational_zone', 'school_complex']);
+const isPerDirList = (t) => PER_DIRECTORATE_LISTS.has(t);
 
 // Lookups DOM refs
 const lkTypeFilter    = document.getElementById('lk-type-filter');
@@ -1286,7 +1292,7 @@ CustomSelect.enhance('lk-type-filter');
 CustomSelect.enhance('lk-dir-filter');
 CustomSelect.enhance('lk-active');
 
-function lkIsPerDirectorate() { return lkTypeFilter.value === 'educational_zone'; }
+function lkIsPerDirectorate() { return isPerDirList(lkTypeFilter.value); }
 
 function syncLookupDir() {
   lkDirWrap.style.display = lkIsPerDirectorate() ? 'inline-block' : 'none';
@@ -1295,14 +1301,14 @@ function syncLookupDir() {
 async function loadLookups() {
   syncLookupDir();
   const listType = lkTypeFilter.value;
-  const per      = listType === 'educational_zone';
+  const per      = isPerDirList(listType);
   const dirId    = lkDirFilter.value;
 
   hide(lookupsTableWrap);
   hide(lookupsEmpty);
   hide(lookupsHint);
 
-  // educational_zone needs a directorate selected first
+  // القوائم المديريّة تحتاج اختيار مديرية أولاً
   if (per && !dirId) {
     if (addLookupBtn) addLookupBtn.disabled = true;
     lookupsCount.textContent = '—';
@@ -1360,7 +1366,7 @@ async function loadLookups() {
 
 function openAddLookup() {
   const listType = lkTypeFilter.value;
-  const per = listType === 'educational_zone';
+  const per = isPerDirList(listType);
   if (per && !lkDirFilter.value) return;   // guard (button is disabled in this state)
   editingLookupId = null;
   lookupModalTitle.textContent = 'إضافة عنصر';
@@ -1384,7 +1390,7 @@ function openEditLookup(id) {
   editingLookupId = id;
   lookupModalTitle.textContent = 'تعديل عنصر';
   lkTypeLabel.value = LIST_TYPE_LABELS[r.list_type] ?? r.list_type;
-  const per = r.list_type === 'educational_zone';
+  const per = isPerDirList(r.list_type);
   lkDirRow.style.display = per ? '' : 'none';
   if (per) {
     const d = allDirectorates.find(x => x.id === r.directorate_id);
@@ -1413,7 +1419,7 @@ lookupModalSave.addEventListener('click', async () => {
 
   const editing = editingLookupId ? allLookups.find(r => r.id === editingLookupId) : null;
   const listType = editing ? editing.list_type : lkTypeFilter.value;
-  const per = listType === 'educational_zone';
+  const per = isPerDirList(listType);
   const dirId = per ? (editing ? editing.directorate_id : lkDirFilter.value) : null;
   if (per && !dirId) { showError(lookupModalError, 'يجب اختيار مديرية.'); return; }
 

@@ -4974,13 +4974,52 @@ el('btn-confirm-import').addEventListener('click', async () => {
 // ════════════════════════════════════════════════════════════════════════════
 //  School identity + GPS (هوية المدرسة والموقع)
 // ════════════════════════════════════════════════════════════════════════════
+/* ضبط قيمةٍ محفوظة على قائمةٍ منسدلة.
+   الخطر: `select.value = x` حيث لا خيارَ قيمتُه x يُرجع الحقل فارغاً **بصمت**،
+   فيقرأ الحفظُ لاحقاً '' ويمحو ما كان محفوظاً. وهذا يقع فعلاً على بياناتٍ أُدخلت
+   يوم كان الحقل نصّاً حرّاً («بنين» بدل «ذكور»، أو مجمّعٍ لم يعرّفه المشرف بعد).
+   الحلّ: تُحقن القيمة الحالية خياراً إن غابت، فتبقى ظاهرةً ومحفوظة حتى يغيّرها
+   المدير قصداً. */
+function setSelectPreserving(sel, value) {
+  if (!sel) return;
+  const v = String(value ?? '').trim();
+  if (v && ![...sel.options].some(o => o.value === v)) {
+    const o = document.createElement('option');
+    o.value = v; o.textContent = v;
+    sel.insertBefore(o, sel.options[1] ?? null);
+  }
+  sel.value = v;
+  CustomSelect.refresh(sel);
+}
+
+/* المجمّع التربوي: قائمةٌ يضبطها المشرف لكل مديرية (school_complex). كان نصّاً
+   حرّاً فتفرّقت صيغُ المجمّع الواحد وتفتّت التجميع في لوحتَي المديرية والوزارة. */
+async function fillComplexSelect() {
+  const sel = el('sch-complex'); if (!sel) return;
+  const cur = S.school?.complex_name ?? '';
+  // المحفوظ يظهر فوراً: القائمة تأتي من الشبكة وقد تتأخّر، ولا يصحّ أن يرى
+  // المديرُ حقلاً فارغاً لقيمةٍ هي محفوظةٌ فعلاً.
+  sel.innerHTML = '<option value="">— اختر —</option>';
+  setSelectPreserving(sel, cur);
+  let vals = [];
+  try { vals = await getLookup('school_complex'); }
+  catch { /* أوفلاين أو تعذّر الجلب: يبقى المحفوظ وحده خياراً */ }
+  if (vals.length) {
+    sel.innerHTML = '<option value="">— اختر —</option>' +
+      vals.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    setSelectPreserving(sel, cur);
+  }
+  const hint = el('sch-complex-hint');
+  if (hint) hint.hidden = vals.length > 0;
+}
+
 function populateIdentityCard() {
   const s = S.school; if (!s) return;
-  if (el('sch-complex'))        el('sch-complex').value        = s.complex_name   ?? '';
   if (el('sch-classification')) el('sch-classification').value = s.classification ?? '';
   if (el('sch-edutype'))      { el('sch-edutype').value        = s.education_type ?? ''; CustomSelect.refresh(el('sch-edutype')); }
   if (el('sch-shift'))        { el('sch-shift').value          = s.shift ?? ''; CustomSelect.refresh(el('sch-shift')); }
-  if (el('sch-studenttype'))    el('sch-studenttype').value    = s.student_type   ?? '';
+  setSelectPreserving(el('sch-studenttype'), s.student_type);
+  void fillComplexSelect();
   if (el('sch-lat'))            el('sch-lat').value            = s.lat ?? '';
   if (el('sch-lng'))            el('sch-lng').value            = s.lng ?? '';
   // Staff & student counts
@@ -5020,8 +5059,11 @@ el('btn-save-identity')?.addEventListener('click', async () => {
   // المجمّع يُطبَع في ترويسة بطاقة العلامات وورقة «لا مانع». وهذا النموذج يرسل
   // المفتاح دائماً، فحفظُه فارغاً كان **يمحو** قيمةً ضبطتها المديرية.
   if (!patch.complexName) {
+    const noOptions = (el('sch-complex')?.options.length ?? 0) <= 1;
     msg.className = 'msg msg-error';
-    msg.textContent = 'المجمّع التربوي مطلوب — يظهر في ترويسة الوثائق المطبوعة.';
+    msg.textContent = noOptions
+      ? 'لا توجد مجمّعات مُعرّفة لمديريتك — يضيفها المشرف من «القوائم المرجعية» ثم تختار منها.'
+      : 'المجمّع التربوي مطلوب — يظهر في ترويسة الوثائق المطبوعة.';
     show(msg); return;
   }
   const btn = el('btn-save-identity'); btn.disabled = true;
@@ -5428,6 +5470,8 @@ CustomSelect.enhance('stu-gov');
 CustomSelect.enhance('transfer-class');
 CustomSelect.enhance('sch-shift');
 CustomSelect.enhance('sch-edutype');
+CustomSelect.enhance('sch-complex');
+CustomSelect.enhance('sch-studenttype');
 CustomSelect.enhance('staff-status');
 CustomSelect.enhance('in-personnel-kind');
 CustomSelect.enhance('mng-class-select');
@@ -6030,6 +6074,12 @@ let _asnEditId    = null;
 let _asnClasses   = [];
 let _asnTeachers  = [];
 let _asnSubjects  = [];            // subjects for the currently selected class grade
+let _asnStaff     = [];            // سجلّ الكوادر النشط — مصدر أسماء أصحاب التكاليف
+
+/* الجهازان كما في البيان الشهريّ الرسميّ: التعليميّ (staff_type = teaching)
+   والإداريّ وهو ما سواه — إداريّون ومهنيّون ومستخدَمون وحرّاس. */
+const asnStaffFor = (kind) => _asnStaff.filter(s =>
+  kind === 'technical' ? s.staff_type === 'teaching' : s.staff_type !== 'teaching');
 
 const asnList         = el('asn-list');
 const asnLoading      = el('asn-loading');
@@ -6042,6 +6092,8 @@ const btnCloseAsn     = el('btn-close-assignment');
 const asnTitle        = el('asn-title');
 const asnKind         = el('asn-kind');
 const asnJobTitle     = el('asn-job-title');
+const asnStaffSel     = el('asn-staff');
+const asnStaffHint    = el('asn-staff-hint');
 const asnTechFields   = el('asn-technical-fields');
 const asnClass        = el('asn-class');
 const asnSection      = el('asn-section');
@@ -6058,6 +6110,7 @@ const btnSaveAsn      = el('btn-save-assignment');
 
 CustomSelect.enhance('asn-kind');
 CustomSelect.enhance('asn-job-title');
+CustomSelect.enhance('asn-staff');
 CustomSelect.enhance('asn-class');
 CustomSelect.enhance('asn-user');
 
@@ -6065,7 +6118,17 @@ async function loadAssignments() {
   if (!S.school?.id) return;
   show(asnLoading); hide(asnError);
   try {
-    _asnAll = await NDB.getStaffAssignments(S.school.id);
+    /* الكوادر والصفوف تُجلب مع التكاليف لا عند فتح النافذة: الجدول يعرض اسم
+       صاحب التكليف واسم صفّه، وكلاهما يُستخرج من هاتين القائمتين. جلبُهما
+       متأخّراً كان يُظهر السطر بلا صفٍّ حتى يفتح المديرُ نافذةَ تعديلٍ ما. */
+    const [asns, staff, classes] = await Promise.all([
+      NDB.getStaffAssignments(S.school.id),
+      NDB.getStaffRecords(S.school.id).catch(() => _asnStaff),
+      NDB.getSchoolClasses(S.school.id).catch(() => _asnClasses),
+    ]);
+    _asnAll     = asns;
+    _asnStaff   = staff   || [];
+    _asnClasses = classes || [];
     renderAssignments();
   } catch (err) {
     console.error('[Ruqi] loadAssignments', err);
@@ -6088,11 +6151,18 @@ function renderAssignments() {
     const clsLabel = cls ? (cls.name || `${gradeLabel(cls.grade)} / ${cls.section ?? ''}`.trim()) : '';
     const synced = a.assignment_kind === 'technical' && a.class_id && a.user_id
       ? '<span class="reg-linked-badge">مُزامَن مع صلاحية المعلّم</span>' : '';
-    const meta = [clsLabel, a.section ? `شعبة ${a.section}` : '',
+    /* الاسم هو عنوان السطر: تكليفٌ بلا صاحبٍ لا معنى له. التكاليف القديمة
+       أُنشئت قبل وجود الحقل فتظهر موسومةً كي تُستكمل، وكادرٌ أُخرج من الخدمة
+       يُميَّز عن غياب الإسناد أصلاً — الحالتان مختلفتان والمعالجة مختلفة. */
+    const person = a.staff_id ? _asnStaff.find(s => s.id === a.staff_id) : null;
+    const title = person
+      ? escapeHtml(person.full_name)
+      : `<span class="reg-noname">${a.staff_id ? 'كادر غير نشط' : 'بلا اسم — حدِّده بالتعديل'}</span>`;
+    const meta = [a.job_title, clsLabel, a.section ? `شعبة ${a.section}` : '',
       a.lesson_count != null ? `${a.lesson_count} درساً` : ''].filter(Boolean).join(' · ');
     return `<li class="reg-row" data-id="${a.id}">
       <div class="reg-row-main">
-        <div class="reg-name">${escapeHtml(a.job_title)}${synced}</div>
+        <div class="reg-name">${title}${synced}</div>
         ${meta ? `<div class="reg-meta">${escapeHtml(meta)}</div>` : ''}
       </div>
       <div class="reg-row-acts">
@@ -6146,6 +6216,31 @@ function _renderAsnKindFields() {
   if (asnTechFields) asnTechFields.hidden = !isTech;
 }
 
+/* قائمة أسماء صاحب التكليف. تتبدّل مع الجهاز: التعليميّ يعرض المعلّمين
+   والإداريّ يعرض من سواهم. الفارغة ليست خطأً بل رسالة: السجلّ لم يُملأ بعد،
+   ومن غير سجلٍّ لا يوجد من يُكلَّف. */
+function _fillAsnStaff(selectedId = '') {
+  if (!asnStaffSel) return;
+  const list = asnStaffFor(asnKind.value);
+  asnStaffSel.innerHTML = '<option value="">— اختر —</option>' + list.map(s =>
+    `<option value="${escapeHtml(s.id)}">${escapeHtml(s.full_name)}</option>`).join('');
+  // كادرٌ أُخرج من الخدمة بعد تكليفه لا يظهر في القائمة النشطة؛ نُبقيه خياراً
+  // عند التعديل كي لا يُمحى إسنادُه بمجرّد فتح النافذة وحفظها.
+  if (selectedId && !list.some(s => s.id === selectedId)) {
+    const o = document.createElement('option');
+    o.value = selectedId; o.textContent = 'كادر غير نشط';
+    asnStaffSel.insertBefore(o, asnStaffSel.options[1] ?? null);
+  }
+  asnStaffSel.value = selectedId || '';
+  CustomSelect.refresh(asnStaffSel);
+  if (asnStaffHint) {
+    asnStaffHint.hidden = list.length > 0;
+    asnStaffHint.textContent = asnKind.value === 'technical'
+      ? 'لا يوجد معلّمون في سجلّ الكوادر — أضِفهم من «سجلّ الكوادر» أولاً.'
+      : 'لا يوجد إداريّون أو مستخدَمون في سجلّ الكوادر — أضِفهم من «سجلّ الكوادر» أولاً.';
+  }
+}
+
 function _fillAsnSubjects(selectedIds = []) {
   if (!asnSubjects) return;
   if (!_asnSubjects.length) {
@@ -6182,6 +6277,7 @@ async function openAssignmentModal(asn) {
   asnKind.value = asn?.assignment_kind || _asnSegment;
   CustomSelect.refresh(asnKind);
   _renderAsnKindFields();
+  _fillAsnStaff(asn?.staff_id || '');
 
   asnSection.value      = asn?.section        || '';
   asnLessonCount.value  = asn?.lesson_count   ?? '';
@@ -6203,10 +6299,17 @@ async function openAssignmentModal(asn) {
 
   // Load classes + teacher accounts (from cache instantly when offline).
   try {
-    [_asnClasses, _asnTeachers] = await Promise.all([
+    const [classes, teachers, staff] = await Promise.all([
       NDB.getSchoolClasses(S.school.id),
       NDB.getTeachersBySchool(S.school.id),
+      // السجلّ قد يتغيّر بعد تحميل التبويب — يُعاد جلبه كي لا تفوت النافذةَ
+      // إضافةٌ جديدة. فشلُه وحده لا يُفرغ ما بين أيدينا.
+      NDB.getStaffRecords(S.school.id).catch(() => _asnStaff),
     ]);
+    _asnClasses  = classes;
+    _asnTeachers = teachers;
+    _asnStaff    = staff || [];
+    _fillAsnStaff(asn?.staff_id || asnStaffSel?.value || '');
   } catch (err) {
     console.warn('[Ruqi] openAssignmentModal load', err);
     _asnClasses  = _asnClasses  || [];
@@ -6248,8 +6351,11 @@ function closeAssignmentModal() {
 btnCloseAsn?.addEventListener('click', closeAssignmentModal);
 modalAsn?.addEventListener('click', e => { if (e.target === modalAsn) closeAssignmentModal(); });
 
-// Update job-title list when kind changes inside the modal
+// Update job-title + staff lists when kind changes inside the modal
 asnKind?.addEventListener('change', async () => {
+  // الأسماء أولاً وبلا انتظار شبكة: تبديلُ الجهاز يُبدّل الجهاز المعروض،
+  // فبقاءُ اسمِ معلّمٍ تحت «إداري» ولو للحظة قراءةٌ خاطئة.
+  _fillAsnStaff('');
   const listType = asnKind.value === 'technical' ? 'job_title' : 'school_admin_role';
   const titles = await getLookup(listType);
   const prev = asnJobTitle.value;
@@ -6262,6 +6368,15 @@ btnSaveAsn?.addEventListener('click', async () => {
   hide(asnFormError);
   const kind = asnKind.value;
   const jobTitle = asnJobTitle.value;
+  const staffId = asnStaffSel?.value || '';
+  // تكليفٌ بلا اسمٍ لا قيمة له: لا يُعرف صاحبه في الجدول، ولا يُحتسب في نصاب
+  // أحد، ولا يصلح سطراً في البيان الشهريّ المرفوع للمديرية.
+  if (!staffId) {
+    asnFormError.textContent = asnStaffFor(kind).length
+      ? 'اختر اسم صاحب التكليف.'
+      : 'لا يوجد كادرٌ مسجَّل لهذا الجهاز — أضِفه من «سجلّ الكوادر» ثم أعد المحاولة.';
+    show(asnFormError); return;
+  }
   if (!jobTitle) {
     asnFormError.textContent = 'اختر الصفة / العمل المسند.'; show(asnFormError); return;
   }
@@ -6272,6 +6387,7 @@ btnSaveAsn?.addEventListener('click', async () => {
   const payload = {
     id:              _asnEditId || undefined,
     assignment_kind: kind,
+    staff_id:        staffId,
     job_title:       jobTitle,
     class_id:        kind === 'technical' ? (asnClass.value || undefined) : undefined,
     section:         kind === 'technical' ? (asnSection.value.trim() || undefined) : undefined,

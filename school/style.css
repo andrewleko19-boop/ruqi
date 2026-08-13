@@ -1818,6 +1818,8 @@ select.csel-native {
 .reg-row-main { flex:1; min-width:0; }
 .reg-name { font-weight:600; font-size:.88rem; color:#0F172A; overflow-wrap:anywhere; }
 .reg-meta { font-size:.75rem; color:#64748B; margin-top:2px; }
+/* تكليفٌ بلا صاحب: يُقرأ فوراً على أنّه ناقص، لا كاسمٍ عاديّ باهت. */
+.reg-noname { color:var(--clr-warn,#B45309); font-weight:600; font-style:italic; }
 .reg-row-acts { display:flex; gap:4px; flex-shrink:0; }
 .form-section-label {
   font-size:.72rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase;

@@ -1073,7 +1073,10 @@
       <div class="card-body">
         <div class="field-group">
           <label for="sch-complex">المجمّع التربوي *</label>
-          <input id="sch-complex" class="field-input" type="text" maxlength="120" />
+          <select id="sch-complex" class="field-input"><option value="">— اختر —</option></select>
+          <p class="form-hint" id="sch-complex-hint" hidden>
+            لا توجد مجمّعات مُعرّفة لمديريتك بعد — يضيفها المشرف من «القوائم المرجعية».
+          </p>
         </div>
         <div class="twin-fields">
           <div class="field-group">
@@ -1102,7 +1105,12 @@
           </div>
           <div class="field-group">
             <label for="sch-studenttype">نوع الطلاب</label>
-            <input id="sch-studenttype" class="field-input" type="text" maxlength="60" />
+            <select id="sch-studenttype" class="field-input">
+              <option value="">—</option>
+              <option value="ذكور">ذكور</option>
+              <option value="إناث">إناث</option>
+              <option value="مختلط">مختلط</option>
+            </select>
           </div>
         </div>
       </div>
@@ -1989,6 +1997,11 @@
             </select>
           </div>
           <div class="field-group">
+            <label for="asn-staff">الاسم *</label>
+            <select id="asn-staff" class="field-input"><option value="">— اختر —</option></select>
+            <p class="form-hint" id="asn-staff-hint" hidden></p>
+          </div>
+          <div class="field-group">
             <label for="asn-job-title">الصفة / العمل المسند</label>
             <select id="asn-job-title" class="field-input"><option value="">— اختر —</option></select>
           </div>
@@ -2014,7 +2027,7 @@
                 <input id="asn-lesson-count" class="field-input" type="number" min="0" max="40" />
               </div>
               <div class="field-group">
-                <label for="asn-user">حساب المعلم <span class="optional">(للمزامنة)</span></label>
+                <label for="asn-user">حساب الدخول <span class="optional">(للمزامنة)</span></label>
                 <select id="asn-user" class="field-input"><option value="">— بلا مزامنة —</option></select>
               </div>
             </div>
