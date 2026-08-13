@@ -1978,8 +1978,6 @@ const tabStatement    = el('tab-statement');
 const viewStatement   = el('view-statement');
 const tabPersonnel    = el('tab-personnel');
 const viewPersonnel   = el('view-personnel');
-const tabAbsence        = el('tab-absence');
-const viewAbsence       = el('view-absence');
 const tabSummaryReports = el('tab-summary-reports');
 const viewSummaryReports= el('view-summary-reports');
 const tabNoc          = el('tab-noc');
@@ -2021,8 +2019,7 @@ let _mngBusy      = false;
 // الفقاعات حرفياً.
 const TAB_META = {
   attendance:        { icon: 'ic-home',         label: 'الرئيسية' },
-  absence:           { icon: 'ic-x-circle',     label: 'الغياب' },
-  'summary-reports': { icon: 'ic-bar-chart',    label: 'التقارير' },
+  'summary-reports': { icon: 'ic-bar-chart',    label: 'الغياب والتقارير' },
   manage:            { icon: 'ic-users',        label: 'الصفوف' },
   students:          { icon: 'ic-user',         label: 'الطلاب' },
   personnel:         { icon: 'ic-receipt',      label: 'الكادر' },
@@ -2035,7 +2032,6 @@ const TAB_META = {
 };
 
 const TABS = {
-  absence:           { tab: tabAbsence,        view: viewAbsence },
   'summary-reports': { tab: tabSummaryReports, view: viewSummaryReports },
   attendance: { tab: tabAttendance, view: viewAttendance },
   manage:     { tab: tabManage,     view: viewManage },
@@ -2120,8 +2116,8 @@ function switchTab(tab, fromHistory = false) {
   }
   if (gateView) clearOfflineGate(gateView);
 
-  if (tab === 'absence')         loadAbsenceView();
-  if (tab === 'summary-reports') loadSummaryReports();
+  // القسم الواحد يحمل الآن الكشفين معاً، فيُحمَّلان معاً.
+  if (tab === 'summary-reports') { loadSummaryReports(); loadAbsenceView(); }
   if (tab === 'manage'   && !_manageLoaded)  loadManageClasses();
   if (tab === 'manage'   && !_mngSubjectsInit) initManageSubjects();
   if (tab === 'students' && !_studentsLoaded) initStudentsTab();
@@ -2133,7 +2129,6 @@ function switchTab(tab, fromHistory = false) {
   if (tab === 'noc'       && !_nocLoaded)       initNocTab();
 }
 
-tabAbsence?.addEventListener('click',        () => switchTab('absence'));
 tabSummaryReports?.addEventListener('click', () => switchTab('summary-reports'));
 tabAttendance.addEventListener('click', () => switchTab('attendance'));
 tabManage.addEventListener('click',     () => switchTab('manage'));

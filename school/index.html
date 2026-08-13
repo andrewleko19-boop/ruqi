@@ -377,15 +377,13 @@
             <svg class="icon"><use href="#ic-home"/></svg>
             <span>الرئيسية</span>
           </button>
-          <button class="bubble-tab" id="tab-absence" role="tab"
-                  aria-selected="false" data-tab="absence" data-module="attendance-core">
-            <svg class="icon"><use href="#ic-x-circle"/></svg>
-            <span>الغياب</span>
-          </button>
+          <!-- «الغياب» و«التقارير» كانا فقاعتين منفصلتين وكلاهما قراءةٌ لنفس
+               اليوم: سجلّ الغياب تقريرٌ بطبيعته، وكان المدير يقفز بينهما ليكوّن
+               صورةً واحدة. دُمجا في قسمٍ واحد بثلاث بطاقات متتابعة. -->
           <button class="bubble-tab" id="tab-summary-reports" role="tab"
                   aria-selected="false" data-tab="summary-reports" data-module="analytics-dashboards">
             <svg class="icon"><use href="#ic-bar-chart"/></svg>
-            <span>التقارير</span>
+            <span>الغياب والتقارير</span>
           </button>
           <button class="bubble-tab" id="tab-manage" role="tab"
                   aria-selected="false" data-tab="manage" data-module="student-records">
@@ -444,8 +442,27 @@
     </svg>
   </div>
 
-  <!-- ═══ VIEW: الغياب (Absence History) ═════════════════════════════════════ -->
-  <main class="page" id="view-absence" role="tabpanel" aria-labelledby="tab-absence" hidden>
+  <!-- ═══ VIEW: الغياب والتقارير ═════════════════════════════════════════════
+       قسمٌ واحد يجمع ما كان تبويبين: التقارير اليومية أوّلاً (النظرة العامة)،
+       ثمّ سجلّات الغياب، ثمّ أعذار أولياء الأمور الواردة — من العامّ إلى الخاصّ. -->
+  <main class="page" id="view-summary-reports" role="tabpanel" aria-labelledby="tab-summary-reports" hidden>
+    <div class="status-card-mockup">
+      <div class="status-header-row">
+        <div class="status-icon-grad">
+          <svg class="icon icon-lg"><use href="#ic-bar-chart"/></svg>
+        </div>
+        <div>
+          <div class="status-title-lg">التقارير اليومية</div>
+          <div class="status-date-sm" id="reports-month">—</div>
+        </div>
+      </div>
+      <div id="summary-reports-body" class="summary-reports-body">
+        <div class="dskel" style="height:40px;border-radius:8px"></div>
+        <div class="dskel" style="height:40px;border-radius:8px;opacity:.7"></div>
+        <div class="dskel" style="height:40px;border-radius:8px;opacity:.4"></div>
+      </div>
+    </div>
+
     <div class="status-card-mockup">
       <div class="status-header-row">
         <div class="status-icon-grad">
@@ -489,26 +506,6 @@
         <div class="dskel" style="height:64px;border-radius:10px;opacity:.6"></div>
       </div>
       <p id="excuses-review-empty" class="excuses-review-empty" hidden>لا توجد أعذار في هذه الحالة</p>
-    </div>
-  </main><!-- /view-absence -->
-
-  <!-- ═══ VIEW: التقارير (Summary Reports) ═══════════════════════════════════ -->
-  <main class="page" id="view-summary-reports" role="tabpanel" aria-labelledby="tab-summary-reports" hidden>
-    <div class="status-card-mockup">
-      <div class="status-header-row">
-        <div class="status-icon-grad">
-          <svg class="icon icon-lg"><use href="#ic-bar-chart"/></svg>
-        </div>
-        <div>
-          <div class="status-title-lg">التقارير اليومية</div>
-          <div class="status-date-sm" id="reports-month">—</div>
-        </div>
-      </div>
-      <div id="summary-reports-body" class="summary-reports-body">
-        <div class="dskel" style="height:40px;border-radius:8px"></div>
-        <div class="dskel" style="height:40px;border-radius:8px;opacity:.7"></div>
-        <div class="dskel" style="height:40px;border-radius:8px;opacity:.4"></div>
-      </div>
     </div>
   </main><!-- /view-summary-reports -->
 
