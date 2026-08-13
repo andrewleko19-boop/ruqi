@@ -10,6 +10,7 @@
 
 import { supabase, errMessage } from '../shared/db.js';
 import * as RUQI_PERMISSIONS from '../shared/permissions.js';
+import { setupPwToggle } from '../shared/pw-toggle.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const loginScreen    = document.getElementById('login-screen');
@@ -20,6 +21,7 @@ const refreshBtn     = document.getElementById('refresh-btn');
 const exportBtn      = document.getElementById('export-btn');
 const emailInput     = document.getElementById('email');
 const passwordInput  = document.getElementById('password');
+setupPwToggle(passwordInput);
 const loginError     = document.getElementById('login-error');
 const userEmailEl    = document.getElementById('user-email');
 const todayLabel     = document.getElementById('today-label');

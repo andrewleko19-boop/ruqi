@@ -388,6 +388,13 @@ function showScreen(name) {
   removeBootSplash();               // أول شاشة حقيقية تُرفع مؤشّر الإقلاع فوراً
   screenLogin.hidden = (name !== 'login');
   screenApp.hidden   = (name !== 'app');
+  /* التنبيهات تعيش خارج الشاشتين، فتنجو من التبديل بينهما. تذكيرُ «لم يُرسل سجل
+     الحضور» يُطلَق بعد استعادة الجلسة، فإن سقطت الجلسة بعدها مباشرةً — انتهاء
+     صلاحية، خروج، فشل تحقّق — بقي التنبيه معلّقاً فوق شاشة الدخول يفشي حالةَ
+     مدرسةٍ لمن لم يسجّل دخوله بعد. شاشة الدخول تبدأ نظيفةً دائماً. */
+  if (name === 'login') {
+    for (const key of [..._activeToasts.keys()]) _dismissToast(key, true);
+  }
 }
 
 // مؤشّر تحميل الإقلاع: يمنع وميض شاشة الدخول قبل حسم الجلسة — قد يستغرق فحصُها
@@ -3960,6 +3967,9 @@ btnSaveGrace.addEventListener('click', async () => {
 
 // ═══ Staff attendance (دوام الموظفين) ════════════════════════════════════════
 let _staffLoaded = false;
+// يرفعه أيّ محمِّل يفشل داخل التبويب. كلّ محمِّل يبتلع خطأه ليعرض رسالته في
+// بطاقته، فلا يصل الفشل إلى Promise.all — وهذا العلم هو قناة الإبلاغ الوحيدة.
+let _staffLoadFailed = false;
 let _staffData   = { teachers: [], admins: [], workers: [] };
 let _staffEdit   = null;  // { kind, refId, name, record } currently being edited
 let _rosterAll   = [];
@@ -4023,10 +4033,15 @@ function fmtHHMM(iso) {
 }
 
 async function initStaffTab() {
-  _staffLoaded = true;
+  _staffLoadFailed = false;
   if (inWorkStart) inWorkStart.value = staffWorkStart() ? String(staffWorkStart()).slice(0, 5) : '';
   populateIdentityCard();
   await Promise.all([loadRosterCard(), loadStaffAttendance(), loadPersonnelRoster(), loadStaffCredentials()]);
+  /* العلم يُرفع بعد اكتمال التحميل لا قبله. كان يُرفع في أوّل سطر، فإذا فشل أيّ
+     نداء — انقطاعٌ لحظيّ، مهلة شبكة، خطأ خادم — بقي التبويب في نظر switchTab
+     «محمَّلاً» فلا يُعيد المحاولة أبداً: يفتحه المدير مرّةً بعد مرّة فيراه فارغاً
+     بلا سبب ظاهر. الآن يبقى «غير محمَّل» عند الفشل فتُعاد المحاولة تلقائياً. */
+  _staffLoaded = !_staffLoadFailed;
 }
 
 // ── Roster card (الكوادر المدرسية) ─────────────────────────────────────────
@@ -4042,8 +4057,9 @@ async function loadRosterCard() {
     hide(rosterLoading); show(rosterListEl);
   } catch (err) {
     console.error('[Ruqi] loadRosterCard', err);
+    _staffLoadFailed = true;
     hide(rosterLoading);
-    if (rosterErrorEl) { rosterErrorEl.textContent = 'تعذّر تحميل الكوادر.'; show(rosterErrorEl); }
+    if (rosterErrorEl) { rosterErrorEl.textContent = errMessage(err, 'تعذّر تحميل الكوادر.'); show(rosterErrorEl); }
   } finally {
     if (rosterRefreshIcon) rosterRefreshIcon.classList.remove('syncing');
   }
@@ -4106,8 +4122,9 @@ async function loadStaffAttendance() {
     hide(staffLoading); show(staffListEl);
   } catch (err) {
     console.error('[Ruqi] loadStaffAttendance', err);
+    _staffLoadFailed = true;
     hide(staffLoading);
-    staffErrorEl.textContent = 'تعذّر تحميل دوام الموظفين.'; show(staffErrorEl);
+    staffErrorEl.textContent = errMessage(err, 'تعذّر تحميل دوام الموظفين.'); show(staffErrorEl);
   } finally {
     staffRefreshIcon.classList.remove('syncing');
   }
@@ -4242,6 +4259,7 @@ async function loadPersonnelRoster() {
     ).join('');
   } catch (err) {
     console.error('[Ruqi] loadPersonnelRoster', err);
+    _staffLoadFailed = true;
   }
 }
 
@@ -5041,7 +5059,7 @@ const modalTeacher = el('modal-teacher');
 
 async function loadStaffCredentials() {
   if (!S.school?.id || !NDB.getStaffCredentials) return;
-  show(el('cred-loading')); hide(el('cred-empty'));
+  show(el('cred-loading')); hide(el('cred-empty')); hide(el('cred-error'));
   try {
     const [creds, teachers] = await Promise.all([
       NDB.getStaffCredentials(S.school.id),
@@ -5053,7 +5071,9 @@ async function loadStaffCredentials() {
     renderCredentials();
   } catch (err) {
     console.error('[Ruqi] loadStaffCredentials', err);
-    toast(errMessage(err, 'تعذّر تحميل بيانات تسجيل الكادر.'), 'error');
+    _staffLoadFailed = true;
+    el('cred-error-text').textContent = errMessage(err, 'تعذّر تحميل بيانات تسجيل الكادر.');
+    show(el('cred-error'));
   } finally {
     hide(el('cred-loading'));
   }
@@ -5102,6 +5122,7 @@ credListEl.addEventListener('click', async (e) => {
 });
 
 el('btn-refresh-cred')?.addEventListener('click', () => loadStaffCredentials());
+el('btn-retry-cred')?.addEventListener('click', () => loadStaffCredentials());
 
 // ── Permanent teacher-account deletion (with confirmation) ──────────────────
 let _credDeleteUserId = null;

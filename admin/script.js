@@ -4,6 +4,7 @@ import {
   updateUserPermissionRole,
 } from '../shared/db.js';
 import { CustomSelect } from '../shared/csel.js';
+import { setupPwToggle } from '../shared/pw-toggle.js';
 
 const EDGE_BASE = supabaseUrl + '/functions/v1';
 
@@ -54,6 +55,7 @@ const loginBtn      = document.getElementById('login-btn');
 const logoutBtn     = document.getElementById('logout-btn');
 const emailInput    = document.getElementById('email');
 const passwordInput = document.getElementById('password');
+setupPwToggle(passwordInput);
 const loginError    = document.getElementById('login-error');
 const userEmailEl   = document.getElementById('user-email');
 

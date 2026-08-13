@@ -248,7 +248,7 @@
           <label for="in-email">البريد الإلكتروني</label>
           <div class="input-wrap">
             <svg class="input-icon"><use href="#ic-user"/></svg>
-            <input type="email" id="in-email" placeholder="admin@school.edu.sy"
+            <input type="email" id="in-email" placeholder="البريد الإلكتروني"
                    autocomplete="username" inputmode="email" required />
           </div>
         </div>
@@ -256,7 +256,7 @@
           <label for="in-password">كلمة المرور</label>
           <div class="input-wrap">
             <svg class="input-icon"><use href="#ic-lock"/></svg>
-            <input type="password" id="in-password" placeholder="••••••••"
+            <input type="password" id="in-password" placeholder="كلمة المرور"
                    autocomplete="current-password" required />
             <button type="button" class="toggle-pw" id="btn-toggle-pw" aria-label="إظهار/إخفاء كلمة المرور">
               <svg class="icon"><use href="#ic-eye" id="pw-eye-use"/></svg>
@@ -849,6 +849,13 @@
         <div id="cred-loading" hidden style="padding:8px 0"><div class="dskel"></div></div>
         <ul id="cred-list" class="mng-list" role="list"></ul>
         <p id="cred-empty" class="mng-empty" hidden>لا توجد حسابات معلّمين بعد.</p>
+        <!-- حالة فشل ظاهرة وقابلة لإعادة المحاولة: كانت رسالةً عابرة تختفي بعد
+             ثوانٍ فيبقى المدير أمام قائمة فارغة يظنّها «لا حسابات». -->
+        <div id="cred-error" class="msg msg-error" hidden>
+          <span id="cred-error-text"></span>
+          <button type="button" class="btn btn-outline btn-sm" id="btn-retry-cred"
+                  style="margin-top:8px">إعادة المحاولة</button>
+        </div>
       </div>
     </section>
 

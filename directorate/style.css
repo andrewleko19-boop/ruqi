@@ -339,6 +339,28 @@ input:focus, select:focus, textarea:focus {
 }
 input::placeholder { color: var(--text-muted); }
 
+/* إظهار/إخفاء كلمة المرور — على الجوّال الكتابة عرضةٌ للخطأ، وبلا تحقّقٍ بصريّ
+   يقرأ المستخدم «بيانات غير صحيحة» فيظنّ العطل في النظام لا في حرفٍ أخطأه. */
+.pw-wrap { position: relative; display: flex; }
+.pw-wrap input { flex: 1; padding-left: 40px; }
+.pw-toggle {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  transition: color var(--transition);
+}
+.pw-toggle:hover { color: var(--blue); }
+.pw-toggle .icon { width: 18px; height: 18px; }
+
 .select-sm {
   width: auto;
   padding: 0.35rem 0.7rem;

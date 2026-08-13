@@ -161,6 +161,28 @@ body {
 .form-group select:focus { border-color: var(--accent); }
 .form-group select { cursor: pointer; }
 
+/* إظهار/إخفاء كلمة المرور — على الجوّال الكتابة عرضةٌ للخطأ، وبلا تحقّقٍ بصريّ
+   يقرأ المستخدم «بيانات غير صحيحة» فيظنّ العطل في النظام لا في حرفٍ أخطأه. */
+.pw-wrap { position: relative; display: flex; }
+.pw-wrap input { flex: 1; padding-left: 40px; }
+.pw-toggle {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--text-dim);
+  border-radius: var(--radius);
+  transition: color .2s;
+}
+.pw-toggle:hover { color: var(--accent); }
+.pw-toggle .icon { width: 18px; height: 18px; }
+
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

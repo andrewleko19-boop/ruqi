@@ -11,6 +11,18 @@
   <link rel="stylesheet" href="style.css" />
 
   <!-- SVG Sprite -->
+  <link rel="icon" href="../icons/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../icons/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="../icons/favicon-16.png" />
+  <link rel="apple-touch-icon" href="../icons/apple-touch-icon-180.png" />
+  <link rel="manifest" href="../manifest.json" />
+  <meta name="theme-color" content="#11182b" />
+  <!-- خطوط محلّية لا من Google: عامل الخدمة لا يخزّن cross-origin،
+       فخطوط CDN تفشل دون اتصال. تُبنى بـ tools/build-fonts.mjs. -->
+  <link rel="stylesheet" href="../shared/vendor/fonts/fonts.css" />
+</head>
+<body>
+
   <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
     <symbol id="icon-school" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
@@ -44,17 +56,6 @@
       <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
     </symbol>
   </svg>
-  <link rel="icon" href="../icons/favicon.ico" sizes="any" />
-  <link rel="icon" type="image/png" sizes="32x32" href="../icons/favicon-32.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="../icons/favicon-16.png" />
-  <link rel="apple-touch-icon" href="../icons/apple-touch-icon-180.png" />
-  <link rel="manifest" href="../manifest.json" />
-  <meta name="theme-color" content="#11182b" />
-  <!-- خطوط محلّية لا من Google: عامل الخدمة لا يخزّن cross-origin،
-       فخطوط CDN تفشل دون اتصال. تُبنى بـ tools/build-fonts.mjs. -->
-  <link rel="stylesheet" href="../shared/vendor/fonts/fonts.css" />
-</head>
-<body>
 
   <!-- شاشة الحارس — لا نموذج دخول هنا؛ index.html يملك الدخول -->
   <div id="guard-screen" class="login-overlay">

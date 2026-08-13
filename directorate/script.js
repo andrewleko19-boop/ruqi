@@ -1,6 +1,7 @@
 // directorate/script.js
 // ── DB من window.RUQI_DB (يُحمَّل عبر shared/db.js قبل هذا الملف) ──────────
 import { CustomSelect }                      from '../shared/csel.js';
+import { setupPwToggle }                     from '../shared/pw-toggle.js';
 import { supabase as _sb, supabaseUrl as _sbUrl } from '../shared/db.js';
 const {
   login,
@@ -117,6 +118,7 @@ window.addEventListener('online', () => loadAll().catch(() => {}));
 function setupLoginForm() {
   const btn   = document.getElementById('login-btn');
   const errEl = document.getElementById('login-error');
+  setupPwToggle(document.getElementById('login-password'));
 
   btn.addEventListener('click', async () => {
     errEl.classList.add('hidden');
