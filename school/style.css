@@ -886,6 +886,50 @@ select.field-input option:disabled { color: var(--clr-text-3); }
 }
 
 /* Counters */
+/* ── بطاقات المؤشّرات (KPI) ─────────────────────────────────────────────────
+   صفٌّ من أربعة على الشاشات المتوسّطة، وشبكةُ ٢×٢ على الجوّال — أربعةٌ في صفٍّ
+   واحد بعرض ٣٦٠px تجعل الرقم أصغر من أن يُقرأ بنظرةٍ سريعة، وهذه البطاقات
+   قيمتُها كلّها في أنّها تُقرأ بنظرة. */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+@media (min-width: 560px) {
+  .kpi-grid { grid-template-columns: repeat(4, 1fr); }
+}
+.kpi-card {
+  border-radius: var(--r-sm);
+  padding: 14px 8px;
+  text-align: center;
+  border: 1.5px solid var(--clr-border);
+  background: var(--clr-surface);
+}
+.kpi-num {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--clr-text-1);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-lbl {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--clr-text-2);
+  margin-top: 2px;
+}
+.kpi-note {
+  font-size: 0.62rem;
+  color: var(--clr-text-3);
+  margin-top: 2px;
+  min-height: 0.8em;      /* يمنع قفزة التخطيط حين يظهر النصّ ويختفي */
+}
+.kpi-blue  { border-color: var(--p-400);            background: linear-gradient(135deg, #eff6ff, #dbeafe); }
+.kpi-green { border-color: var(--clr-success-brd);  background: var(--clr-success-bg); }
+.kpi-red   { border-color: var(--clr-danger-brd);   background: var(--clr-danger-bg); }
+.kpi-amber { border-color: #FCD34D;                 background: linear-gradient(135deg, #fffbeb, #fef3c7); }
+
 .counters {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

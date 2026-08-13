@@ -511,6 +511,31 @@
 
   <main class="page" id="view-attendance" role="tabpanel" aria-labelledby="tab-attendance">
 
+    <!-- ═══ بطاقات المؤشّرات ═══════════════════════════════════════════════════
+         الرئيسية كانت تفتح على «الحضور اليومي» وحده: مهمّة الصباح الأولى، لكنّها
+         لا تقول للمدير أين مدرسته اليوم. الأرقام الأربعة محسوبة من كشوف اليوم
+         نفسها التي تُحمَّل أصلاً — لا نداء شبكيّ إضافي ولا انتظار جديد. -->
+    <div class="kpi-grid" id="kpi-grid">
+      <div class="kpi-card kpi-blue">
+        <div class="kpi-num" id="kpi-students">—</div>
+        <div class="kpi-lbl">طالب</div>
+      </div>
+      <div class="kpi-card kpi-green">
+        <div class="kpi-num" id="kpi-present">—</div>
+        <div class="kpi-lbl">حاضر اليوم</div>
+      </div>
+      <div class="kpi-card kpi-red">
+        <div class="kpi-num" id="kpi-absent">—</div>
+        <div class="kpi-lbl">غائب اليوم</div>
+      </div>
+      <div class="kpi-card kpi-amber">
+        <div class="kpi-num" id="kpi-rate">—</div>
+        <div class="kpi-lbl">نسبة الحضور</div>
+        <!-- المقام معلَن: ٩٥٪ من فصلٍ واحد ليست ٩٥٪ من المدرسة. -->
+        <div class="kpi-note" id="kpi-rate-note"></div>
+      </div>
+    </div>
+
     <!-- Overview card -->
     <div class="status-card-mockup">
       <div class="status-header-row">

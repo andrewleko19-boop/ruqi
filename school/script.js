@@ -1242,6 +1242,36 @@ let _detailStudents = [];
 let _detailMap      = {};
 let _detailDate     = null;
 
+/* ── بطاقات المؤشّرات ────────────────────────────────────────────────────────
+   تُشتقّ من كشوف اليوم المحمَّلة أصلاً — لا نداء إضافي.
+
+   نسبة الحضور تُحسَب على الفصول التي أُرسلت كشوفها وحدها لا على المدرسة كلّها:
+   في السابعة صباحاً كشفٌ واحد من ستّة يعني ٩٥٪ من فصلٍ واحد، أمّا قسمتُه على
+   طلاب المدرسة جميعاً فتعطي ١٦٪ فيظنّ المدير كارثة. والمقام يُعلَن صراحةً تحت
+   الرقم كي لا يُقرأ ٩٥٪ على أنّه حصيلة اليوم كلّه وهو حصيلة فصلٍ منه. */
+function renderKpis(summaries) {
+  const kpi = (id, v) => { const n = el(id); if (n) n.textContent = v; };
+
+  const totalStudents = summaries.reduce((a, s) => a + (s.totalStudents ?? 0), 0);
+  // الحاضر = المسجَّل حاضراً + المتأخّر: كلاهما في المدرسة فعلاً، وعدّ المتأخّر
+  // غائباً يُنقص نسبةً هي في الواقع أعلى.
+  const present = summaries.reduce((a, s) => a + (s.stats?.present ?? 0) + (s.stats?.late ?? 0), 0);
+  const absent  = summaries.reduce((a, s) => a + (s.stats?.absent ?? 0) + (s.stats?.excused ?? 0), 0);
+  const counted = present + absent;   // الطلاب الذين رُصدوا فعلاً اليوم
+
+  kpi('kpi-students', totalStudents || '—');
+  kpi('kpi-present',  counted ? present : '—');
+  kpi('kpi-absent',   counted ? absent  : '—');
+  kpi('kpi-rate',     counted ? Math.round((present / counted) * 100) + '٪' : '—');
+
+  const note = el('kpi-rate-note');
+  if (note) {
+    note.textContent = counted && counted < totalStudents
+      ? `من ${counted} طالباً رُصدوا`   // الكشوف لم تكتمل بعد
+      : '';
+  }
+}
+
 // ── Load class summaries ──────────────────────────────────────────────────────
 async function loadClassSummaries() {
   if (!S.school?.id) return;
@@ -1283,6 +1313,8 @@ async function loadClassSummaries() {
     if (el('cls-confirmed')) el('cls-confirmed').textContent = clsConfirmed;
     if (el('cls-pending'))   el('cls-pending').textContent   = clsPending;
     if (el('cls-total'))     el('cls-total').textContent     = clsTotal;
+
+    renderKpis(summaries);
 
     // Wire the class filter toggle to .csub-row elements (idempotent)
     const filterToggle = el('class-filter-toggle');
