@@ -371,7 +371,10 @@ input::placeholder { color: var(--text-muted); }
    MAIN LAYOUT
 ══════════════════════════════════════════════ */
 .main-content {
-  max-width: 1400px;
+  /* رُفعت من 1400: على 1440 لابتوب لا يتغيّر شيء (المحتوى أضيق أصلاً)، وعلى
+     شاشةٍ أوسع يملأ المحتوى مكاناً أكبر بدل هامشين ميتين. التكبير الفعليّ
+     للأرقام يأتي بعتبة min-width منفصلة كي لا يمسّ الجوّال. */
+  max-width: 1720px;
   margin: 0 auto;
   padding: 1.5rem;
   display: flex;
@@ -388,6 +391,18 @@ input::placeholder { color: var(--text-muted); }
   gap: 0.8rem;
 }
 @media (max-width: 1250px) { .stats-row { grid-template-columns: repeat(3, 1fr); } }
+
+/* ── شاشات كبيرة (مكتب ٢٧″ / عرض) ──────────────────────────────────────────
+   min-width فقط: لا يمسّ الجوّال ولا اللابتوب الصغير إطلاقاً. الأرقام تكبر
+   كي تُقرأ من بُعد المكتب لا من جواره. الشبكة ٦ أعمدة ثابتة، فكلّ خانة ~270px
+   تتّسع للرقم المكبَّر بلا فيضان. */
+@media (min-width: 1600px) {
+  .kpi-value  { font-size: 2.2rem; }
+  .kpi-delta  { font-size: .82rem; }
+  .kpi-label  { font-size: .82rem; }
+  .kpi-icon   { width: 34px; height: 34px; }
+  .kpi-icon .icon { width: 18px; height: 18px; }
+}
 
 .kpi {
   background: var(--bg-card);

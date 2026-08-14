@@ -32,6 +32,13 @@ const CSS = `
 .sd-chip.is-good .sd-chip-val { color:var(--good,#3fbd80); }
 .sd-chip.is-warn .sd-chip-val { color:var(--warn,#e0a83f); }
 .sd-chip.is-bad  .sd-chip-val { color:var(--bad,#e2685a); }
+/* شاشات كبيرة: أرقام البنية تُقرأ من بُعد. min-width فقط، فلا أثر على الجوّال.
+   الوحدة مشتركة بين المديرية والوزارة فتكبر فيهما معاً. */
+@media (min-width:1600px) {
+  .sd-chip { min-width:132px; padding:12px 16px; }
+  .sd-chip-val { font-size:1.9rem; }
+  .sd-chip-lbl { font-size:.8rem; }
+}
 
 .sd-overlay { position:fixed; inset:0; z-index:1200; display:flex; align-items:center;
   justify-content:center; padding:16px; background:rgba(3,6,15,.72); }

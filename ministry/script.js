@@ -700,6 +700,13 @@ function closeDrill() {
 //  ومحافظةٌ بعينها متى فُتحت — فلا يقرأ رقماً وطنياً وهو ينظر في محافظة.
 // ══════════════════════════════════════════════
 const SCHOOL_TYPE_AR = { primary: 'ابتدائي', preparatory: 'إعدادي', secondary: 'ثانوي' };
+/* هذه الخريطة كانت معرَّفةً في المديرية وحدها، ونسخُ كتلة الدليل من هناك
+   نقل STAFF_CAT ونسي STAFF_TYPE_AR — فسقط الدليل بـReferenceError. CI لم
+   يُلقط الأمر لأنه فحص بنية لا ربط أسماء. */
+const STAFF_TYPE_AR = {
+  teaching: 'تدريسي', admin: 'إداري', professional: 'مهني',
+  worker: 'مستخدَم', guard: 'حارس',
+};
 const STAFF_CAT = [
   ['staff_teaching',     'تدريسي'],
   ['staff_admin',        'إداري'],

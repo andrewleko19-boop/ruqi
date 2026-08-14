@@ -242,7 +242,10 @@ body {
 
 /* ── Main ─────────────────────────────────────── */
 .main-content {
-  max-width: 1280px;
+  /* رُفعت من 1280 ووُحِّدت مع المديرية (1720): كانت الوزارة — أوسع الجهات
+     نطاقاً — محبوسةً في أضيق حاوية، وهي انعكاسة. التكبير الفعليّ للأرقام
+     بعتبة min-width منفصلة أدناه. */
+  max-width: 1720px;
   margin: 0 auto;
   padding: 24px 28px 48px;
   display: flex;
@@ -454,6 +457,15 @@ tfoot td {
   .main-content { padding: 16px 16px 40px; }
   .stats-row { grid-template-columns: repeat(2, 1fr); }
   .stat-value { font-size: 24px; }
+}
+
+/* ── شاشات كبيرة (مكتب ٢٧″ / عرض حائطيّ) ───────────────────────────────────
+   min-width فقط: لا يمسّ الجوّال. الرقم يكبر من 26px إلى 36px، والبطاقة
+   تتّسع معه من 160px إلى 220px كي لا يفيض «2,110,000» خارج حدّها. */
+@media (min-width: 1600px) {
+  .stats-row { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+  .stat-value { font-size: 36px; }
+  .stat-label { font-size: 13px; }
 }
 /* ══════════════════════════════════════════════
    PHASE 1 — LIVE INDICATOR & COUNTDOWN
@@ -937,3 +949,21 @@ select.csel-native {
 /* القائمة تُفتح فوق حدود البطاقة، والبطاقة تقصّ محتواها افتراضياً. */
 .section-card:has(.csel.is-open) { overflow: visible; }
 .sdir-filters .csel { width: auto; min-width: 160px; }
+
+/* ── الصندوق النصّي القصير (البحث في دليل الكادر وغيره) ───────────────────
+   كان يعتمد على النمط الافتراضي للمتصفّح — أبيضَ فاتحاً على لوحةٍ داكنة،
+   دخيلاً. المديرية تعرّفها في stylesheet خاص بها، والوزارة كانت تعتمد على
+   الوراثة فلا ترث شيئاً. الآن لُبِّست ألوان اللوحة صراحةً. */
+.input-sm {
+  padding: .5rem .7rem; border-radius: 8px;
+  background: var(--paper); color: var(--ink);
+  border: 1px solid var(--line);
+  font: inherit; font-size: .85rem;
+}
+.input-sm:focus { outline: none; border-color: var(--accent); }
+.input-sm::placeholder { color: var(--ink-faint); }
+
+/* .data-table في المديرية هو الاسم القياسيّ المستعمل في دليل الكادر المشترك.
+   الوزارة تنسّق table عامّاً فترثه أصلاً، لكن نبقيه صريحاً كي لا يتوّه مطوّرٌ
+   لاحق يبحث عن جدولٍ لا يعرف أنّه محرّرٌ بلا صف. */
+table.data-table { width:100%; border-collapse:collapse; font-size:13px; }
