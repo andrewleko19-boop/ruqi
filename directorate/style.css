@@ -2109,3 +2109,18 @@ input[type="search"].input-sm {
 .sdir-pager[hidden] { display: none; }
 tr.row-clickable { cursor: pointer; }
 tr.row-clickable:hover { background: var(--bg-hover); }
+
+/* ملف المدرسة — قائمة الحقائق */
+.sp-facts {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: .55rem .9rem; margin: 0;
+}
+.sp-fact {
+  display: flex; justify-content: space-between; gap: .6rem;
+  padding: .42rem 0; border-bottom: 1px solid var(--border-light);
+}
+.sp-fact dt { font-size: .76rem; color: var(--text-muted); }
+.sp-fact dd { margin: 0; font-size: .8rem; font-weight: 600; color: var(--text-primary);
+  text-align: end; overflow-wrap: anywhere; }
+.sp-sub { font-size: .8rem; font-weight: 800; color: var(--text-secondary);
+  margin: 1.1rem 0 .5rem; }

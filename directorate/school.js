@@ -1,5 +1,7 @@
 // directorate/school.js — صفحة ملف المدرسة (drill-down من لوحة المديرية)
 // الجلسة مشتركة مع اللوحة (LAYER يُكتشف من مقطع المسار /directorate/)
+import { StatDrill } from '../shared/stat-drill.js';
+
 if (!window.RUQI_DB) {
   document.body.innerHTML =
     '<p style="padding:24px;color:#e2685a;font-family:sans-serif;direction:rtl">' +
@@ -492,8 +494,146 @@ function setupTrendPeriod() {
   });
 }
 
+// ══════════════════════════════════════════════
+//  ملف المدرسة: البنية والبيانات والمبنى
+//
+//  الصفحة كانت تعرض الحضور وحده. والمسؤول الذي يفتح ملفّ مدرسةٍ يسأل عن
+//  تركيبها قبل حضورها: كم طالبة، كم مدرّساً، كم غرفةَ صفّ. البيانات كلّها
+//  موجودة في القاعدة ولم تكن تُعرض في مكانٍ واحد.
+// ══════════════════════════════════════════════
+const STAFF_CAT_AR = [
+  ['staff_teaching',     'تدريسي'],
+  ['staff_admin',        'إداري'],
+  ['staff_professional', 'مهني'],
+  ['staff_worker',       'مستخدَم'],
+  ['staff_guard',        'حارس'],
+];
+const num = (n) => (Number(n) || 0).toLocaleString('en-US');
+
+/** صفوف بطاقة التفصيل: أسماء الكادر أو تعدادُ الطلاب بالصفوف. */
+async function staffRowsFor(type) {
+  const { rows } = await window.RUQI_DB.getStaffDirectory({
+    schoolId: school.id, staffType: type || null, limit: 500,
+  });
+  return rows.map(r => ({
+    label: r.full_name,
+    sub: [r.job_title, r.specialization].filter(Boolean).join(' · '),
+    value: r.certificate ?? '',
+  }));
+}
+
+async function loadSchoolStructure() {
+  const loading = document.getElementById('sp-loading');
+  const errEl   = document.getElementById('sp-error');
+  const gridEl  = document.getElementById('sp-grid');
+  if (!gridEl) return;
+  try {
+    const all  = await window.RUQI_DB.getDirectorateSchoolStats();
+    const s    = all.find(r => r.school_id === school.id);
+    if (!s) throw new Error('المدرسة خارج نطاق الإحصاء');
+
+    const studentItems = [
+      { label: 'إجمالي الطلاب', value: num(s.students_total) },
+      { label: 'ذكور',          value: num(s.students_male) },
+      { label: 'إناث',          value: num(s.students_female) },
+    ];
+    if (s.students_unknown) studentItems.push(
+      { label: 'جنسٌ غير مسجَّل', value: num(s.students_unknown), tone: 'warn' });
+
+    const staffTotal = STAFF_CAT_AR.reduce((t, [k]) => t + (Number(s[k]) || 0), 0);
+    const staffItems = [
+      { label: 'إجمالي الكادر', value: num(staffTotal),
+        drill: { title: 'كادر المدرسة', subtitle: `${num(staffTotal)} موظفاً`,
+                 rows: () => staffRowsFor(null) } },
+      ...STAFF_CAT_AR.map(([key, ar]) => ({
+        label: ar, value: num(s[key]),
+        drill: s[key] ? { title: `الكادر — ${ar}`, subtitle: `${num(s[key])} موظفاً`,
+                          rows: () => staffRowsFor(key.replace('staff_', '')) } : null,
+      })),
+    ];
+
+    const groups = [
+      { title: 'الطلاب حسب الجنس', items: studentItems },
+      { title: 'الكادر حسب الفئة',  items: staffItems },
+    ];
+    const quotaItems = [];
+    if (s.teachers_over_quota) quotaItems.push({
+      label: 'تجاوزوا النصاب', value: num(s.teachers_over_quota), tone: 'bad' });
+    if (s.teachers_no_quota) quotaItems.push({
+      label: 'بلا نصابٍ محدَّد', value: num(s.teachers_no_quota), tone: 'warn' });
+    if (quotaItems.length) groups.push({ title: 'نصاب التدريس', items: quotaItems });
+
+    StatDrill.grid(gridEl, groups);
+  } catch (e) {
+    console.error('[school] loadSchoolStructure', e);
+    gridEl.innerHTML = '';
+    errEl?.removeAttribute('hidden');
+  } finally {
+    loading?.classList.add('hidden');
+  }
+}
+
+/** قائمة وصفٍ من أزواج، والفارغ يُحذف لا يُعرض شُرَطاً. */
+const factList = (pairs) => pairs
+  .filter(([, v]) => v !== null && v !== undefined && v !== '')
+  .map(([k, v]) => `<div class="sp-fact"><dt>${esc(k)}</dt><dd>${esc(String(v))}</dd></div>`)
+  .join('');
+
+async function loadSchoolFacts() {
+  const el = document.getElementById('sp-facts');
+  if (el) el.innerHTML = factList([
+    ['نوع المدرسة',      SCHOOL_TYPE_AR[school.school_type] ?? school.school_type],
+    ['المجمّع التربوي',  school.complex_name],
+    ['التصنيف',          school.classification],
+    ['نوع التعليم',      school.education_type],
+    ['نوع الطلاب',       school.student_type],
+    ['فترة الدوام',      SHIFT_AR[school.shift] ?? school.shift],
+    ['الرقم الإحصائي',   school.statistical_number],
+    ['المنطقة التعليمية', school.educational_zone],
+    ['القرية / البلدة',  school.village],
+    ['العنوان',          school.address],
+    ['الهاتف',           school.phone],
+    ['بدء الدوام',       school.work_start_time],
+    ['حدّ التسرّب (أيام)', school.dropout_threshold_days],
+  ]);
+
+  // بيانات المبنى اختيارية: تُملأ من بوّابة المدرسة وقد لا تكون أُدخلت بعد.
+  const bEl     = document.getElementById('sp-building');
+  const bTitle  = document.getElementById('sp-building-title');
+  const bEmpty  = document.getElementById('sp-building-empty');
+  try {
+    const b = await window.RUQI_DB.getSchoolBuilding(school.id);
+    const html = b ? factList([
+      ['عدد الطوابق',     b.floors],
+      ['الملكية',         b.ownership],
+      ['غرف الصفوف',      b.class_rooms],
+      ['الغرف الإدارية',  b.admin_rooms],
+      ['غرف غير مستثمرة', b.unused_rooms],
+      ['مخبر',            b.lab],
+      ['مخبر حاسوب',      b.computer_lab],
+      ['مكتبة',           b.library],
+      ['صالة رياضية',     b.gym],
+      ['مستودع',          b.storage],
+      ['غرفة إرشاد',      b.guidance],
+      ['غرفة صحّية',      b.health_room],
+      ['مشغل',            b.workshop],
+      ['مسرح',            b.theater],
+      ['ساحة',            b.yard],
+      ['قاعات أخرى',      b.other_halls],
+    ]) : '';
+    if (html) { bEl.innerHTML = html; bTitle?.removeAttribute('hidden'); }
+    else bEmpty?.removeAttribute('hidden');
+  } catch (e) {
+    console.warn('[school] building', e);
+    bEmpty?.removeAttribute('hidden');
+  }
+}
+
 async function loadAll() {
-  await Promise.allSettled([loadTrendAndToday(), loadCompliance(), loadReports()]);
+  await Promise.allSettled([
+    loadTrendAndToday(), loadCompliance(), loadReports(),
+    loadSchoolStructure(), loadSchoolFacts(),
+  ]);
 }
 
 function startAutoRefresh() {

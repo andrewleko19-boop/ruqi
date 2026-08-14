@@ -197,6 +197,42 @@
         </section>
       </div>
 
+      <!-- بنية المدرسة: الطلاب بالجنس والكادر بالفئة، كلٌّ يُفتح على أسمائه -->
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <span class="eyebrow">البنية</span>
+            <h2>الطلاب والكادر</h2>
+          </div>
+          <span class="panel-hint">اضغط أيّ رقم لعرض التفصيل</span>
+        </div>
+        <div class="struct-body">
+          <div id="sp-loading" class="table-loading">
+            <div class="spinner"></div><span>جارٍ الحساب…</span>
+          </div>
+          <div id="sp-error" class="table-empty" hidden>تعذّر حساب بنية المدرسة.</div>
+          <div id="sp-grid"></div>
+        </div>
+      </section>
+
+      <!-- بيانات المدرسة الكاملة + المبنى -->
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <span class="eyebrow">الملف</span>
+            <h2>بيانات المدرسة والمبنى</h2>
+          </div>
+        </div>
+        <div class="struct-body">
+          <dl class="sp-facts" id="sp-facts"></dl>
+          <h3 class="sp-sub" id="sp-building-title" hidden>المبنى</h3>
+          <dl class="sp-facts" id="sp-building"></dl>
+          <p class="table-empty" id="sp-building-empty" hidden>
+            لم تُدخَل بيانات المبنى بعد — تُملأ من بوّابة المدرسة.
+          </p>
+        </div>
+      </section>
+
       <!-- بلاغات المدرسة -->
       <section class="panel">
         <div class="panel-header">
