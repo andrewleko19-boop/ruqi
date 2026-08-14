@@ -59,7 +59,12 @@ let drill         = { level: 'national', gov: null, dirId: null };
 const esc = (str) => String(str ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-const fmt  = (n) => (n === null || n === undefined) ? '—' : Number(n).toLocaleString();
+/* اللغة مُصرَّح بها عمداً. toLocaleString() بلا وسيط يتبع لغة المتصفّح، فيُخرج
+   على متصفّحٍ عربيّ أرقاماً عربية-هندية (١٬٢٣٤) بينما بقيّة التطبيق لاتينية:
+   المدرسة والمديرية تُصرّحان بـen-US، وtoFixed وStatDrill لاتينيّان دائماً.
+   فكانت الشاشة الواحدة تخلط نظامين — «٣١٢ مدرسة» بجوار «45.7 طالب/مدرّس».
+   الأرقام اللاتينية هي عُرف الوثائق الإحصائية الرسمية أيضاً. */
+const fmt  = (n) => (n === null || n === undefined) ? '—' : Number(n).toLocaleString('en-US');
 const pct  = (part, total) => total > 0 ? ((part / total) * 100).toFixed(1) + '%' : '—';
 const today = () => {
   const d = new Date();
@@ -83,10 +88,10 @@ function animateValue(el, target) {
   el._animId = setInterval(() => {
     step++;
     const value = Math.round(start + (numTarget - start) * (step / steps));
-    el.textContent = value.toLocaleString();
+    el.textContent = fmt(value);
     if (step >= steps) {
       clearInterval(el._animId);
-      el.textContent = numTarget.toLocaleString();
+      el.textContent = fmt(numTarget);
     }
   }, delay);
 }
