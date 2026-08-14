@@ -3,6 +3,7 @@
 import { CustomSelect }                      from '../shared/csel.js';
 import { setupPwToggle }                     from '../shared/pw-toggle.js';
 import { StatDrill }                         from '../shared/stat-drill.js';
+import { detectAnomalies }                   from '../shared/data-alerts.js';
 import { supabase as _sb, supabaseUrl as _sbUrl } from '../shared/db.js';
 const {
   login,
@@ -1479,12 +1480,26 @@ function renderStructure() {
     label: 'لا تجاوزات', value: '✓', tone: 'good',
   });
 
-  StatDrill.grid(gridEl, [
+  const groups = [
     { title: 'المدارس حسب النوع', items: schoolItems },
     { title: 'الطلاب حسب الجنس',  items: studentItems },
     { title: 'الكادر حسب الفئة',  items: staffItems },
     { title: 'نصاب التدريس',      items: quotaItems },
-  ]);
+  ];
+
+  /* تنبيهات الأرقام غير المنطقية. تناقضٌ بين حقلين لا يكشفه التحقّق عند
+     الإدخال — كلّ حقلٍ وحده صحيح — ولا يظهر إلا حين تُقرأ الأرقام معاً. */
+  const alerts = detectAnomalies(structStats);
+  if (alerts.length) groups.push({
+    title: 'تنبيهات البيانات',
+    items: alerts.map(a => ({
+      label: a.label, value: fmtNum(a.schools.length), tone: a.tone,
+      drill: { title: a.label, subtitle: a.hint,
+               rows: () => a.schools.map(s => ({ label: s.name, value: s.detail })) },
+    })),
+  });
+
+  StatDrill.grid(gridEl, groups);
 }
 
 // ══════════════════════════════════════════════

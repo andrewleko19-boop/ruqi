@@ -12,6 +12,7 @@ import { supabase, errMessage } from '../shared/db.js';
 import * as RUQI_PERMISSIONS from '../shared/permissions.js';
 import { setupPwToggle } from '../shared/pw-toggle.js';
 import { StatDrill } from '../shared/stat-drill.js';
+import { detectAnomalies } from '../shared/data-alerts.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const loginScreen    = document.getElementById('login-screen');
@@ -263,9 +264,12 @@ async function loadAllData() {
       .is('archived_at', null);
     if (schErr) throw schErr;
 
-    // البنية تُحمَّل بالتوازي ولا تُنتظَر: فشلُها يترك بطاقتها وحدها معطّلة
-    // بدل أن يُسقط لوحة الحضور كلّها.
+    // البنية والمقارنة تُحمَّلان بالتوازي ولا تُنتظران: فشلُ إحداهما يترك
+    // بطاقتها وحدها معطّلة بدل أن يُسقط لوحة الحضور كلّها.
     void loadStructure(structScope);
+    // المقارنة وطنيّةٌ دائماً — مقارنةُ محافظةٍ بنفسها لا معنى لها — فلا
+    // تُعاد مع كل تنقيب.
+    if (!_govCmp.length) void loadGovComparison();
 
     const allSchoolIds = (schools || []).map(s => s.id);
 
@@ -981,13 +985,92 @@ function renderStructure() {
     label: 'لا تجاوزات', value: '✓', tone: 'good',
   });
 
-  StatDrill.grid(gridEl, [
+  const groups = [
     { title: 'المدارس حسب النوع', items: schoolItems },
     { title: 'الطلاب حسب الجنس',  items: studentItems },
     { title: 'الكادر حسب الفئة',  items: staffItems },
     { title: 'نصاب التدريس',      items: quotaItems },
-  ]);
+  ];
+
+  /* تنبيهات الأرقام غير المنطقية — تناقضٌ بين حقلين لا يكشفه التحقّق عند
+     الإدخال، ولا يظهر إلا حين تُقرأ الأرقام معاً. */
+  const alerts = detectAnomalies(structStats);
+  if (alerts.length) groups.push({
+    title: `تنبيهات البيانات — ${where}`,
+    items: alerts.map(a => ({
+      label: a.label, value: fmt(a.schools.length), tone: a.tone,
+      drill: { title: a.label, subtitle: a.hint,
+               rows: () => a.schools.map(s => ({ label: s.name, value: s.detail })) },
+    })),
+  });
+
+  StatDrill.grid(gridEl, groups);
 }
+
+// ══════════════════════════════════════════════
+//  مقارنة المحافظات
+//
+//  الترتيب بنسبة الحضور موجود، وهو مؤشّرُ يومٍ واحد. المقارنة البنيوية سؤالٌ
+//  آخر: أين الكثافة أعلى، وأين نصيبُ المدرّس من الطلاب يفوق أقرانه. ونسبة
+//  الطالب للمدرّس هي المؤشّر الذي يُقارَن به التعليم بين المناطق عالمياً،
+//  ولم تكن تُحسب هنا رغم أن طرفَيها في القاعدة.
+// ══════════════════════════════════════════════
+let _govCmp = [], _govSort = 'ratio';
+
+async function loadGovComparison() {
+  const wrap = document.getElementById('govcmp-wrap');
+  if (!wrap) return;
+  try {
+    _govCmp = await window.RUQI_DB.getMinistryGovernorateStats();
+    renderGovComparison();
+  } catch (e) {
+    console.error('[ministry] loadGovComparison', e);
+    document.getElementById('govcmp-error')?.classList.remove('hidden');
+  } finally {
+    document.getElementById('govcmp-loading')?.classList.add('hidden');
+  }
+}
+
+const govRatio = (r) => {
+  const t = Number(r.staff_teaching) || 0;
+  return t > 0 ? (Number(r.students_total) || 0) / t : null;
+};
+
+function renderGovComparison() {
+  const wrap  = document.getElementById('govcmp-wrap');
+  const tbody = document.getElementById('govcmp-tbody');
+  if (!tbody || !_govCmp.length) return;
+
+  const sorted = [..._govCmp].sort((a, b) => {
+    if (_govSort === 'name') return String(a.governorate).localeCompare(String(b.governorate), 'ar');
+    if (_govSort === 'students') return (b.students_total || 0) - (a.students_total || 0);
+    // النسبة الأعلى أوّلاً؛ ومن لا مدرّس له يُذيَّل لا يُصدَّر بلانهاية.
+    return (govRatio(b) ?? -1) - (govRatio(a) ?? -1);
+  });
+
+  tbody.innerHTML = sorted.map((r, i) => {
+    const ratio = govRatio(r);
+    // العتبة نفسها المستعملة في تنبيهات البيانات كي لا يتناقض تلوينان.
+    const cls = ratio == null ? '' : ratio > 40 ? 'style="color:var(--bad)"'
+              : ratio > 30 ? 'style="color:var(--warn)"' : '';
+    return `<tr>
+      <td>${fmt(i + 1)}</td>
+      <td><strong>${esc(r.governorate)}</strong></td>
+      <td>${fmt(r.schools_total)}</td>
+      <td class="muted">${fmt(r.schools_primary)} / ${fmt(r.schools_preparatory)} / ${fmt(r.schools_secondary)}</td>
+      <td>${fmt(r.students_total)}</td>
+      <td class="muted">${fmt(r.students_male)} / ${fmt(r.students_female)}</td>
+      <td>${fmt(r.staff_teaching)}</td>
+      <td ${cls}>${ratio == null ? '—' : ratio.toFixed(1)}</td>
+    </tr>`;
+  }).join('');
+  wrap.classList.remove('hidden');
+}
+
+document.getElementById('govcmp-sort')?.addEventListener('change', (e) => {
+  _govSort = e.target.value;
+  renderGovComparison();
+});
 
 function renderDrill() {
   const card = document.getElementById('drill-card');

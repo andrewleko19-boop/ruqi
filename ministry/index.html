@@ -198,6 +198,40 @@
         </div>
       </section>
 
+      <!-- مقارنة المحافظات بنيوياً: الكثافة ونصيب المدرّس من الطلاب -->
+      <section class="section-card" id="govcmp-card">
+        <div class="section-header">
+          <div>
+            <span class="eyebrow">مقارنة</span>
+            <h2>المحافظات — البنية والكثافة</h2>
+          </div>
+          <select id="govcmp-sort" class="govcmp-sort">
+            <option value="ratio">الترتيب: طالب/مدرّس</option>
+            <option value="students">الترتيب: عدد الطلاب</option>
+            <option value="name">الترتيب: الاسم</option>
+          </select>
+        </div>
+        <div class="struct-body">
+          <div id="govcmp-loading" class="table-loading">
+            <div class="spinner"></div><span>جارٍ الحساب…</span>
+          </div>
+          <div id="govcmp-error" class="table-empty hidden">تعذّر حساب المقارنة.</div>
+          <div id="govcmp-wrap" class="table-wrapper hidden">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th><th>المحافظة</th><th>المدارس</th>
+                  <th>ابتدائي / إعدادي / ثانوي</th>
+                  <th>الطلاب</th><th>ذكور / إناث</th>
+                  <th>المدرّسون</th><th>طالب/مدرّس</th>
+                </tr>
+              </thead>
+              <tbody id="govcmp-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <!-- دليل الكادر — السجل المهني الكامل، وطنياً أو لمحافظة -->
       <section class="section-card" id="msdir-card">
         <div class="section-header">

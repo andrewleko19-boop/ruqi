@@ -11,7 +11,7 @@
  *
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'ruqi-v153';
+const CACHE = 'ruqi-v154';
 
 /* ⚠️ التقسيم مقصود ويعالج عطلاً حقيقياً.
    كان التثبيت كلّه على Promise.allSettled — يبتلع فشل أي ملفّ ويُعلن النجاح —
@@ -49,6 +49,7 @@ const OPTIONAL = [
   './shared/csel.js',
   './shared/pw-toggle.js',
   './shared/stat-drill.js',
+  './shared/data-alerts.js',
   './shared/qr.js',
   './shared/import-parser.js',
   // قالب البيان الشهري — التصدير يجلبه بـ fetch، فبدون تخزينه

@@ -866,3 +866,11 @@ tfoot td {
 .sdir-filters select option { background:var(--paper-2); color:var(--ink); }
 .sdir-pager { display:flex; align-items:center; justify-content:center; gap:.8rem; margin-top:.9rem; }
 .sdir-pager[hidden] { display:none; }
+
+/* مقارنة المحافظات — قائمة الترتيب */
+.govcmp-sort {
+  padding:.42rem .6rem; border-radius:8px; font:inherit; font-size:.82rem;
+  background:var(--paper); color:var(--ink); border:1px solid var(--line);
+}
+.govcmp-sort:focus { outline:none; border-color:var(--accent); }
+.govcmp-sort option { background:var(--paper-2); color:var(--ink); }
