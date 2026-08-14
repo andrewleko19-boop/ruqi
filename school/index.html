@@ -2044,18 +2044,17 @@
           </div>
 
           <p class="form-section-label">التواريخ</p>
-          <div class="twin-fields">
-            <div class="field-group"><label for="asn-start-date">تاريخ البدء</label>
-              <input id="asn-start-date" class="field-input" type="date" /></div>
-            <div class="field-group"><label for="asn-commence-date">تاريخ المباشرة</label>
-              <input id="asn-commence-date" class="field-input" type="date" /></div>
-          </div>
-          <div class="twin-fields">
-            <div class="field-group"><label for="asn-assignment-date">تاريخ التكليف</label>
-              <input id="asn-assignment-date" class="field-input" type="date" /></div>
-            <div class="field-group"><label for="asn-execution-start">بدء التنفيذ</label>
-              <input id="asn-execution-start" class="field-input" type="date" /></div>
-          </div>
+          <!-- ثلاث خانات لا <input type="date">: المنتقي الأصليّ يتبع لغة
+               الجهاز، فيقرأ جهازٌ إنجليزيّ 8/12 شهراً/يوماً ويحفظ تاريخاً
+               خاطئاً بصمت. الخانات معنونةٌ بالعربية فلا لبس. -->
+          <div class="field-group"><label>تاريخ البدء</label>
+            <div id="asn-start"></div></div>
+          <div class="field-group"><label>تاريخ المباشرة</label>
+            <div id="asn-commence"></div></div>
+          <div class="field-group"><label>تاريخ التكليف</label>
+            <div id="asn-assign"></div></div>
+          <div class="field-group"><label>بدء التنفيذ</label>
+            <div id="asn-exec"></div></div>
 
           <div id="asn-form-error" class="msg msg-error" hidden></div>
           <button type="button" class="btn btn-primary btn-full" id="btn-save-assignment">
@@ -2152,9 +2151,8 @@
             </select>
           </div>
           <div class="field-group">
-            <label for="sr-seniority">القدم الوظيفي <span class="optional">(سنة التعيين)</span></label>
-            <input id="sr-seniority" class="field-input field-input--num" type="number"
-                   min="1940" max="2100" step="1" inputmode="numeric" />
+            <label>القدم الوظيفي <span class="optional">(تاريخ التعيين)</span></label>
+            <div id="sr-seniority"></div>
           </div>
           <div class="field-group">
             <label>تاريخ المباشرة</label>

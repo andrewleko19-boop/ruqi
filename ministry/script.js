@@ -11,6 +11,7 @@
 import { supabase, errMessage } from '../shared/db.js';
 import * as RUQI_PERMISSIONS from '../shared/permissions.js';
 import { setupPwToggle } from '../shared/pw-toggle.js';
+import { CustomSelect } from '../shared/csel.js';
 import { StatDrill } from '../shared/stat-drill.js';
 import { detectAnomalies } from '../shared/data-alerts.js';
 
@@ -759,6 +760,7 @@ let _msdirSeq = 0, _msdirDebounce = null;
 function initStaffDir() {
   if (_msdirInit) return;
   _msdirInit = true;
+  CustomSelect.enhance('msdir-type');
   const reload = () => { _msdirOffset = 0; void loadStaffDir(); };
   document.getElementById('msdir-type')?.addEventListener('change', reload);
   document.getElementById('msdir-search')?.addEventListener('input', () => {
@@ -1072,6 +1074,10 @@ function renderGovComparison() {
   wrap.classList.remove('hidden');
 }
 
+/* القوائم الأصلية تفتح على أندرويد حواراً من النظام رماديَّ الطابع، دخيلاً
+   على لوحةٍ داكنة — ولا يُنسَّق مهما نُسِّق العنصر، فالحوار للنظام لا للصفحة.
+   بقيّة البوّابات تستعمل CustomSelect منذ البداية، وهذه تلحق بها. */
+CustomSelect.enhance('govcmp-sort');
 document.getElementById('govcmp-sort')?.addEventListener('change', (e) => {
   _govSort = e.target.value;
   renderGovComparison();

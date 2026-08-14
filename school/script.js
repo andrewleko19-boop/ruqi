@@ -1,5 +1,6 @@
 // school/script.js
 // Loaded as <script type="module"> after Supabase CDN and shared/db.js
+import { buildDateFields, setDateFields, readDateFields } from '../shared/date-fields.js';
 
 // ── Guard ─────────────────────────────────────────────────────────────────────
 if (!window.RUQI_DB) {
@@ -5518,7 +5519,31 @@ const srSubject       = el('sr-subject');
 const srRosterType    = el('sr-roster-type');
 const srCertificate   = el('sr-certificate');
 const srHigherDegree  = el('sr-higher-degree');
-const srSeniority     = el('sr-seniority');
+buildDateFields(el('sr-seniority'), 'sr-seniority', 'القدم الوظيفي');
+
+/* القدم الوظيفي وحده يقبل «سنةً بلا يومٍ ولا شهر»، بخلاف تواريخ التكليف.
+   السبب أنّ الورقة الرسمية تسأل عن «سنة التعيين» لا عن يومها، وأكثرُ
+   السجلّات المنقولة عن الورق لا تحمل غيرها. فالتاريخ الكامل يُفضَّل ويُخزَّن
+   في seniority_date، والسنة وحدها تبقى مقبولةً في seniority_year.
+   ويُرفض المزيجُ الناقص: يومٌ بلا سنةٍ ليس أحدهما. */
+function readSeniority() {
+  const v = (id) => String(el(`sr-seniority-${id}`)?.value ?? '').trim();
+  const [d, m, y] = ['d', 'm', 'y'].map(v);
+  if (!d && !m && !y) return { ok: true, seniority_date: null, seniority_year: null };
+  if (d && m && y) {
+    const r = readDateFields('sr-seniority', 'القدم الوظيفي');
+    if (!r.ok) return { ok: false, error: r.error };
+    return { ok: true, seniority_date: r.value, seniority_year: parseInt(y, 10) };
+  }
+  if (y && !d && !m) {
+    const n = parseInt(y, 10);
+    if (!Number.isInteger(n) || n < 1940 || n > 2100) {
+      return { ok: false, error: 'القدم الوظيفي: السنة خارج المدى المقبول (1940–2100).' };
+    }
+    return { ok: true, seniority_date: null, seniority_year: n };
+  }
+  return { ok: false, error: 'القدم الوظيفي: أدخل السنة وحدها، أو اليوم والشهر والسنة معاً.' };
+}
 const srStartDay      = el('sr-start-day');
 const srStartMonth    = el('sr-start-month');
 const srStartYear     = el('sr-start-year');
@@ -5737,7 +5762,14 @@ async function openStaffRecModal(rec) {
     srResZone.value       = rec.residential_zone   || '';
     srNotes.value         = rec.notes              || '';
     srSubject.value       = rec.subject_taught     || '';
-    srSeniority.value     = rec.seniority_year     ?? '';
+    /* السجلّات القديمة تحمل سنةً بلا يومٍ ولا شهر. تُعرض في خانة السنة وحدها
+       بدل أن تُخترع لها أوّلُ كانون الثاني فتبدو يوماً موثّقاً وهي تخمين. */
+    if (rec.seniority_date) setDateFields('sr-seniority', rec.seniority_date);
+    else {
+      setDateFields('sr-seniority', '');
+      const yEl = el('sr-seniority-y');
+      if (yEl) yEl.value = rec.seniority_year ?? '';
+    }
     srSelfNumber.value    = rec.self_number        || '';
     if (srLandline)    srLandline.value    = rec.landline              || '';
     if (srTeachHours)  srTeachHours.value  = rec.teaching_hours        ?? '';
@@ -5835,6 +5867,9 @@ btnSaveStaffRec?.addEventListener('click', async () => {
     birth_date = `${y}-${m}-${d}`;
   }
 
+  const sen = readSeniority();
+  if (!sen.ok) { if (srError) { srError.textContent = sen.error; show(srError); } return; }
+
   const jt = srJobTitle?.value || null;
   let staff_type = _regSegment === 'admin' ? 'admin'
     : _regSegment === 'teaching' ? 'teaching'
@@ -5854,8 +5889,10 @@ btnSaveStaffRec?.addEventListener('click', async () => {
     subject_taught:   _regSegment === 'teaching' ? (srSubject?.value.trim() || null) : null,
     certificate:      srCertificate?.value || null,
     higher_degree:    srHigherDegree?.value || null,
-    // سنة التعيين لا عدد سنوات — هكذا تكتبها الورقة الرسمية (مثال: 1978).
-    seniority_year:   srSeniority?.value ? parseInt(srSeniority.value, 10) : null,
+    // القدم: تاريخٌ كامل إن أُدخل، وإلّا سنةٌ وحدها — والورقة الرسمية تكتفي
+    // بالسنة (مثال: 1978)، فمنعُ حفظِ سجلٍّ لا يُعرف يومُ تعيينه تعطيلٌ بلا داعٍ.
+    seniority_date:   sen.seniority_date,
+    seniority_year:   sen.seniority_year,
     start_date:       (srStartYear?.value && srStartMonth?.value && srStartDay?.value)
                         ? `${String(srStartYear.value).padStart(4,'0')}-${String(srStartMonth.value).padStart(2,'0')}-${String(srStartDay.value).padStart(2,'0')}`
                         : null,
@@ -6100,10 +6137,15 @@ const asnSection      = el('asn-section');
 const asnSubjects     = el('asn-subjects');
 const asnLessonCount  = el('asn-lesson-count');
 const asnUser         = el('asn-user');
-const asnStartDate    = el('asn-start-date');
-const asnCommenceDate = el('asn-commence-date');
-const asnAssignDate   = el('asn-assignment-date');
-const asnExecStart    = el('asn-execution-start');
+/* تواريخ التكليف الأربعة، كلٌّ ثلاثُ خانات. تُبنى مرّةً عند التحميل لا عند
+   كل فتح: إعادة البناء تُفقد مراجع المستمعات وتُعيد تعيين التركيز. */
+const ASN_DATES = [
+  ['asn-start',    'start_date',      'تاريخ البدء'],
+  ['asn-commence', 'commence_date',   'تاريخ المباشرة'],
+  ['asn-assign',   'assignment_date', 'تاريخ التكليف'],
+  ['asn-exec',     'execution_start', 'بدء التنفيذ'],
+];
+for (const [base, , label] of ASN_DATES) buildDateFields(el(base), base, label);
 const asnFormError    = el('asn-form-error');
 const asnSaveSpinner  = el('asn-save-spinner');
 const btnSaveAsn      = el('btn-save-assignment');
@@ -6348,10 +6390,7 @@ async function openAssignmentModal(asn) {
 
   asnSection.value      = asn?.section        || '';
   asnLessonCount.value  = asn?.lesson_count   ?? '';
-  asnStartDate.value    = asn?.start_date     || '';
-  asnCommenceDate.value = asn?.commence_date  || '';
-  asnAssignDate.value   = asn?.assignment_date|| '';
-  asnExecStart.value    = asn?.execution_start|| '';
+  for (const [base, key] of ASN_DATES) setDateFields(base, asn?.[key]);
 
   // قوائم شبكية بحالة تحميل مؤقّتة كي لا تظهر فارغة قبل التعبئة.
   asnClass.innerHTML = '<option value="">…جارٍ التحميل</option>';
@@ -6451,6 +6490,15 @@ btnSaveAsn?.addEventListener('click', async () => {
     ? [...asnSubjects.querySelectorAll('input[type="checkbox"]:checked')].map(c => c.value)
     : [];
 
+  /* التواريخ تُقرأ قبل بناء الحمولة: تاريخٌ ناقصٌ أو غيرُ موجود (٣١ شباط)
+     يُوقف الحفظ برسالةٍ تسمّي حقله، بدل أن يُرسَل فارغاً فيُمحى ما كُتب. */
+  const dates = {};
+  for (const [base, key, label] of ASN_DATES) {
+    const r = readDateFields(base, label);
+    if (!r.ok) { asnFormError.textContent = r.error; show(asnFormError); return; }
+    dates[key] = r.value || undefined;
+  }
+
   const payload = {
     id:              _asnEditId || undefined,
     assignment_kind: kind,
@@ -6461,10 +6509,7 @@ btnSaveAsn?.addEventListener('click', async () => {
     subject_ids:     kind === 'technical' ? selectedSubjects : [],
     lesson_count:    kind === 'technical' && asnLessonCount.value ? Number(asnLessonCount.value) : undefined,
     user_id:         kind === 'technical' ? (asnUser.value || undefined) : undefined,
-    start_date:      asnStartDate.value || undefined,
-    commence_date:   asnCommenceDate.value || undefined,
-    assignment_date: asnAssignDate.value || undefined,
-    execution_start: asnExecStart.value || undefined,
+    ...dates,
     academic_year:   NDB.getAcademicYear(),
   };
 

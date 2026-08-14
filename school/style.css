@@ -2606,3 +2606,13 @@ select.csel-native {
 .qa-num  { flex-shrink:0; font-variant-numeric:tabular-nums; font-weight:700; }
 .qa-num b { font-weight:800; }
 .qa-num.is-muted { font-weight:600; opacity:.85; }
+
+/* حقل تاريخٍ من ثلاث خانات (shared/date-fields.js) — يوم · شهر · سنة. */
+.dmy-row { display:grid; grid-template-columns:1fr 1fr 1.4fr; gap:8px; }
+.dmy-row input {
+  text-align:center; width:100%; box-sizing:border-box;
+  padding:10px 8px; border:1px solid var(--clr-border,#CBD5E1); border-radius:10px;
+  background:var(--clr-surface,#fff); color:var(--clr-text,#0F172A);
+  font:inherit; font-size:.9rem; font-variant-numeric:tabular-nums;
+}
+.dmy-row input:focus { outline:none; border-color:var(--clr-primary,#2563EB); }
