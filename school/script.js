@@ -1254,10 +1254,16 @@ function renderKpis(summaries) {
   const kpi = (id, v) => { const n = el(id); if (n) n.textContent = v; };
 
   const totalStudents = summaries.reduce((a, s) => a + (s.totalStudents ?? 0), 0);
-  // الحاضر = المسجَّل حاضراً + المتأخّر: كلاهما في المدرسة فعلاً، وعدّ المتأخّر
-  // غائباً يُنقص نسبةً هي في الواقع أعلى.
-  const present = summaries.reduce((a, s) => a + (s.stats?.present ?? 0) + (s.stats?.late ?? 0), 0);
-  const absent  = summaries.reduce((a, s) => a + (s.stats?.absent ?? 0) + (s.stats?.excused ?? 0), 0);
+  /* الحاضر = حاضر + متأخّر + معذور، والغائب هو الغياب بلا عذرٍ وحده.
+     هذا اصطلاح التطبيق كلّه: سجلّ الحضور اليوميّ أسفل الصفحة نفسها يحسبها
+     هكذا (السطر ~1342)، وكذلك لوحتا المديرية والوزارة. وكانت هذه الدالة
+     وحدها تعدّ المعذور غائباً، فتُظهر البطاقات «١٩ حاضراً / ٥ غائبين» فوق
+     سجلٍّ يقول «٢٠ حاضراً / ٤ غائبين» — رقمان متناقضان في شاشةٍ واحدة.
+     والغياب بعذرٍ ليس غياباً في المعنى الإداريّ: الطالب مُبرَّرٌ غيابه فلا
+     يُحتسب عليه، ولا يدخل في إنذارات التسرّب. */
+  const present = summaries.reduce((a, s) =>
+    a + (s.stats?.present ?? 0) + (s.stats?.late ?? 0) + (s.stats?.excused ?? 0), 0);
+  const absent  = summaries.reduce((a, s) => a + (s.stats?.absent ?? 0), 0);
   const counted = present + absent;   // الطلاب الذين رُصدوا فعلاً اليوم
 
   kpi('kpi-students', totalStudents || '—');
@@ -5752,7 +5758,10 @@ async function openStaffRecModal(rec) {
                       srDobYear, srStartDay, srStartMonth, srStartYear, srSubject, srPhone, srResZone, srNotes,
                       srSelfNumber, srLandline, srAsgGrade, srAsgSection,
                       srQuotaSubj, srQuotaSchool];
-  const numInputs  = [srSeniority, srTeachHours];
+  /* القدم الوظيفي صار ثلاث خاناتٍ يبنيها buildDateFields، فلم يعد له عنصرٌ
+     واحد. خاناته تُمسح مع بقيّة الحقول النصّية أدناه. */
+  const numInputs  = [srTeachHours];
+  const senInputs  = ['d', 'm', 'y'].map(s => el(`sr-seniority-${s}`)).filter(Boolean);
 
   if (rec) {
     srFullName.value      = rec.full_name          || '';
@@ -5810,6 +5819,7 @@ async function openStaffRecModal(rec) {
   } else {
     textInputs.forEach(i => { if (i) i.value = ''; });
     numInputs.forEach(i => { if (i) i.value = ''; });
+    senInputs.forEach(i => { i.value = ''; });
     srRosterType.value = 'inside';
     _setGender('');
     [srJobTitle, srSpec, srCertificate, srHigherDegree, srEduZone, srMinDoc]

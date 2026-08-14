@@ -32,6 +32,11 @@ jobs:
       - name: JS syntax check (all pages + modules)
         run: node tools/check-js-syntax.mjs
 
+      # يُمسك «مرجعٌ بلا تعريف» — عائلةُ العلل التي تمرّ من node --check ومن
+      # اختبارات الوحدة ومن الفحص الدخانيّ، ثمّ تسقط عند أوّل استعمالٍ حقيقيّ.
+      - name: Undeclared-reference check
+        run: npm run check:undef
+
       - name: HTML validation (all pages)
         run: npm run check:html
 
@@ -91,6 +96,25 @@ jobs:
       - name: Stop local Supabase
         if: always()
         run: supabase stop --no-backup
+
+  smoke:
+    name: Smoke-test every portal in a real browser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install tooling
+        run: npm ci --no-audit --no-fund
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+      # يفتح كلّ بوّابة ويشترط ألّا تُخطئ. يُكمّل فحص no-undef: ذاك يمسك
+      # المراجع المفقودة، وهذا يمسك ما لا يظهر إلا عند التحميل الفعليّ.
+      - name: Smoke
+        run: node tools/smoke-portals.mjs
 
   edge-functions:
     name: Type-check Supabase Edge Functions (Deno)
