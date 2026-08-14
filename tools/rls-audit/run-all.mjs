@@ -7,6 +7,7 @@ import { Report, paint, nowIso } from './config.mjs';
 import { createFixtures, teardown } from './seed.mjs';
 import { runRlsTests } from './rls-test.mjs';
 import { runSqlRlsTests } from './rls-sql-test.mjs';
+import { runRpcScopeTests } from './rpc-scope-test.mjs';
 import { runBugChecks } from './bug-check.mjs';
 import { runPerfChecks } from './perf-check.mjs';
 
@@ -54,6 +55,12 @@ try {
   if (process.env.DATABASE_URL && (!rlsRan || process.env.AUDIT_RUN_SQL_RLS)) {
     try { await runSqlRlsTests(report); }
     catch (e) { report.section('١ب) عزل RLS — طريقة SQL').rows.push(Report.row('warn', 'تعذّرت طريقة SQL', e.message)); }
+  }
+
+  // ١ج) نطاق دوال SECURITY DEFINER — لا يغطّيها ١ب لأنها تتجاوز RLS بالتصميم.
+  if (process.env.DATABASE_URL) {
+    try { await runRpcScopeTests(report); }
+    catch (e) { report.section('١ج) نطاق الدوال').rows.push(Report.row('warn', 'تعذّر فحص نطاق الدوال', e.message)); }
   }
 
   // ٢) الباغات (على البيانات الحيّة، بلا بذر)

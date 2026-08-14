@@ -81,6 +81,13 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
 
+      # الدوال SECURITY DEFINER تتجاوز RLS بالتصميم، فالخطوة أعلاه لا تغطّيها.
+      - name: Run RPC scope isolation test
+        run: node rpc-scope-test.mjs
+        working-directory: tools/rls-audit
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+
       - name: Stop local Supabase
         if: always()
         run: supabase stop --no-backup
