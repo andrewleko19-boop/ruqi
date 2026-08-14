@@ -2585,3 +2585,24 @@ select.csel-native {
   background: #fee2e2; color: #991b1b;
   border-radius: 8px; font-size: .82rem;
 }
+
+/* ── نصاب التدريس: تنبيه التجاوز فوق قائمة التكاليف ───────────────────────── */
+.quota-alert {
+  border:1px solid var(--clr-warn-brd,#FCD34D); background:var(--clr-warn-bg,#FEF3C7);
+  border-radius:10px; padding:10px 12px; margin-bottom:12px;
+}
+.quota-alert.is-danger {
+  border-color:var(--clr-danger-brd,#FCA5A5); background:var(--clr-danger-bg,#FEE2E2);
+}
+.quota-alert-hd { display:flex; align-items:center; gap:8px; }
+.quota-alert-title { flex:1; font-size:.82rem; font-weight:800; color:#7C2D12; }
+.quota-alert.is-danger .quota-alert-title { color:#7F1D1D; }
+.quota-alert-list { list-style:none; margin:8px 0 0; padding:0; display:grid; gap:5px; }
+.quota-alert-list li {
+  display:flex; align-items:center; gap:8px; font-size:.78rem; color:#78350F;
+}
+.quota-alert.is-danger .quota-alert-list li { color:#7F1D1D; }
+.qa-name { flex:1; min-width:0; overflow-wrap:anywhere; }
+.qa-num  { flex-shrink:0; font-variant-numeric:tabular-nums; font-weight:700; }
+.qa-num b { font-weight:800; }
+.qa-num.is-muted { font-weight:600; opacity:.85; }

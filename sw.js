@@ -11,7 +11,7 @@
  *
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'ruqi-v149';
+const CACHE = 'ruqi-v150';
 
 /* ⚠️ التقسيم مقصود ويعالج عطلاً حقيقياً.
    كان التثبيت كلّه على Promise.allSettled — يبتلع فشل أي ملفّ ويُعلن النجاح —

@@ -6130,6 +6130,7 @@ async function loadAssignments() {
     _asnStaff   = staff   || [];
     _asnClasses = classes || [];
     renderAssignments();
+    void loadQuotaAlert();   // لا تُنتظَر: تنبيهٌ مساعد لا يحجب قائمة التكاليف
   } catch (err) {
     console.error('[Ruqi] loadAssignments', err);
     show(asnError);
@@ -6176,6 +6177,72 @@ function renderAssignments() {
     </li>`;
   }).join('');
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// § نصاب التدريس — تنبيه التجاوز
+//
+//  النصاب القانونيّ في staff_records.teaching_hours، والحمل الفعليّ مجموع
+//  lesson_count في تكاليف المعلّم النشطة. المدرسة هي من يُسنِد الدروس، فهنا
+//  موضع التنبيه: يرى المديرُ التجاوز وهو يُسنِد، لا بعد شهرٍ من المديرية.
+//
+//  حالتان لا تُخلطان: «نصابٌ محدَّد والحمل يفوقه» تجاوزٌ حقيقيّ، و«نصابٌ غير
+//  محدَّد» بيانٌ ناقص. جعلُ الفارغ صفراً يُشهِّر بكل معلّمٍ لم يُملأ نصابه.
+// ─────────────────────────────────────────────────────────────────────────────
+let _quotaRows = [];
+let _quotaExpanded = false;
+
+async function loadQuotaAlert() {
+  const box = el('quota-alert');
+  if (!box || !S.school?.id) return;
+  try {
+    _quotaRows = await NDB.getTeachingLoad(S.school.id);
+  } catch (err) {
+    console.warn('[Ruqi] loadQuotaAlert', err);
+    hide(box); return;                   // تنبيهٌ تعذّر جلبه لا يُعلَن خطأً صاخباً
+  }
+  renderQuotaAlert();
+}
+
+function renderQuotaAlert() {
+  const box   = el('quota-alert');
+  const title = el('quota-alert-title');
+  const list  = el('quota-alert-list');
+  if (!box || !title || !list) return;
+
+  const over    = _quotaRows.filter(r => r.excess != null && r.excess > 0);
+  const noQuota = _quotaRows.filter(r => r.quota == null);
+  const flagged = [...over, ...noQuota];
+  if (!flagged.length) { hide(box); return; }
+
+  box.classList.toggle('is-danger', over.length > 0);
+  title.textContent = [
+    over.length    ? `${over.length} تجاوزوا النصاب`      : '',
+    noQuota.length ? `${noQuota.length} بلا نصابٍ محدَّد` : '',
+  ].filter(Boolean).join(' · ');
+
+  // ثلاثةٌ افتراضاً: قائمةٌ طويلة فوق التكاليف تدفعها خارج الشاشة، والغرض
+  // تنبيهٌ لا تقرير. الزرّ يفتحها كاملةً لمن أراد.
+  const shown = _quotaExpanded ? flagged : flagged.slice(0, 3);
+  list.innerHTML = shown.map(r => `
+    <li>
+      <span class="qa-name">${escapeHtml(r.full_name)}</span>
+      <span class="qa-num${r.quota == null ? ' is-muted' : ''}">${r.quota == null
+        ? 'نصاب غير محدَّد'
+        : `${r.assigned} / ${r.quota} <b>+${r.excess}</b>`}</span>
+    </li>`).join('');
+
+  const btn = el('btn-quota-detail');
+  if (btn) {
+    btn.hidden = flagged.length <= 3;
+    btn.textContent = _quotaExpanded ? 'إخفاء' : `عرض الكل (${flagged.length})`;
+  }
+  show(box);
+}
+
+el('btn-quota-detail')?.addEventListener('click', () => {
+  _quotaExpanded = !_quotaExpanded;
+  renderQuotaAlert();
+});
 
 // Segment switching
 document.querySelectorAll('.asn-seg-btn').forEach(btn => {

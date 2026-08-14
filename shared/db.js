@@ -1165,6 +1165,17 @@ async function getMinistryGovernorateStats() {
   return data || [];
 }
 
+// نصاب التدريس لكل معلّم: النصاب القانوني والدروس المسندة والفائض.
+// النطاق يتبع دور المستدعي (مدرسة / مديرية / وزارة)؛ p_school_id يضيّقه.
+// excess = null يعني «نصابٌ غير محدَّد» لا «بلا تجاوز» — والفرق جوهريّ.
+async function getTeachingLoad(schoolId = null) {
+  const { data, error } = await db.rpc('get_teaching_load', {
+    p_school_id: schoolId || null,
+  });
+  if (error) throw error;
+  return data || [];
+}
+
 // صفٌّ لكل مدرسة داخل محافظة (أو القُطر كلّه إن كان المعامل فارغاً).
 async function getMinistrySchoolStats(governorate = null) {
   const { data, error } = await db.rpc('get_ministry_school_stats', {
@@ -4483,6 +4494,7 @@ window.RUQI_DB = {
   getDirectorateSchoolStats,
   getMinistryGovernorateStats,
   getMinistrySchoolStats,
+  getTeachingLoad,
   flagStudentDropout,
   getFlaggedDropoutStudents,
 

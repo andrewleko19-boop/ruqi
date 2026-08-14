@@ -1458,10 +1458,32 @@ function renderStructure() {
     })),
   ];
 
+  // نصاب التدريس: المدرسة هي من يُسنِد الدروس، والمديرية تراقب التجاوز.
+  // «بلا نصابٍ محدَّد» ليست تجاوزاً بل حقلٌ ناقص — تُفصَل عنه صراحةً.
+  const over    = sum('teachers_over_quota');
+  const noQuota = sum('teachers_no_quota');
+  const quotaItems = [];
+  if (over) quotaItems.push({
+    label: 'تجاوزوا النصاب', value: fmtNum(over), tone: 'bad',
+    drill: { title: 'مدارس فيها تجاوزٌ للنصاب',
+             subtitle: `${fmtNum(over)} معلّماً — الرقم عدد المتجاوزين في المدرسة`,
+             rows: () => structRows(s => s.teachers_over_quota > 0, s => s.teachers_over_quota) },
+  });
+  if (noQuota) quotaItems.push({
+    label: 'بلا نصابٍ محدَّد', value: fmtNum(noQuota), tone: 'warn',
+    drill: { title: 'معلّمون بلا نصابٍ محدَّد',
+             subtitle: 'حقل «ساعات التدريس» فارغ في سجلّ الكوادر — لا يُحتسب تجاوزهم',
+             rows: () => structRows(s => s.teachers_no_quota > 0, s => s.teachers_no_quota) },
+  });
+  if (!quotaItems.length && structStats.length) quotaItems.push({
+    label: 'لا تجاوزات', value: '✓', tone: 'good',
+  });
+
   StatDrill.grid(gridEl, [
     { title: 'المدارس حسب النوع', items: schoolItems },
     { title: 'الطلاب حسب الجنس',  items: studentItems },
     { title: 'الكادر حسب الفئة',  items: staffItems },
+    { title: 'نصاب التدريس',      items: quotaItems },
   ]);
 }
 
