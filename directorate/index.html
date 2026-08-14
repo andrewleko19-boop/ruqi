@@ -198,6 +198,9 @@
       <button class="dir-tab-btn" data-tab="schools" role="tab" aria-selected="false" data-module="student-records">
         <svg class="icon"><use href="#icon-school"/></svg><span class="dir-rail-label">المدارس والطاقم</span>
       </button>
+      <button class="dir-tab-btn" data-tab="staff" role="tab" aria-selected="false" data-module="staff-hr">
+        <svg class="icon"><use href="#icon-users"/></svg><span class="dir-rail-label">دليل الكادر</span>
+      </button>
     </nav>
 
     <!-- ═════ نظرة عامة ═════ -->
@@ -931,6 +934,59 @@
       </div>
     </div>
     </div><!-- /dir-tab-schools -->
+
+    <!-- ═════ دليل الكادر — السجل المهني الكامل ═════ -->
+    <div id="dir-tab-staff" class="dir-tab-panel">
+    <div class="main-content">
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <span class="eyebrow">السجل المهني</span>
+            <h2>دليل الكادر (<span id="sdir-count">—</span>)</h2>
+          </div>
+          <span class="panel-hint">اضغط أيّ اسم لعرض بطاقته الكاملة</span>
+        </div>
+        <div class="struct-body">
+          <div class="sdir-filters">
+            <input id="sdir-search" class="input-sm" type="search"
+                   placeholder="ابحث بالاسم أو الرقم الوطني أو الرقم الذاتي…" />
+            <select id="sdir-school"><option value="">كل المدارس</option></select>
+            <select id="sdir-type">
+              <option value="">كل الفئات</option>
+              <option value="teaching">تدريسي</option>
+              <option value="admin">إداري</option>
+              <option value="professional">مهني</option>
+              <option value="worker">مستخدَم</option>
+              <option value="guard">حارس</option>
+            </select>
+          </div>
+
+          <div id="sdir-loading" class="table-loading hidden">
+            <div class="spinner"></div><span>جارٍ التحميل…</span>
+          </div>
+          <div id="sdir-table-wrap" class="table-wrapper hidden">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th><th>الاسم</th><th>الفئة</th><th>المدرسة</th>
+                  <th>الاختصاص</th><th>الشهادة</th><th>الأقدمية</th>
+                </tr>
+              </thead>
+              <tbody id="sdir-tbody"></tbody>
+            </table>
+          </div>
+          <div id="sdir-empty" class="table-empty hidden">لا نتائج مطابقة.</div>
+          <div id="sdir-error" class="table-empty hidden">تعذّر تحميل دليل الكادر.</div>
+
+          <div class="sdir-pager" id="sdir-pager" hidden>
+            <button class="btn btn-ghost btn-sm" id="sdir-prev">السابق</button>
+            <span id="sdir-range" class="panel-hint"></span>
+            <button class="btn btn-ghost btn-sm" id="sdir-next">التالي</button>
+          </div>
+        </div>
+      </section>
+    </div>
+    </div><!-- /dir-tab-staff -->
 
   </div><!-- /#app -->
 

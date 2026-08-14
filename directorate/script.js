@@ -1488,6 +1488,184 @@ function renderStructure() {
 }
 
 // ══════════════════════════════════════════════
+//  دليل الكادر — السجل المهني الكامل
+//
+//  staff_records تحمل ثلاثين حقلاً مهنياً لا يقرؤها اليوم إلا مديرُ المدرسة
+//  نفسها. فالمديرية التي تُسأل «من عندك من حملة الماجستير في الرياضيات» لا
+//  تملك جواباً إلا بالاتصال بالمدارس واحدةً واحدة. هذا الدليل هو الجواب.
+//
+//  البحث والترقيم في الخادم لا هنا: تصفيةُ ستّة آلاف صفٍّ في المتصفّح تعني
+//  سحبها أوّلاً، وهو ما لا يُحتمل على شبكةٍ ولا على هاتف.
+// ══════════════════════════════════════════════
+const STAFF_TYPE_AR = {
+  teaching: 'تدريسي', admin: 'إداري', professional: 'مهني',
+  worker: 'مستخدَم', guard: 'حارس',
+};
+const SDIR_PAGE = 100;
+
+let _sdirInit = false, _sdirRows = [], _sdirTotal = 0, _sdirOffset = 0;
+let _sdirSeq = 0, _sdirDebounce = null;
+
+function initStaffDirectory() {
+  if (_sdirInit) return;
+  _sdirInit = true;
+
+  CustomSelect.enhance('sdir-school');
+  CustomSelect.enhance('sdir-type');
+  void fillStaffSchoolFilter();
+
+  const reload = () => { _sdirOffset = 0; loadStaffDirectory(); };
+  document.getElementById('sdir-school')?.addEventListener('change', reload);
+  document.getElementById('sdir-type')?.addEventListener('change', reload);
+  // تأخيرٌ قصير على الكتابة: استعلامٌ لكل ضغطة مفتاح يُغرق الخادم ويُرجع
+  // نتائجَ متسابقة تتقدّم أحدثُها على أقدمها.
+  document.getElementById('sdir-search')?.addEventListener('input', () => {
+    clearTimeout(_sdirDebounce);
+    _sdirDebounce = setTimeout(reload, 300);
+  });
+  document.getElementById('sdir-prev')?.addEventListener('click', () => {
+    _sdirOffset = Math.max(0, _sdirOffset - SDIR_PAGE); loadStaffDirectory();
+  });
+  document.getElementById('sdir-next')?.addEventListener('click', () => {
+    if (_sdirOffset + SDIR_PAGE < _sdirTotal) { _sdirOffset += SDIR_PAGE; loadStaffDirectory(); }
+  });
+  document.getElementById('sdir-tbody')?.addEventListener('click', (e) => {
+    const tr = e.target.closest('tr[data-sid]');
+    if (tr) openStaffCard(tr.dataset.sid);
+  });
+
+  loadStaffDirectory();
+}
+
+/* مرشِّح المدارس. يُفضَّل ما حمّله تبويب المدارس، وإلا جُلبت الأسماء وحدها —
+   فقد يفتح المستخدمُ هذا التبويب أوّلاً فلا يجد قائمةً بلا هذا الاحتياط. */
+async function fillStaffSchoolFilter() {
+  const sel = document.getElementById('sdir-school');
+  if (!sel) return;
+  let list = Array.isArray(_dirAllSchools) ? _dirAllSchools : [];
+  if (!list.length && currentUser?.directorateId) {
+    const { data } = await _sb.from('schools')
+      .select('id, name').eq('directorate_id', currentUser.directorateId)
+      .is('archived_at', null).order('name');
+    list = data ?? [];
+  }
+  const keep = sel.value;
+  sel.innerHTML = '<option value="">كل المدارس</option>' + list
+    .map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+  sel.value = keep;
+  CustomSelect.refresh(sel);
+}
+
+async function loadStaffDirectory() {
+  const loading = document.getElementById('sdir-loading');
+  const wrap    = document.getElementById('sdir-table-wrap');
+  const empty   = document.getElementById('sdir-empty');
+  const errEl   = document.getElementById('sdir-error');
+  const pager   = document.getElementById('sdir-pager');
+  if (!wrap) return;
+
+  const seq = ++_sdirSeq;
+  loading?.classList.remove('hidden');
+  wrap.classList.add('hidden');
+  empty?.classList.add('hidden');
+  errEl?.classList.add('hidden');
+  pager?.setAttribute('hidden', '');
+
+  try {
+    const { rows, total } = await RUQI_DB.getStaffDirectory({
+      schoolId:  document.getElementById('sdir-school')?.value || null,
+      staffType: document.getElementById('sdir-type')?.value   || null,
+      search:    document.getElementById('sdir-search')?.value?.trim() || null,
+      limit: SDIR_PAGE, offset: _sdirOffset,
+    });
+    // ردٌّ متأخّر لبحثٍ هُجر: تجاهُله يمنع أن تحلّ نتائج «أح» محلّ «أحمد».
+    if (seq !== _sdirSeq) return;
+    _sdirRows = rows; _sdirTotal = total;
+    renderStaffDirectory();
+  } catch (e) {
+    if (seq !== _sdirSeq) return;
+    console.error('[dir] loadStaffDirectory', e);
+    errEl?.classList.remove('hidden');
+  } finally {
+    if (seq === _sdirSeq) loading?.classList.add('hidden');
+  }
+}
+
+function renderStaffDirectory() {
+  const wrap  = document.getElementById('sdir-table-wrap');
+  const tbody = document.getElementById('sdir-tbody');
+  const empty = document.getElementById('sdir-empty');
+  const pager = document.getElementById('sdir-pager');
+  const count = document.getElementById('sdir-count');
+  if (count) count.textContent = fmtNum(_sdirTotal);
+
+  if (!_sdirRows.length) { empty?.classList.remove('hidden'); return; }
+
+  tbody.innerHTML = _sdirRows.map((r, i) => `
+    <tr data-sid="${esc(r.id)}" class="row-clickable">
+      <td class="muted">${fmtNum(_sdirOffset + i + 1)}</td>
+      <td><strong>${esc(r.full_name)}</strong></td>
+      <td>${esc(STAFF_TYPE_AR[r.staff_type] ?? r.staff_type ?? '—')}</td>
+      <td>${esc(r.school_name ?? '—')}</td>
+      <td>${esc(r.specialization ?? '—')}</td>
+      <td>${esc(r.certificate ?? '—')}</td>
+      <td>${r.seniority_year ?? '—'}</td>
+    </tr>`).join('');
+  wrap.classList.remove('hidden');
+
+  if (_sdirTotal > SDIR_PAGE) {
+    const from = _sdirOffset + 1, to = _sdirOffset + _sdirRows.length;
+    document.getElementById('sdir-range').textContent =
+      `${fmtNum(from)}–${fmtNum(to)} من ${fmtNum(_sdirTotal)}`;
+    document.getElementById('sdir-prev').disabled = _sdirOffset === 0;
+    document.getElementById('sdir-next').disabled = to >= _sdirTotal;
+    pager?.removeAttribute('hidden');
+  }
+}
+
+/** البطاقة الشخصية: كل ما في السجلّ، والفارغ يُحذف لا يُعرض شُرَطاً. */
+function openStaffCard(id) {
+  const r = _sdirRows.find(x => x.id === id);
+  if (!r) return;
+  const F = [
+    ['الفئة',            STAFF_TYPE_AR[r.staff_type] ?? r.staff_type],
+    ['المدرسة',          r.school_name],
+    ['المديرية',         r.directorate_name],
+    ['الصفة / العمل',    r.job_title],
+    ['الرقم الوطني',     r.national_id],
+    ['الرقم الذاتي',     r.self_number],
+    ['الرقم العام',      r.general_number],
+    ['اسم الأم',         r.mother_name],
+    ['الجنس',            r.gender === 'male' ? 'ذكر' : r.gender === 'female' ? 'أنثى' : null],
+    ['تاريخ الميلاد',    r.birth_date],
+    ['الشهادة',          r.certificate],
+    ['الشهادة العليا',   r.higher_degree],
+    ['الاختصاص',         r.specialization],
+    ['المادة المُدرَّسة', r.subject_taught],
+    ['الرتبة',           r.teaching_rank],
+    ['النصاب (ساعات)',   r.teaching_hours],
+    ['سنة الأقدمية',     r.seniority_year],
+    ['تاريخ المباشرة',   r.start_date],
+    ['الملاك',           r.roster_type === 'inside' ? 'داخل الملاك'
+                        : r.roster_type === 'outside' ? 'خارج الملاك'
+                        : r.roster_type === 'contract' ? 'متعاقد' : null],
+    ['الوثيقة الوزارية', r.ministerial_doc],
+    ['المنطقة التعليمية', r.educational_zone],
+    ['منطقة السكن',      r.residential_zone],
+    ['الهاتف',           r.phone],
+    ['الهاتف الأرضي',    r.landline],
+    ['الصف المسند',      r.assigned_grade],
+    ['الشعبة',           r.assigned_section],
+  ].filter(([, v]) => v !== null && v !== undefined && v !== '');
+
+  StatDrill.open(
+    r.full_name,
+    [STAFF_TYPE_AR[r.staff_type], r.school_name].filter(Boolean).join(' · '),
+    F.map(([label, value]) => ({ label, value: String(value) })),
+  );
+}
+
+// ══════════════════════════════════════════════
 //  التقارير الشهرية
 // ══════════════════════════════════════════════
 async function loadPeriodicReports() {
@@ -2637,6 +2815,8 @@ function _dirActivateTab(tabName) {
 
   // Schools and principals now share one section, so both lists load together.
   if (tabName === 'schools') { loadDirSchools(); loadDirPrincipals(); }
+
+  if (tabName === 'staff') initStaffDirectory();
 
   // Leaflet measures 0×0 while its panel is display:none, so it must be told to
   // re-measure whenever the overview becomes visible again.
