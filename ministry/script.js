@@ -11,6 +11,7 @@
 import { supabase, errMessage } from '../shared/db.js';
 import * as RUQI_PERMISSIONS from '../shared/permissions.js';
 import { setupPwToggle } from '../shared/pw-toggle.js';
+import { StatDrill } from '../shared/stat-drill.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const loginScreen    = document.getElementById('login-screen');
@@ -261,6 +262,10 @@ async function loadAllData() {
       .select('id, name, directorate_id, total_students, lat, lng')
       .is('archived_at', null);
     if (schErr) throw schErr;
+
+    // البنية تُحمَّل بالتوازي ولا تُنتظَر: فشلُها يترك بطاقتها وحدها معطّلة
+    // بدل أن يُسقط لوحة الحضور كلّها.
+    void loadStructure(structScope);
 
     const allSchoolIds = (schools || []).map(s => s.id);
 
@@ -667,12 +672,152 @@ const rateCellHTML = (rateStr, barClass) => `
 function openDrillGov(gov) {
   drill = { level: 'gov', gov, dirId: null };
   renderDrill();
+  void loadStructure(gov);
   document.getElementById('drill-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function closeDrill() {
   drill = { level: 'national', gov: null, dirId: null };
   renderDrill();
+  void loadStructure(null);
+}
+
+// ══════════════════════════════════════════════
+//  البنية — المدارس والطلاب والكادر
+//
+//  اللوحة كانت تعرض الحضور وحده. المسؤول يسأل أوّلاً عن التركيب: كم مدرسةً
+//  ابتدائية، كم طالبة، كم مدرّساً. والنطاق يتبع التنقيب: وطنيٌّ افتراضاً،
+//  ومحافظةٌ بعينها متى فُتحت — فلا يقرأ رقماً وطنياً وهو ينظر في محافظة.
+// ══════════════════════════════════════════════
+const SCHOOL_TYPE_AR = { primary: 'ابتدائي', preparatory: 'إعدادي', secondary: 'ثانوي' };
+const STAFF_CAT = [
+  ['staff_teaching',     'تدريسي'],
+  ['staff_admin',        'إداري'],
+  ['staff_professional', 'مهني'],
+  ['staff_worker',       'مستخدَم'],
+  ['staff_guard',        'حارس'],
+];
+
+let structStats = [];
+let structScope = null;          // null = القُطر كلّه
+let structSeq   = 0;             // يحرس ضدّ سباق الطلبات عند تنقيبٍ سريع
+
+async function loadStructure(governorate) {
+  const loading = document.getElementById('struct-loading');
+  const errEl   = document.getElementById('struct-error');
+  const gridEl  = document.getElementById('struct-grid');
+  const scopeEl = document.getElementById('struct-scope');
+  if (!gridEl) return;
+
+  structScope = governorate || null;
+  if (scopeEl) scopeEl.textContent = structScope ? `بنية محافظة ${structScope}` : 'البنية الوطنية';
+
+  const seq = ++structSeq;
+  loading?.classList.remove('hidden');
+  errEl?.classList.add('hidden');
+  try {
+    const rows = await window.RUQI_DB.getMinistrySchoolStats(structScope);
+    // ردٌّ متأخّر لنطاقٍ هُجر: تجاهُله يمنع أن تُرسَم أرقام محافظةٍ سابقة
+    // فوق المحافظة المفتوحة الآن.
+    if (seq !== structSeq) return;
+    structStats = rows;
+    renderStructure();
+  } catch (e) {
+    if (seq !== structSeq) return;
+    console.error('[ministry] loadStructure', e);
+    gridEl.innerHTML = '';
+    errEl?.classList.remove('hidden');
+  } finally {
+    if (seq === structSeq) loading?.classList.add('hidden');
+  }
+}
+
+/** صفوف التفصيل: مدرسةٌ في كل سطر، وتحتها مديريتها ونوعها. */
+const structRows = (filter, valueOf) => structStats
+  .filter(filter)
+  .map(s => ({
+    label: s.school_name,
+    sub:   [SCHOOL_TYPE_AR[s.school_type] ?? 'بلا نوع محدَّد', s.directorate_name]
+             .filter(Boolean).join(' · '),
+    value: valueOf ? fmt(valueOf(s)) : '',
+  }))
+  .sort((a, b) => a.label.localeCompare(b.label, 'ar'));
+
+function renderStructure() {
+  const gridEl = document.getElementById('struct-grid');
+  if (!gridEl) return;
+
+  const sum = (k) => structStats.reduce((t, s) => t + (Number(s[k]) || 0), 0);
+  const typed = (t) => structStats.filter(s => s.school_type === t);
+  const untyped = structStats.filter(s => !SCHOOL_TYPE_AR[s.school_type]);
+  const where = structScope ? `محافظة ${structScope}` : 'القُطر';
+
+  const schoolItems = [
+    { label: 'إجمالي المدارس', value: fmt(structStats.length),
+      drill: structStats.length ? {
+        title: `كل المدارس — ${where}`, subtitle: `${fmt(structStats.length)} مدرسة`,
+        rows: () => structRows(() => true, s => s.students_total),
+      } : null },
+    ...Object.entries(SCHOOL_TYPE_AR).map(([key, ar]) => ({
+      label: ar, value: fmt(typed(key).length),
+      drill: typed(key).length ? {
+        title: `المدارس — ${ar}`, subtitle: `${where} · ${fmt(typed(key).length)} مدرسة`,
+        rows: () => structRows(s => s.school_type === key, s => s.students_total),
+      } : null,
+    })),
+  ];
+  if (untyped.length) schoolItems.push({
+    label: 'بلا نوع محدَّد', value: fmt(untyped.length), tone: 'warn',
+    drill: { title: 'مدارس بلا نوع محدَّد',
+             subtitle: 'بياناتٌ ناقصة تُخلّ بالإحصاء الوطني',
+             rows: () => structRows(s => !SCHOOL_TYPE_AR[s.school_type], s => s.students_total) },
+  });
+
+  const males = sum('students_male'), females = sum('students_female');
+  const total = sum('students_total');
+  const studentItems = [
+    { label: 'إجمالي الطلاب', value: fmt(total),
+      drill: { title: `الطلاب — ${where}`, subtitle: `${fmt(total)} طالباً وطالبة`,
+               rows: () => structRows(s => s.students_total > 0, s => s.students_total) } },
+    { label: 'ذكور', value: fmt(males),
+      drill: { title: `الذكور — ${where}`, subtitle: `${fmt(males)} طالباً`,
+               rows: () => structRows(s => s.students_male > 0, s => s.students_male) } },
+    { label: 'إناث', value: fmt(females),
+      drill: { title: `الإناث — ${where}`, subtitle: `${fmt(females)} طالبة`,
+               rows: () => structRows(s => s.students_female > 0, s => s.students_female) } },
+  ];
+  // الفارق بين المجموع ومجموع الجنسين طلابٌ بلا جنسٍ مسجَّل — نقصٌ يجب أن يُرى.
+  const noGender = Math.max(0, total - males - females);
+  if (noGender) studentItems.push({
+    label: 'جنسٌ غير مسجَّل', value: fmt(noGender), tone: 'warn',
+    drill: { title: 'طلاب بلا جنسٍ مسجَّل',
+             subtitle: 'حقلٌ ناقص في سجلّ الطلاب',
+             rows: () => structRows(
+               s => (s.students_total - s.students_male - s.students_female) > 0,
+               s => s.students_total - s.students_male - s.students_female) },
+  });
+
+  const staffTotal = STAFF_CAT.reduce((t, [k]) => t + sum(k), 0);
+  const staffItems = [
+    { label: 'إجمالي الكادر', value: fmt(staffTotal),
+      drill: { title: `الكادر — ${where}`, subtitle: `${fmt(staffTotal)} موظفاً`,
+               rows: () => structRows(
+                 s => STAFF_CAT.some(([k]) => s[k] > 0),
+                 s => STAFF_CAT.reduce((t, [k]) => t + (Number(s[k]) || 0), 0)) } },
+    ...STAFF_CAT.map(([key, ar]) => ({
+      label: ar, value: fmt(sum(key)),
+      drill: sum(key) ? {
+        title: `الكادر — ${ar}`, subtitle: `${where} · ${fmt(sum(key))} موظفاً`,
+        rows: () => structRows(s => s[key] > 0, s => s[key]),
+      } : null,
+    })),
+  ];
+
+  StatDrill.grid(gridEl, [
+    { title: 'المدارس حسب النوع', items: schoolItems },
+    { title: 'الطلاب حسب الجنس',  items: studentItems },
+    { title: 'الكادر حسب الفئة',  items: staffItems },
+  ]);
 }
 
 function renderDrill() {

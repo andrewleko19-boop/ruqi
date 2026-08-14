@@ -179,6 +179,25 @@
         </div>
       </section>
 
+      <!-- البنية الوطنية: المدارس بالنوع، الطلاب بالجنس، الكادر بالفئة.
+           تتبدّل مع التنقيب: وطنيةً افتراضاً، ومحافظةً عند اختيارها. -->
+      <section class="section-card" id="struct-card">
+        <div class="section-header">
+          <div>
+            <span class="eyebrow" id="struct-scope">البنية الوطنية</span>
+            <h2>المدارس والطلاب والكادر</h2>
+          </div>
+          <span class="panel-hint">اضغط أيّ رقم لعرض التفصيل بالأسماء</span>
+        </div>
+        <div class="struct-body">
+          <div id="struct-loading" class="table-loading">
+            <div class="spinner"></div><span>جارٍ حساب الإحصاءات…</span>
+          </div>
+          <div id="struct-error" class="table-empty" hidden>تعذّر حساب الإحصاءات. حدِّث الصفحة.</div>
+          <div id="struct-grid"></div>
+        </div>
+      </section>
+
       <!-- الخريطة الوطنية + ترتيب المحافظات -->
       <div class="min-grid-2">
         <section class="section-card">

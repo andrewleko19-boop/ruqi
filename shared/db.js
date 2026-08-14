@@ -1144,6 +1144,36 @@ async function getDirectorateTrend(days = 14) {
   return data || [];
 }
 
+// ── إحصاءات مفصَّلة: الطلاب بالجنس والكادر بالفئة ────────────────────────────
+// التجميع في القاعدة لا في المتصفّح: مديريةٌ بمئتَي مدرسة تعني عشرات آلاف
+// الصفوف، وسحبُها لتُعدّ هنا يُثقل الشبكة ويُنهك أجهزةً متواضعة.
+
+// صفٌّ لكل مدرسة في مديرية المستدعي.
+// [{ school_id, school_name, school_type, students_total, students_male,
+//    students_female, students_unknown, staff_teaching, staff_admin,
+//    staff_professional, staff_worker, staff_guard }]
+async function getDirectorateSchoolStats() {
+  const { data, error } = await db.rpc('get_directorate_school_stats');
+  if (error) throw error;
+  return data || [];
+}
+
+// صفٌّ لكل محافظة، وطنياً. للوزارة وحدها.
+async function getMinistryGovernorateStats() {
+  const { data, error } = await db.rpc('get_ministry_governorate_stats');
+  if (error) throw error;
+  return data || [];
+}
+
+// صفٌّ لكل مدرسة داخل محافظة (أو القُطر كلّه إن كان المعامل فارغاً).
+async function getMinistrySchoolStats(governorate = null) {
+  const { data, error } = await db.rpc('get_ministry_school_stats', {
+    p_governorate: governorate || null,
+  });
+  if (error) throw error;
+  return data || [];
+}
+
 // اتجاه حضور مدرسة واحدة (للمديرية المالكة أو الوزارة)
 // returns [{ day, present, late, absent, excused }]
 async function getSchoolTrend(schoolId, days = 30) {
@@ -4450,6 +4480,9 @@ window.RUQI_DB = {
   // Dropout warning
   getDropoutRiskStudents,
   getDirectorateDropoutSummary,
+  getDirectorateSchoolStats,
+  getMinistryGovernorateStats,
+  getMinistrySchoolStats,
   flagStudentDropout,
   getFlaggedDropoutStudents,
 

@@ -2092,3 +2092,6 @@ input[type="search"].input-sm {
   .imp-intro { padding: 12px 12px 0; }
   .imp-map-sample { max-width: 120px; }
 }
+
+/* بنية المديرية — حاوية شبكة الأرقام القابلة للضغط (shared/stat-drill.js). */
+.struct-body { padding: 1rem 1.1rem; }

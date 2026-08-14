@@ -2,6 +2,7 @@
 // ── DB من window.RUQI_DB (يُحمَّل عبر shared/db.js قبل هذا الملف) ──────────
 import { CustomSelect }                      from '../shared/csel.js';
 import { setupPwToggle }                     from '../shared/pw-toggle.js';
+import { StatDrill }                         from '../shared/stat-drill.js';
 import { supabase as _sb, supabaseUrl as _sbUrl } from '../shared/db.js';
 const {
   login,
@@ -1327,12 +1328,141 @@ document.getElementById('reload-dropout-btn')?.addEventListener('click', loadDro
 document.getElementById('reload-periodic-btn')?.addEventListener('click', loadPeriodicReports);
 
 async function loadAll() {
-  await Promise.allSettled([loadStats(), loadMapAndCompliance(), loadReports(), loadTrend(), loadRequests(), loadStatements(), loadResultSheets(), loadDropoutSummary(), loadPeriodicReports()]);
+  await Promise.allSettled([loadStats(), loadMapAndCompliance(), loadReports(), loadTrend(), loadRequests(), loadStatements(), loadResultSheets(), loadDropoutSummary(), loadPeriodicReports(), loadStructure()]);
   // After every list has settled. loadReports renders the queue too, but it
   // runs in parallel with the three approval loaders, so at that point their
   // arrays may still be empty — this pass is the one that sees all four.
   renderPendingList();
   refreshRailCounts();
+}
+
+// ══════════════════════════════════════════════
+//  بنية المديرية — المدارس والطلاب والكادر
+//
+//  أوّل سؤالٍ يسأله مسؤولٌ حقيقيّ ليس «كم حضر اليوم» بل «كم مدرسةً ابتدائية
+//  عندي وكم طالبةً فيها». وكل رقمٍ هنا بابٌ: ضغطُه يُظهر ما وراءه بالأسماء،
+//  فيُراجَع الرقم بدل أن يُصدَّق على علّاته.
+// ══════════════════════════════════════════════
+const SCHOOL_TYPE_AR = { primary: 'ابتدائي', preparatory: 'إعدادي', secondary: 'ثانوي' };
+const fmtNum = (n) => (Number(n) || 0).toLocaleString('en-US');
+const STAFF_CAT = [
+  ['staff_teaching',     'تدريسي'],
+  ['staff_admin',        'إداري'],
+  ['staff_professional', 'مهني'],
+  ['staff_worker',       'مستخدَم'],
+  ['staff_guard',        'حارس'],
+];
+
+let structStats = [];
+
+async function loadStructure() {
+  const loading = document.getElementById('struct-loading');
+  const errEl   = document.getElementById('struct-error');
+  const gridEl  = document.getElementById('struct-grid');
+  if (!gridEl) return;
+
+  loading?.classList.remove('hidden');
+  errEl?.setAttribute('hidden', '');
+  try {
+    structStats = await RUQI_DB.getDirectorateSchoolStats();
+    renderStructure();
+  } catch (e) {
+    console.error('[dir] loadStructure', e);
+    gridEl.innerHTML = '';
+    errEl?.removeAttribute('hidden');
+  } finally {
+    loading?.classList.add('hidden');
+  }
+}
+
+/** يبني صفوف التفصيل: مدرسةٌ في كل سطر مع الرقم الذي ساهمت به. */
+const structRows = (filter, valueOf) => structStats
+  .filter(filter)
+  .map(s => ({
+    label: s.school_name,
+    sub:   SCHOOL_TYPE_AR[s.school_type] ?? 'بلا نوع محدَّد',
+    value: valueOf ? fmtNum(valueOf(s)) : '',
+  }))
+  .sort((a, b) => a.label.localeCompare(b.label, 'ar'));
+
+function renderStructure() {
+  const gridEl = document.getElementById('struct-grid');
+  if (!gridEl) return;
+
+  const sum = (k) => structStats.reduce((t, s) => t + (Number(s[k]) || 0), 0);
+  const typed = (t) => structStats.filter(s => s.school_type === t);
+  const untypedCount = structStats.filter(s => !SCHOOL_TYPE_AR[s.school_type]).length;
+
+  const schoolItems = Object.entries(SCHOOL_TYPE_AR).map(([key, ar]) => ({
+    label: ar,
+    value: fmtNum(typed(key).length),
+    drill: typed(key).length ? {
+      title: `المدارس — ${ar}`,
+      subtitle: `${fmtNum(typed(key).length)} مدرسة`,
+      rows: () => structRows(s => s.school_type === key, s => s.students_total),
+    } : null,
+  }));
+  schoolItems.unshift({
+    label: 'إجمالي المدارس',
+    value: fmtNum(structStats.length),
+    drill: structStats.length ? {
+      title: 'كل مدارس المديرية',
+      subtitle: `${fmtNum(structStats.length)} مدرسة`,
+      rows: () => structRows(() => true, s => s.students_total),
+    } : null,
+  });
+  // نوعٌ غير محدَّد يُعرض فقط إن وُجد: صفرٌ دائمُ الظهور ضجيجٌ، وغيرُ الصفر
+  // بياناتٌ ناقصة يجب أن تُرى وتُصحَّح.
+  if (untypedCount) schoolItems.push({
+    label: 'بلا نوع محدَّد', value: fmtNum(untypedCount), tone: 'warn',
+    drill: {
+      title: 'مدارس بلا نوع محدَّد',
+      subtitle: 'أكمِل نوع المدرسة من تبويب «المدارس» — تنقص الإحصاء الوطني',
+      rows: () => structRows(s => !SCHOOL_TYPE_AR[s.school_type], s => s.students_total),
+    },
+  });
+
+  const males = sum('students_male'), females = sum('students_female');
+  const unknownGender = sum('students_unknown');
+  const studentItems = [
+    { label: 'إجمالي الطلاب', value: fmtNum(sum('students_total')),
+      drill: { title: 'الطلاب حسب المدرسة', subtitle: `${fmtNum(sum('students_total'))} طالباً وطالبة`,
+               rows: () => structRows(s => s.students_total > 0, s => s.students_total) } },
+    { label: 'ذكور', value: fmtNum(males),
+      drill: { title: 'الذكور حسب المدرسة', subtitle: `${fmtNum(males)} طالباً`,
+               rows: () => structRows(s => s.students_male > 0, s => s.students_male) } },
+    { label: 'إناث', value: fmtNum(females),
+      drill: { title: 'الإناث حسب المدرسة', subtitle: `${fmtNum(females)} طالبة`,
+               rows: () => structRows(s => s.students_female > 0, s => s.students_female) } },
+  ];
+  if (unknownGender) studentItems.push({
+    label: 'جنسٌ غير مسجَّل', value: fmtNum(unknownGender), tone: 'warn',
+    drill: { title: 'طلاب بلا جنسٍ مسجَّل',
+             subtitle: 'حقلٌ ناقص في سجلّ الطلاب — يُخلّ بالإحصاء المفصَّل',
+             rows: () => structRows(s => s.students_unknown > 0, s => s.students_unknown) },
+  });
+
+  const staffTotal = STAFF_CAT.reduce((t, [k]) => t + sum(k), 0);
+  const staffItems = [
+    { label: 'إجمالي الكادر', value: fmtNum(staffTotal),
+      drill: { title: 'الكادر حسب المدرسة', subtitle: `${fmtNum(staffTotal)} موظفاً`,
+               rows: () => structRows(
+                 s => STAFF_CAT.some(([k]) => s[k] > 0),
+                 s => STAFF_CAT.reduce((t, [k]) => t + (Number(s[k]) || 0), 0)) } },
+    ...STAFF_CAT.map(([key, ar]) => ({
+      label: ar, value: fmtNum(sum(key)),
+      drill: sum(key) ? {
+        title: `الكادر — ${ar}`, subtitle: `${fmtNum(sum(key))} موظفاً`,
+        rows: () => structRows(s => s[key] > 0, s => s[key]),
+      } : null,
+    })),
+  ];
+
+  StatDrill.grid(gridEl, [
+    { title: 'المدارس حسب النوع', items: schoolItems },
+    { title: 'الطلاب حسب الجنس',  items: studentItems },
+    { title: 'الكادر حسب الفئة',  items: staffItems },
+  ]);
 }
 
 // ══════════════════════════════════════════════
@@ -3581,7 +3711,7 @@ function renderImportPreview() {
     `<tr><th>#</th>${cols.map(c => `<th>${dirEsc(c.label)}</th>`).join('')}</tr>`;
   impEl('imp-sample-tbody').innerHTML = ok.slice(0, 10).map(r =>
     `<tr><td class="muted">${r.line}</td>${
-      cols.map(c => `<td>${dirEsc(c.fmt ? c.fmt(r[c.key]) : (r[c.key] || '—'))}</td>`).join('')
+      cols.map(c => `<td>${dirEsc(c.fmt ? c.fmtNum(r[c.key]) : (r[c.key] || '—'))}</td>`).join('')
     }</tr>`).join('') || `<tr><td colspan="${cols.length + 1}" class="empty-state">لا سطر جاهز.</td></tr>`;
 
   const runBtn = impEl('imp-run-btn');
