@@ -198,6 +198,52 @@
         </div>
       </section>
 
+      <!-- دليل الكادر — السجل المهني الكامل، وطنياً أو لمحافظة -->
+      <section class="section-card" id="msdir-card">
+        <div class="section-header">
+          <div>
+            <span class="eyebrow" id="msdir-scope">دليل الكادر الوطني</span>
+            <h2>السجل المهني (<span id="msdir-count">—</span>)</h2>
+          </div>
+          <span class="panel-hint">اضغط أيّ اسم لعرض بطاقته الكاملة</span>
+        </div>
+        <div class="struct-body">
+          <div class="sdir-filters">
+            <input id="msdir-search" class="input-sm" type="search"
+                   placeholder="ابحث بالاسم أو الرقم الوطني أو الرقم الذاتي…" />
+            <select id="msdir-type">
+              <option value="">كل الفئات</option>
+              <option value="teaching">تدريسي</option>
+              <option value="admin">إداري</option>
+              <option value="professional">مهني</option>
+              <option value="worker">مستخدَم</option>
+              <option value="guard">حارس</option>
+            </select>
+          </div>
+          <div id="msdir-loading" class="table-loading hidden">
+            <div class="spinner"></div><span>جارٍ التحميل…</span>
+          </div>
+          <div id="msdir-table-wrap" class="table-wrapper hidden">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th><th>الاسم</th><th>الفئة</th><th>المدرسة</th>
+                  <th>المديرية</th><th>الاختصاص</th><th>الشهادة</th>
+                </tr>
+              </thead>
+              <tbody id="msdir-tbody"></tbody>
+            </table>
+          </div>
+          <div id="msdir-empty" class="table-empty hidden">لا نتائج مطابقة.</div>
+          <div id="msdir-error" class="table-empty hidden">تعذّر تحميل دليل الكادر.</div>
+          <div class="sdir-pager" id="msdir-pager" hidden>
+            <button class="btn btn-ghost btn-sm" id="msdir-prev">السابق</button>
+            <span id="msdir-range" class="panel-hint"></span>
+            <button class="btn btn-ghost btn-sm" id="msdir-next">التالي</button>
+          </div>
+        </div>
+      </section>
+
       <!-- الخريطة الوطنية + ترتيب المحافظات -->
       <div class="min-grid-2">
         <section class="section-card">

@@ -1170,14 +1170,17 @@ async function getMinistryGovernorateStats() {
 // total_count فيُعرَف الإجمالي بلا استعلامٍ ثانٍ.
 // → { rows, total }
 async function getStaffDirectory({
-  schoolId = null, staffType = null, search = null, limit = 100, offset = 0,
+  schoolId = null, staffType = null, search = null,
+  limit = 100, offset = 0, governorate = null,
 } = {}) {
   const { data, error } = await db.rpc('get_staff_directory', {
-    p_school_id:  schoolId  || null,
-    p_staff_type: staffType || null,
-    p_search:     search    || null,
-    p_limit:      limit,
-    p_offset:     offset,
+    p_school_id:   schoolId  || null,
+    p_staff_type:  staffType || null,
+    p_search:      search    || null,
+    p_limit:       limit,
+    p_offset:      offset,
+    // للوزارة وحدها؛ الخادم يتجاهله لغيرها.
+    p_governorate: governorate || null,
   });
   if (error) throw error;
   const rows = data || [];

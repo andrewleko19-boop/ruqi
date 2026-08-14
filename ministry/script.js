@@ -722,6 +722,10 @@ async function loadStructure(governorate) {
     if (seq !== structSeq) return;
     structStats = rows;
     renderStructure();
+    // الدليل يتبع النطاق نفسه: قائمةُ كادرٍ وطنية تحت عنوان محافظةٍ مفتوحة
+    // قراءةٌ خاطئة. الصفحة تعود للأوّل لأن الترقيم يخصّ النطاق السابق.
+    _msdirOffset = 0;
+    void loadStaffDir();
   } catch (e) {
     if (seq !== structSeq) return;
     console.error('[ministry] loadStructure', e);
@@ -730,6 +734,149 @@ async function loadStructure(governorate) {
   } finally {
     if (seq === structSeq) loading?.classList.add('hidden');
   }
+}
+
+// ══════════════════════════════════════════════
+//  دليل الكادر الوطني — السجل المهني الكامل
+//
+//  المديرية تتصفّح كادرها، والوزارة يجب أن ترى أكثر لا أقلّ. النطاق يتبع
+//  التنقيب كالبنية: القُطر افتراضاً، والمحافظة متى فُتحت — فوحدةُ عمل الوزارة
+//  المحافظة لا المدرسة، وقائمةُ مدارسها بالآلاف لا تصلح مرشِّحاً.
+// ══════════════════════════════════════════════
+const MSDIR_PAGE = 100;
+let _msdirInit = false, _msdirRows = [], _msdirTotal = 0, _msdirOffset = 0;
+let _msdirSeq = 0, _msdirDebounce = null;
+
+function initStaffDir() {
+  if (_msdirInit) return;
+  _msdirInit = true;
+  const reload = () => { _msdirOffset = 0; void loadStaffDir(); };
+  document.getElementById('msdir-type')?.addEventListener('change', reload);
+  document.getElementById('msdir-search')?.addEventListener('input', () => {
+    clearTimeout(_msdirDebounce);
+    _msdirDebounce = setTimeout(reload, 300);
+  });
+  document.getElementById('msdir-prev')?.addEventListener('click', () => {
+    _msdirOffset = Math.max(0, _msdirOffset - MSDIR_PAGE); void loadStaffDir();
+  });
+  document.getElementById('msdir-next')?.addEventListener('click', () => {
+    if (_msdirOffset + MSDIR_PAGE < _msdirTotal) { _msdirOffset += MSDIR_PAGE; void loadStaffDir(); }
+  });
+  document.getElementById('msdir-tbody')?.addEventListener('click', (e) => {
+    const tr = e.target.closest('tr[data-sid]');
+    if (tr) openStaffCard(tr.dataset.sid);
+  });
+}
+
+async function loadStaffDir() {
+  initStaffDir();
+  const loading = document.getElementById('msdir-loading');
+  const wrap    = document.getElementById('msdir-table-wrap');
+  const empty   = document.getElementById('msdir-empty');
+  const errEl   = document.getElementById('msdir-error');
+  const scopeEl = document.getElementById('msdir-scope');
+  if (!wrap) return;
+  if (scopeEl) scopeEl.textContent = structScope
+    ? `كادر محافظة ${structScope}` : 'دليل الكادر الوطني';
+
+  const seq = ++_msdirSeq;
+  loading?.classList.remove('hidden');
+  wrap.classList.add('hidden');
+  empty?.classList.add('hidden');
+  errEl?.classList.add('hidden');
+  document.getElementById('msdir-pager')?.setAttribute('hidden', '');
+
+  try {
+    const { rows, total } = await window.RUQI_DB.getStaffDirectory({
+      governorate: structScope,
+      staffType:   document.getElementById('msdir-type')?.value || null,
+      search:      document.getElementById('msdir-search')?.value?.trim() || null,
+      limit: MSDIR_PAGE, offset: _msdirOffset,
+    });
+    if (seq !== _msdirSeq) return;   // ردٌّ لبحثٍ هُجر
+    _msdirRows = rows; _msdirTotal = total;
+    renderStaffDir();
+  } catch (e) {
+    if (seq !== _msdirSeq) return;
+    console.error('[ministry] loadStaffDir', e);
+    errEl?.classList.remove('hidden');
+  } finally {
+    if (seq === _msdirSeq) loading?.classList.add('hidden');
+  }
+}
+
+function renderStaffDir() {
+  const wrap  = document.getElementById('msdir-table-wrap');
+  const tbody = document.getElementById('msdir-tbody');
+  const count = document.getElementById('msdir-count');
+  const pager = document.getElementById('msdir-pager');
+  if (count) count.textContent = fmt(_msdirTotal);
+  if (!_msdirRows.length) {
+    document.getElementById('msdir-empty')?.classList.remove('hidden'); return;
+  }
+  tbody.innerHTML = _msdirRows.map((r, i) => `
+    <tr data-sid="${esc(r.id)}" class="row-clickable">
+      <td>${fmt(_msdirOffset + i + 1)}</td>
+      <td><strong>${esc(r.full_name)}</strong></td>
+      <td>${esc(STAFF_TYPE_AR[r.staff_type] ?? r.staff_type ?? '—')}</td>
+      <td>${esc(r.school_name ?? '—')}</td>
+      <td>${esc(r.directorate_name ?? '—')}</td>
+      <td>${esc(r.specialization ?? '—')}</td>
+      <td>${esc(r.certificate ?? '—')}</td>
+    </tr>`).join('');
+  wrap.classList.remove('hidden');
+
+  if (_msdirTotal > MSDIR_PAGE) {
+    const from = _msdirOffset + 1, to = _msdirOffset + _msdirRows.length;
+    document.getElementById('msdir-range').textContent =
+      `${fmt(from)}–${fmt(to)} من ${fmt(_msdirTotal)}`;
+    document.getElementById('msdir-prev').disabled = _msdirOffset === 0;
+    document.getElementById('msdir-next').disabled = to >= _msdirTotal;
+    pager?.removeAttribute('hidden');
+  }
+}
+
+/** البطاقة الشخصية: كل ما في السجلّ، والفارغ يُحذف لا يُعرض شُرَطاً. */
+function openStaffCard(id) {
+  const r = _msdirRows.find(x => x.id === id);
+  if (!r) return;
+  const F = [
+    ['الفئة',            STAFF_TYPE_AR[r.staff_type] ?? r.staff_type],
+    ['المدرسة',          r.school_name],
+    ['المديرية',         r.directorate_name],
+    ['المحافظة',         r.governorate],
+    ['الصفة / العمل',    r.job_title],
+    ['الرقم الوطني',     r.national_id],
+    ['الرقم الذاتي',     r.self_number],
+    ['الرقم العام',      r.general_number],
+    ['اسم الأم',         r.mother_name],
+    ['الجنس',            r.gender === 'male' ? 'ذكر' : r.gender === 'female' ? 'أنثى' : null],
+    ['تاريخ الميلاد',    r.birth_date],
+    ['الشهادة',          r.certificate],
+    ['الشهادة العليا',   r.higher_degree],
+    ['الاختصاص',         r.specialization],
+    ['المادة المُدرَّسة', r.subject_taught],
+    ['الرتبة',           r.teaching_rank],
+    ['النصاب (ساعات)',   r.teaching_hours],
+    ['سنة الأقدمية',     r.seniority_year],
+    ['تاريخ المباشرة',   r.start_date],
+    ['الملاك',           r.roster_type === 'inside' ? 'داخل الملاك'
+                        : r.roster_type === 'outside' ? 'خارج الملاك'
+                        : r.roster_type === 'contract' ? 'متعاقد' : null],
+    ['الوثيقة الوزارية', r.ministerial_doc],
+    ['المنطقة التعليمية', r.educational_zone],
+    ['منطقة السكن',      r.residential_zone],
+    ['الهاتف',           r.phone],
+    ['الهاتف الأرضي',    r.landline],
+    ['الصف المسند',      r.assigned_grade],
+    ['الشعبة',           r.assigned_section],
+  ].filter(([, v]) => v !== null && v !== undefined && v !== '');
+
+  StatDrill.open(
+    r.full_name,
+    [STAFF_TYPE_AR[r.staff_type], r.school_name, r.directorate_name].filter(Boolean).join(' · '),
+    F.map(([label, value]) => ({ label, value: String(value) })),
+  );
 }
 
 /** صفوف التفصيل: مدرسةٌ في كل سطر، وتحتها مديريتها ونوعها. */
