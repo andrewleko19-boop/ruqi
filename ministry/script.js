@@ -14,6 +14,7 @@ import { setupPwToggle } from '../shared/pw-toggle.js';
 import { CustomSelect } from '../shared/csel.js';
 import { StatDrill } from '../shared/stat-drill.js';
 import { detectAnomalies } from '../shared/data-alerts.js';
+import { fmtDateShort } from '../shared/date-format.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const loginScreen    = document.getElementById('login-screen');
@@ -546,8 +547,7 @@ function upsertChart(holder, key, canvasId, configFactory, labels, datasetsData)
 }
 
 // مرساة الظهيرة تمنع انزياح اليوم في UTC+3
-const trendLabel = (isoDay) =>
-  new Date(isoDay + 'T12:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+const trendLabel = (isoDay) => fmtDateShort(isoDay);
 
 function natRateConfig(labels, datasetsData) {
   const opts = chartBaseOptions();

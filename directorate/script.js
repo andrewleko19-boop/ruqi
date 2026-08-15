@@ -4,6 +4,7 @@ import { CustomSelect }                      from '../shared/csel.js';
 import { setupPwToggle }                     from '../shared/pw-toggle.js';
 import { StatDrill }                         from '../shared/stat-drill.js';
 import { detectAnomalies }                   from '../shared/data-alerts.js';
+import { fmtDateShort, fmtDateLong, fmtDateTime } from '../shared/date-format.js';
 import { supabase as _sb, supabaseUrl as _sbUrl } from '../shared/db.js';
 const {
   login,
@@ -1087,7 +1088,7 @@ function exportReportsCSV() {
     r.description ?? '',
     formatStatus(r.status),
     r.receipt_number ?? '',
-    r.created_at ? new Date(r.created_at).toLocaleString('en-GB') : '',
+    r.created_at ? fmtDateTime(r.created_at, '') : '',
     r.media_urls?.length ?? 0,
   ]);
 
@@ -1189,8 +1190,7 @@ function upsertChart(holder, key, canvasId, configFactory, labels, datasetsData)
 }
 
 // مرساة الظهيرة تمنع انزياح اليوم في UTC+3
-const trendLabel = (isoDay) =>
-  new Date(isoDay + 'T12:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+const trendLabel = (isoDay) => fmtDateShort(isoDay);
 
 function rateLineConfig(labels, datasetsData) {
   const opts = chartBaseOptions();
@@ -1812,9 +1812,7 @@ function setupManualRefresh() {
 function setNavDate() {
   const el = document.getElementById('nav-date');
   if (!el) return;
-  el.textContent = new Date().toLocaleDateString('en-GB', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  });
+  el.textContent = fmtDateLong(new Date());
 }
 
 function esc(str) {
@@ -1851,10 +1849,7 @@ function formatType(type) {
 
 function formatDate(iso) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
+  return fmtDateTime(iso);
 }
 
 // عدّاد متحرك لقيمة رقمية (لا يُحرِّك النص أو القيم المتساوية)

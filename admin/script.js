@@ -211,28 +211,22 @@ function roleBadgeClass(role) {
   return { school_admin: 'role-school-admin', directorate_user: 'role-directorate', ministry_user: 'role-ministry' }[role] ?? '';
 }
 
-// ── المستوى الإداري الفرعي (permission_role) — يفصل "الوزير" عن "موظف
-// الوزارة"، و"مدير التربية" عن "موظف مديرية"، ضمن نفس role التقني (RLS لا
-// يتغيّر). يُستخدم في تبويب المستخدمين وفي مصفوفة الوحدات والصلاحيات. ─────────
+/* المستوى الإداريّ (permission_role) — دورٌ واحد لكلّ بوّابة.
+   كان يفصل «الوزير» عن «موظف الوزارة» و«مدير التربية» عن «موظف مديرية»، لكنّ
+   الزوجين كانا متطابقَين حرفياً في الوحدات الأربع عشرة كلّها: صفرُ فرق. فهو
+   تمييزٌ اسميّ يُوهم المشرفَ بأنّه يضبط شيئاً وهو يضبط نسخةً مكرّرة. دُمجا
+   في 20260815000000، والمديرية والوزارة حسابٌ واحد بصلاحياتٍ واحدة. */
 const PERMISSION_ROLE_OPTIONS = {
-  directorate_user: [
-    { value: 'directorate_head',  label: 'مدير التربية' },
-    { value: 'directorate_staff', label: 'موظف مديرية' },
-  ],
-  ministry_user: [
-    { value: 'minister',       label: 'الوزير' },
-    { value: 'ministry_staff', label: 'موظف الوزارة' },
-  ],
+  directorate_user: [{ value: 'directorate_staff', label: 'موظف مديرية' }],
+  ministry_user:    [{ value: 'ministry_staff',    label: 'موظف الوزارة' }],
 };
 
-// ترتيب أعمدة مصفوفة الوحدات — يغطي كل الأدوار السبعة في role_module_permissions.
+// أعمدة مصفوفة الوحدات — خمسةٌ تقابل البوّابات الخمس، لا سبعة.
 const MATRIX_ROLES = [
   { key: 'teacher',           label: 'معلم / موجّه' },
   { key: 'school_admin',      label: 'مدير مدرسة' },
   { key: 'directorate_staff', label: 'موظف مديرية' },
-  { key: 'directorate_head',  label: 'مدير التربية' },
   { key: 'ministry_staff',    label: 'موظف الوزارة' },
-  { key: 'minister',          label: 'الوزير' },
   { key: 'parent',            label: 'ولي الأمر' },
 ];
 
@@ -725,11 +719,15 @@ function renderUsers() {
            </button>`
         : `<button class="btn btn-danger btn-sm" data-deactivate="${esc(u.id)}" data-name="${esc(u.full_name)}">تعطيل</button>`;
     const permOptions = PERMISSION_ROLE_OPTIONS[u.role];
-    const permCell = permOptions
-      ? `<select class="perm-role-select" data-perm-role="${esc(u.id)}" onclick="event.stopPropagation()">
-           ${permOptions.map(o => `<option value="${o.value}" ${u.permission_role === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}
-         </select>`
-      : '<span class="muted">—</span>';
+    /* بعد دمج الأدوار صار لكلّ بوّابةٍ مستوىً واحد، فقائمةٌ بخيارٍ يتيم تبدو
+       ضابطاً وهي لا تضبط شيئاً. تُعرض نصّاً. ولو عادت مستوياتٌ متعدّدة يوماً
+       رجعت القائمة تلقائياً — الشرط على العدد لا على الحالة. */
+    const permCell = !permOptions ? '<span class="muted">—</span>'
+      : permOptions.length === 1
+        ? `<span>${esc(permOptions[0].label)}</span>`
+        : `<select class="perm-role-select" data-perm-role="${esc(u.id)}" onclick="event.stopPropagation()">
+             ${permOptions.map(o => `<option value="${o.value}" ${u.permission_role === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}
+           </select>`;
     return `
     <tr class="${u.is_active === false ? 'is-off' : ''}" style="cursor:pointer" data-view-cred="${esc(u.id)}" data-cred-name="${esc(u.full_name ?? '')}">
       <td class="muted num">${(usersPage - 1) * PAGE_SIZE + i + 1}</td>

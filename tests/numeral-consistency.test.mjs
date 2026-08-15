@@ -54,6 +54,26 @@ describe('كل toLocaleString تُصرّح بلغتها', () => {
 /* المنسِّقات العددية الثلاث — واحدةٌ لكل بوّابة. تُفحَص بأعيانها لا بمسحٍ
    عامّ على toLocaleString: التواريخ تُنسَّق بـen-GB عمداً (يوم/شهر/سنة)، ومسحٌ
    يطالب بلغةٍ واحدة يرفعها إنذاراً كاذباً ثم يُروَّض بتعطيله فيضيع الحارس. */
+/* التواريخ تُنسَّق بـar-SY حصراً (الشهور السريانية). أيّ لغةٍ أخرى تُخرج
+   «أغسطس» أو «August» — كلاهما غريبٌ عن الوثيقة السورية. */
+describe('التواريخ بالتقويم السوريّ وحده', () => {
+  const DATE_FILES = ['ministry/script.js','directorate/script.js','directorate/school.js',
+                      'school/script.js','admin/script.js','parent/script.js','shared/db.js'];
+  for (const rel of DATE_FILES) {
+    test(rel, () => {
+      const src = readFileSync(join(ROOT, rel), 'utf8');
+      /* التواريخ وحدها: toLocaleDateString وtoLocaleTimeString. أمّا
+         toLocaleString فتخدم الأرقام أيضاً (en-US مقصودة هناك)، فمسحُها
+         يخلط الحارسَين ويُنذر كذباً. */
+      const bad = [...src.matchAll(/toLocale(?:Date|Time)String\(\s*'((?!ar-SY)[a-zA-Z-]+)'/g)]
+        .map(m => m[1]);
+      assert.deepEqual([...new Set(bad)], [],
+        `${rel}: تاريخٌ بلغةٍ غير ar-SY (${[...new Set(bad)].join(', ')}) — ` +
+        'الشهور السريانية شرطُ الوثيقة الرسمية.');
+    });
+  }
+});
+
 const NUM_FORMATTERS = [
   ['ministry/script.js',      /const fmt\s*=[^;]*?toLocaleString\('([^']+)'\)/],
   ['directorate/script.js',   /const fmtNum\s*=[^;]*?toLocaleString\('([^']+)'\)/],

@@ -534,7 +534,8 @@ function renderAttDetails(rec) {
   if (rec.notes) rows.push(['ملاحظات', escapeHtml(rec.notes)]);
   if (rec.submitted_at) {
     const d = new Date(rec.submitted_at);
-    const time = d.toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' });
+    // ar-SY لا ar: العامّة تتبع تفضيلات النظام فقد تُخرج صيغةً غير سورية.
+    const time = d.toLocaleTimeString('ar-SY', { hour: '2-digit', minute: '2-digit' });
     rows.push(['وقت الإرسال', `${formatDateAr(localDateISO(d))} — ${time}`]);
   }
   return rows

@@ -1,6 +1,7 @@
 // directorate/school.js — صفحة ملف المدرسة (drill-down من لوحة المديرية)
 // الجلسة مشتركة مع اللوحة (LAYER يُكتشف من مقطع المسار /directorate/)
 import { StatDrill } from '../shared/stat-drill.js';
+import { fmtDateShort, fmtDateLong, fmtDateTime } from '../shared/date-format.js';
 
 if (!window.RUQI_DB) {
   document.body.innerHTML =
@@ -201,8 +202,7 @@ function upsertChart(holder, key, canvasId, configFactory, labels, datasetsData)
   return holder[key];
 }
 
-const trendLabel = (isoDay) =>
-  new Date(isoDay + 'T12:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+const trendLabel = (isoDay) => fmtDateShort(isoDay);
 
 function rateLineConfig(labels, datasetsData) {
   const opts = chartBaseOptions();
@@ -673,9 +673,7 @@ function setupManualRefresh() {
 function setNavDate() {
   const el = document.getElementById('nav-date');
   if (el) {
-    el.textContent = new Date().toLocaleDateString('en-GB', {
-      weekday: 'long', day: '2-digit', month: 'short', year: 'numeric',
-    });
+    el.textContent = fmtDateLong(new Date());
   }
 }
 
@@ -708,10 +706,7 @@ function formatType(type) {
 
 function formatDate(iso) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
+  return fmtDateTime(iso);
 }
 
 function animateValue(el, target, dur = 600) {
