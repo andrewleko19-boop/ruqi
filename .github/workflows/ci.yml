@@ -49,6 +49,11 @@ jobs:
       - name: db.js import/export consistency
         run: node tools/check-db-imports.mjs
 
+      # دالّةٌ في docs/database-setup.sql وحدها لا تصل الإنتاج — والزرّ الذي
+      # يستدعيها يسقط بـ 42883 بعد أشهر. حدث فعلاً مع upsert_year_results.
+      - name: SQL reference/migrations drift
+        run: npm run check:sql
+
       - name: Unit tests
         run: npm test
 

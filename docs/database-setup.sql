@@ -9,8 +9,18 @@
 --  exist (it is used by the app's existing RLS policies and returns the
 --  school_id of the currently-authenticated user).
 --
---  NOTE: the app is a client-only PWA — schema lives in Supabase, not in
---  migrations in this repo. This file is committed for REFERENCE only.
+--  ⚠ لم يعد هذا الملفّ مصدرَ الحقيقة. المنشور هو supabase/migrations/ عبر
+--  سير .github/workflows/deploy-migrations.yml. وما يُكتب هنا وحده لا يصل
+--  القاعدة أبداً: الدالّة تبدو موجودةً لمن يقرأ، ويسقط زرُّها بـ 42883 عند أوّل
+--  مستخدمٍ يضغطه — وقد مضت أشهر. حدث فعلاً مع upsert_year_results (§12.2)،
+--  فبقي «الترفيع السنويّ» معطَّلاً كاملاً حتى استُدرك.
+--
+--  فأيّ تغييرٍ على القاعدة يبدأ بهجرةٍ في supabase/migrations/. ويُبقي
+--  tools/check-sql-drift.mjs (في CI) الملفّين متّسقين فلا يتكرّر الصنف.
+--
+--  NOTE: the app is a client-only PWA — schema lives in Supabase. This file is
+--  kept as a readable, grouped REFERENCE of the schema; migrations are what
+--  actually ships.
 --
 --  The teacher-account feature also needs the Edge Function
 --  `supabase/functions/admin-create-staff` deployed. Its secrets

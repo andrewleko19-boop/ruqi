@@ -222,6 +222,75 @@ export async function runRpcScopeTests(report) {
       });
     }
 
+    // ── ٨) صفحةُ التحقّق العامّة: تعمل، ولا تُفشي أكثر ممّا على الورقة ──────
+    //  المسار الوحيد في النظام الذي يُنفَّذ بلا جلسة (verify.js بمفتاح anon).
+    //  ولذلك لا يمرّ به أحدٌ منّا يومياً: عطلُه صامتٌ تماماً — من يمسح رمزاً
+    //  مطبوعاً ويرى «تعذّر التحقّق» ليس مستخدماً يفتح تذكرة.
+    await inTx(c, async () => {
+      const f = await seedForeign(c);
+      const { rows: [cls] } = await c.query(
+        `insert into public.classes (school_id, name, grade, section, academic_year)
+         values ($1, 'اختبار', '5', 'A', '2025-2026') returning id`, [f.schoolId]);
+      const { rows: [st] } = await c.query(
+        `insert into public.students (school_id, class_id, full_name)
+         values ($1, $2, '__طالب اختبار التحقّق__') returning id`, [f.schoolId, cls.id]);
+
+      // (أ) طالبٌ بلا أيّ جلاء: لا شيء يُعاد لغير المسجَّل. قبل الإصلاح كان
+      //     فرعُ الاحتياط يُعيد اسمه ومدرستَه ومديريّتَه وصفَّه لأيّ حاملِ معرّف.
+      await c.query('set local role anon');
+      const bare = await callRpc(c,
+        'select student_name, school_name, class_label from public.verify_certificate($1, null)',
+        [st.id]);
+      if (!bare.ok) {
+        sec.rows.push(Report.row('fail', 'verify_certificate · نداء anon',
+          `⚠ مرفوض لغير المسجَّل — كلُّ رمز QR مطبوع لا يعمل: ${bare.err.slice(0, 70)}`));
+      } else {
+        sec.rows.push(bare.rows.length === 0
+          ? Report.row('pass', 'verify_certificate · طالبٌ بلا جلاء',
+              'نتيجةٌ فارغة — لا مسارَ إلى students من غير مسجَّل')
+          : Report.row('fail', 'verify_certificate · طالبٌ بلا جلاء',
+              `⚠ تسريب: اسمُ الطفل ومدرستُه الحاليّة مكشوفة بلا تسجيل دخول (${JSON.stringify(bare.rows[0])})`));
+      }
+      await c.query('reset role');
+
+      // (ب) ضابط موجب: جلاءٌ صادر يُعيد الصفَّ فعلاً. بدونه قد ينجح (أ) لأنّ
+      //     الدالّة لا تُرجع شيئاً لأحد — فيبدو الأمانُ عطلاً متنكّراً.
+      await c.query(
+        `insert into public.result_sheets (school_id, class_id, academic_year, term, status, snapshot_data)
+         values ($1, $2, '2025-2026', 'final', 'issued', $3::jsonb)`,
+        [f.schoolId, cls.id, JSON.stringify({
+          classLabel: 'الصف 5 / A',
+          students: [{ studentId: st.id, name: '__طالب اختبار التحقّق__', result: 'ناجح', finalPercent: 88.5 }],
+        })]);
+      await c.query('set local role anon');
+      const issued = await callRpc(c,
+        'select student_name, result, issued from public.verify_certificate($1, null)', [st.id]);
+      sec.rows.push(!issued.ok
+        ? Report.row('fail', 'ضابط موجب: جلاءٌ صادر يُقرأ', issued.err.slice(0, 90))
+        : issued.rows.length === 1 && issued.rows[0].issued === true && issued.rows[0].result === 'ناجح'
+          ? Report.row('pass', 'ضابط موجب: جلاءٌ صادر يُقرأ',
+              'الشهادة الصادرة تُعرَض — الفحص (أ) ليس أعمى')
+          : Report.row('fail', 'ضابط موجب: جلاءٌ صادر يُقرأ',
+              `⚠ الشهادة الصادرة لا تُقرأ: ${JSON.stringify(issued.rows)}`));
+      await c.query('reset role');
+
+      // (ج) جلاءٌ مُرسَل لم يُعتمد: يُثبَت وجودُه ولا تُعلَن نتيجتُه — قرارُ
+      //     النجاح أو الرسوب لا يُنشر قبل اعتماد المديرية.
+      await c.query(`update public.result_sheets set status = 'submitted' where class_id = $1`, [cls.id]);
+      await c.query('set local role anon');
+      const draft = await callRpc(c,
+        'select result, final_percent, issued from public.verify_certificate($1, null)', [st.id]);
+      sec.rows.push(!draft.ok
+        ? Report.row('warn', 'verify_certificate · جلاءٌ غير صادر', draft.err.slice(0, 90))
+        : draft.rows.length === 1 && draft.rows[0].issued === false
+            && draft.rows[0].result === null && draft.rows[0].final_percent === null
+          ? Report.row('pass', 'verify_certificate · جلاءٌ غير صادر',
+              'issued=false بلا نتيجةٍ ولا نسبة')
+          : Report.row('fail', 'verify_certificate · جلاءٌ غير صادر',
+              `⚠ نتيجةٌ تُعلَن قبل اعتماد المديرية: ${JSON.stringify(draft.rows)}`));
+      await c.query('reset role');
+    });
+
     return sec;
   } finally {
     await c.end();
