@@ -775,6 +775,10 @@ async function updateSchool(schoolId, patch) {
   // Staff & enrolment counts — school admin enters real figures in settings.
   if (patch.totalTeachers !== undefined) row.total_teachers = patch.totalTeachers === '' ? null : Number(patch.totalTeachers);
   if (patch.totalStudents !== undefined) row.total_students = patch.totalStudents === '' ? null : Number(patch.totalStudents);
+  /* حدّا النصاب: الفارغ يعني «اتبع الوطنيّ» لا «بلا حدّ» — فيُخزَّن null لا صفر.
+     وصفرٌ هنا سيمنع كلَّ إدخالٍ ويبدو للمدير عطلاً لا إعداداً. */
+  if (patch.quotaMinHours !== undefined) row.quota_min_hours = patch.quotaMinHours === '' || patch.quotaMinHours == null ? null : Number(patch.quotaMinHours);
+  if (patch.quotaMaxHours !== undefined) row.quota_max_hours = patch.quotaMaxHours === '' || patch.quotaMaxHours == null ? null : Number(patch.quotaMaxHours);
   if (Object.keys(row).length === 0) return true;
   const { data, error } = await db.from('schools').update(row).eq('id', schoolId).select('id');
   if (error) throw error;
@@ -783,6 +787,31 @@ async function updateSchool(schoolId, patch) {
   if (!data || data.length === 0)
     throw new Error('لم تُحفظ التعديلات — تحقق من صلاحيات قاعدة البيانات (RLS) لجدول المدرسة.');
   return true;
+}
+
+/* حدُّ النصاب الوطنيّ (صفٌّ واحدٌ تضبطه الوزارة). القراءة للجميع: كلُّ مدرسةٍ
+   تحتاجه لتتحقّق من مدخلاتها قبل الحفظ. وعند تعذّر الجلب نُرجع null لا رقماً
+   مخترَعاً — حدٌّ مخترَعٌ يرفض إدخالاً سليماً أسوأ من غياب الحدّ. */
+async function getTeachingQuotaBounds() {
+  const { data, error } = await db
+    .from('teaching_quota_bounds')
+    .select('min_hours, max_hours, updated_at')
+    .maybeSingle();
+  if (error) throw error;
+  return data ?? null;
+}
+
+async function setTeachingQuotaBounds({ minHours, maxHours }) {
+  const { data, error } = await db
+    .from('teaching_quota_bounds')
+    .update({ min_hours: Number(minHours), max_hours: Number(maxHours),
+              updated_at: new Date().toISOString() })
+    .eq('id', true)
+    .select('min_hours, max_hours');
+  if (error) throw error;
+  if (!data || !data.length)
+    throw new Error('لم تُحفظ الحدود — الضبط مخصّص لمشرف الوزارة.');
+  return data[0];
 }
 
 // ─── Workflow requests (school ↔ directorate) ────────────────────────────────
@@ -4070,7 +4099,7 @@ async function getAdminDirectorates() {
 async function getAdminSchools() {
   const { data, error } = await db
     .from('schools')
-    .select('id, name, directorate_id, directorates(name, governorate), school_type, classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name, archived_at')
+    .select('id, name, directorate_id, directorates(name, governorate), school_type, classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name, quota_min_hours, quota_max_hours, archived_at')
     .order('name');
   if (error) throw error;
   return data ?? [];
@@ -4674,6 +4703,8 @@ window.RUQI_DB = {
   updateStaffRecord,
   softDeleteStaffRecord,
   getStaffLeaves,
+  getTeachingQuotaBounds,
+  setTeachingQuotaBounds,
   getLeavesRegister,
   getLeavesSummary,
   upsertStaffLeave,

@@ -448,6 +448,8 @@
           </div>
           <div id="lookups-empty" class="table-empty hidden">لا توجد عناصر في هذه القائمة.</div>
           <div id="lookups-hint" class="table-empty hidden">اختر مديرية لعرض عناصر هذه القائمة وإدارتها.</div>
+          <!-- قيمٌ تستعملها مدارسُ المديرية فعلاً وليست في القائمة — تُضاف بضغطة -->
+          <div id="lookups-orphans" class="lk-orphans hidden"></div>
         </div>
       </div>
 
@@ -457,6 +459,8 @@
             <h2>فهرس المواد (<span id="subjects-count">—</span>)</h2>
             <div class="section-header-actions">
               <button id="pass-rules-btn" class="btn btn-ghost btn-sm">قواعد النجاح</button>
+              <button id="quota-bounds-btn" class="btn btn-ghost btn-sm"
+                      title="الحدّ الأدنى والأعلى لعدد ساعات التدريس — تتحقّق منه كلُّ مدرسة عند إدخال نصاب معلّم">حدّ النصاب</button>
               <button id="sync-full-marks-btn" class="btn btn-ghost btn-sm"
                       title="مواد أُنشئت في مدرسة ما قبل تفعيل «علامة كاملة» على الفهرس لا تتحدّث تلقائياً — استخدم هذا لتعويضها">
                 مزامنة العلامة الكاملة مع المدارس
@@ -970,6 +974,39 @@
       <div class="modal-footer">
         <button class="btn btn-ghost" id="pass-rules-cancel">إلغاء</button>
         <button class="btn btn-primary" id="pass-rules-save">حفظ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       Modal: حدّ نصاب التدريس (وطنيّ)
+  ══════════════════════════════════════════════ -->
+  <div id="quota-bounds-modal" class="modal-overlay hidden">
+    <div class="modal" style="max-width:460px">
+      <div class="modal-header">
+        <span class="modal-title">حدّ نصاب التدريس</span>
+        <button class="btn btn-icon btn-sm" id="quota-bounds-close">
+          <svg width="16" height="16"><use href="#icon-close"/></svg>
+        </button>
+      </div>
+      <div id="quota-bounds-error" class="error-msg hidden"></div>
+      <p style="font-size:.82rem;color:var(--text-dim);margin:0 0 10px">
+        الحدّ الأدنى والأعلى لعدد ساعات التدريس. تتحقّق منه كلُّ مدرسة عند إدخال
+        نصاب معلّم، ولكلّ مدرسة أن تخالفه من «إعدادات المدرسة» عند الحاجة.
+      </p>
+      <div style="display:flex;gap:10px">
+        <div class="form-group" style="flex:1">
+          <label for="quota-min">الحدّ الأدنى</label>
+          <input id="quota-min" class="field-input" type="number" min="0" max="60" inputmode="numeric" />
+        </div>
+        <div class="form-group" style="flex:1">
+          <label for="quota-max">الحدّ الأعلى</label>
+          <input id="quota-max" class="field-input" type="number" min="0" max="60" inputmode="numeric" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="quota-bounds-cancel">إلغاء</button>
+        <button class="btn btn-primary" id="quota-bounds-save">حفظ</button>
       </div>
     </div>
   </div>

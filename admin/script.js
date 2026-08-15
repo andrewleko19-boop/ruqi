@@ -5,6 +5,7 @@ import {
 } from '../shared/db.js';
 import { CustomSelect } from '../shared/csel.js';
 import { setupPwToggle } from '../shared/pw-toggle.js';
+import { restoreTab } from '../shared/tab-restore.js';
 
 const EDGE_BASE = supabaseUrl + '/functions/v1';
 
@@ -338,7 +339,14 @@ function _adminActivateTab(tabName) {
   if (tabName === 'overview') renderOverview();
 }
 
-history.replaceState({ tab: 'overview', d: 0 }, '', '#overview');
+/* العنوان يُقرأ قبل أن يُكتب: كان الإقلاع يدوس عليه بـ '#overview' دائماً،
+   فتحديثُ الصفحة يُخرج المشرف من القسم الذي يعمل فيه إلى أوّل قسم. */
+{
+  const _names = [...tabBtns].map(b => b.dataset.tab);
+  const _start = restoreTab(_names, 'overview');
+  history.replaceState({ tab: _start, d: 0 }, '', '#' + _start);
+  if (_start !== 'overview') _adminActivateTab(_start);
+}
 
 // أزرار «اذهب إلى القسم» داخل المحتوى (بطاقة نظرة عامة) — وجهة واحدة لكل قسم.
 document.addEventListener('click', (e) => {
@@ -1301,6 +1309,67 @@ function syncLookupDir() {
   lkDirWrap.style.display = lkIsPerDirectorate() ? 'inline-block' : 'none';
 }
 
+const lookupsOrphans = document.getElementById('lookups-orphans');
+
+/* ── قيمٌ مستعمَلةٌ وليست في القائمة ──────────────────────────────────────────
+   القائمةُ المرجعية لا تُغني ما لم تحوِ ما تستعمله المدارس فعلاً. ومديرُ مدرسةٍ
+   حُفظ لها «مدينة اللاذقية» يفتح الحقل فيجد أربعةَ خيارات ليس فيها ما عنده —
+   فيبقى المحفوظُ معلّقاً وحده، أو يختار أقربَ شبيهٍ فيتفتّت التجميع. والمشرفُ
+   لا يعلم بالنقص أصلاً: لا شيء في لوحته يقول إنّ قيمةً تُستعمل وليست عنده.
+
+   فنعرضها هنا بضغطةِ إضافة. (المجمّع التربوي والمنطقة التعليمية صارا قائمةً
+   واحدة، فمصدرُ الاستعمال هو schools.complex_name وحقلُ البيان معاً.) */
+async function renderLookupOrphans(listType, dirId) {
+  if (!lookupsOrphans) return;
+  hide(lookupsOrphans);
+  if (listType !== 'educational_zone' || !dirId) return;
+
+  let used = [];
+  try {
+    const { data, error } = await supabase
+      .from('schools')
+      .select('complex_name')
+      .eq('directorate_id', dirId)
+      .is('archived_at', null)
+      .not('complex_name', 'is', null);
+    if (error) throw error;
+    used = data ?? [];
+  } catch (e) {
+    console.warn('[admin] renderLookupOrphans', e);
+    return;                       // مساعدٌ لا يُعلَن عطلُه صاخباً
+  }
+
+  const have = new Set(allLookups.map(r => (r.value || '').trim()));
+  const missing = [...new Set(used
+    .map(r => (r.complex_name || '').trim())
+    .filter(v => v && !have.has(v)))];
+  if (!missing.length) return;
+
+  lookupsOrphans.innerHTML =
+    `<p class="lk-orphans-hd">قيمٌ تستعملها مدارسُ هذه المديرية وليست في القائمة:</p>` +
+    missing.map(v =>
+      `<span class="lk-orphan"><b>${esc(v)}</b>` +
+      `<button class="btn btn-ghost btn-sm" data-add-orphan="${esc(v)}">أضِف</button></span>`).join('');
+
+  lookupsOrphans.querySelectorAll('[data-add-orphan]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        const { error } = await supabase.from('lookup_lists').insert({
+          list_type: 'educational_zone', value: btn.dataset.addOrphan,
+          directorate_id: dirId, sort_order: (allLookups.length + 1), active: true,
+        });
+        if (error) throw error;
+        await loadLookups();
+      } catch (e) {
+        console.error('[admin] addOrphan', e);
+        btn.disabled = false;
+      }
+    });
+  });
+  show(lookupsOrphans);
+}
+
 async function loadLookups() {
   syncLookupDir();
   const listType = lkTypeFilter.value;
@@ -1310,6 +1379,7 @@ async function loadLookups() {
   hide(lookupsTableWrap);
   hide(lookupsEmpty);
   hide(lookupsHint);
+  hide(lookupsOrphans);
 
   // القوائم المديريّة تحتاج اختيار مديرية أولاً
   if (per && !dirId) {
@@ -1336,6 +1406,8 @@ async function loadLookups() {
   }
   hide(lookupsLoading);
   lookupsCount.textContent = allLookups.length;
+
+  void renderLookupOrphans(listType, dirId);
 
   if (!allLookups.length) { show(lookupsEmpty); return; }
 
@@ -1859,6 +1931,57 @@ async function openPassRules() {
 }
 
 function closePassRules() { hide(passRulesModal); }
+/* ── حدّ نصاب التدريس (وطنيّ) ────────────────────────────────────────────────
+   «عدد الساعات» في سجلّ الكادر كان حقلاً مفتوحاً بلا حدٍّ يُعلَم، ثمّ يُبنى عليه
+   تنبيهُ التجاوز في المدرسة وتقاريرُ المديرية ونصابُ القطر. والرقمان هنا لا في
+   الشيفرة: تغييرُ النصاب القانونيّ قرارٌ وزاريّ لا نشرةُ برمجيات. */
+const quotaBoundsBtn    = document.getElementById('quota-bounds-btn');
+const quotaBoundsModal  = document.getElementById('quota-bounds-modal');
+const quotaBoundsClose  = document.getElementById('quota-bounds-close');
+const quotaBoundsCancel = document.getElementById('quota-bounds-cancel');
+const quotaBoundsSave   = document.getElementById('quota-bounds-save');
+const quotaBoundsError  = document.getElementById('quota-bounds-error');
+const quotaMinIn        = document.getElementById('quota-min');
+const quotaMaxIn        = document.getElementById('quota-max');
+
+async function openQuotaBounds() {
+  clearError(quotaBoundsError);
+  quotaBoundsModal.classList.remove('hidden');
+  try {
+    const b = await window.RUQI_DB.getTeachingQuotaBounds();
+    quotaMinIn.value = b?.min_hours ?? '';
+    quotaMaxIn.value = b?.max_hours ?? '';
+  } catch (e) {
+    showError(quotaBoundsError, errMessage(e, 'تعذّر جلب الحدود.'));
+  }
+}
+function closeQuotaBounds() { quotaBoundsModal.classList.add('hidden'); }
+
+quotaBoundsBtn?.addEventListener('click', () => void openQuotaBounds());
+quotaBoundsClose?.addEventListener('click', closeQuotaBounds);
+quotaBoundsCancel?.addEventListener('click', closeQuotaBounds);
+quotaBoundsModal?.addEventListener('click', e => {
+  if (e.target === quotaBoundsModal) closeQuotaBounds();
+});
+
+quotaBoundsSave?.addEventListener('click', async () => {
+  clearError(quotaBoundsError);
+  const mn = Number(quotaMinIn.value), mx = Number(quotaMaxIn.value);
+  if (!Number.isFinite(mn) || !Number.isFinite(mx) || mn < 0) {
+    showError(quotaBoundsError, 'أدخل رقمين صحيحين.'); return;
+  }
+  if (mx < mn) { showError(quotaBoundsError, 'الحدّ الأعلى لا يجوز أن يقلّ عن الأدنى.'); return; }
+  quotaBoundsSave.disabled = true;
+  try {
+    await window.RUQI_DB.setTeachingQuotaBounds({ minHours: mn, maxHours: mx });
+    closeQuotaBounds();
+  } catch (e) {
+    showError(quotaBoundsError, errMessage(e, 'تعذّر الحفظ.'));
+  } finally {
+    quotaBoundsSave.disabled = false;
+  }
+});
+
 passRulesBtn.addEventListener('click', openPassRules);
 passRulesClose.addEventListener('click', closePassRules);
 passRulesCancel.addEventListener('click', closePassRules);

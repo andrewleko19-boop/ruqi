@@ -1,3 +1,4 @@
+import { restoreTab } from '../shared/tab-restore.js';
 // ── Guard ─────────────────────────────────────────────────────────────────
 if (!window.RUQI_DB) {
   document.body.innerHTML = '<p style="padding:2rem;text-align:center;color:red">تعذَّر تحميل shared/db.js</p>';
@@ -478,8 +479,11 @@ async function loadApp() {
   window.RUQI_PERMISSIONS.applyToDom();
 
   refreshOfflineBar();
-  // بذرة التاريخ: التبويب الافتراضي عمقه صفر، فأيّ تنقّلٍ بعده يُدفع فوقه
-  // ويعيده زرُّ الرجوع بدل الخروج من البوّابة.
+  /* بذرة التاريخ: التبويب الافتراضي عمقه صفر، فأيّ تنقّلٍ بعده يُدفع فوقه
+     ويعيده زرُّ الرجوع بدل الخروج من البوّابة.
+     والعنوانُ يُقرأ قبل أن يُكتب: كان يُدهس بـ activeView الابتدائي ('att')
+     فيخرج وليُّ الأمر من المنظور الذي كان فيه عند كلّ تحديث. */
+  S.activeView = restoreTab(['att', 'grades', 'calendar', 'more'], S.activeView);
   history.replaceState({ view: S.activeView, d: 0 }, '', '#' + S.activeView);
   _navDepth = 0;
 

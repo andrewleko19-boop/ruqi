@@ -1182,6 +1182,26 @@
         </div>
         <div id="sch-counts-msg" class="msg" hidden></div>
         <button type="button" class="btn btn-primary btn-sm" id="btn-save-counts">حفظ الأعداد</button>
+
+        <!-- حدّا نصاب التدريس — الوطنيّ من لوحة المشرف، ولهذه المدرسة أن تخالفه -->
+        <hr class="soft-sep" />
+        <p class="form-section-label">حدّ نصاب التدريس (عدد الساعات)</p>
+        <p class="form-hint" id="sch-quota-national">—</p>
+        <div class="twin-fields">
+          <div class="field-group">
+            <label for="sch-quota-min">الحدّ الأدنى</label>
+            <input id="sch-quota-min" class="field-input" type="number" min="0" max="60"
+                   inputmode="numeric" placeholder="اتبع الوطنيّ" />
+          </div>
+          <div class="field-group">
+            <label for="sch-quota-max">الحدّ الأعلى</label>
+            <input id="sch-quota-max" class="field-input" type="number" min="0" max="60"
+                   inputmode="numeric" placeholder="اتبع الوطنيّ" />
+          </div>
+        </div>
+        <p class="form-hint">اتركهما فارغين لاتّباع الحدّ الوطنيّ. يُستخدمان للتحقّق من «عدد الساعات» في سجلّ الكادر.</p>
+        <div id="sch-quota-msg" class="msg" hidden></div>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-save-quota">حفظ حدّ النصاب</button>
       </div>
     </section>
 

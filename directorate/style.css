@@ -2153,3 +2153,24 @@ tr.row-clickable:hover { background: var(--bg-hover); }
 .dlv-chip b { font-size: .95rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .dlv-chip-days { background: var(--green-dim); color: var(--green); }
 .dlv-chip-top  { background: var(--bg-hover); color: var(--text-secondary); }
+
+/* ── تفصيل البيان الشهري داخل مودال المراجعة ────────────────────────────────
+   البيانُ عشرةُ أقسام، والمودالُ شاشةُ هاتف — فالتمرير داخليّ والجداول تنزلق
+   أفقيّاً في حاويتها بدل أن تدفع الصفحة كلَّها. */
+.dir-stmt-detail { max-height: 62vh; overflow-y: auto; overflow-x: hidden; padding-inline-end: 4px; }
+.dir-stmt-detail h2 {
+  font-size: .84rem; font-weight: 800; margin: 14px 0 6px;
+  color: var(--text-primary); border-bottom: 1px solid var(--border); padding-bottom: 3px;
+}
+.dir-stmt-detail h2:first-child { margin-top: 0; }
+.dir-stmt-detail p { font-size: .82rem; color: var(--text-secondary); margin: 0 0 6px; }
+.dir-stmt-detail table {
+  width: 100%; border-collapse: collapse; margin-bottom: 8px;
+  font-size: .76rem; display: block; overflow-x: auto; white-space: nowrap;
+}
+.dir-stmt-detail th, .dir-stmt-detail td {
+  border: 1px solid var(--border); padding: 4px 6px; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.dir-stmt-detail th { background: var(--bg-hover); font-weight: 700; }
+.dir-stmt-detail td.k { text-align: right; white-space: normal; min-width: 120px; }

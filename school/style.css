@@ -2654,3 +2654,6 @@ select.csel-native {
 }
 .lv-days b { font-size: .92rem; font-weight: 800; color: var(--clr-text-1);
              font-variant-numeric: tabular-nums; }
+
+/* فاصلٌ خفيف بين مجموعتَي إعداداتٍ في بطاقةٍ واحدة. */
+.soft-sep { border: 0; border-top: 1px solid var(--clr-border, #E2E8F0); margin: 16px 0 12px; }

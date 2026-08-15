@@ -1,6 +1,7 @@
 // school/script.js
 // Loaded as <script type="module"> after Supabase CDN and shared/db.js
 import { buildDateFields, setDateFields, readDateFields } from '../shared/date-fields.js';
+import { restoreTab } from '../shared/tab-restore.js';
 
 // ── Guard ─────────────────────────────────────────────────────────────────────
 if (!window.RUQI_DB) {
@@ -89,6 +90,8 @@ function normaliseSchool(row) {
     // they survive caching). Safe when the columns are missing (⇒ undefined).
     work_start_time:    row.work_start_time    ?? null,
     complex_name:       row.complex_name       ?? null,
+    quota_min_hours:    row.quota_min_hours    ?? null,
+    quota_max_hours:    row.quota_max_hours    ?? null,
     classification:     row.classification     ?? null,
     education_type:     row.education_type     ?? null,
     shift:              row.shift              ?? null,
@@ -1059,7 +1062,9 @@ async function initApp() {
   await RUQI_PERMISSIONS.init(S.user?.user?.id);
   RUQI_PERMISSIONS.applyToDom();
   showScreen('app');
-  history.replaceState({ tab: 'attendance', d: 0 }, '', '#attendance');
+  // العنوانُ يُقرأ قبل أن يُكتب: هو ما ينجو من التحديث، وهو ما يقول أين كنّا.
+  const _startTab = restoreTab(Object.keys(TABS), 'attendance');
+  history.replaceState({ tab: _startTab, d: 0 }, '', '#' + _startTab);
   _navDepth = 0;
   if (backNavBtn) backNavBtn.hidden = true;
 
@@ -1134,7 +1139,12 @@ async function initApp() {
   _registryLoaded  = false;
   _statementLoaded = false;
   _lookupCache     = {};
-  switchTab('attendance', true);
+  /* تحديثُ الصفحة يُبقي المديرَ حيث كان.
+     كان الإقلاع يفتح «الحضور» دائماً مهما كان العنوان — فمن ضغط «تحديث» وهو في
+     «البيان الشهري» (وهو أوّلُ ما يفعله من ظنَّ الشاشة متجمّدة) يعود إلى أوّل
+     تبويب ويُعيد الطريق كلَّه. والعنوان مكتوبٌ أصلاً بـ pushTabHistory، فلم
+     يكن ينقص إلا قراءتُه بدل الدوس عليه. */
+  switchTab(_startTab, true);
 
   // Kick off sync of any offline-queued records
   await doSync();
@@ -5132,6 +5142,7 @@ function populateIdentityCard() {
   if (el('sch-shift'))        { el('sch-shift').value          = s.shift ?? ''; CustomSelect.refresh(el('sch-shift')); }
   setSelectPreserving(el('sch-studenttype'), s.student_type);
   void fillComplexSelect();
+  void loadQuotaBounds();
   if (el('sch-lat'))            el('sch-lat').value            = s.lat ?? '';
   if (el('sch-lng'))            el('sch-lng').value            = s.lng ?? '';
   // Staff & student counts
@@ -5201,6 +5212,66 @@ el('btn-save-identity')?.addEventListener('click', async () => {
 // ════════════════════════════════════════════════════════════════════════════
 //  Staff & student real counts (بيانات الكادر والطلاب)
 // ════════════════════════════════════════════════════════════════════════════
+/* ── حدّ نصاب التدريس ────────────────────────────────────────────────────────
+   «عدد الساعات» في سجلّ الكادر كان حقلاً مفتوحاً بلا حدٍّ إلا max="40" في
+   الـ HTML — لا يعرف كاتبُه ما المسموح ولا يمنعه شيءٌ من كتابة ٣ أو ٣٩، ثمّ
+   يُبنى عليه تنبيهُ التجاوز وتقاريرُ المديرية ونصابُ القطر.
+   الحدّ الوطنيّ في القاعدة تضبطه الوزارة (لا في الشيفرة: تغييرُه قرارٌ وزاريّ
+   لا نشرةُ برمجيات)، ولهذه المدرسة أن تخالفه بفارغٍ يعني «اتبع الوطنيّ». */
+let _quotaBounds = null;          // { min_hours, max_hours } وطنيّاً، أو null
+
+/** الحدّان الفعليّان لهذه المدرسة: تجاوزُها إن وُجد، وإلّا الوطنيّ. */
+function effectiveQuotaBounds() {
+  const min = S.school?.quota_min_hours ?? _quotaBounds?.min_hours ?? null;
+  const max = S.school?.quota_max_hours ?? _quotaBounds?.max_hours ?? null;
+  return { min, max };
+}
+
+async function loadQuotaBounds() {
+  try { _quotaBounds = await NDB.getTeachingQuotaBounds(); }
+  catch { _quotaBounds = null; }   // تعذّر الجلب: لا حدَّ مخترَع يرفض إدخالاً سليماً
+  const hint = el('sch-quota-national');
+  if (hint) {
+    hint.textContent = _quotaBounds
+      ? `الحدّ الوطنيّ: من ${_quotaBounds.min_hours} إلى ${_quotaBounds.max_hours} ساعة.`
+      : 'تعذّر جلب الحدّ الوطنيّ.';
+  }
+  const mn = el('sch-quota-min'), mx = el('sch-quota-max');
+  if (mn) mn.value = S.school?.quota_min_hours ?? '';
+  if (mx) mx.value = S.school?.quota_max_hours ?? '';
+}
+
+el('btn-save-quota')?.addEventListener('click', async () => {
+  const msg = el('sch-quota-msg');
+  const btn = el('btn-save-quota'); btn.disabled = true;
+  const minVal = el('sch-quota-min')?.value.trim() ?? '';
+  const maxVal = el('sch-quota-max')?.value.trim() ?? '';
+  try {
+    const mn = minVal === '' ? null : Number(minVal);
+    const mx = maxVal === '' ? null : Number(maxVal);
+    if ((minVal !== '' && !Number.isFinite(mn)) || (maxVal !== '' && !Number.isFinite(mx))) {
+      msg.className = 'msg msg-error'; msg.textContent = 'الأرقام غير صحيحة.'; show(msg);
+      btn.disabled = false; return;
+    }
+    if (mn != null && mx != null && mx < mn) {
+      msg.className = 'msg msg-error';
+      msg.textContent = 'الحدّ الأعلى لا يجوز أن يقلّ عن الأدنى.'; show(msg);
+      btn.disabled = false; return;
+    }
+    await NDB.updateSchool(S.school.id, { quotaMinHours: mn, quotaMaxHours: mx });
+    S.school.quota_min_hours = mn;
+    S.school.quota_max_hours = mx;
+    cacheSchool(S.school.id, S.school);
+    msg.className = 'msg msg-success'; msg.textContent = 'تم حفظ حدّ النصاب'; show(msg);
+    setTimeout(() => hide(msg), 2500);
+  } catch (err) {
+    console.error('[Ruqi] saveQuotaBounds', err);
+    msg.className = 'msg msg-error'; msg.textContent = errMessage(err, 'تعذّر الحفظ'); show(msg);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 el('btn-save-counts')?.addEventListener('click', async () => {
   const teachersVal = el('sch-total-teachers')?.value.trim() ?? '';
   const studentsVal = el('sch-total-students')?.value.trim() ?? '';
@@ -5750,11 +5821,17 @@ function fillSel(sel, values, blank = '— اختر —') {
 
 async function initRegistryTab() {
   _registryLoaded = true;
-  // الشهر الجاري افتراضاً: المدير يفتح التبويب ليرى شهره لا ليضبط مرشِّحاً.
+  /* الشهر الجاري افتراضاً: المدير يفتح التبويب ليرى شهره لا ليضبط مرشِّحاً.
+
+     ⚠ كان الضبط مشروطاً بـ `!lvM.value` — و <select> له قيمةٌ دائماً (أوّل
+     خيار)، فالشرط لا يتحقّق أبداً ويبقى المرشِّح على «كانون الثاني». فيسجّل
+     المديرُ إجازةً في آب ثمّ يقرأ «لا إجازات مسجَّلة في هذا الشهر» — والسجلّ
+     سليمٌ والإجازة محفوظة، والكذبة في المرشِّح وحده. وهذا ما أبلغ عنه المستخدم.
+     الحقل الرقميّ للسنة كان يعمل بالمصادفة: قيمته الابتدائية '' فارغة فعلاً. */
   const now = new Date();
   const lvM = el('lv-month'), lvY = el('lv-year');
-  if (lvM && !lvM.value) { lvM.value = String(now.getMonth() + 1); CustomSelect.refresh(lvM); }
-  if (lvY && !lvY.value)   lvY.value = String(now.getFullYear());
+  if (lvM && !_leavesFilterTouched) { lvM.value = String(now.getMonth() + 1); CustomSelect.refresh(lvM); }
+  if (lvY && !_leavesFilterTouched)   lvY.value = String(now.getFullYear());
   await Promise.all([loadRegistryRecords(), loadAssignments(), loadLeavesRegister()]);
 }
 
@@ -6055,6 +6132,23 @@ btnSaveStaffRec?.addEventListener('click', async () => {
     payload.assigned_section      = srAsgSection?.value.trim() || null;
     payload.quota_subjects        = srQuotaSubj?.value.trim() || null;
     payload.quota_school_external = srQuotaSchool?.value.trim() || null;
+
+    /* النصاب بين حدَّين: كان الحقل مفتوحاً فيُكتب فيه ٣ أو ٣٩ بلا مانع، ثمّ
+       يُبنى عليه تنبيهُ التجاوز وتقاريرُ المديرية. والفارغ يبقى مسموحاً — «لم
+       يُملأ بعد» حالةٌ مشروعة تُعرَض بوصفها «نصاب غير محدَّد»، لا خطأً يمنع حفظ
+       سجلّ موظّفٍ لسببٍ لا علاقة له بهويّته. */
+    const qb = effectiveQuotaBounds();
+    const th = payload.teaching_hours;
+    if (th != null && (qb.min != null || qb.max != null)) {
+      const lo = qb.min ?? 0, hi = qb.max ?? Infinity;
+      if (th < lo || th > hi) {
+        srError.textContent =
+          `عدد الساعات (${th}) خارج الحدّ المسموح: من ${lo} إلى ${qb.max ?? '—'}.` +
+          ' يمكن تعديل الحدّ من «إعدادات المدرسة».';
+        show(srError);
+        return;
+      }
+    }
   }
 
   if (btnSaveStaffRec) btnSaveStaffRec.disabled = true;
@@ -6496,9 +6590,12 @@ async function loadLeavesRegister() {
   }
 }
 
+// ما إن يختار المديرُ شهراً بنفسه لا نُعيده إلى الجاري عند كلّ دخولٍ للتبويب.
+let _leavesFilterTouched = false;
+
 el('btn-refresh-leaves')?.addEventListener('click', () => void loadLeavesRegister());
-el('lv-month')?.addEventListener('change', () => void loadLeavesRegister());
-el('lv-year') ?.addEventListener('change', () => void loadLeavesRegister());
+el('lv-month')?.addEventListener('change', () => { _leavesFilterTouched = true; void loadLeavesRegister(); });
+el('lv-year') ?.addEventListener('change', () => { _leavesFilterTouched = true; void loadLeavesRegister(); });
 
 // Segment switching
 document.querySelectorAll('.asn-seg-btn').forEach(btn => {
@@ -6958,12 +7055,12 @@ const _CHG_SELF  = ['self_number','الرقم الذاتي','text'];
 const _CHG_NAME  = ['full_name','الاسم الثلاثي','text', 1];
 const _CHG_MOM   = ['mother_name','الأم','text'];
 const _CHG_BIRTH = ['@birth','تاريخ الولادة','date'];
-const _CHG_CERT  = ['certificate','الشهادة /ج/م.م/أ.ه/ثا','lookup:certificate'];
+const _CHG_CERT  = ['certificate','الشهادة','lookup:certificate'];
 const _CHG_SPEC  = ['specialization','الاختصاص','lookup:specialization'];
 const _CHG_SEN   = ['seniority_year','القدم الوظيفي (سنة التعيين)','num'];
 const _CHG_PHONE = ['phone','الهاتف — الجوال','text'];
 const _CHG_LAND  = ['landline','الهاتف — الأرضي','text'];
-const _CHG_LEAVE = ['leave_text','إجازات ادارية / صحية / أمومة / زواج','text'];
+const _CHG_LEAVE = ['leave_text','الإجازات','lookup:leave_type'];
 const _CHG_DOC   = ['ministerial_doc','نوع الوثيقة / موافقة وزارية','text'];
 const _CHG_NOTES = ['notes','ملاحظات / عن أي بيانات مدخلة','textarea'];
 
@@ -8410,7 +8507,7 @@ function _stmtOpenStaffRecord(id) {
 let _stmtChgLookups = {};
 
 const STMT_CHG_LOOKUP_TYPES = ['certificate', 'specialization', 'higher_degree',
-                               'admin_role', 'support_job'];
+                               'admin_role', 'support_job', 'leave_type'];
 
 async function loadStmtChangeLookups() {
   const pairs = await Promise.all(STMT_CHG_LOOKUP_TYPES.map(async t =>

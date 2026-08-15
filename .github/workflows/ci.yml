@@ -54,6 +54,11 @@ jobs:
       - name: SQL reference/migrations drift
         run: npm run check:sql
 
+      # استيرادٌ ساكن لا يُخزَّن مسبقاً يمنع تنفيذ ملفّ البوّابة كلِّه أوفلاين،
+      # فلا تظهر اللوحة. حدث مع shared/permissions.js في ستّ بوّابات معاً.
+      - name: Service-worker precache coverage
+        run: npm run check:precache
+
       - name: Unit tests
         run: npm test
 

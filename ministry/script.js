@@ -799,11 +799,12 @@ let _mlvInit = false;
 function initLeavesGov() {
   if (_mlvInit) return;
   _mlvInit = true;
+  // كما في المديرية: <select> لا يكون فارغاً، فالشرط القديم لا يعمل أبداً.
   const now = new Date();
   const m = document.getElementById('mlv-month');
   const y = document.getElementById('mlv-year');
-  if (m && !m.value) m.value = String(now.getMonth() + 1);
-  if (y && !y.value)  y.value = String(now.getFullYear());
+  if (m) m.value = String(now.getMonth() + 1);
+  if (y) y.value = String(now.getFullYear());
   CustomSelect.enhance('mlv-month');
   ['mlv-month', 'mlv-year'].forEach(id =>
     document.getElementById(id)?.addEventListener('change', () => void loadLeavesGov()));

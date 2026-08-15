@@ -991,3 +991,13 @@ tbody tr.is-off td:not(.row-actions-cell) { opacity: .5; }
   gap: 8px;
 }
 .date-row input { text-align: center; }
+
+/* ── قيمٌ تستعملها المدارس وليست في القائمة المرجعية ─────────────────────────
+   المشرفُ لا يعلم بالنقص إلا إن قيل له: لا شيء في لوحته يدلّ على أنّ قيمةً
+   محفوظةً في مدرسةٍ لا خيارَ لها في القائمة. */
+.lk-orphans { margin-top: 12px; padding: 10px 12px; border-radius: 8px;
+              background: var(--warn-tint, #fef3c7); border: 1px solid var(--warn, #f59e0b); }
+.lk-orphans-hd { margin: 0 0 8px; font-size: .8rem; font-weight: 700; color: var(--text-primary); }
+.lk-orphan { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 6px 8px;
+             padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--bg-surface);
+             border: 1px solid var(--border); font-size: .8rem; }

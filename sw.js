@@ -11,7 +11,7 @@
  *
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'ruqi-v168';
+const CACHE = 'ruqi-v169';
 
 /* ⚠️ التقسيم مقصود ويعالج عطلاً حقيقياً.
    كان التثبيت كلّه على Promise.allSettled — يبتلع فشل أي ملفّ ويُعلن النجاح —
@@ -40,6 +40,10 @@ const CRITICAL = [
      القديم في activate بلا شرط — فذهب الملفّ معه ولم يُعوّضه التخزين المسبق،
      وانكسر الدخول أوفلاين في البوّابات الستّ دفعةً واحدة. */
   './shared/permissions.js',
+  /* حرِجٌ للسبب نفسه وأشدّ: كلُّ بوّابةٍ تستورده استيراداً ساكناً في أوّل
+     script.js. وفشلُ استيرادٍ ساكن يُسقط الوحدة كلَّها قبل أن يُنفَّذ منها سطر —
+     فلا تظهر اللوحة أصلاً، لا أنّ ميزةً تتعطّل. */
+  './shared/tab-restore.js',
   './shared/vendor/fonts/fonts.css',
   './icons/eagle-mark.png',
   './icons/icon-192.png',

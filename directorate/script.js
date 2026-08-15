@@ -5,6 +5,7 @@ import { setupPwToggle }                     from '../shared/pw-toggle.js';
 import { StatDrill }                         from '../shared/stat-drill.js';
 import { detectAnomalies }                   from '../shared/data-alerts.js';
 import { fmtDateShort, fmtDateLong, fmtDateTime } from '../shared/date-format.js';
+import { restoreTab, syncTabHash }            from '../shared/tab-restore.js';
 import { supabase as _sb, supabaseUrl as _sbUrl } from '../shared/db.js';
 const {
   login,
@@ -1565,11 +1566,13 @@ function initLeavesRegister() {
   if (_dlvInit) return;
   _dlvInit = true;
 
+  // <select> له قيمةٌ دائماً (أوّل خيار)، فشرطُ `!m.value` لا يتحقّق أبداً
+  // ويبقى المرشِّح على «كانون الثاني» — فيُقرأ «لا إجازات» والسجلّ مملوء.
   const now = new Date();
   const m = document.getElementById('dlv-month');
   const y = document.getElementById('dlv-year');
-  if (m && !m.value) m.value = String(now.getMonth() + 1);
-  if (y && !y.value)  y.value = String(now.getFullYear());
+  if (m) m.value = String(now.getMonth() + 1);
+  if (y) y.value = String(now.getFullYear());
 
   CustomSelect.enhance('dlv-month');
   CustomSelect.enhance('dlv-school');
@@ -2290,11 +2293,19 @@ function buildStmtRow(s) {
         ? `<span class="dir-req-badge dir-req-badge--rejected">مرفوض ✗</span>`
         : `<span class="dir-req-badge">مسودة</span>`;
 
-  const actionHtml = s.status === 'submitted'
-    ? `<button class="btn btn-sm btn-primary dir-stmt-review-btn" data-id="${esc(s.id)}"
-         data-school="${esc(schoolName)}" data-period="${esc(period)}"
-         data-snap='${esc(JSON.stringify(s.snapshot_data || {}))}'>مراجعة</button>`
-    : `<span class="dir-req-reason">${s.notes ? esc(s.notes) : '—'}</span>`;
+  /* ⚠ كان زرُّ الفتح يظهر لحالة «مُرسَل» وحدها. فما إن يعتمد الموظّفُ البيانَ
+     أو يرفضه حتى يصير محتواه غيرَ قابلٍ للفتح إلى الأبد — لا مراجعةَ لقرار،
+     ولا رجوعَ إلى رقمٍ عند الخلاف، ولا نسخةَ تُحفظ. والبيانُ وثيقةٌ رسمية
+     تُسلَّم للمديرية، فحجبُها بعد الاعتماد يُفرغ الاعتماد من معناه.
+     الآن يُفتح دائماً؛ وأزرارُ القرار وحدها تُخفى لما بُتَّ فيه. */
+  const actionHtml =
+    `<button class="btn btn-sm ${s.status === 'submitted' ? 'btn-primary' : 'btn-ghost'} dir-stmt-review-btn"
+       data-id="${esc(s.id)}" data-status="${esc(s.status)}"
+       data-school="${esc(schoolName)}" data-period="${esc(period)}"
+       data-snap='${esc(JSON.stringify(s.snapshot_data || {}))}'
+       >${s.status === 'submitted' ? 'مراجعة' : 'عرض'}</button>` +
+    (s.status !== 'submitted' && s.notes
+      ? `<span class="dir-req-reason" style="display:block;margin-top:4px">${esc(s.notes)}</span>` : '');
 
   tr.innerHTML = `
     <td>${esc(schoolName)}</td>
@@ -2315,12 +2326,178 @@ document.addEventListener('click', (e) => {
   let snap = {};
   try { snap = JSON.parse(btn.dataset.snap || '{}'); } catch { /* tolerate */ }
 
-  document.getElementById('dir-stmt-title').textContent = `مراجعة بيان: ${school} — ${period}`;
-  document.getElementById('dir-stmt-body').innerHTML = buildStmtSummary(snap);
+  const status = btn.dataset.status || 'submitted';
+  const decided = status !== 'submitted';
+  _stmtViewCtx = { school, period, snap, status };
+
+  const STATUS_AR = { approved: 'معتمد ✓', rejected: 'مرفوض ✗', issued: 'صادر', draft: 'مسودة' };
+  document.getElementById('dir-stmt-title').textContent =
+    `${decided ? 'بيان' : 'مراجعة بيان'}: ${school} — ${period}`
+    + (decided ? ` (${STATUS_AR[status] ?? status})` : '');
+  document.getElementById('dir-stmt-body').innerHTML = buildStmtDetail(snap);
   document.getElementById('dir-stmt-notes').value = '';
   document.getElementById('dir-stmt-msg').hidden = true;
+
+  /* ما بُتَّ فيه يُعرَض ولا يُقرَّر فيه ثانيةً: إخفاءُ أزرار القرار (لا تعطيلُها)
+     أوضحُ للموظّف، وحقلُ السبب بلا معنى بعد صدور القرار. */
+  const noteWrap = document.getElementById('dir-stmt-notes')?.closest('.form-group');
+  if (noteWrap) noteWrap.hidden = decided;
+  document.getElementById('dir-stmt-approve').hidden = decided;
+  document.getElementById('dir-stmt-reject').hidden  = decided;
+
   document.getElementById('dir-stmt-modal').classList.remove('hidden');
 });
+
+/* نسخةٌ تُحفَظ أو تُطبع. نافذةٌ مستقلّة بأنماطها الخاصّة: طباعةُ المودال نفسه
+   تجرّ معها ترويسةَ اللوحة وشريطَ التبويبات وأزرارَ القرار. */
+let _stmtViewCtx = null;
+
+document.getElementById('dir-stmt-print')?.addEventListener('click', () => {
+  if (!_stmtViewCtx) return;
+  const { school, period, snap, status } = _stmtViewCtx;
+  const STATUS_AR = { approved: 'معتمد', rejected: 'مرفوض', submitted: 'بانتظار المراجعة' };
+  const win = window.open('', '_blank');
+  if (!win) { showToast('امنع حاصر النوافذ المنبثقة لحفظ الورقة', '', 'error'); return; }
+  win.document.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
+    <title>البيان الشهري — ${esc(school)} — ${esc(period)}</title>
+    <style>
+      body { font-family: system-ui, 'Segoe UI', Tahoma, sans-serif; direction: rtl;
+             margin: 24px; color: #111; font-size: 13px; }
+      h1 { font-size: 17px; margin: 0 0 2px; }
+      .sub { color: #555; font-size: 12px; margin-bottom: 14px; }
+      h2 { font-size: 14px; margin: 16px 0 6px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
+      table { border-collapse: collapse; width: 100%; margin-bottom: 8px; }
+      th, td { border: 1px solid #bbb; padding: 4px 6px; text-align: center; }
+      th { background: #f1f5f9; font-weight: 700; }
+      td.k { text-align: right; background: #fafafa; width: 45%; }
+      @media print { body { margin: 0; } }
+    </style></head><body>
+    <h1>البيان الشهري — ${esc(school)}</h1>
+    <div class="sub">${esc(period)} · الحالة: ${esc(STATUS_AR[status] ?? status)}</div>
+    ${buildStmtDetail(snap, true)}
+    </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 300);
+});
+
+/* ─── تفصيلُ البيان كاملاً ────────────────────────────────────────────────────
+   الملخّصُ سبعةُ أرقام، والبيانُ عشرةُ أقسام. وموظّفُ المديرية يعتمد وثيقةً
+   رسمية — فإن لم يرَ إلا مجاميعَها فهو يوقّع على ما لم يقرأ. اللقطةُ تحمل
+   الأقسام كلَّها أصلاً؛ لم يكن ينقص إلا عرضُها.
+   forPrint: بلا أصنافِ اللوحة، فالنافذةُ المطبوعة تحمل أنماطها بنفسها. */
+function buildStmtDetail(snap, forPrint = false) {
+  const num = (n) => Number(n) || 0;
+  const t   = (v) => esc(String(v ?? '—') === '' ? '—' : String(v ?? '—'));
+  const out = [];
+  const h2  = (txt) => out.push(`<h2>${esc(txt)}</h2>`);
+  const kv  = (pairs) => {
+    const rows = pairs.filter(([, v]) => v !== undefined)
+      .map(([k, v]) => `<tr><td class="k">${esc(k)}</td><td>${t(v)}</td></tr>`).join('');
+    if (rows) out.push(`<table>${rows}</table>`);
+  };
+
+  // الصيغة الأولى لا تحمل الأقسام، فنكتفي لها بالملخّص كما كان.
+  if (Number(snap.schemaVersion) < 2) {
+    return `<div class="dir-stmt-detail">${buildStmtSummary(snap)}</div>`;
+  }
+
+  const sc = snap.school || {};
+  h2('هوية المدرسة');
+  kv([['الاسم', sc.name], ['الاسم سابقاً', sc.formerName], ['الحلقة', sc.cycle],
+      ['الرقم الإحصائي', sc.statisticalNumber], ['المنطقة التعليمية', sc.educationalZone],
+      ['القرية', sc.village], ['العنوان', sc.address], ['الهاتف', sc.phone],
+      ['نوع الدوام', sc.dayType], ['مشترك مع', sc.sharedWith]]);
+
+  const b = snap.building || {};
+  if (Object.keys(b).length) {
+    h2('البناء المدرسي');
+    kv([['البناء', b.ownership], ['عدد الطوابق', b.floors],
+        ['غرف صفية مستخدمة', b.class_rooms], ['غرف إدارية', b.admin_rooms],
+        ['غرف غير مستخدمة', b.unused]]);
+  }
+
+  // جدول الطلاب بالصفوف كما في الورقة الرسمية — لا مجاميعَ وحدها.
+  const stu = snap.students || {};
+  if (Array.isArray(stu.rows) && stu.rows.length) {
+    h2('أعداد الطلاب والشعب');
+    const body = stu.rows.map(r => `<tr><td class="k">${t(r.label)}</td>
+      <td>${num(r.sections)}</td><td>${num(r.enM)}</td><td>${num(r.enF)}</td>
+      <td>${num(r.frM)}</td><td>${num(r.frF)}</td><td>${num(r.ruM)}</td>
+      <td>${num(r.ruF)}</td><td>${num(r.total)}</td></tr>`).join('');
+    const g = stu.totals || {};
+    out.push(`<table>
+      <thead><tr><th>الصف</th><th>الشعب</th><th>ذكور إنك.</th><th>إناث إنك.</th>
+        <th>ذكور فر.</th><th>إناث فر.</th><th>ذكور رو.</th><th>إناث رو.</th><th>المجموع</th></tr></thead>
+      <tbody>${body}<tr><th>المجموع</th><th>${num(g.sections)}</th><th>${num(g.enM)}</th>
+        <th>${num(g.enF)}</th><th>${num(g.frM)}</th><th>${num(g.frF)}</th>
+        <th>${num(g.ruM)}</th><th>${num(g.ruF)}</th><th>${num(g.total)}</th></tr></tbody></table>`);
+  }
+
+  const adm = snap.adminStaff || {};
+  if (Array.isArray(adm.rows) && adm.rows.length) {
+    h2('الجهاز الإداري');
+    out.push(`<table><thead><tr><th>الوظيفة</th><th>العدد</th></tr></thead><tbody>` +
+      adm.rows.map(r => `<tr><td class="k">${t(r.role)}</td><td>${num(r.count)}</td></tr>`).join('') +
+      `<tr><th>مجموع الإداريين</th><th>${num(adm.total)}</th></tr></tbody></table>`);
+  }
+
+  const w = snap.workforce || {};
+  if (Object.keys(w).length) {
+    h2('ملخص العاملين');
+    kv([['عدد المعلمين', w.teachers], ['عدد المدرسين', w.masters],
+        ['المدرسون المساعدون', w.assist], ['الجهاز التدريسي بشكل كامل', w.full],
+        ['غير المصنّف', w.unclassified], ['الجهاز الإداري', w.admin],
+        ['العاملون المهنيون', w.professional], ['المستخدمون', w.worker],
+        ['الحراس', w.guard], ['مجموع العاملين', w.grand]]);
+  }
+
+  // الإجازات مجمّعةً بالنوع: اللقطة تحمل معرّفات الكادر لا أسماءهم عمداً
+  // (الأسماء تذهب إلى monthly_statement_rosters بصلاحياته).
+  const lv = Array.isArray(snap.leaves) ? snap.leaves : [];
+  if (lv.length) {
+    h2('إجازات الشهر');
+    const byType = new Map();
+    for (const l of lv) {
+      const k = String(l?.type ?? '').trim() || 'غير محدّد';
+      const cur = byType.get(k) || { n: 0, days: 0 };
+      cur.n += 1; cur.days += num(l?.days);
+      byType.set(k, cur);
+    }
+    out.push(`<table><thead><tr><th>النوع</th><th>عدد الإجازات</th><th>مجموع الأيام</th></tr></thead><tbody>` +
+      [...byType].map(([k, v]) => `<tr><td class="k">${esc(k)}</td><td>${v.n}</td><td>${v.days}</td></tr>`).join('') +
+      `</tbody></table>`);
+  }
+
+  h2('التعديلات الطارئة');
+  const ch = snap.changes || {};
+  const items = Array.isArray(ch.items) ? ch.items : [];
+  if (ch.none && !items.length) {
+    out.push('<p>لا يوجد تعديل هذا الشهر — موثَّق من المدرسة.</p>');
+  } else if (!items.length) {
+    out.push('<p>—</p>');
+  } else {
+    out.push(`<table><thead><tr><th>الاسم</th><th>الفئة</th><th>العمل المسند</th>
+      <th>نوع الحدث</th><th>تاريخ النفاذ</th><th>السبب</th></tr></thead><tbody>` +
+      items.map(c => {
+        const d = c.data || {};
+        const GRP = { admin: 'إداري', teaching: 'تدريسي', support: 'مهني/مستخدم/حارس' };
+        return `<tr><td class="k">${t(d.full_name)}</td><td>${t(GRP[c.group] ?? c.group)}</td>
+          <td>${t(d.job_title)}</td><td>${t(c.eventType)}</td>
+          <td>${t(c.effectiveDate)}</td><td>${t(c.reason)}</td></tr>`;
+      }).join('') + `</tbody></table>`);
+  }
+
+  const sig = snap.signatures || {};
+  const per = snap.period || {};
+  h2('التسليم والتواقيع');
+  kv([['تاريخ التسليم', [per.deliveryDay, per.deliveryMonth, per.deliveryYear].filter(Boolean).join('/') || undefined],
+      ['استلمه', per.receivedBy], ['أمين سر المدرسة', sig.secretary],
+      ['مدير المدرسة', sig.principal]]);
+
+  const html = out.join('');
+  return forPrint ? html : `<div class="dir-stmt-detail">${html}</div>`;
+}
 
 /* ملخّصُ البيان الشهريّ الذي يقرؤه موظّف المديرية قبل أن يعتمد أو يرفض.
  *
@@ -3043,7 +3220,12 @@ function refreshRailCounts() {
 }
 
 function setupDirTabs() {
-  history.replaceState({ tab: 'overview', d: 0 }, '', '#overview');
+  /* العنوان يُقرأ قبل أن يُكتب: كان الإقلاع يدوس عليه بـ '#overview' دائماً،
+     فتحديثُ الصفحة يُخرج الموظّف من التبويب الذي يعمل فيه إلى أوّل تبويب. */
+  const names = [...document.querySelectorAll('.dir-tab-btn')].map(b => b.dataset.tab);
+  const start = restoreTab(names, 'overview');
+  history.replaceState({ tab: start, d: 0 }, '', '#' + start);
+  if (start !== 'overview') _dirActivateTab(start);
 
   document.querySelectorAll('.dir-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {

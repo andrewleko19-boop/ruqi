@@ -1,5 +1,6 @@
 // teacher/script.js
 // Loaded as <script type="module"> after shared/db.js
+import { restoreTab, syncTabHash } from '../shared/tab-restore.js';
 
 // ── Guard ─────────────────────────────────────────────────────────────────────
 if (!window.RUQI_DB) {
@@ -530,6 +531,9 @@ async function initApp() {
   await RUQI_PERMISSIONS.init(S.user?.user?.id);
   RUQI_PERMISSIONS.applyToDom();
   showScreen('app');
+  /* التحديثُ يُبقي المعلّم حيث كان. والمناظرُ المسموحة عند الإقلاع هي الرئيسية
+     وحدها: «الحضور» و«الدرجات» و«السلوك» تحتاج شعبةً مختارة، وفتحُها من عنوانٍ
+     بلا شعبة يعرض شاشةً فارغة لا يفهمها المعلّم. */
   showView('home', true);
   history.replaceState({ view: 'home', d: 0 }, '', '#home');
   _navDepth = 0;
@@ -580,6 +584,12 @@ async function loadClasses() {
   // teacher (معلم الصف) and the supervisor (موجه الصف); grades are for the
   // homeroom teacher and subject teachers (أستاذ مادة).
   setupModeTabs();
+  /* setupModeTabs تختار الوضعَ الأوّل المتاح، فتدوس على ما كان المعلّم فيه عند
+     التحديث. نستعيده من العنوان بعدها — وبشرط أن يكون له صفوفٌ فعلاً، وإلّا
+     ظهرت شاشةٌ فارغة لا يفهمها. */
+  const wanted = restoreTab(['att', 'grades', 'conduct'], homeMode);
+  if (wanted !== homeMode && classesForMode(wanted).length) homeMode = wanted;
+  syncTabHash(homeMode);
   applyHomeMode();
   void loadMyGraceProposals();   // مساعدٌ لا يحجب الصفوف
 }
@@ -1600,6 +1610,10 @@ function canEditCurrent() {
 
 function setHomeMode(mode) {
   homeMode = mode;
+  // العنوان يعكس الوضع المعروض فينجو من التحديث. replaceState لا pushState:
+  // تبديلُ وضعٍ ليس انتقالَ صفحة، ودفعُ خطوةٍ له يجعل زرَّ الرجوع يمشي في
+  // الأوضاع خطوةً خطوة بدل أن يخرج من المنظور.
+  syncTabHash(mode);
   applyHomeMode();
 }
 
