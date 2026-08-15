@@ -33,6 +33,7 @@ const {
   proposeGrace,
   getGraceProposals,
   getMyGraceProposals,
+  getMyStaffLeaves,
   teacherCheckIn,
   teacherCheckOut,
   getMyStaffAttendanceToday,
@@ -592,6 +593,40 @@ async function loadClasses() {
   syncTabHash(homeMode);
   applyHomeMode();
   void loadMyGraceProposals();   // مساعدٌ لا يحجب الصفوف
+  void loadMyLeaves();           // «إجازاتي»: لا يعلمها المعلّم اليوم
+}
+
+/* ── إجازاتي ───────────────────────────────────────────────────────────────
+   كانت إجازةٌ تُسجَّل عليّ فتُنقص أيّامي دون علمي: لا سياسة RLS تسمح لي
+   بقراءة staff_leaves، ولا شاشةَ في بوّابتي. السياسةُ الجديدة
+   staff_leaves_own_read مبنيّة على مطابقة الاسم داخل مدرسةٍ واحدة. */
+const AR_MONTHS = ['كانون الثاني','شباط','آذار','نيسان','أيار','حزيران',
+                   'تموز','آب','أيلول','تشرين الأول','تشرين الثاني','كانون الأول'];
+
+async function loadMyLeaves() {
+  const box  = document.getElementById('my-leaves');
+  const list = document.getElementById('my-leaves-list');
+  if (!box || !list) return;
+
+  const schoolId = S.classes[0]?.schoolId ?? S.user?.schoolId ?? null;
+  if (!schoolId) { hide(box); return; }
+
+  let rows = [];
+  try { rows = await getMyStaffLeaves(schoolId, { year: new Date().getFullYear() }); }
+  catch (e) { console.warn('[teacher] loadMyLeaves', e); hide(box); return; }
+  if (!rows.length) { hide(box); return; }
+
+  list.innerHTML = rows.map(r => {
+    const mo = AR_MONTHS[(r.month | 0) - 1] || ('شهر ' + r.month);
+    return `<div class="lv-row">
+      <div class="lv-main">
+        <div class="lv-type">${escapeHtml(r.leave_type)}</div>
+        <div class="lv-meta">${escapeHtml(mo)} ${r.year} — ${r.leave_days} يوم${
+          r.note ? ' · ' + escapeHtml(r.note) : ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+  show(box);
 }
 
 // ── اقتراحات الرأفة المُرسَلة ومصيرها ─────────────────────────────────────────

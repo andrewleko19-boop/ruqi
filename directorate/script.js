@@ -32,6 +32,7 @@ const {
   directorateBulkImportStaff,
   getLeavesRegister,
   getLeavesSummary,
+  getDirectorateDepartures,
   localDateISO,
   errMessage,
 } = window.RUQI_DB;
@@ -1766,7 +1767,7 @@ function openStaffCard(id) {
     ['الاختصاص',         r.specialization],
     ['المادة المُدرَّسة', r.subject_taught],
     ['الرتبة',           r.teaching_rank],
-    ['النصاب (ساعات)',   r.teaching_hours],
+    ['النصاب (حصص)',    r.weekly_lessons],
     ['سنة الأقدمية',     r.seniority_year],
     ['تاريخ المباشرة',   r.start_date],
     ['الملاك',           r.roster_type === 'inside' ? 'داخل الملاك'
@@ -2690,13 +2691,23 @@ function buildRsRow(s) {
   }[s.status] || ['', s.status];
   const statusHtml = `<span class="dir-req-badge ${badge[0]}">${esc(badge[1])}</span>`;
 
+  /* ⚠ كان الزرّ يظهر لِـ submitted/approved فقط. فما إن يُصدر الجلاءُ (issued)
+     أو يُرفَض حتى يصير محتواه غيرَ قابلٍ للفتح إلى الأبد — ولا مراجعةَ لقرار،
+     ولا رجوعَ إلى نتيجةِ طالبٍ عند خلاف، ولا نسخةَ تُحفظ. الجلاءُ وثيقةٌ رسمية
+     تُسلَّم للمديرية ثمّ لأولياء الأمور. الآن يُفتح دائماً بحسب حالته:
+     مراجعة/إصدار للحالتين القابلتين للفعل، «عرض» للبقية. */
+  const label = s.status === 'submitted' ? 'مراجعة'
+              : s.status === 'approved'  ? 'إصدار'
+              : 'عرض';
   const actionable = s.status === 'submitted' || s.status === 'approved';
-  const actionHtml = actionable
-    ? `<button class="btn btn-sm btn-primary dir-rs-review-btn" data-id="${esc(s.id)}"
-         data-status="${esc(s.status)}" data-school="${esc(schoolName)}"
-         data-label="${esc(clsLabel + ' — ' + termLabel)}"
-         data-snap='${esc(JSON.stringify(s.snapshot_data || {}))}'>${s.status === 'approved' ? 'إصدار' : 'مراجعة'}</button>`
-    : `<span class="dir-req-reason">${s.notes ? esc(s.notes) : '—'}</span>`;
+  const actionHtml =
+    `<button class="btn btn-sm ${actionable ? 'btn-primary' : 'btn-ghost'} dir-rs-review-btn"
+       data-id="${esc(s.id)}" data-status="${esc(s.status)}"
+       data-school="${esc(schoolName)}"
+       data-label="${esc(clsLabel + ' — ' + termLabel)}"
+       data-snap='${esc(JSON.stringify(s.snapshot_data || {}))}'>${label}</button>` +
+    (!actionable && s.notes
+      ? `<div class="dir-req-reason" style="margin-top:4px">${esc(s.notes)}</div>` : '');
 
   // Only sheets still awaiting a decision are selectable — there is nothing to
   // batch about one that is already issued or rejected.
@@ -2865,8 +2876,14 @@ document.addEventListener('click', (e) => {
   let snap = {};
   try { snap = JSON.parse(btn.dataset.snap || '{}'); } catch { /* tolerate */ }
 
+  const decided = _reviewingSheetStatus !== 'submitted' && _reviewingSheetStatus !== 'approved';
+  const STATUS_AR = { issued: 'صادر ✓', rejected: 'مرفوض ✗', draft: 'مسودة' };
+  const titleVerb = _reviewingSheetStatus === 'submitted' ? 'مراجعة جلاء'
+                  : _reviewingSheetStatus === 'approved'  ? 'إصدار جلاء'
+                  : 'عرض جلاء';
   document.getElementById('dir-rs-title').textContent =
-    `${_reviewingSheetStatus === 'approved' ? 'إصدار جلاء' : 'مراجعة جلاء'}: ${btn.dataset.school} — ${btn.dataset.label}`;
+    `${titleVerb}: ${btn.dataset.school} — ${btn.dataset.label}` +
+    (decided ? ` (${STATUS_AR[_reviewingSheetStatus] ?? _reviewingSheetStatus})` : '');
   document.getElementById('dir-rs-body').innerHTML = buildRsSummary(snap);
   document.getElementById('dir-rs-notes').value = '';
   document.getElementById('dir-rs-msg').hidden = true;
@@ -2878,11 +2895,17 @@ document.addEventListener('click', (e) => {
   if (failedOnly) failedOnly.checked = false;
   renderRsStudents();
 
-  // أزرار حسب الحالة: submitted → موافقة/رفض · approved → إصدار/رفض
+  /* أزرار القرار حسب الحالة، وتُخفى كاملةً لِما بُتَّ فيه: الجلاءُ الصادر
+     وثيقةٌ نهائية، ورؤيةُ أزرار «موافقة/رفض» لصفٍّ لا يقبلها يُوهم أنّ ثمّ
+     قراراً ينتظر. حقلُ السبب بلا معنى بعد صدور القرار كذلك. */
   const approveBtn = document.getElementById('dir-rs-approve');
+  const rejectBtn  = document.getElementById('dir-rs-reject');
   const issueBtn   = document.getElementById('dir-rs-issue');
   if (approveBtn) approveBtn.hidden = _reviewingSheetStatus !== 'submitted';
+  if (rejectBtn)  rejectBtn.hidden  = decided;
   if (issueBtn)   issueBtn.hidden   = _reviewingSheetStatus !== 'approved';
+  const noteWrap = document.getElementById('dir-rs-notes')?.closest('.form-group');
+  if (noteWrap) noteWrap.hidden = decided;
 
   document.getElementById('dir-rs-modal').classList.remove('hidden');
 });
@@ -3088,6 +3111,49 @@ document.getElementById('dir-rs-approve')?.addEventListener('click', () => doRsR
 document.getElementById('dir-rs-issue')?.addEventListener('click',   () => doRsReview('issued'));
 document.getElementById('dir-rs-reject')?.addEventListener('click',  () => doRsReview('rejected'));
 
+/* حفظ / طباعة: نسخةٌ رسمية بأنماطها في نافذةٍ مستقلّة — طباعةُ المودال نفسه
+   تجرّ ترويسة اللوحة وأزرار القرار معها. */
+document.getElementById('dir-rs-print')?.addEventListener('click', () => {
+  const title = document.getElementById('dir-rs-title')?.textContent || 'جلاء';
+  const summary = document.getElementById('dir-rs-body')?.innerHTML || '';
+  const rows = _reviewingStudents.map((s, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${esc(s.name || '—')}</td>
+      <td>${esc(s.result || '—')}</td>
+      <td>${s.finalPercent != null ? (Math.round(s.finalPercent * 10) / 10) + '٪' : '—'}</td>
+      <td>${s.complete ? '✓' : ''}</td>
+    </tr>`).join('');
+  const win = window.open('', '_blank');
+  if (!win) { showToast('امنع حاصر النوافذ المنبثقة لحفظ الورقة', '', 'error'); return; }
+  win.document.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
+    <title>${esc(title)}</title>
+    <style>
+      body { font-family: system-ui, 'Segoe UI', Tahoma, sans-serif; direction: rtl;
+             margin: 24px; color: #111; font-size: 13px; }
+      h1 { font-size: 17px; margin: 0 0 12px; }
+      h2 { font-size: 14px; margin: 16px 0 6px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
+      .summary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 12px; margin-bottom: 12px; }
+      .summary > div { display: flex; justify-content: space-between; padding: 3px 8px; background: #f8fafc; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border: 1px solid #bbb; padding: 4px 6px; text-align: center; }
+      th { background: #f1f5f9; font-weight: 700; }
+      @media print { body { margin: 0; } }
+    </style></head><body>
+    <h1>${esc(title)}</h1>
+    <h2>الملخّص</h2>
+    <div class="summary">${summary}</div>
+    <h2>قائمة الطلاب</h2>
+    <table>
+      <thead><tr><th>#</th><th>الاسم</th><th>النتيجة</th><th>النسبة النهائية</th><th>مكتمل</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="5">لا سجلات</td></tr>'}</tbody>
+    </table>
+    </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 300);
+});
+
 async function doRsReview(decision) {
   if (!_reviewingSheetId) return;
   const notes      = document.getElementById('dir-rs-notes')?.value.trim() || null;
@@ -3160,7 +3226,7 @@ function _dirActivateTab(tabName) {
   document.getElementById(`dir-tab-${tabName}`)?.classList.add('is-active');
 
   // Schools and principals now share one section, so both lists load together.
-  if (tabName === 'schools') { loadDirSchools(); loadDirPrincipals(); }
+  if (tabName === 'schools') { loadDirSchools(); loadDirPrincipals(); loadDeparted(); }
 
   if (tabName === 'staff') initStaffDirectory();
 
@@ -3439,6 +3505,44 @@ function setupDirSchools() {
 // ══════════════════════════════════════════════
 let _dirAllPrincipals    = [];
 let _dirPendingDeactivate = null;
+
+/* ── مغادرو المدارس (كشف مديرية) ────────────────────────────────────────────
+   دالّةٌ SECURITY DEFINER تُصفّي بحسب `current_user_directorate_id()` — تمرير
+   مدرسةٍ أجنبية يُفرغ النتيجة لا يوسّعها. الترتيب افتراضياً بالمجموع تنازلياً،
+   فيرى الموظّف الظواهر (مدرسةٌ يرتفع عندها الترقين) فوراً. */
+async function loadDeparted() {
+  const loading = document.getElementById('dep-loading');
+  const wrap    = document.getElementById('dep-table-wrap');
+  const tbody   = document.getElementById('dep-tbody');
+  const empty   = document.getElementById('dep-empty');
+  const err     = document.getElementById('dep-error');
+  if (!tbody) return;
+
+  loading?.classList.remove('hidden');
+  wrap?.classList.add('hidden'); empty?.classList.add('hidden'); err?.classList.add('hidden');
+
+  try {
+    const rows = await getDirectorateDepartures();
+    const shown = rows.filter(r => r.total_departed > 0);
+    if (!shown.length) { empty?.classList.remove('hidden'); return; }
+    tbody.innerHTML = shown.map((r, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${esc(r.school_name)}</td>
+        <td>${r.transferred}</td>
+        <td>${r.out_of_year}</td>
+        <td>${r.graduated}</td>
+        <td>${r.struck_off}</td>
+        <td><b>${r.total_departed}</b></td>
+      </tr>`).join('');
+    wrap?.classList.remove('hidden');
+  } catch (e) {
+    console.error('[dir] loadDeparted', e);
+    err?.classList.remove('hidden');
+  } finally {
+    loading?.classList.add('hidden');
+  }
+}
 
 async function loadDirPrincipals() {
   if (!currentUser?.directorateId) return;

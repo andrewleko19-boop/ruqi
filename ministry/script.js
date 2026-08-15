@@ -938,7 +938,7 @@ function openStaffCard(id) {
     ['الاختصاص',         r.specialization],
     ['المادة المُدرَّسة', r.subject_taught],
     ['الرتبة',           r.teaching_rank],
-    ['النصاب (ساعات)',   r.teaching_hours],
+    ['النصاب (حصص)',    r.weekly_lessons],
     ['سنة الأقدمية',     r.seniority_year],
     ['تاريخ المباشرة',   r.start_date],
     ['الملاك',           r.roster_type === 'inside' ? 'داخل الملاك'

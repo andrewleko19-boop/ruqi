@@ -129,12 +129,13 @@ describe('حدّ النصاب يُفرَض حيث تُدخَل الساعات', 
 
   test('الحدّان يُشتقّان: تجاوزُ المدرسة ثمّ الوطنيّ', () => {
     assert.match(src, /function effectiveQuotaBounds\(\)/);
-    assert.match(src, /S\.school\?\.quota_min_hours \?\? _quotaBounds\?\.min_hours/);
+    // بعد إعادة تسمية teaching_hours → weekly_lessons (والحدود معها):
+    assert.match(src, /S\.school\?\.quota_min_lessons \?\? _quotaBounds\?\.min_lessons/);
   });
 
   test('الفارغ يعني «اتبع الوطنيّ» لا صفراً', () => {
     const db = read('shared/db.js');
-    assert.match(db, /quotaMinHours === '' \|\| patch\.quotaMinHours == null \? null/,
+    assert.match(db, /quotaMinLessons === '' \|\| patch\.quotaMinLessons == null \? null/,
       'صفرٌ هنا يمنع كلَّ إدخال ويبدو للمدير عطلاً لا إعداداً.');
   });
 

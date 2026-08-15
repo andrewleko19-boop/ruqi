@@ -1001,3 +1001,17 @@ tbody tr.is-off td:not(.row-actions-cell) { opacity: .5; }
 .lk-orphan { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 6px 8px;
              padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--bg-surface);
              border: 1px solid var(--border); font-size: .8rem; }
+
+/* الفصل الحاليّ: ثلاثة أزرار اختيار كبيرة بلونٍ متمايز عند التحديد. */
+.ct-choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ct-choice {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 14px 10px; border-radius: 10px; cursor: pointer;
+  background: var(--bg-surface); border: 1.5px solid var(--border);
+  font-weight: 700; font-size: .88rem; user-select: none;
+}
+.ct-choice input { position: absolute; opacity: 0; pointer-events: none; }
+.ct-choice:has(input:checked) {
+  background: var(--accent-tint, #dbeafe); border-color: var(--accent, #2563eb);
+  color: var(--accent, #2563eb);
+}

@@ -90,8 +90,8 @@ function normaliseSchool(row) {
     // they survive caching). Safe when the columns are missing (⇒ undefined).
     work_start_time:    row.work_start_time    ?? null,
     complex_name:       row.complex_name       ?? null,
-    quota_min_hours:    row.quota_min_hours    ?? null,
-    quota_max_hours:    row.quota_max_hours    ?? null,
+    quota_min_lessons:  row.quota_min_lessons  ?? null,
+    quota_max_lessons:  row.quota_max_lessons  ?? null,
     classification:     row.classification     ?? null,
     education_type:     row.education_type     ?? null,
     shift:              row.shift              ?? null,
@@ -4587,8 +4587,57 @@ function liveDobError() {
 
 async function initStudentsTab() {
   _studentsLoaded = true;
-  await Promise.all([loadStuClasses(), loadDropoutWarning()]);
+  await Promise.all([loadStuClasses(), loadDropoutWarning(), loadDeparted()]);
 }
+
+/* ── الطلاب المغادرون ─────────────────────────────────────────────────────
+   كانوا يظهرون داخل قائمة كلّ صفٍّ في شرائحَ منفصلة، والمدير الذي يريد
+   قائمة من غادروا هذا العام يفتح كلّ صفٍّ على حدة. */
+const DEP_STATUS_AR = {
+  transferred: 'منقول', out_of_year: 'خارج العام الدراسي',
+  graduated: 'متخرّج', struck_off: 'مرقّن القيد',
+};
+
+async function loadDeparted() {
+  if (!S.school?.id) return;
+  const list  = el('dep-list');
+  const empty = el('dep-empty');
+  const err   = el('dep-error');
+  const cnt   = el('dep-count');
+  if (!list) return;
+
+  const status = el('dep-status-sel')?.value || null;
+  show(el('dep-loading')); hide(err); hide(empty); if (cnt) cnt.hidden = true;
+  list.innerHTML = '';
+
+  try {
+    const rows = await NDB.getDepartedStudents({ status });
+    if (cnt) { cnt.textContent = String(rows.length); cnt.hidden = false; }
+    if (!rows.length) { show(empty); return; }
+    list.innerHTML = rows.map(r => {
+      const st  = DEP_STATUS_AR[r.status] || r.status;
+      const dt  = r.status_changed_at
+        ? new Date(r.status_changed_at).toLocaleDateString('ar-SY') : '—';
+      const reason = r.status_reason ? ` · ${escapeHtml(r.status_reason)}` : '';
+      return `<li class="reg-row">
+        <div class="reg-main">
+          <div class="reg-name">${escapeHtml(r.full_name)}</div>
+          <div class="reg-sub">${escapeHtml(st)} — ${escapeHtml(r.class_label || '—')}${reason}
+            <span style="color:var(--clr-text-3)"> · ${escapeHtml(dt)}</span></div>
+        </div>
+      </li>`;
+    }).join('');
+  } catch (e) {
+    console.error('[Ruqi] loadDeparted', e);
+    show(err);
+  } finally {
+    hide(el('dep-loading'));
+  }
+}
+
+el('btn-refresh-departed')?.addEventListener('click', () => void loadDeparted());
+el('dep-status-sel')?.addEventListener('change', () => void loadDeparted());
+CustomSelect.enhance('dep-status-sel');
 
 // ── Dropout warning ───────────────────────────────────────────────────────────
 async function loadDropoutWarning() {
@@ -5213,17 +5262,17 @@ el('btn-save-identity')?.addEventListener('click', async () => {
 //  Staff & student real counts (بيانات الكادر والطلاب)
 // ════════════════════════════════════════════════════════════════════════════
 /* ── حدّ نصاب التدريس ────────────────────────────────────────────────────────
-   «عدد الساعات» في سجلّ الكادر كان حقلاً مفتوحاً بلا حدٍّ إلا max="40" في
+   «عدد الحصص الأسبوعية» في سجلّ الكادر كان حقلاً مفتوحاً بلا حدٍّ إلا max="40" في
    الـ HTML — لا يعرف كاتبُه ما المسموح ولا يمنعه شيءٌ من كتابة ٣ أو ٣٩، ثمّ
    يُبنى عليه تنبيهُ التجاوز وتقاريرُ المديرية ونصابُ القطر.
    الحدّ الوطنيّ في القاعدة تضبطه الوزارة (لا في الشيفرة: تغييرُه قرارٌ وزاريّ
    لا نشرةُ برمجيات)، ولهذه المدرسة أن تخالفه بفارغٍ يعني «اتبع الوطنيّ». */
-let _quotaBounds = null;          // { min_hours, max_hours } وطنيّاً، أو null
+let _quotaBounds = null;          // { min_lessons, max_lessons } وطنيّاً، أو null
 
 /** الحدّان الفعليّان لهذه المدرسة: تجاوزُها إن وُجد، وإلّا الوطنيّ. */
 function effectiveQuotaBounds() {
-  const min = S.school?.quota_min_hours ?? _quotaBounds?.min_hours ?? null;
-  const max = S.school?.quota_max_hours ?? _quotaBounds?.max_hours ?? null;
+  const min = S.school?.quota_min_lessons ?? _quotaBounds?.min_lessons ?? null;
+  const max = S.school?.quota_max_lessons ?? _quotaBounds?.max_lessons ?? null;
   return { min, max };
 }
 
@@ -5233,12 +5282,12 @@ async function loadQuotaBounds() {
   const hint = el('sch-quota-national');
   if (hint) {
     hint.textContent = _quotaBounds
-      ? `الحدّ الوطنيّ: من ${_quotaBounds.min_hours} إلى ${_quotaBounds.max_hours} ساعة.`
+      ? `الحدّ الوطنيّ: من ${_quotaBounds.min_lessons} إلى ${_quotaBounds.max_lessons} حصة أسبوعياً.`
       : 'تعذّر جلب الحدّ الوطنيّ.';
   }
   const mn = el('sch-quota-min'), mx = el('sch-quota-max');
-  if (mn) mn.value = S.school?.quota_min_hours ?? '';
-  if (mx) mx.value = S.school?.quota_max_hours ?? '';
+  if (mn) mn.value = S.school?.quota_min_lessons ?? '';
+  if (mx) mx.value = S.school?.quota_max_lessons ?? '';
 }
 
 el('btn-save-quota')?.addEventListener('click', async () => {
@@ -5258,9 +5307,9 @@ el('btn-save-quota')?.addEventListener('click', async () => {
       msg.textContent = 'الحدّ الأعلى لا يجوز أن يقلّ عن الأدنى.'; show(msg);
       btn.disabled = false; return;
     }
-    await NDB.updateSchool(S.school.id, { quotaMinHours: mn, quotaMaxHours: mx });
-    S.school.quota_min_hours = mn;
-    S.school.quota_max_hours = mx;
+    await NDB.updateSchool(S.school.id, { quotaMinLessons: mn, quotaMaxLessons: mx });
+    S.school.quota_min_lessons = mn;
+    S.school.quota_max_lessons = mx;
     cacheSchool(S.school.id, S.school);
     msg.className = 'msg msg-success'; msg.textContent = 'تم حفظ حدّ النصاب'; show(msg);
     setTimeout(() => hide(msg), 2500);
@@ -5987,7 +6036,7 @@ async function openStaffRecModal(rec) {
     }
     srSelfNumber.value    = rec.self_number        || '';
     if (srLandline)    srLandline.value    = rec.landline              || '';
-    if (srTeachHours)  srTeachHours.value  = rec.teaching_hours        ?? '';
+    if (srTeachHours)  srTeachHours.value  = rec.weekly_lessons        ?? '';
     if (srAsgGrade)    srAsgGrade.value    = rec.assigned_grade        || '';
     if (srAsgSection)  srAsgSection.value  = rec.assigned_section      || '';
     if (srQuotaSubj)   srQuotaSubj.value   = rec.quota_subjects        || '';
@@ -6127,7 +6176,7 @@ btnSaveStaffRec?.addEventListener('click', async () => {
     // teaching_rank لا يُدخَل هنا: يُستنتج مرّةً في _stmtTeachRank ويُخزَّن، ويُحرَّر
     // عند اللزوم من جدول القسم ٦ في البيان. حقل «رتبة التدريس» كان مكرّراً مع
     // «العمل المسند» فحُذف من هذا النموذج.
-    payload.teaching_hours        = srTeachHours?.value ? parseInt(srTeachHours.value, 10) : null;
+    payload.weekly_lessons        = srTeachHours?.value ? parseInt(srTeachHours.value, 10) : null;
     payload.assigned_grade        = srAsgGrade?.value.trim() || null;
     payload.assigned_section      = srAsgSection?.value.trim() || null;
     payload.quota_subjects        = srQuotaSubj?.value.trim() || null;
@@ -6138,12 +6187,12 @@ btnSaveStaffRec?.addEventListener('click', async () => {
        يُملأ بعد» حالةٌ مشروعة تُعرَض بوصفها «نصاب غير محدَّد»، لا خطأً يمنع حفظ
        سجلّ موظّفٍ لسببٍ لا علاقة له بهويّته. */
     const qb = effectiveQuotaBounds();
-    const th = payload.teaching_hours;
+    const th = payload.weekly_lessons;
     if (th != null && (qb.min != null || qb.max != null)) {
       const lo = qb.min ?? 0, hi = qb.max ?? Infinity;
       if (th < lo || th > hi) {
         srError.textContent =
-          `عدد الساعات (${th}) خارج الحدّ المسموح: من ${lo} إلى ${qb.max ?? '—'}.` +
+          `عدد الحصص (${th}) خارج الحدّ المسموح: من ${lo} إلى ${qb.max ?? '—'}.` +
           ' يمكن تعديل الحدّ من «إعدادات المدرسة».';
         show(srError);
         return;
@@ -6458,7 +6507,7 @@ function renderAssignments() {
 // ─────────────────────────────────────────────────────────────────────────────
 // § نصاب التدريس — تنبيه التجاوز
 //
-//  النصاب القانونيّ في staff_records.teaching_hours، والحمل الفعليّ مجموع
+//  النصاب القانونيّ في staff_records.weekly_lessons (عدد الحصص الأسبوعية)، والحمل الفعليّ مجموع
 //  lesson_count في تكاليف المعلّم النشطة. المدرسة هي من يُسنِد الدروس، فهنا
 //  موضع التنبيه: يرى المديرُ التجاوز وهو يُسنِد، لا بعد شهرٍ من المديرية.
 //
@@ -7010,7 +7059,7 @@ const STMT_ROSTER_FIELDS = {
     ['mother_name','الأم',1], ['@birth','تاريخ الولادة',1],
     ['certificate','الشهادة ج/م.م/أ.ه/ثا',1], ['specialization','الاختصاص',1],
     ['seniority_year','القدم الوظيفي (سنة التعيين)',1], ['subject_taught','المادة التي يدرسها',1],
-    ['teaching_hours','عدد الساعات التي يدرسها',1],
+    ['weekly_lessons','عدد الحصص الأسبوعية',1],
     ['quota_subjects','المواد التي يكمل فيها نصابه في مدرسته وعددها',0],
     ['quota_school_external','المدرسة التي يكمل نصابه بها وعددها',0],
     ['assigned_grade','الصف',0], ['assigned_section','الشعبة',0],
@@ -7077,7 +7126,7 @@ const STMT_CHG_FIELDS = {
   teaching: [
     _CHG_ID, _CHG_SELF, _CHG_NAME, _CHG_MOM, _CHG_BIRTH, _CHG_CERT, _CHG_SPEC, _CHG_SEN,
     ['subject_taught','المادة التي يدرسها','text'],
-    ['teaching_hours','عدد الساعات التي يدرسها','num'],
+    ['weekly_lessons','عدد الحصص الأسبوعية','num'],
     ['quota_subjects','المواد التي يكمل فيها نصابه في مدرسته وعددها','text'],
     ['quota_school_external','المدرسة التي يكمل نصابه بها وعددها','text'],
     ['assigned_grade','الصف','text'],
@@ -7105,7 +7154,7 @@ const STMT_CHG_FIELDS = {
 const STMT_CHG_FROM_REC = [
   'national_id','self_number','full_name','mother_name','certificate','specialization',
   'seniority_year','job_title','higher_degree','phone','landline','residential_zone',
-  'ministerial_doc','notes','subject_taught','teaching_hours','quota_subjects',
+  'ministerial_doc','notes','subject_taught','weekly_lessons','quota_subjects',
   'quota_school_external','assigned_grade','assigned_section',
 ];
 const STMT_ROSTER_TYPE_LABEL = { inside: 'داخل الملاك', outside: 'خارج الملاك', contract: 'عقود' };
@@ -8946,7 +8995,7 @@ function _stmtChangeRecord(c) {
     job_title:    d.job_title || d.job || live.job_title || '',
     higher_degree: pick('higher_degree', 'higher_degree'),
     subject_taught: pick('subject_taught', 'subject_taught'),
-    teaching_hours: pick('teaching_hours', 'teaching_hours'),
+    weekly_lessons: pick('weekly_lessons', 'weekly_lessons'),
     quota_subjects: pick('quota_subjects', 'quota_subjects'),
     quota_school_external: pick('quota_school_external', 'quota_school_external'),
     assigned_grade:   pick('assigned_grade', 'assigned_grade'),
@@ -8980,7 +9029,7 @@ function _writeStaffRow(ws, row, r, map, leaveText) {
   put('job_title',    r.job_title || '');
   put('higher_degree', r.higher_degree || '');
   put('subject',      r.subject_taught || '');
-  put('hours',        r.teaching_hours ?? '');
+  put('hours',        r.weekly_lessons ?? '');
   put('quota_subj',   r.quota_subjects || '');
   put('quota_school', r.quota_school_external || '');
   put('grade',        r.assigned_grade || '');
@@ -9871,6 +9920,8 @@ nocList?.addEventListener('click', (e) => {
 CustomSelect.enhance('noc-grade-sel');
 CustomSelect.enhance('noc-section-sel');
 CustomSelect.enhance('noc-reason-sel');
+// سجلّ الإجازات: قائمة الشهر كانت تفتح بواجهة النظام (بيضاء وسط لوحةٍ داكنة).
+CustomSelect.enhance('lv-month');
 
 // ── طباعة «ورقة لا مانع» ──────────────────────────────────────────────────
 // نافذة طباعة كبقية مطبوعات البوابة (كشف الحضور، البيان) لا مكتبة PDF: المدير

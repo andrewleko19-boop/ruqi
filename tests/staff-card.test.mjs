@@ -56,8 +56,11 @@ describe('البطاقة الشخصية — حذف الفارغ', () => {
   });
 
   test('صفرٌ معلومةٌ لا فراغ — النصاب صفر يبقى معروضاً', () => {
-    const c = cardFor({ ...base, teaching_hours: 0 });
-    assert.equal(valueOf(c, 'النصاب (ساعات)'), '0',
+    // بعد إعادة تسمية الحقل: teaching_hours → weekly_lessons، والوسم
+    // «النصاب (ساعات)» → «النصاب (حصص)» — الوحدة صحّحت من ساعات إلى حصصٍ
+    // أسبوعية، والحقل نفسه هو ما يقارَن بمجموع lesson_count.
+    const c = cardFor({ ...base, weekly_lessons: 0 });
+    assert.equal(valueOf(c, 'النصاب (حصص)'), '0',
       'الصفر ابتُلع كأنّه فارغ — فلترةُ falsy الساذجة');
   });
 

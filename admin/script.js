@@ -1932,7 +1932,7 @@ async function openPassRules() {
 
 function closePassRules() { hide(passRulesModal); }
 /* ── حدّ نصاب التدريس (وطنيّ) ────────────────────────────────────────────────
-   «عدد الساعات» في سجلّ الكادر كان حقلاً مفتوحاً بلا حدٍّ يُعلَم، ثمّ يُبنى عليه
+   «عدد الحصص الأسبوعية» في سجلّ الكادر كان حقلاً مفتوحاً بلا حدٍّ يُعلَم، ثمّ يُبنى عليه
    تنبيهُ التجاوز في المدرسة وتقاريرُ المديرية ونصابُ القطر. والرقمان هنا لا في
    الشيفرة: تغييرُ النصاب القانونيّ قرارٌ وزاريّ لا نشرةُ برمجيات. */
 const quotaBoundsBtn    = document.getElementById('quota-bounds-btn');
@@ -1949,8 +1949,8 @@ async function openQuotaBounds() {
   quotaBoundsModal.classList.remove('hidden');
   try {
     const b = await window.RUQI_DB.getTeachingQuotaBounds();
-    quotaMinIn.value = b?.min_hours ?? '';
-    quotaMaxIn.value = b?.max_hours ?? '';
+    quotaMinIn.value = b?.min_lessons ?? '';
+    quotaMaxIn.value = b?.max_lessons ?? '';
   } catch (e) {
     showError(quotaBoundsError, errMessage(e, 'تعذّر جلب الحدود.'));
   }
@@ -1973,12 +1973,84 @@ quotaBoundsSave?.addEventListener('click', async () => {
   if (mx < mn) { showError(quotaBoundsError, 'الحدّ الأعلى لا يجوز أن يقلّ عن الأدنى.'); return; }
   quotaBoundsSave.disabled = true;
   try {
-    await window.RUQI_DB.setTeachingQuotaBounds({ minHours: mn, maxHours: mx });
+    await window.RUQI_DB.setTeachingQuotaBounds({ minLessons: mn, maxLessons: mx });
     closeQuotaBounds();
   } catch (e) {
     showError(quotaBoundsError, errMessage(e, 'تعذّر الحفظ.'));
   } finally {
     quotaBoundsSave.disabled = false;
+  }
+});
+
+/* ── الفصل الحاليّ (وطنيّ) ────────────────────────────────────────────────────
+   يُبنى عليه: تسجيلُ ترقين القيد يُنسَب لهذا الفصل، واجهةُ الدرجات، والتقارير.
+   كان يُشتقّ من `month >= 9 ? 's1' : 's2'` — والسنة الدراسية السورية لا تتّبع
+   هذا القالب حرفياً، وبدايةُ العام تتقدّم وتتأخّر بقرارٍ وزاريّ. */
+const currentTermBtn    = document.getElementById('current-term-btn');
+const currentTermModal  = document.getElementById('current-term-modal');
+const currentTermClose  = document.getElementById('current-term-close');
+const currentTermCancel = document.getElementById('current-term-cancel');
+const currentTermSave   = document.getElementById('current-term-save');
+const currentTermError  = document.getElementById('current-term-error');
+const currentTermMeta   = document.getElementById('current-term-meta');
+
+const TERM_AR = { s1: 'الفصل الأول', s2: 'الفصل الثاني', summer: 'إجازة صيفية' };
+
+async function openCurrentTerm() {
+  clearError(currentTermError);
+  currentTermModal.classList.remove('hidden');
+  try {
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('current_term, updated_at, updated_by:users!app_settings_updated_by_fkey(full_name)')
+      .maybeSingle();
+    if (error) throw error;
+    const cur = data?.current_term ?? 's1';
+    document.querySelectorAll('input[name="ct"]').forEach(r => { r.checked = r.value === cur; });
+    if (currentTermMeta) {
+      if (data?.updated_at) {
+        const d = new Date(data.updated_at);
+        const who = data.updated_by?.full_name ? ` — ${data.updated_by.full_name}` : '';
+        currentTermMeta.textContent =
+          `آخر تحديث ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}${who}`;
+      } else {
+        currentTermMeta.textContent = 'لم يُضبَط بعد — يُستعمل s1 افتراضاً.';
+      }
+    }
+  } catch (e) {
+    showError(currentTermError, errMessage(e, 'تعذّر جلب الإعداد.'));
+  }
+}
+function closeCurrentTerm() { currentTermModal.classList.add('hidden'); }
+
+currentTermBtn?.addEventListener('click', () => void openCurrentTerm());
+currentTermClose?.addEventListener('click', closeCurrentTerm);
+currentTermCancel?.addEventListener('click', closeCurrentTerm);
+currentTermModal?.addEventListener('click', e => {
+  if (e.target === currentTermModal) closeCurrentTerm();
+});
+
+currentTermSave?.addEventListener('click', async () => {
+  clearError(currentTermError);
+  const picked = document.querySelector('input[name="ct"]:checked')?.value;
+  if (!picked) { showError(currentTermError, 'اختر الفصل الحاليّ.'); return; }
+  currentTermSave.disabled = true;
+  try {
+    const { data, error } = await supabase
+      .from('app_settings')
+      .update({ current_term: picked, updated_at: new Date().toISOString() })
+      .eq('id', true)
+      .select('current_term');
+    if (error) throw error;
+    if (!data?.length)
+      throw new Error('لم يُحفظ — الضبط مخصّص لمشرف الوزارة.');
+    // مسحُ المخبأ في نفس الجلسة لئلّا يقرأ المشرف قيمةً قديمة بعد ثوانٍ.
+    window.RUQI_DB._clearCurrentTermCache?.();
+    closeCurrentTerm();
+  } catch (e) {
+    showError(currentTermError, errMessage(e, 'تعذّر الحفظ.'));
+  } finally {
+    currentTermSave.disabled = false;
   }
 });
 

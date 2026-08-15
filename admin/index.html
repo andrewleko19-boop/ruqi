@@ -460,7 +460,9 @@
             <div class="section-header-actions">
               <button id="pass-rules-btn" class="btn btn-ghost btn-sm">قواعد النجاح</button>
               <button id="quota-bounds-btn" class="btn btn-ghost btn-sm"
-                      title="الحدّ الأدنى والأعلى لعدد ساعات التدريس — تتحقّق منه كلُّ مدرسة عند إدخال نصاب معلّم">حدّ النصاب</button>
+                      title="الحدّ الأدنى والأعلى لعدد الحصص الأسبوعية — تتحقّق منه كلُّ مدرسة عند إدخال نصاب معلّم">حدّ النصاب</button>
+              <button id="current-term-btn" class="btn btn-ghost btn-sm"
+                      title="الفصل الحاليّ الذي يُبنى عليه تسجيل ترقين القيد والدرجات والتقارير">الفصل الحاليّ</button>
               <button id="sync-full-marks-btn" class="btn btn-ghost btn-sm"
                       title="مواد أُنشئت في مدرسة ما قبل تفعيل «علامة كاملة» على الفهرس لا تتحدّث تلقائياً — استخدم هذا لتعويضها">
                 مزامنة العلامة الكاملة مع المدارس
@@ -991,7 +993,7 @@
       </div>
       <div id="quota-bounds-error" class="error-msg hidden"></div>
       <p style="font-size:.82rem;color:var(--text-dim);margin:0 0 10px">
-        الحدّ الأدنى والأعلى لعدد ساعات التدريس. تتحقّق منه كلُّ مدرسة عند إدخال
+        الحدّ الأدنى والأعلى لعدد الحصص الأسبوعية للتدريس. تتحقّق منه كلُّ مدرسة عند إدخال
         نصاب معلّم، ولكلّ مدرسة أن تخالفه من «إعدادات المدرسة» عند الحاجة.
       </p>
       <div style="display:flex;gap:10px">
@@ -1007,6 +1009,42 @@
       <div class="modal-footer">
         <button class="btn btn-ghost" id="quota-bounds-cancel">إلغاء</button>
         <button class="btn btn-primary" id="quota-bounds-save">حفظ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════
+       Modal: الفصل الحاليّ (وطنيّ)
+  ══════════════════════════════════════════════ -->
+  <div id="current-term-modal" class="modal-overlay hidden">
+    <div class="modal" style="max-width:520px">
+      <div class="modal-header">
+        <span class="modal-title">الفصل الحاليّ</span>
+        <button class="btn btn-icon btn-sm" id="current-term-close">
+          <svg width="16" height="16"><use href="#icon-close"/></svg>
+        </button>
+      </div>
+      <div id="current-term-error" class="error-msg hidden"></div>
+      <p style="font-size:.82rem;color:var(--text-dim);margin:0 0 10px">
+        يُبنى عليه: ترقين القيد يُنسَب لهذا الفصل، وواجهةُ الدرجات تفتح
+        عليه افتراضياً، وتقاريرُ المديرية تعرف الفصل السائد. قلِبه عند
+        صدور قرارٍ وزاريّ ببداية فصلٍ جديد.
+      </p>
+      <div class="ct-choices" role="radiogroup" aria-label="اختر الفصل">
+        <label class="ct-choice">
+          <input type="radio" name="ct" value="s1"><span>الفصل الأول</span>
+        </label>
+        <label class="ct-choice">
+          <input type="radio" name="ct" value="s2"><span>الفصل الثاني</span>
+        </label>
+        <label class="ct-choice">
+          <input type="radio" name="ct" value="summer"><span>إجازة صيفية</span>
+        </label>
+      </div>
+      <p id="current-term-meta" class="form-hint" style="margin-top:8px"></p>
+      <div class="modal-footer">
+        <button class="btn btn-ghost"   id="current-term-cancel">إلغاء</button>
+        <button class="btn btn-primary" id="current-term-save">حفظ</button>
       </div>
     </div>
   </div>

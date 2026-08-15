@@ -777,8 +777,8 @@ async function updateSchool(schoolId, patch) {
   if (patch.totalStudents !== undefined) row.total_students = patch.totalStudents === '' ? null : Number(patch.totalStudents);
   /* حدّا النصاب: الفارغ يعني «اتبع الوطنيّ» لا «بلا حدّ» — فيُخزَّن null لا صفر.
      وصفرٌ هنا سيمنع كلَّ إدخالٍ ويبدو للمدير عطلاً لا إعداداً. */
-  if (patch.quotaMinHours !== undefined) row.quota_min_hours = patch.quotaMinHours === '' || patch.quotaMinHours == null ? null : Number(patch.quotaMinHours);
-  if (patch.quotaMaxHours !== undefined) row.quota_max_hours = patch.quotaMaxHours === '' || patch.quotaMaxHours == null ? null : Number(patch.quotaMaxHours);
+  if (patch.quotaMinLessons !== undefined) row.quota_min_lessons = patch.quotaMinLessons === '' || patch.quotaMinLessons == null ? null : Number(patch.quotaMinLessons);
+  if (patch.quotaMaxLessons !== undefined) row.quota_max_lessons = patch.quotaMaxLessons === '' || patch.quotaMaxLessons == null ? null : Number(patch.quotaMaxLessons);
   if (Object.keys(row).length === 0) return true;
   const { data, error } = await db.from('schools').update(row).eq('id', schoolId).select('id');
   if (error) throw error;
@@ -795,19 +795,19 @@ async function updateSchool(schoolId, patch) {
 async function getTeachingQuotaBounds() {
   const { data, error } = await db
     .from('teaching_quota_bounds')
-    .select('min_hours, max_hours, updated_at')
+    .select('min_lessons, max_lessons, updated_at')
     .maybeSingle();
   if (error) throw error;
   return data ?? null;
 }
 
-async function setTeachingQuotaBounds({ minHours, maxHours }) {
+async function setTeachingQuotaBounds({ minLessons, maxLessons }) {
   const { data, error } = await db
     .from('teaching_quota_bounds')
-    .update({ min_hours: Number(minHours), max_hours: Number(maxHours),
+    .update({ min_lessons: Number(minLessons), max_lessons: Number(maxLessons),
               updated_at: new Date().toISOString() })
     .eq('id', true)
-    .select('min_hours, max_hours');
+    .select('min_lessons, max_lessons');
   if (error) throw error;
   if (!data || !data.length)
     throw new Error('لم تُحفظ الحدود — الضبط مخصّص لمشرف الوزارة.');
@@ -4010,6 +4010,42 @@ async function deleteHoliday(id) {
   if (error) throw error;
 }
 
+/* ─── الفصل الحاليّ ───────────────────────────────────────────────────────────
+   قراءةٌ مخبَّأة من `app_settings.current_term` (يضبطها المشرف). النتيجةُ
+   محفوظةٌ في ذاكرة الصفحة لخمس دقائق: نافذة الجلسة تُحدَّث عند إعادة التحميل،
+   والمدير لا يقلب الفصل مرّاتٍ في اليوم. عند تعذّر الجلب نسقط إلى الاشتقاق
+   القديم (`month >= 9`) — أفضل من تجميدٍ أو خطأ. */
+let _currentTermCache = null;
+let _currentTermAt    = 0;
+const CURRENT_TERM_TTL_MS = 5 * 60 * 1000;
+
+async function getCurrentTerm() {
+  if (_currentTermCache && Date.now() - _currentTermAt < CURRENT_TERM_TTL_MS) {
+    return _currentTermCache;
+  }
+  try {
+    const { data, error } = await db.rpc('current_term');
+    if (error) throw error;
+    const t = typeof data === 'string' ? data : (Array.isArray(data) ? data[0] : null);
+    if (t) {
+      _currentTermCache = t;
+      _currentTermAt    = Date.now();
+      return t;
+    }
+  } catch { /* أوفلاين أو تعذّر — نسقط إلى الاشتقاق */ }
+  return (new Date().getMonth() + 1) >= 9 ? 's1' : 's2';
+}
+
+/** يُستدعى بعد أن يبدّل المشرفُ الفصل، فتُقرأ القيمة الجديدة فوراً لا بعد
+ *  انقضاء المخبأ. */
+function _clearCurrentTermCache() { _currentTermCache = null; }
+
+/** تحويلٌ إلى '1'/'2' كما تُخزَّن في students.dropout_semester. */
+async function getCurrentSemester() {
+  const t = await getCurrentTerm();
+  return t === 's1' ? '1' : '2';
+}
+
 // ─── Dropout warning ─────────────────────────────────────────────────────────
 
 async function getDropoutRiskStudents(schoolId) {
@@ -4026,8 +4062,10 @@ async function getDirectorateDropoutSummary() {
 }
 
 async function flagStudentDropout(studentId, grade) {
-  const month = new Date().getMonth() + 1;
-  const semester = month >= 9 ? '1' : '2';
+  /* الفصل يُقرأ من الإعداد الوطنيّ لا من شهر الحاسوب: بدايةُ العام تتقدّم
+     وتتأخّر بقرارٍ وزاريّ، ومديرٌ يرقّن قيداً في نهاية آب يُسجَّل خطأً على
+     «الفصل الأول» لأنّ اليوم 30/8. current_term تُرجع 's1'/'s2'/'summer'. */
+  const semester = await getCurrentSemester();
   const returnAt = grade <= 9
     ? localDateISO(new Date(Date.now() + 15 * 86400000))
     : null;
@@ -4042,8 +4080,7 @@ async function flagStudentDropout(studentId, grade) {
 }
 
 async function getFlaggedDropoutStudents(schoolId) {
-  const month = new Date().getMonth() + 1;
-  const semester = month >= 9 ? '1' : '2';
+  const semester = await getCurrentSemester();
   const { data, error } = await db
     .from('students')
     .select('id, full_name, dropout_flagged_at, dropout_semester, dropout_grade, dropout_return_at, class_id, classes(name, grade)')
@@ -4099,7 +4136,7 @@ async function getAdminDirectorates() {
 async function getAdminSchools() {
   const { data, error } = await db
     .from('schools')
-    .select('id, name, directorate_id, directorates(name, governorate), school_type, classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name, quota_min_hours, quota_max_hours, archived_at')
+    .select('id, name, directorate_id, directorates(name, governorate), school_type, classification, education_type, shift, student_type, total_students, total_teachers, lat, lng, complex_name, quota_min_lessons, quota_max_lessons, archived_at')
     .order('name');
   if (error) throw error;
   return data ?? [];
@@ -4703,8 +4740,14 @@ window.RUQI_DB = {
   updateStaffRecord,
   softDeleteStaffRecord,
   getStaffLeaves,
+  getMyStaffLeaves,
+  getDepartedStudents,
+  getDirectorateDepartures,
   getTeachingQuotaBounds,
   setTeachingQuotaBounds,
+  getCurrentTerm,
+  getCurrentSemester,
+  _clearCurrentTermCache,
   getLeavesRegister,
   getLeavesSummary,
   upsertStaffLeave,
@@ -4856,6 +4899,22 @@ async function softDeleteStaffRecord(id) {
   if (error) throw error;
 }
 
+/* «إجازاتي» للمعلّم: يقرأ ما سُجِّل عليه في مدرسته لهذه السنة.
+   RLS الجديدة (staff_leaves_own_read) تسمح بالقراءة بمطابقة اسمٍ داخل مدرسة —
+   لا رابطَ مباشر بين staff_records.id و users.id في المخطّط. */
+async function getMyStaffLeaves(schoolId, { year } = {}) {
+  if (!schoolId) return [];
+  let q = db.from('staff_leaves')
+    .select('id, leave_type, leave_days, month, year, note, created_at')
+    .eq('school_id', schoolId)
+    .order('year', { ascending: false })
+    .order('month', { ascending: false });
+  if (year) q = q.eq('year', year);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
 async function getStaffLeaves(schoolId, month, year) {
   const { data, error } = await db.from('staff_leaves')
     .select('*')
@@ -4865,6 +4924,23 @@ async function getStaffLeaves(schoolId, month, year) {
     .order('created_at');
   if (error) throw error;
   return data || [];
+}
+
+/* الطلاب المغادرون: تبويبٌ عابر للصفوف في المدرسة، وكشفُ مدارس المديرية.
+   RPC بنطاقٍ يُشتقّ من الدور — مديرُ مدرسةٍ يمرّر معرّف مدرسةٍ أجنبية يُفرغ
+   نتيجته لا يوسّعه. */
+async function getDepartedStudents({ schoolId = null, status = null } = {}) {
+  const { data, error } = await db.rpc('get_departed_students', {
+    p_school_id: schoolId, p_status: status,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function getDirectorateDepartures() {
+  const { data, error } = await db.rpc('get_directorate_departures');
+  if (error) throw error;
+  return data ?? [];
 }
 
 /* سجلّ الإجازات: سطرٌ لكلّ إجازة باسم صاحبها، بنطاقٍ يُشتقّ من الدور.

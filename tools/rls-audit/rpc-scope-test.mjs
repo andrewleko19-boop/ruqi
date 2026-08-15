@@ -353,6 +353,69 @@ export async function runRpcScopeTests(report) {
             '⚠ سُحب الربط رغم مطابقة رقم التواصل'));
     });
 
+    // ── ١٠) الطلاب المغادرون: النطاق يُشتقّ من الدور لا من المعامل ──────────
+    await inTx(c, async () => {
+      const f = await seedForeign(c);
+      // نُلحق فصلاً وطالباً منقولاً بالمدرسة الأجنبية
+      const { rows: [cls] } = await c.query(
+        `insert into public.classes (school_id, name, grade, section, academic_year)
+         values ($1, 'خ', '5', 'A', '2025-2026') returning id`, [f.schoolId]);
+      await c.query(
+        `insert into public.students (school_id, class_id, full_name, status, status_reason)
+         values ($1, $2, '__طالب__', 'transferred', 'اختبار العزل')`, [f.schoolId, cls.id]);
+
+      if (need('school_admin')) {
+        await become(c, by.school_admin.id);
+        const r = await callRpc(c,
+          'select full_name from public.get_departed_students($1, null)', [f.schoolId]);
+        sec.rows.push(!r.ok
+          ? Report.row('warn', 'get_departed_students · مدير مدرسة يمرّر مدرسة أجنبية', r.err.slice(0, 90))
+          : r.rows.length === 0
+            ? Report.row('pass', 'get_departed_students · مدير مدرسة يمرّر مدرسة أجنبية',
+                'نتيجةٌ فارغة — المعامل لا يوسّع النطاق')
+            : Report.row('fail', 'get_departed_students · مدير مدرسة يمرّر مدرسة أجنبية',
+                `⚠ تسريب: ${r.rows.length} طالباً`));
+      }
+
+      if (need('directorate_user') && by.directorate_user.directorate_id !== f.dirId) {
+        await become(c, by.directorate_user.id);
+        const r = await callRpc(c, 'select school_name from public.get_directorate_departures()');
+        if (r.ok) {
+          const leaked = r.rows.some(x => x.school_name === '__مدرسة أجنبية للاختبار__');
+          sec.rows.push(leaked
+            ? Report.row('fail', 'get_directorate_departures · مدرسة أجنبية',
+                '⚠ تسريب: كشف المديرية يحوي مدرسة خارج نطاقها')
+            : Report.row('pass', 'get_directorate_departures · مدرسة أجنبية',
+                'محجوبة (المديرية ترى مدارسها وحدها)'));
+        }
+      }
+    });
+
+    // ── ١١) الفصل الحاليّ: قراءةٌ للكلّ، كتابةٌ للوزارة وحدها ────────────────
+    await inTx(c, async () => {
+      if (need('school_admin')) {
+        await become(c, by.school_admin.id);
+        const r = await callRpc(c, 'select public.current_term() as t');
+        sec.rows.push(r.ok && r.rows[0]?.t
+          ? Report.row('pass', 'current_term · مدير المدرسة يقرأ', `القيمة: ${r.rows[0].t}`)
+          : Report.row('fail', 'current_term · مدير المدرسة يقرأ',
+              r.ok ? 'قيمةٌ فارغة' : r.err.slice(0, 90)));
+        const w = await callRpc(c, `update public.app_settings set current_term = 's2' where id returning current_term`);
+        sec.rows.push(w.ok && w.rows.length === 0
+          ? Report.row('pass', 'app_settings · مدير المدرسة لا يكتب', 'صفوف مكتوبة: 0')
+          : Report.row('fail', 'app_settings · مدير المدرسة لا يكتب',
+              w.ok ? `⚠ كتب ${w.rows.length} صفّاً` : w.err.slice(0, 90)));
+      }
+      if (need('ministry_user')) {
+        await become(c, by.ministry_user.id);
+        const w = await callRpc(c, `update public.app_settings set current_term = 's2' where id returning current_term`);
+        sec.rows.push(w.ok && w.rows.length === 1
+          ? Report.row('pass', 'app_settings · الوزارة تكتب', 'تغيّرت القيمة إلى s2')
+          : Report.row('fail', 'app_settings · الوزارة تكتب',
+              w.ok ? '⚠ لم يُكتب صفّ' : w.err.slice(0, 90)));
+      }
+    });
+
     return sec;
   } finally {
     await c.end();

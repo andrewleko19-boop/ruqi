@@ -933,6 +933,36 @@
         </div>
       </div>
     </div>
+
+      <!-- ═════ كشف مغادري المدارس ═════════════════════════════════════════
+           لكلّ مدرسة عددُ مغادريها هذا العام بحسب الحالة. يُشير إلى ظواهرَ لا
+           تظهر في الملخّصات العادية: مدرسةٌ يرتفع عندها الترقين، أو تنقّلاتٌ
+           خارجية كثيرة. -->
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <span class="eyebrow">حركة الطلاب</span>
+            <h2>مغادرو المدارس</h2>
+          </div>
+          <span class="panel-hint">مرتَّبة بالمجموع تنازلياً</span>
+        </div>
+        <div class="struct-body">
+          <div id="dep-loading" class="table-loading hidden">
+            <div class="spinner"></div><span>جارٍ التحميل…</span>
+          </div>
+          <div id="dep-table-wrap" class="table-wrapper hidden">
+            <table class="data-table">
+              <thead>
+                <tr><th>#</th><th>المدرسة</th><th>منقول</th><th>خارج العام</th>
+                    <th>متخرّج</th><th>مرقّن قيد</th><th>المجموع</th></tr>
+              </thead>
+              <tbody id="dep-tbody"></tbody>
+            </table>
+          </div>
+          <div id="dep-empty" class="table-empty hidden">لا مغادرون في مدارس المديرية.</div>
+          <div id="dep-error" class="table-empty hidden">تعذّر تحميل الكشف.</div>
+        </div>
+      </section>
     </div><!-- /dir-tab-schools -->
 
     <!-- ═════ دليل الكادر — السجل المهني الكامل ═════ -->
@@ -1098,6 +1128,7 @@
           </div>
           <p id="dir-rs-msg" class="dir-review-msg" hidden></p>
           <div class="modal-actions">
+            <button class="btn btn-sm" id="dir-rs-print" title="حفظ نسخة أو طباعتها">حفظ / طباعة</button>
             <button class="btn btn-sm" id="dir-rs-approve" style="background:var(--green-dim);color:var(--green);border:1px solid var(--green)">موافقة ✓</button>
             <button class="btn btn-sm" id="dir-rs-issue"   style="background:var(--green-dim);color:var(--green);border:1px solid var(--green)" hidden>إصدار نهائي ✓</button>
             <button class="btn btn-sm" id="dir-rs-reject"  style="background:var(--red-dim);color:var(--red);border:1px solid var(--red)">رفض ✗</button>

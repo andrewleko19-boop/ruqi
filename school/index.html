@@ -1185,7 +1185,7 @@
 
         <!-- حدّا نصاب التدريس — الوطنيّ من لوحة المشرف، ولهذه المدرسة أن تخالفه -->
         <hr class="soft-sep" />
-        <p class="form-section-label">حدّ نصاب التدريس (عدد الساعات)</p>
+        <p class="form-section-label">حدّ نصاب التدريس (عدد الحصص الأسبوعية)</p>
         <p class="form-hint" id="sch-quota-national">—</p>
         <div class="twin-fields">
           <div class="field-group">
@@ -1199,7 +1199,7 @@
                    inputmode="numeric" placeholder="اتبع الوطنيّ" />
           </div>
         </div>
-        <p class="form-hint">اتركهما فارغين لاتّباع الحدّ الوطنيّ. يُستخدمان للتحقّق من «عدد الساعات» في سجلّ الكادر.</p>
+        <p class="form-hint">اتركهما فارغين لاتّباع الحدّ الوطنيّ. يُستخدمان للتحقّق من «عدد الحصص» في سجلّ الكادر.</p>
         <div id="sch-quota-msg" class="msg" hidden></div>
         <button type="button" class="btn btn-primary btn-sm" id="btn-save-quota">حفظ حدّ النصاب</button>
       </div>
@@ -1425,6 +1425,39 @@
           <svg class="icon icon-sm"><use href="#ic-plus"/></svg>
           إضافة طالب جديد
         </button>
+      </div>
+    </section>
+
+    <!-- ── الطلاب المغادرون: كشفٌ عابرٌ للصفوف ────────────────────────────
+         كانوا يظهرون شرائح داخل قائمة كلّ صفّ (transferred / graduated /
+         out_of_year / struck_off) — والمدير الذي يريد قائمة من غادروا هذا
+         العام يفتح كلّ صفّ على حدة. -->
+    <section class="section-card">
+      <div class="section-card-header">
+        <div class="section-card-icon"><svg class="icon icon-sm"><use href="#ic-users"/></svg></div>
+        <div style="flex:1">
+          <div class="section-card-title">الطلاب المغادرون <span id="dep-count" class="stu-count-badge" hidden></span></div>
+          <div class="section-card-desc">من نُقل أو رُقّن قيده أو تخرّج أو خرج من العام</div>
+        </div>
+        <button class="hdr-btn" id="btn-refresh-departed" aria-label="تحديث">
+          <svg class="icon icon-sm"><use href="#ic-refresh"/></svg>
+        </button>
+      </div>
+      <div class="card-body">
+        <div class="field-group">
+          <label for="dep-status-sel">الحالة</label>
+          <select id="dep-status-sel" class="field-input">
+            <option value="">— كل الحالات —</option>
+            <option value="transferred">منقول</option>
+            <option value="out_of_year">خارج العام الدراسي</option>
+            <option value="graduated">متخرّج</option>
+            <option value="struck_off">مرقّن القيد</option>
+          </select>
+        </div>
+        <div id="dep-loading" class="loading-row" hidden><span class="spinner"></span></div>
+        <div id="dep-error" class="msg msg-error" hidden>تعذّر تحميل القائمة.</div>
+        <ul id="dep-list" class="reg-list"></ul>
+        <p id="dep-empty" class="empty-hint" hidden>لا مغادرون في هذه الحالة.</p>
       </div>
     </section>
   </main><!-- /page (students) -->
@@ -2181,8 +2214,8 @@
           <div id="sr-teach-extra" hidden>
             <div class="twin-fields">
               <div class="field-group">
-                <label for="sr-teaching-hours">عدد الساعات</label>
-                <input id="sr-teaching-hours" class="field-input" type="number" min="0" max="40" inputmode="numeric" />
+                <label for="sr-teaching-hours">عدد الحصص الأسبوعية</label>
+                <input id="sr-teaching-hours" class="field-input" type="number" min="0" max="60" inputmode="numeric" />
               </div>
               <div class="field-group">
                 <label for="sr-assigned-grade">الصف</label>
