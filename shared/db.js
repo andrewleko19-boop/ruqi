@@ -2766,32 +2766,101 @@ async function getSubjectComponents(subjectId) {
   return data ?? [];
 }
 
-// Replace a subject's component set with the given list (full overwrite).
-// components: [{ name, maxMark }]. Existing rows are deleted then re-inserted —
-// simplest correct approach for an admin editing a short list.
+// ⚠ هذه الدالة كانت تمسح مكوّنات المادة كلَّها ثم تُعيد إدراجها بمعرّفاتٍ جديدة.
+// و student_grades.component_id مرتبطٌ بـ ON DELETE CASCADE (baseline.sql:5770).
+// فمديرُ مدرسةٍ يفتح «تعديل مادة» ليصحّح حرفاً في الاسم ويضغط حفظ كان يمحو كلَّ
+// علامات تلك المادة — لكلّ الطلاب، في الفصلين، بلا سؤالٍ ولا رسالة ولا رجعة.
+//
+// البديل: مطابقةٌ بالهوية لا مسحٌ شامل. المكوّن الذي بقي يُحدَّث في مكانه فيبقى
+// معرّفه ومعه العلامات؛ الجديد يُدرَج؛ والمحذوف وحده يُحذف. تغييرُ اسم المكوّن
+// نفسه صار تحديثاً لا استبدالاً — وهو الصواب: «مذاكرة» التي أُعيدت تسميتها
+// «المذاكرة» هي المكوّن نفسه، ودرجاتُ الطلاب فيها لم تتغيّر.
+//
+// components: [{ id?, name, maxMark }] — id للصفوف القائمة. عند غيابه نُطابق
+// بالاسم المطابق تماماً (لمناديَ لا يحمل معرّفات)، وإلّا فهو صفٌّ جديد.
+// تُرجع مجموعة المكوّنات بعد الحفظ.
 async function setSubjectComponents(subjectId, components) {
-  const { error: delErr } = await db
-    .from('subject_components')
-    .delete()
-    .eq('subject_id', subjectId);
-  if (delErr) throw delErr;
+  const existing = await getSubjectComponents(subjectId);
+  const byId     = new Map(existing.map(r => [r.id, r]));
+  const unusedByName = new Map();
+  for (const r of existing) {
+    const k = (r.name || '').trim();
+    if (!unusedByName.has(k)) unusedByName.set(k, []);
+    unusedByName.get(k).push(r);
+  }
 
-  const rows = (components ?? [])
-    .filter(c => c.name && c.name.trim())
+  const wanted = (components ?? [])
+    .filter(c => c && c.name && String(c.name).trim())
     .map((c, i) => ({
-      subject_id: subjectId,
-      name:       c.name.trim(),
+      id:         c.id && byId.has(c.id) ? c.id : null,
+      name:       String(c.name).trim(),
       max_mark:   Number(c.maxMark) || 0,
       sort_order: i,
     }));
-  if (rows.length === 0) return [];
 
-  const { data, error } = await db
-    .from('subject_components')
-    .insert(rows)
-    .select('id, subject_id, name, max_mark, sort_order');
+  // كلُّ معرّفٍ صريح يحجز صفَّه أوّلاً، ثمّ يلتقط الباقي أقرانَه بالاسم — حتى لا
+  // يخطف صفٌّ بلا معرّف صفَّاً سُمّي إليه معرّفٌ صريح.
+  for (const w of wanted) if (w.id) {
+    const k = (byId.get(w.id).name || '').trim();
+    const pool = unusedByName.get(k);
+    if (pool) {
+      const at = pool.findIndex(r => r.id === w.id);
+      if (at >= 0) pool.splice(at, 1);
+    }
+  }
+  for (const w of wanted) if (!w.id) {
+    const pool = unusedByName.get(w.name);
+    if (pool?.length) w.id = pool.shift().id;
+  }
+
+  const keep    = new Set(wanted.map(w => w.id).filter(Boolean));
+  const removed = existing.filter(r => !keep.has(r.id)).map(r => r.id);
+
+  // تحديثُ ما تغيّر فعلاً فقط: صفٌّ لم يمسّه المستخدم لا داعيَ لكتابته.
+  for (const w of wanted) {
+    if (!w.id) continue;
+    const cur = byId.get(w.id);
+    if (cur
+      && (cur.name || '').trim() === w.name
+      && Number(cur.max_mark) === w.max_mark
+      && (cur.sort_order ?? null) === w.sort_order) continue;
+    const { error } = await db
+      .from('subject_components')
+      .update({ name: w.name, max_mark: w.max_mark, sort_order: w.sort_order })
+      .eq('id', w.id);
+    if (error) throw error;
+  }
+
+  const fresh = wanted.filter(w => !w.id).map(w => ({
+    subject_id: subjectId, name: w.name, max_mark: w.max_mark, sort_order: w.sort_order,
+  }));
+  if (fresh.length) {
+    const { error } = await db.from('subject_components').insert(fresh);
+    if (error) throw error;
+  }
+
+  // الحذف أخيراً: لو انقطع الاتصال في المنتصف تبقى المكوّنات القديمة ومعها
+  // العلامات، والأسوأ الذي يقع تكرارٌ يراه المدير ويصلحه — لا فقدٌ لا رجعة فيه.
+  if (removed.length) {
+    const { error } = await db.from('subject_components').delete().in('id', removed);
+    if (error) throw error;
+  }
+
+  return getSubjectComponents(subjectId);
+}
+
+// كم علامةً مسجَّلة معلَّقة بهذه المكوّنات؟ تُستدعى قبل حذف مكوّنٍ لنُنذر المدير
+// بما سيضيع بالضبط بدل إنذارٍ عامّ لا يقرأه أحد.
+async function countGradesForComponents(componentIds) {
+  const ids = [...new Set((componentIds ?? []).filter(Boolean))];
+  if (!ids.length) return 0;
+  const { count, error } = await db
+    .from('student_grades')
+    .select('id', { count: 'exact', head: true })
+    .in('component_id', ids)
+    .is('deleted_at', null);
   if (error) throw error;
-  return data ?? [];
+  return count ?? 0;
 }
 
 // ─── Global subject catalog (managed by the supervisor/ministry in admin) ─────
@@ -4505,6 +4574,7 @@ window.RUQI_DB = {
   deleteSubject,
   getSubjectComponents,
   setSubjectComponents,
+  countGradesForComponents,
   getSubjectCatalog,
   createCatalogSubject,
   updateCatalogSubject,

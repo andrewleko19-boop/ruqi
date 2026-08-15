@@ -2556,6 +2556,7 @@ const subjSpinner    = el('subj-spinner');
 let _mngSubjectsInit  = false;
 let _subjGrade        = 1;
 let _editingSubjectId = null;
+let _editingComps = [];   // [{ id, name }] كما كانت في القاعدة لحظة الفتح
 
 // Map a Supabase error to a clear Arabic message. 42501 / "permission denied
 // for table" means the grades tables haven't been granted to the app role yet.
@@ -2745,9 +2746,12 @@ subjGradeSelect.addEventListener('change', loadSubjects);
 btnRefreshSubjects.addEventListener('click', loadSubjects);
 
 // ── Subject editor modal ──
-function addCompRow(name = '', max = '') {
+// id: معرّف المكوّن القائم في القاعدة. حمْلُه في الصفّ هو ما يجعل الحفظ تحديثاً
+// في مكانه لا استبدالاً — ومعه تبقى درجات الطلاب المعلّقة بهذا المكوّن.
+function addCompRow(name = '', max = '', id = '') {
   const li = document.createElement('li');
   li.className = 'comp-row';
+  if (id) li.dataset.compId = id;
   li.innerHTML = `
     <input class="field-input comp-name" type="text" placeholder="اسم المكوّن (مذاكرة…)" maxlength="40" />
     <input class="field-input comp-max"  type="number" min="0" step="1" placeholder="العظمى" />
@@ -2773,6 +2777,7 @@ function updateCompSum() {
 
 async function openSubjectModal(sub) {
   _editingSubjectId = sub?.id ?? null;
+  _editingComps = [];   // لقطةُ المكوّنات كما فُتحت — نقارن بها عند الحفظ
   subjModalTitle.textContent = sub ? 'تعديل مادة' : 'مادة جديدة';
   subjError.hidden = true;
   subjNameIn.value   = sub?.name ?? '';
@@ -2789,7 +2794,8 @@ async function openSubjectModal(sub) {
   if (sub) {
     try {
       const comps = await NDB.getSubjectComponents(sub.id);
-      if (comps.length) comps.forEach(c => addCompRow(c.name, c.max_mark));
+      _editingComps = comps.map(c => ({ id: c.id, name: (c.name || '').trim() }));
+      if (comps.length) comps.forEach(c => addCompRow(c.name, c.max_mark, c.id));
       else addCompRow();
     } catch {
       addCompRow();
@@ -2841,13 +2847,39 @@ btnSaveSubject.addEventListener('click', async () => {
   subjCompList.querySelectorAll('.comp-row').forEach(row => {
     const n = row.querySelector('.comp-name').value.trim();
     const m = Number(row.querySelector('.comp-max').value) || 0;
-    if (n) comps.push({ name: n, maxMark: m });
+    if (n) comps.push({ id: row.dataset.compId || null, name: n, maxMark: m });
   });
   if (comps.length === 0) { subjError.textContent = 'أضف مكوّناً واحداً على الأقل'; show(subjError); return; }
   const compSum = comps.reduce((a, c) => a + c.maxMark, 0);
   if (compSum !== maxTotal) {
     subjError.textContent = `مجموع المكوّنات (${compSum}) يجب أن يساوي العلامة العظمى (${maxTotal})`;
     show(subjError); return;
+  }
+
+  // حذفُ مكوّنٍ يمحو درجاته (ON DELETE CASCADE). الحفظ نفسه لم يعد يمسّ ما بقي،
+  // لكنّ ما حذفه المدير من القائمة يُحذف فعلاً — فنقول له كم علامةً سيكلّفه ذلك
+  // بالضبط قبل أن يقع، لا بعد. ولا نعدّ صفّاً أُعيد بناؤه بالاسم نفسه: الحفظ
+  // يُطابقه بالاسم فيبقى المكوّن ومعه درجاته.
+  const keptIds  = new Set(comps.map(c => c.id).filter(Boolean));
+  const newNames = comps.filter(c => !c.id).map(c => c.name);
+  const dropped  = [];
+  for (const c of _editingComps) {
+    if (keptIds.has(c.id)) continue;
+    const at = newNames.indexOf(c.name);
+    if (at >= 0) { newNames.splice(at, 1); continue; }
+    dropped.push(c);
+  }
+  if (dropped.length) {
+    const names = dropped.map(c => `«${c.name}»`).join('، ');
+    let n = null;
+    try { n = await NDB.countGradesForComponents(dropped.map(c => c.id)); }
+    catch { n = null; }   // تعذّر العدّ: نُنذر بلا رقمٍ بدل أن نمرّ صامتين
+    const msg = n === null
+      ? `سيُحذف المكوّن ${names}. إن كانت له درجات مسجّلة فستُحذف نهائياً. متابعة؟`
+      : n > 0
+        ? `حذف المكوّن ${names} سيمحو ${n} علامة مسجّلة نهائياً ولا يمكن استرجاعها. متابعة؟`
+        : null;   // لا درجات معلّقة — لا شيء يُفقد فلا داعي لإزعاج المدير
+    if (msg && !await askConfirm(msg, 'حذف ومتابعة')) return;
   }
 
   btnSaveSubject.disabled = true;
