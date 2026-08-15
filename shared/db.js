@@ -4150,7 +4150,10 @@ async function parentGetMyStudents() {
 
   const { data, error } = await db
     .from('parent_links')
-    .select('student:student_id(id, full_name, gender, class_id, school_id, school:school_id(id, name), class:class_id(id, name, grade, section))')
+    /* status وstatus_reason لم تكونا تُقرآن، فكان الطالب يُرقَّن قيدُه أو
+       يُنقَل وتظهر بوّابة أهله كما كانت بالضبط — لا تنبيه ولا أثر. وهي أخطر
+       إجراءٍ في النظام: إخراجُ طفلٍ من السجلّ يجب ألّا يمرّ بلا علم أهله. */
+    .select('student:student_id(id, full_name, gender, class_id, school_id, status, status_reason, school:school_id(id, name), class:class_id(id, name, grade, section))')
     .order('linked_at');
   if (error) throw error;
   return (data ?? []).map(r => r.student).filter(Boolean);

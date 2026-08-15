@@ -865,3 +865,18 @@ input, textarea, select { font-family: inherit; }
 }
 .conn-pill svg { width: 14px; height: 14px; flex-shrink: 0; }
 .conn-pill[data-state="offline"] { background: rgba(0,0,0,.28); opacity: .9; }
+
+/* حالة قيد الطالب — تظهر فقط حين تكون غير «نشط».
+   ترقين القيد أو النقل كان يمرّ بلا أيّ أثرٍ في بوّابة الأهل. */
+.stu-status-banner {
+  margin: 10px 0 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: #FEF3C7;
+  border: 1px solid #FCD34D;
+  color: #92400E;
+  font-size: .82rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.stu-status-banner[hidden] { display: none; }

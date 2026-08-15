@@ -683,6 +683,31 @@ async function loadStudentSummary() {
   if (stu.class?.section)   bits.push('شعبة ' + stu.class.section);
   if (stu.school?.name)     bits.push(stu.school.name);
   stuMeta.textContent = bits.join(' · ');
+
+  /* حالةُ القيد. كان الطالب يُرقَّن قيدُه أو يُنقَل فتظهر البوّابة كما كانت
+     بالضبط — لا تنبيه ولا أثر — وهي أخطر إجراءٍ في النظام. الحالة النشطة لا
+     تُعلَن (شريطٌ دائم يُتجاهَل)، وما سواها يُعلَن بسببه إن كُتب. */
+  const STATUS_AR = {
+    transferred:  'نُقل إلى مدرسة أخرى',
+    out_of_year:  'خارج العام الدراسي',
+    graduated:    'متخرّج',
+    struck_off:   'مُرقَّن القيد',
+  };
+  const label = STATUS_AR[stu.status];
+  let banner = document.getElementById('stu-status-banner');
+  if (label) {
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'stu-status-banner';
+      banner.className = 'stu-status-banner';
+      stuCard.querySelector('.stu-card-head')?.after(banner);
+    }
+    banner.textContent = label + (stu.status_reason ? ' — ' + stu.status_reason : '');
+    banner.hidden = false;
+  } else if (banner) {
+    banner.hidden = true;
+  }
+
   stuCard.hidden = false;
 
   const year = getAcademicYear ? getAcademicYear() : getCurrentAcademicYear();
