@@ -2139,3 +2139,17 @@ tr.row-clickable:hover { background: var(--bg-hover); }
   text-align: end; overflow-wrap: anywhere; }
 .sp-sub { font-size: .8rem; font-weight: 800; color: var(--text-secondary);
   margin: 1.1rem 0 .5rem; }
+
+/* ── سجلّ الإجازات ───────────────────────────────────────────────────────────
+   كلُّ رقمٍ في شارةٍ ومعه اسمه: زوجُ أرقامٍ عارٍ في فقرةٍ عربية تعكس ترتيبَه
+   خوارزميةُ ثنائية الاتجاه، فيُقرأ مقلوباً. */
+.dlv-totals { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.dlv-chip {
+  display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap;
+  padding: 4px 10px; border-radius: 999px;
+  background: var(--blue-dim); color: var(--blue);
+  font-size: .78rem; font-weight: 600;
+}
+.dlv-chip b { font-size: .95rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.dlv-chip-days { background: var(--green-dim); color: var(--green); }
+.dlv-chip-top  { background: var(--bg-hover); color: var(--text-secondary); }

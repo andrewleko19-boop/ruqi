@@ -2713,7 +2713,9 @@ async function getSchoolSubjects(schoolId, grade = null) {
   return data ?? [];
 }
 
-async function createSubject({ schoolId, grade, name, maxTotal = 100, passMark = 40, isCoreArabic = false, isCoreMath = false, allowFullMarks = false, sortOrder = null }) {
+// catalogId: أصلُ المادّة في الفهرس المركزيّ حين تُنشأ منه. المزامنة تتبع هذا
+// المعرّف لا الاسم، فإعادةُ تسمية المادّة في الفهرس لا تقطع نسخ المدارس عنه.
+async function createSubject({ schoolId, grade, name, maxTotal = 100, passMark = 40, isCoreArabic = false, isCoreMath = false, allowFullMarks = false, sortOrder = null, catalogId = null }) {
   const { data, error } = await db
     .from('subjects')
     .insert({
@@ -2726,6 +2728,7 @@ async function createSubject({ schoolId, grade, name, maxTotal = 100, passMark =
       is_core_math:     isCoreMath,
       allow_full_marks: allowFullMarks,
       sort_order:       sortOrder,
+      catalog_id:       catalogId,
       is_active:        true,
     })
     .select('id')
@@ -2914,10 +2917,16 @@ async function deleteCatalogSubject(id) {
 // per-grade `subjects` rows (matched by trimmed name). The catalog is only
 // copied at creation time (applyCatalogSubjectsToGrades), so editing it later
 // otherwise never reaches subjects that already exist. Returns rows updated.
+// تُرجع { synced, unlinked }. الثاني عددُ نسخ المدارس التي لا أصل لها في
+// الفهرس المركزيّ — أُنشئت محلّياً أو باسمٍ لا يُطابق أحداً، فلا تصلها مزامنة.
+// كان العائد رقماً واحداً؛ نقبل الشكلين فلا تنكسر واجهةٌ على قاعدةٍ لم تُهاجَر.
 async function syncFullMarksFromCatalog() {
   const { data, error } = await db.rpc('sync_full_marks_from_catalog');
   if (error) throw error;
-  return Number(data) || 0;
+  if (data && typeof data === 'object') {
+    return { synced: Number(data.synced) || 0, unlinked: Number(data.unlinked) || 0 };
+  }
+  return { synced: Number(data) || 0, unlinked: 0 };
 }
 
 // Components of a catalog subject (defined by the supervisor). School subjects
@@ -3025,6 +3034,7 @@ async function applyCatalogSubjectsToGrades(schoolId, grades, catalogIds) {
         schoolId, grade, name: c.name, maxTotal, passMark,
         isCoreArabic: c.is_core_arabic, isCoreMath: c.is_core_math,
         allowFullMarks: c.allow_full_marks,
+        catalogId: c.id,          // النسب يُسجَّل عند النسخ لا يُستنتج بالاسم لاحقاً
       });
       if (comps.length) {
         await setSubjectComponents(subjectId, comps.map(x => ({ name: x.name, maxMark: x.max_mark })));
@@ -4664,6 +4674,8 @@ window.RUQI_DB = {
   updateStaffRecord,
   softDeleteStaffRecord,
   getStaffLeaves,
+  getLeavesRegister,
+  getLeavesSummary,
   upsertStaffLeave,
   deleteStaffLeave,
   getSchoolStudentStats,
@@ -4822,6 +4834,27 @@ async function getStaffLeaves(schoolId, month, year) {
     .order('created_at');
   if (error) throw error;
   return data || [];
+}
+
+/* سجلّ الإجازات: سطرٌ لكلّ إجازة باسم صاحبها، بنطاقٍ يُشتقّ من الدور.
+   الإجازة كانت تُدخَل في نافذةٍ تخصّ موظّفاً واحداً ولا تُقرأ إلا منها — فلا
+   موضعَ في التطبيق كلِّه يقول «كم إجازةً في مدرستي هذا الشهر». */
+async function getLeavesRegister(month, year, schoolId = null) {
+  const { data, error } = await db.rpc('get_leaves_register', {
+    p_month: month, p_year: year, p_school_id: schoolId || null,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
+// مجاميع: للمدرسة نفسها، وللمديرية بمدارسها، وللوزارة بمحافظاتها. الوزارة تقرأ
+// هذه وحدها — لا سطورَ بأسماء الكادر على مستوى القطر.
+async function getLeavesSummary(month, year) {
+  const { data, error } = await db.rpc('get_leaves_summary', {
+    p_month: month, p_year: year,
+  });
+  if (error) throw error;
+  return data ?? [];
 }
 
 // onConflict يعتمد على الفهرس الفريد staff_leaves_unique_period (§20.5).

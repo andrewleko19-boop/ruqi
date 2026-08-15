@@ -784,6 +784,68 @@ function initStaffDir() {
     const tr = e.target.closest('tr[data-sid]');
     if (tr) openStaffCard(tr.dataset.sid);
   });
+  initLeavesGov();
+}
+
+/* ── إجازات الكادر بالمحافظات ────────────────────────────────────────────────
+   الإجازة تُدخَل في المدرسة ولم تكن تصل الوزارة ألبتّة: لا سياسةَ RLS تسمح لها
+   بقراءة staff_leaves أصلاً، ولا واجهةَ تعرضها. فبيانٌ تملؤه كلُّ مدرسة كلَّ
+   شهر لا يُبنى عليه قرارٌ وطنيّ.
+
+   وبالمجاميع لا بالأسماء: الوزارة تُشرف على القطر ولا حاجةَ لها بسطرٍ باسم
+   موظّفٍ في مدرسة — و get_leaves_register ترفض نداءها لهذا السبب. */
+let _mlvInit = false;
+
+function initLeavesGov() {
+  if (_mlvInit) return;
+  _mlvInit = true;
+  const now = new Date();
+  const m = document.getElementById('mlv-month');
+  const y = document.getElementById('mlv-year');
+  if (m && !m.value) m.value = String(now.getMonth() + 1);
+  if (y && !y.value)  y.value = String(now.getFullYear());
+  CustomSelect.enhance('mlv-month');
+  ['mlv-month', 'mlv-year'].forEach(id =>
+    document.getElementById(id)?.addEventListener('change', () => void loadLeavesGov()));
+  void loadLeavesGov();
+}
+
+async function loadLeavesGov() {
+  const loading = document.getElementById('mlv-loading');
+  const wrap    = document.getElementById('mlv-table-wrap');
+  const tbody   = document.getElementById('mlv-tbody');
+  const empty   = document.getElementById('mlv-empty');
+  const errEl   = document.getElementById('mlv-error');
+  if (!tbody) return;
+
+  const month = parseInt(document.getElementById('mlv-month')?.value || '1', 10);
+  const year  = parseInt(document.getElementById('mlv-year')?.value  || '2026', 10);
+
+  loading?.classList.remove('hidden');
+  wrap?.classList.add('hidden'); empty?.classList.add('hidden'); errEl?.classList.add('hidden');
+
+  try {
+    const rows = await window.RUQI_DB.getLeavesSummary(month, year);
+    if (!rows.length) { empty?.classList.remove('hidden'); return; }
+    tbody.innerHTML = rows.map((r, i) => {
+      const types = Object.entries(r.by_type || {})
+        .map(([t, d]) => `${esc(t)} ${d}`).join(' · ');
+      return `<tr>
+        <td>${i + 1}</td>
+        <td>${esc(r.scope_label)}</td>
+        <td>${r.staff_count}</td>
+        <td>${r.leave_count}</td>
+        <td>${r.total_days}</td>
+        <td>${types || '—'}</td>
+      </tr>`;
+    }).join('');
+    wrap?.classList.remove('hidden');
+  } catch (err) {
+    console.error('[min] loadLeavesGov', err);
+    errEl?.classList.remove('hidden');
+  } finally {
+    loading?.classList.add('hidden');
+  }
 }
 
 async function loadStaffDir() {

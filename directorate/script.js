@@ -29,6 +29,8 @@ const {
   getSchoolClassesForDirectorate,
   directorateBulkImportStudents,
   directorateBulkImportStaff,
+  getLeavesRegister,
+  getLeavesSummary,
   localDateISO,
   errMessage,
 } = window.RUQI_DB;
@@ -1550,6 +1552,109 @@ function initStaffDirectory() {
   });
 
   loadStaffDirectory();
+  initLeavesRegister();
+}
+
+/* ── سجلّ الإجازات ───────────────────────────────────────────────────────────
+   المدرسة تُدخل الإجازات شهراً بعد شهر، ولم تكن تصل المديرية: RLS تسمح
+   لمستخدم المديرية بالقراءة نظريّاً، ولا واجهةَ تقرأ. فبيانٌ يُملأ بيدٍ كلَّ
+   شهر لا يُبنى عليه قرار — وهو أوّلُ ما يُسأل عنه عند نقص الكادر. */
+let _dlvInit = false;
+
+function initLeavesRegister() {
+  if (_dlvInit) return;
+  _dlvInit = true;
+
+  const now = new Date();
+  const m = document.getElementById('dlv-month');
+  const y = document.getElementById('dlv-year');
+  if (m && !m.value) m.value = String(now.getMonth() + 1);
+  if (y && !y.value)  y.value = String(now.getFullYear());
+
+  CustomSelect.enhance('dlv-month');
+  CustomSelect.enhance('dlv-school');
+  void fillLeavesSchoolFilter();
+
+  const reload = () => void loadLeavesRegisterView();
+  ['dlv-month', 'dlv-year', 'dlv-school'].forEach(id =>
+    document.getElementById(id)?.addEventListener('change', reload));
+
+  void loadLeavesRegisterView();
+}
+
+async function fillLeavesSchoolFilter() {
+  const sel = document.getElementById('dlv-school');
+  if (!sel) return;
+  let list = Array.isArray(_dirAllSchools) ? _dirAllSchools : [];
+  if (!list.length && currentUser?.directorateId) {
+    const { data } = await _sb.from('schools')
+      .select('id, name').eq('directorate_id', currentUser.directorateId)
+      .is('archived_at', null).order('name');
+    list = data ?? [];
+  }
+  const keep = sel.value;
+  sel.innerHTML = '<option value="">كل المدارس</option>' + list
+    .map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+  sel.value = keep;
+  CustomSelect.refresh(sel);
+}
+
+async function loadLeavesRegisterView() {
+  const loading = document.getElementById('dlv-loading');
+  const wrap    = document.getElementById('dlv-table-wrap');
+  const tbody   = document.getElementById('dlv-tbody');
+  const empty   = document.getElementById('dlv-empty');
+  const errBox  = document.getElementById('dlv-error');
+  const totals  = document.getElementById('dlv-totals');
+  if (!tbody) return;
+
+  const month = parseInt(document.getElementById('dlv-month')?.value || '1', 10);
+  const year  = parseInt(document.getElementById('dlv-year')?.value  || '2026', 10);
+  const school = document.getElementById('dlv-school')?.value || null;
+
+  loading?.classList.remove('hidden');
+  wrap?.classList.add('hidden'); empty?.classList.add('hidden');
+  errBox?.classList.add('hidden'); totals?.classList.add('hidden');
+
+  try {
+    const [rows, summary] = await Promise.all([
+      getLeavesRegister(month, year, school),
+      getLeavesSummary(month, year).catch(() => []),
+    ]);
+
+    // المجاميع تشمل كلّ المديرية دائماً، والجدول يتبع المرشِّح — فيبقى للموظّف
+    // مرجعٌ يقيس عليه المدرسةَ التي يفحصها بدل رقمٍ معلَّقٍ بلا سياق.
+    if (totals && summary.length) {
+      const days   = summary.reduce((a, s) => a + (Number(s.total_days)   || 0), 0);
+      const leaves = summary.reduce((a, s) => a + (Number(s.leave_count)  || 0), 0);
+      const staff  = summary.reduce((a, s) => a + (Number(s.staff_count)  || 0), 0);
+      const top = [...summary].sort((a, b) => b.total_days - a.total_days).slice(0, 3);
+      totals.innerHTML =
+        `<span class="dlv-chip">مدارس <b>${summary.length}</b></span>` +
+        `<span class="dlv-chip">موظّفون <b>${staff}</b></span>` +
+        `<span class="dlv-chip">إجازات <b>${leaves}</b></span>` +
+        `<span class="dlv-chip dlv-chip-days">أيام <b>${days}</b></span>` +
+        top.map(s => `<span class="dlv-chip dlv-chip-top">${esc(s.scope_label)} <b>${s.total_days}</b></span>`).join('');
+      totals.classList.remove('hidden');
+    }
+
+    if (!rows.length) { empty?.classList.remove('hidden'); return; }
+    tbody.innerHTML = rows.map((r, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${esc(r.full_name)}</td>
+        <td>${esc(STAFF_TYPE_AR[r.staff_type] ?? r.staff_type ?? '—')}</td>
+        <td>${esc(r.school_name)}</td>
+        <td>${esc(r.leave_type)}</td>
+        <td>${r.leave_days}</td>
+      </tr>`).join('');
+    wrap?.classList.remove('hidden');
+  } catch (err) {
+    console.error('[dir] loadLeavesRegister', err);
+    errBox?.classList.remove('hidden');
+  } finally {
+    loading?.classList.add('hidden');
+  }
 }
 
 /* مرشِّح المدارس. يُفضَّل ما حمّله تبويب المدارس، وإلا جُلبت الأسماء وحدها —

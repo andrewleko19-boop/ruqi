@@ -985,6 +985,50 @@
           </div>
         </div>
       </section>
+
+      <!-- ── سجلّ الإجازات ────────────────────────────────────────────────
+           كانت المدرسة تُدخلها شهراً بعد شهر ولا تصل المديرية: RLS تسمح
+           بالقراءة ولا واجهةَ تقرأ. -->
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <span class="eyebrow">الموارد البشرية</span>
+            <h2>إجازات الكادر</h2>
+          </div>
+          <span class="panel-hint">ما تُسجّله المدارس شهرياً</span>
+        </div>
+        <div class="struct-body">
+          <div class="sdir-filters">
+            <select id="dlv-month" aria-label="الشهر">
+              <option value="1">كانون الثاني</option><option value="2">شباط</option>
+              <option value="3">آذار</option><option value="4">نيسان</option>
+              <option value="5">أيار</option><option value="6">حزيران</option>
+              <option value="7">تموز</option><option value="8">آب</option>
+              <option value="9">أيلول</option><option value="10">تشرين الأول</option>
+              <option value="11">تشرين الثاني</option><option value="12">كانون الأول</option>
+            </select>
+            <input id="dlv-year" class="input-sm" type="number" min="2020" max="2100"
+                   inputmode="numeric" aria-label="السنة" />
+            <select id="dlv-school" aria-label="المدرسة"><option value="">كل المدارس</option></select>
+          </div>
+
+          <div id="dlv-loading" class="table-loading hidden">
+            <div class="spinner"></div><span>جارٍ التحميل…</span>
+          </div>
+          <div id="dlv-totals" class="dlv-totals hidden"></div>
+          <div id="dlv-table-wrap" class="table-wrapper hidden">
+            <table class="data-table">
+              <thead>
+                <tr><th>#</th><th>الاسم</th><th>الفئة</th><th>المدرسة</th>
+                    <th>نوع الإجازة</th><th>الأيام</th></tr>
+              </thead>
+              <tbody id="dlv-tbody"></tbody>
+            </table>
+          </div>
+          <div id="dlv-empty" class="table-empty hidden">لا إجازات مسجَّلة في هذا الشهر.</div>
+          <div id="dlv-error" class="table-empty hidden">تعذّر تحميل سجلّ الإجازات.</div>
+        </div>
+      </section>
     </div>
     </div><!-- /dir-tab-staff -->
 

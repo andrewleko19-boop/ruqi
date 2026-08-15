@@ -1968,6 +1968,11 @@ select.csel-native {
   background: #fff; border: 1px solid currentColor; color: inherit;
   font-size: 11.5px; font-weight: 800; flex-shrink: 0; cursor: pointer;
 }
+/* «مؤكَّد اليوم ✓»: أثرُ الضغطة يبقى بعد أن يزول التنبيه، فيقرأ المديرُ في
+   الشاشة نفسها أنّ ضغطته وصلت — لا يعيدها ولا يشكّ فيها. */
+.stmt-banner-btn.is-done {
+  background: #166534; color: #fff; border-color: #166534;
+}
 
 .stmt-badge {
   display: inline-flex; align-items: center; gap: 5px; margin-inline-start: auto;
@@ -2603,7 +2608,19 @@ select.csel-native {
 }
 .quota-alert.is-danger .quota-alert-list li { color:#7F1D1D; }
 .qa-name { flex:1; min-width:0; overflow-wrap:anywhere; }
-.qa-num  { flex-shrink:0; font-variant-numeric:tabular-nums; font-weight:700; }
+.qa-num  { flex-shrink:0; font-variant-numeric:tabular-nums; font-weight:700;
+           display:flex; flex-wrap:wrap; gap:4px 6px; justify-content:flex-end; }
+/* كلُّ رقمٍ في عنصره ومعه اسمه: لا يجاور رقمٌ رقماً فتعكسهما ثنائيةُ الاتجاه،
+   ولا يبقى للمدير أن يخمّن أيُّهما الحمل وأيّهما النصاب. */
+.qa-part {
+  display:inline-flex; align-items:baseline; gap:3px; white-space:nowrap;
+  font-weight:600; font-size:.76rem; opacity:.85;
+}
+.qa-part b { font-weight:800; font-size:.85rem; opacity:1; }
+.qa-part.qa-over {
+  padding:1px 6px; border-radius:var(--r-pill);
+  background:rgba(127,29,29,.1); opacity:1;
+}
 .qa-num b { font-weight:800; }
 .qa-num.is-muted { font-weight:600; opacity:.85; }
 
@@ -2616,3 +2633,24 @@ select.csel-native {
   font:inherit; font-size:.9rem; font-variant-numeric:tabular-nums;
 }
 .dmy-row input:focus { outline:none; border-color:var(--clr-primary,#2563EB); }
+
+/* ── سجلّ الإجازات ───────────────────────────────────────────────────────────
+   كلُّ رقمٍ في شارةٍ ومعه اسمه: لا يجاور رقمٌ رقماً فتعكس ثنائيةُ الاتجاه
+   ترتيبَهما — وهي العلّة التي جعلت «١٥ / ١٢» تُقرأ «١٢ / ١٥» في تنبيه النصاب. */
+.lv-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.lv-totals  { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.lv-chip {
+  display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap;
+  padding: 4px 10px; border-radius: var(--r-pill);
+  background: var(--clr-info-bg); color: #1e40af;
+  font-size: .76rem; font-weight: 600;
+}
+.lv-chip b { font-size: .9rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.lv-chip-days { background: var(--clr-success-bg); color: #166534; }
+.lv-chip-type { background: #f1f5f9; color: var(--clr-text-2); }
+.lv-days {
+  flex-shrink: 0; white-space: nowrap; font-size: .78rem; font-weight: 600;
+  color: var(--clr-text-2);
+}
+.lv-days b { font-size: .92rem; font-weight: 800; color: var(--clr-text-1);
+             font-variant-numeric: tabular-nums; }

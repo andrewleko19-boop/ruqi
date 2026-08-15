@@ -5097,8 +5097,15 @@ function setSelectPreserving(sel, value) {
   CustomSelect.refresh(sel);
 }
 
-/* المجمّع التربوي: قائمةٌ يضبطها المشرف لكل مديرية (school_complex). كان نصّاً
-   حرّاً فتفرّقت صيغُ المجمّع الواحد وتفتّت التجميع في لوحتَي المديرية والوزارة. */
+/* المجمّع التربوي: القائمةُ نفسها التي يقرأ منها «المنطقة التعليمية» في البيان
+   (educational_zone)، وكلاهما يضبطه المشرف لكلّ مديرية.
+
+   كانت قائمةً ثانيةً منفصلة (school_complex)، وهذا خطأُ تصميمٍ لا خطأُ تنفيذ:
+   المجمّع التربوي والمنطقة التعليمية في التقسيم الإداريّ السوريّ الشيءُ نفسه —
+   مدينة اللاذقية، جبلة، الحفة، القرداحة. فقائمتان تعنيان أنّ المشرف يملأ
+   واحدةً وينسى الأخرى (وهو ما وقع فعلاً: المناطق خمسٌ والمجمّعات واحد)، ثمّ
+   يكتب المديرُ اسم مجمّعه على وجهٍ والبيانُ على وجهٍ آخر، فيتفتّت التجميع في
+   لوحتَي المديرية والوزارة — وهو بعينه ما بُنيت القائمة لمنعه. */
 async function fillComplexSelect() {
   const sel = el('sch-complex'); if (!sel) return;
   const cur = S.school?.complex_name ?? '';
@@ -5107,7 +5114,7 @@ async function fillComplexSelect() {
   sel.innerHTML = '<option value="">— اختر —</option>';
   setSelectPreserving(sel, cur);
   let vals = [];
-  try { vals = await getLookup('school_complex'); }
+  try { vals = await getLookup('educational_zone'); }
   catch { /* أوفلاين أو تعذّر الجلب: يبقى المحفوظ وحده خياراً */ }
   if (vals.length) {
     sel.innerHTML = '<option value="">— اختر —</option>' +
@@ -5743,7 +5750,12 @@ function fillSel(sel, values, blank = '— اختر —') {
 
 async function initRegistryTab() {
   _registryLoaded = true;
-  await Promise.all([loadRegistryRecords(), loadAssignments()]);
+  // الشهر الجاري افتراضاً: المدير يفتح التبويب ليرى شهره لا ليضبط مرشِّحاً.
+  const now = new Date();
+  const lvM = el('lv-month'), lvY = el('lv-year');
+  if (lvM && !lvM.value) { lvM.value = String(now.getMonth() + 1); CustomSelect.refresh(lvM); }
+  if (lvY && !lvY.value)   lvY.value = String(now.getFullYear());
+  await Promise.all([loadRegistryRecords(), loadAssignments(), loadLeavesRegister()]);
 }
 
 async function loadRegistryRecords() {
@@ -5848,6 +5860,10 @@ async function openStaffRecModal(rec) {
   if (!rec) modalStaffRec.querySelector('.sheet-body').scrollTop = 0;
   document.body.style.overflow = 'hidden';
 
+  /* 'admin_role' («الأعمال الإدارية») لا 'school_admin_role' («الصفة الإدارية
+     — التكليف الإداري»): الأولى عملُ الموظّف الإداريّ في سجلّه، والثانية صفةُ
+     تكليفٍ يُسنَد. قائمتان يضبطهما المشرف كلتاهما، ولكلٍّ موضعها — وضمُّهما
+     يخلط العمل بالتكليف. */
   const jobTitles = _regSegment === 'admin'
     ? await getLookup('admin_role').catch(() => [])
     : _regSegment === 'teaching'
@@ -6148,6 +6164,7 @@ btnSaveLeave?.addEventListener('click', async () => {
     if (leaveTypeSel) { leaveTypeSel.value = ''; CustomSelect.refresh(leaveTypeSel); }
     if (leaveDaysIn)    leaveDaysIn.value  = '';
     await loadLeavesForStaff();
+    void loadLeavesRegister();   // السجلّ العامّ يعكس ما سُجِّل فوراً لا بعد إعادة فتح التبويب
     toast('تم تسجيل الإجازة', 'success');
   } catch (err) {
     console.error('[Ruqi] saveLeave', err);
@@ -6163,6 +6180,7 @@ leavesList?.addEventListener('click', async e => {
   try {
     await NDB.deleteStaffLeave(id);
     await loadLeavesForStaff();
+    void loadLeavesRegister();
   } catch (err) {
     toast('تعذّر حذف الإجازة', 'error');
   }
@@ -6387,13 +6405,24 @@ function renderQuotaAlert() {
 
   // ثلاثةٌ افتراضاً: قائمةٌ طويلة فوق التكاليف تدفعها خارج الشاشة، والغرض
   // تنبيهٌ لا تقرير. الزرّ يفتحها كاملةً لمن أراد.
+  /* ⚠ «15 / 12» كانت تُعرض للمدير فيقرؤها «12 / 15».
+     الرقمان مقطعان لاتينيّان والشرطة محايدة، والفقرة عربية الاتجاه — فخوارزمية
+     ثنائية الاتجاه تعكس ترتيبهما بصريّاً. والنتيجة أنّ مديراً أسند ١٥ درساً
+     لمعلّمةٍ نصابُها ١٢ يقرأ «١٢ من ١٥»، أي أنّها **دون** النصاب — عكسُ الحقيقة
+     تماماً، وفوقه عنوانٌ أحمر يقول «تجاوزوا النصاب». فلا يفهم، ويظنّ أنّ ١٥
+     رقمٌ يفرضه النظام. وهذا بالضبط ما أبلغ عنه المستخدم.
+
+     فلا نُبقي زوجاً عارياً يتّكل على الاتجاه: كلُّ رقمٍ يسبقه اسمه، ويُلفّ كلٌّ
+     منها في عنصرٍ مستقلّ فلا يجاور رقمٌ رقماً وتنتفي المسألة من أصلها. */
   const shown = _quotaExpanded ? flagged : flagged.slice(0, 3);
   list.innerHTML = shown.map(r => `
     <li>
       <span class="qa-name">${escapeHtml(r.full_name)}</span>
       <span class="qa-num${r.quota == null ? ' is-muted' : ''}">${r.quota == null
         ? 'نصاب غير محدَّد'
-        : `${r.assigned} / ${r.quota} <b>+${r.excess}</b>`}</span>
+        : `<span class="qa-part">الحمل <b>${r.assigned}</b></span>`
+        + `<span class="qa-part">النصاب <b>${r.quota}</b></span>`
+        + `<span class="qa-part qa-over">تجاوز <b>${r.excess}</b></span>`}</span>
     </li>`).join('');
 
   const btn = el('btn-quota-detail');
@@ -6408,6 +6437,68 @@ el('btn-quota-detail')?.addEventListener('click', () => {
   _quotaExpanded = !_quotaExpanded;
   renderQuotaAlert();
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// § سجلّ الإجازات
+//
+//  الإجازة تُسجَّل في نافذةٍ تخصّ موظّفاً واحداً، ولم تكن تُقرأ إلا من النافذة
+//  نفسها. فمديرٌ يريد أن يعرف كم إجازةً في مدرسته هذا الشهر عليه أن يفتح نافذةً
+//  لكلّ اسمٍ في الكادر — فلا يفتح، ويبقى بيانٌ يُدخله بيده كلَّ شهر بلا قارئ.
+// ─────────────────────────────────────────────────────────────────────────────
+const LEAVE_STAFF_TYPE_AR = {
+  admin: 'إداري', teaching: 'تعليمي', professional: 'مهني',
+  worker: 'مستخدَم', guard: 'حارس',
+};
+
+async function loadLeavesRegister() {
+  const list = el('lv-list'); if (!list || !S.school?.id) return;
+  const month = parseInt(el('lv-month')?.value || String(new Date().getMonth() + 1), 10);
+  const year  = parseInt(el('lv-year')?.value  || String(new Date().getFullYear()), 10);
+
+  show(el('lv-loading')); hide(el('lv-error')); hide(el('lv-empty')); hide(el('lv-totals'));
+  list.innerHTML = '';
+  try {
+    const [rows, summary] = await Promise.all([
+      NDB.getLeavesRegister(month, year),
+      NDB.getLeavesSummary(month, year).catch(() => []),
+    ]);
+
+    const tot = el('lv-totals');
+    const s   = summary[0];
+    if (tot && s) {
+      const types = Object.entries(s.by_type || {});
+      // كلُّ رقمٍ ومعه اسمه في عنصرٍ مستقلّ — لا زوجَ أرقامٍ عارٍ تعكسه
+      // ثنائيةُ الاتجاه كما وقع في تنبيه النصاب.
+      tot.innerHTML =
+        `<span class="lv-chip">موظّفون <b>${s.staff_count}</b></span>` +
+        `<span class="lv-chip">إجازات <b>${s.leave_count}</b></span>` +
+        `<span class="lv-chip lv-chip-days">أيام <b>${s.total_days}</b></span>` +
+        types.map(([t, d]) =>
+          `<span class="lv-chip lv-chip-type">${escapeHtml(t)} <b>${d}</b></span>`).join('');
+      tot.hidden = false;
+    }
+
+    if (!rows.length) { show(el('lv-empty')); return; }
+    list.innerHTML = rows.map(r => `
+      <li class="reg-row">
+        <div class="reg-main">
+          <div class="reg-name">${escapeHtml(r.full_name)}</div>
+          <div class="reg-sub">${escapeHtml(LEAVE_STAFF_TYPE_AR[r.staff_type] || r.staff_type || '—')}
+            · ${escapeHtml(r.leave_type)}</div>
+        </div>
+        <span class="lv-days"><b>${r.leave_days}</b> يوم</span>
+      </li>`).join('');
+  } catch (err) {
+    console.error('[Ruqi] loadLeavesRegister', err);
+    show(el('lv-error'));
+  } finally {
+    hide(el('lv-loading'));
+  }
+}
+
+el('btn-refresh-leaves')?.addEventListener('click', () => void loadLeavesRegister());
+el('lv-month')?.addEventListener('change', () => void loadLeavesRegister());
+el('lv-year') ?.addEventListener('change', () => void loadLeavesRegister());
 
 // Segment switching
 document.querySelectorAll('.asn-seg-btn').forEach(btn => {
@@ -6852,14 +6943,23 @@ const STMT_EVENTS = ['مباشرة','انفكاك','نقل','تقاعد','وفا
 // مستخرجة حرفياً من القالب: كتلة الإداري (رؤوس السطر ٩)، التدريسي (١٥)،
 // المهنيين والمستخدمين والحراس (٢٢). كل عمود حقلٌ يُملأ يدوياً ويُمحى يدوياً —
 // حتى المملوء آلياً من سجلّ الكوادر يبقى قابلاً للتعديل.
-// [مفتاح, عنوان, نوع, مطلوب؟] — 'date' يعني ثلاثة حقول يوم/شهر/سنة.
-const _CHG_ID   = ['national_id','الرقم الوطني','text'];
+/* [مفتاح, عنوان, نوع, مطلوب؟]
+   'date'          ثلاثة حقول يوم/شهر/سنة.
+   'nid'           الرقم الوطني: أحد عشر رقماً لا أكثر ولا أقلّ.
+   'lookup:<نوع>'  قائمةٌ منسدلة من القوائم المرجعية التي يضبطها المشرف.
+
+   ⚠ كانت هذه النافذة نصّاً حرّاً في كلّ حقولها، بينما نافذةُ سجلّ الكوادر
+   المجاورة تقرأ القوائم نفسها من لوحة المشرف. فيصير للمدرسة مصدران للحقيقة:
+   «إجازة» في السجلّ و«اجازه» في التعديل الطارئ — وكلاهما يُرحَّل إلى البيان
+   المرفوع للمديرية، فيتفتّت التجميع في اللوحات كما تفتّت في المجمّع التربوي.
+   والرقم الوطني كان يقبل عدداً بلا حدّ، وهو أحد عشر رقماً بالضبط. */
+const _CHG_ID    = ['national_id','الرقم الوطني','nid'];
 const _CHG_SELF  = ['self_number','الرقم الذاتي','text'];
 const _CHG_NAME  = ['full_name','الاسم الثلاثي','text', 1];
 const _CHG_MOM   = ['mother_name','الأم','text'];
 const _CHG_BIRTH = ['@birth','تاريخ الولادة','date'];
-const _CHG_CERT  = ['certificate','الشهادة /ج/م.م/أ.ه/ثا','text'];
-const _CHG_SPEC  = ['specialization','الاختصاص','text'];
+const _CHG_CERT  = ['certificate','الشهادة /ج/م.م/أ.ه/ثا','lookup:certificate'];
+const _CHG_SPEC  = ['specialization','الاختصاص','lookup:specialization'];
 const _CHG_SEN   = ['seniority_year','القدم الوظيفي (سنة التعيين)','num'];
 const _CHG_PHONE = ['phone','الهاتف — الجوال','text'];
 const _CHG_LAND  = ['landline','الهاتف — الأرضي','text'];
@@ -6870,8 +6970,8 @@ const _CHG_NOTES = ['notes','ملاحظات / عن أي بيانات مدخلة'
 const STMT_CHG_FIELDS = {
   admin: [
     _CHG_ID, _CHG_SELF, _CHG_NAME, _CHG_MOM, _CHG_BIRTH, _CHG_CERT, _CHG_SPEC, _CHG_SEN,
-    ['job_title','العمل المسند إليه','text'],
-    ['higher_degree','الشهادات العليا','text'],
+    ['job_title','العمل المسند إليه','lookup:admin_role'],
+    ['higher_degree','الشهادات العليا','lookup:higher_degree'],
     ['@start','تاريخ المباشرة بالعمل الإداري الحالي','date'],
     _CHG_PHONE, _CHG_LAND,
     ['residential_zone','المنطقة السكنية','text'],
@@ -6892,7 +6992,7 @@ const STMT_CHG_FIELDS = {
   ],
   support: [
     _CHG_ID, _CHG_SELF, _CHG_NAME, _CHG_MOM, _CHG_BIRTH, _CHG_CERT, _CHG_SPEC, _CHG_SEN,
-    ['job_title','العمل المسند إليه','text'],
+    ['job_title','العمل المسند إليه','lookup:support_job'],
     ['@start','تاريخ المباشرة في المدرسة','date'],
     _CHG_PHONE, _CHG_LAND,
     ['residential_zone','السكن','text'],
@@ -7299,11 +7399,31 @@ function renderStmtBuildingSec() {
   if (banner) {
     banner.hidden = !STMT.building;
     const txt = el('stmt-building-banner-txt');
+    const btn = el('btn-stmt-building-same');
     if (txt && STMT.building?.updated_at) {
       const d = new Date(STMT.building.updated_at);
       // تنسيق صريح: toLocaleDateString('ar-SY') يطبع أرقاماً هندية، والتبويب لاتيني بالكامل.
       const dmy = `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
-      txt.textContent = `محفوظ منذ ${dmy} — عدّل ما تغيّر فقط.`;
+
+      /* أثرُ الضغطة يبقى بعد أن يزول التنبيه.
+         كان الضغط على «لا تغيير» يُظهر toast يختفي بعد ثوانٍ، ويبقى الزرّ كما
+         هو حرفاً بحرف — فلا يجد المديرُ في الشاشة ما يقول إنّ ضغطته وصلت.
+         فيضغط ثانيةً وثالثة، أو يتركها ظانّاً أنّها لم تُحفظ.
+         والحالة تُشتقّ من updated_at لا من متغيّرٍ في الذاكرة: فتنجو من إعادة
+         الرسم ومن إغلاق التطبيق، وتقول حقيقةً محفوظةً لا ذكرى ضغطة. */
+      const today = new Date();
+      const sameDay = d.getFullYear() === today.getFullYear()
+                   && d.getMonth()    === today.getMonth()
+                   && d.getDate()     === today.getDate();
+      txt.textContent = sameDay
+        ? `تم تأكيد البناء اليوم (${dmy}) — لا تغيير ✓`
+        : `محفوظ منذ ${dmy} — عدّل ما تغيّر فقط.`;
+      if (btn) {
+        btn.textContent = sameDay ? 'مؤكَّد اليوم ✓' : 'لا تغيير';
+        btn.classList.toggle('is-done', sameDay);
+        // لا يُعطَّل: قد يُعدّل المديرُ رقماً بعد التأكيد ويحتاج تأكيداً جديداً.
+        btn.setAttribute('aria-pressed', sameDay ? 'true' : 'false');
+      }
     }
   }
   renderStmtBuildingTotal();
@@ -8104,8 +8224,13 @@ function _stmtWire() {
     stmtSaveBuilding().catch(() => {}); stmtQueueSave(); stmtRefreshMeta();
   });
   el('btn-stmt-building-same')?.addEventListener('click', async () => {
-    await stmtSaveBuilding().catch(() => {});
+    let ok = true;
+    await stmtSaveBuilding().catch(() => { ok = false; });
+    // فشلُ الحفظ كان يُبتلع ثمّ يُعلَن نجاحاً — أسوأ من خطأٍ ظاهر: يمضي المديرُ
+    // ظانّاً أنّ البناء مؤكَّد وهو لم يصل القاعدة.
+    if (!ok) { toast('تعذّر تأكيد البناء — تحقّق من الاتصال', 'error'); return; }
     toast('تم تأكيد بيانات البناء دون تغيير ✓', 'success');
+    renderStmtBuildingSec();     // يُثبّت «مؤكَّد اليوم ✓» في الشريط والزرّ
     stmtRefreshMeta();
   });
 
@@ -8172,7 +8297,7 @@ function _stmtWire() {
   el('btn-stmt-open-registry')?.addEventListener('click', () => switchTab('registry'));
 
   // القسم ٨
-  el('btn-stmt-add-change')?.addEventListener('click', () => openStmtChangeModal(null));
+  el('btn-stmt-add-change')?.addEventListener('click', () => void openStmtChangeModal(null));
   el('btn-stmt-no-change')?.addEventListener('click', stmtMarkNoChange);
   el('btn-close-stmt-change')?.addEventListener('click', closeStmtChangeModal);
   el('btn-save-stmt-change')?.addEventListener('click', saveStmtChange);
@@ -8187,6 +8312,11 @@ function _stmtWire() {
     renderStmtChangeFields(group, keep);
   });
 
+  // البحث يُرشّح القائمة وهو يُكتب، ولا يمسّ ما أُدخل في الحقول.
+  el('stmt-chg-staff-q')?.addEventListener('input', () => {
+    renderStmtChangeStaffPicker(STMT.chgGroup || 'admin', _stmtVal('stmt-chg-staff') || null);
+  });
+
   // اختيار شخص من السجلّ يملأ الخانات — ثم تبقى كلها قابلة للتحرير والمسح.
   el('stmt-chg-staff')?.addEventListener('change', () => {
     const id = _stmtVal('stmt-chg-staff');
@@ -8197,11 +8327,11 @@ function _stmtWire() {
   });
   view.addEventListener('click', (e) => {
     const ok = e.target.closest('[data-sug-ok]');
-    if (ok) { _stmtConfirmSuggestion(ok.dataset.sugOk, ok.dataset.sugType); return; }
+    if (ok) { void _stmtConfirmSuggestion(ok.dataset.sugOk, ok.dataset.sugType); return; }
     const skip = e.target.closest('[data-sug-skip]');
     if (skip) { _stmtSkipSuggestion(skip.dataset.sugSkip, skip.dataset.sugType); return; }
     const ed = e.target.closest('[data-chg-edit]');
-    if (ed) { openStmtChangeModal(STMT.changes.find(c => c.id === ed.dataset.chgEdit)); return; }
+    if (ed) { void openStmtChangeModal(STMT.changes.find(c => c.id === ed.dataset.chgEdit)); return; }
     const del = e.target.closest('[data-chg-del]');
     if (del) { _stmtDeleteChange(del.dataset.chgDel); return; }
   });
@@ -8273,6 +8403,21 @@ function _stmtOpenStaffRecord(id) {
 
 // ── التعديلات الطارئة: تأكيد، إضافة، حذف ────────────────────────────────────
 
+/* القوائم المرجعية التي تحتاجها نافذة التعديل، مجلوبةً مرّةً ومخبّأةً هنا.
+   البناءُ متزامنٌ عمداً: النافذة تُفتح فوراً بضغطة، وانتظارُ الشبكة قبل رسم
+   الحقول يعني نافذةً بيضاء لثوانٍ — أو أسوأ، حقولاً تُرسم مرّتين فيضيع ما
+   بدأ المديرُ كتابته. فنجلبها قبل الفتح ونرسم من المخبّأ. */
+let _stmtChgLookups = {};
+
+const STMT_CHG_LOOKUP_TYPES = ['certificate', 'specialization', 'higher_degree',
+                               'admin_role', 'support_job'];
+
+async function loadStmtChangeLookups() {
+  const pairs = await Promise.all(STMT_CHG_LOOKUP_TYPES.map(async t =>
+    [t, await getLookup(t).catch(() => [])]));
+  _stmtChgLookups = Object.fromEntries(pairs);
+}
+
 // يبني حقول الفئة المختارة ويملؤها من `data` — الحقول كلها قابلة للتحرير والمسح.
 function renderStmtChangeFields(group, data) {
   const host = el('stmt-chg-fields');
@@ -8283,6 +8428,32 @@ function renderStmtChangeFields(group, data) {
   host.innerHTML = spec.map(([key, label, type, req]) => {
     const id  = 'stmt-chg-f-' + key.replace('@', '');
     const lbl = escapeHtml(label) + (req ? ' <span class="req">*</span>' : '');
+
+    if (type.startsWith('lookup:')) {
+      const cur  = String(d[key] ?? '');
+      const vals = _stmtChgLookups[type.slice(7)] || [];
+      /* القيمةُ المحفوظة تُضاف خياراً إن غابت عن القائمة. بدونها يفتح المديرُ
+         سطراً قديماً فيجده فارغاً، ويحفظ فيمحو ما كان — والقائمة تتغيّر بيد
+         المشرف فهذا يقع كلّما حذف عنصراً. */
+      const opts = [...(cur && !vals.includes(cur) ? [cur] : []), ...vals];
+      return `<div class="field-group"><label for="${id}">${lbl}</label>
+        <select id="${id}" class="field-input">
+          <option value="">— اختر —</option>
+          ${opts.map(v => `<option value="${escapeHtml(v)}"${v === cur ? ' selected' : ''}>${escapeHtml(v)}</option>`).join('')}
+        </select>
+        ${vals.length ? '' : '<p class="form-hint">لا قائمة مضبوطة — راجع «القوائم المرجعية» في لوحة المشرف.</p>'}
+      </div>`;
+    }
+
+    if (type === 'nid') {
+      // أحد عشر رقماً: maxlength يقف عند الحدّ، و inputmode يفتح لوحة الأرقام،
+      // والتنقية عند الإدخال تمنع لصق نصٍّ فيه حروف أو فواصل.
+      return `<div class="field-group"><label for="${id}">${lbl}</label>
+        <input id="${id}" class="field-input stmt-nid" type="text" inputmode="numeric"
+               maxlength="11" pattern="[0-9]{11}" placeholder="١١ رقماً"
+               value="${escapeHtml(String(d[key] ?? ''))}"></div>`;
+    }
+
     if (type === 'date') {
       const [y, m, dd] = String(d[key] || '').split('-');
       return `<div class="field-group"><label>${lbl}</label><div class="dob-row">
@@ -8304,18 +8475,54 @@ function renderStmtChangeFields(group, data) {
     return `<div class="field-group"><label for="${id}">${lbl}</label>
       <input id="${id}" class="field-input" ${attrs} value="${escapeHtml(String(d[key] ?? ''))}"></div>`;
   }).join('');
+
+  // القوائم المبنيّة للتوّ تأخذ مظهر التطبيق: بدونها تفتح على الجوّال كنافذة
+  // نظامٍ بيضاء وسط لوحةٍ عربية داكنة — وهي العلّة نفسها التي أُصلحت في الوزارة.
+  host.querySelectorAll('select.field-input').forEach(s => CustomSelect.enhance(s));
+
+  // الرقم الوطني أرقامٌ فقط: اللصق من رسالةٍ أو جدول يجرّ فراغاتٍ وشرطات،
+  // فتُحفظ في البيان الرسميّ كما هي ويردّها الموظّف.
+  host.querySelectorAll('input.stmt-nid').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const clean = inp.value.replace(/\D/g, '').slice(0, 11);
+      if (clean !== inp.value) inp.value = clean;
+    });
+  });
 }
 
-// قائمة «تعبئة من سجلّ الكوادر» — كوادر الفئة المختارة وحدهم.
+/* قائمة «تعبئة من سجلّ الكوادر» — كوادر الفئة المختارة وحدهم.
+
+   ⚠ نصُّ الخيار الأوّل يَعِد بما لم يكن ممكناً: «شخص خارج السجلّ (أدخل يدوياً)».
+   فالمدير يفهم أنّه يستطيع كتابة الاسم هنا، ثمّ لا تقبل القائمة حرفاً — لأنّها
+   <select> لا حقل نصّ. والمقصود أنّ **الحقول أدناه** تُملأ يدوياً، لا هذه
+   الخانة. فصار النصّ يقول ذلك صراحةً، ومعه حقلُ بحثٍ يُرشّح الأسماء: مدرسةٌ
+   فيها سبعون كادراً لا يُعقل أن يُنقَّب فيها بالتمرير. */
 function renderStmtChangeStaffPicker(group, selectedId) {
   const sel = el('stmt-chg-staff');
   if (!sel) return;
+  const q = (el('stmt-chg-staff-q')?.value || '').trim();
+  const norm = (s) => String(s || '')
+    .replace(/[أإآٱ]/g, 'ا').replace(/[ىي]/g, 'ي').replace(/[ةه]/g, 'ه')
+    .replace(/\s+/g, ' ').trim();
+  const nq = norm(q);
+
   const inGroup = STMT.staff.filter(r => _stmtGroupOf(r) === group);
-  sel.innerHTML = '<option value="">— شخص خارج السجلّ (أدخل يدوياً) —</option>' +
-    inGroup.map(r =>
+  // المختارُ يبقى معروضاً ولو لم يُطابق البحث: وإلّا أفرغ البحثُ اختياراً قائماً.
+  const shown = nq
+    ? inGroup.filter(r => norm(r.full_name).includes(nq) || r.id === selectedId)
+    : inGroup;
+
+  sel.innerHTML = '<option value="">— أدخل البيانات يدوياً في الحقول أدناه —</option>' +
+    shown.map(r =>
       `<option value="${escapeHtml(r.id)}">${escapeHtml(r.full_name || '—')}</option>`).join('');
-  sel.value = selectedId && inGroup.some(r => r.id === selectedId) ? selectedId : '';
+  sel.value = selectedId && shown.some(r => r.id === selectedId) ? selectedId : '';
   CustomSelect.refresh(sel);
+
+  const hint = el('stmt-chg-staff-hint');
+  if (hint) {
+    hint.hidden = !nq;
+    hint.textContent = nq ? `${shown.length} من ${inGroup.length} مطابقاً` : '';
+  }
 }
 
 // يحوّل سجلّ كادر إلى شكل change_data — نسخة لحظة الحدث، لا مرجعاً حيّاً:
@@ -8334,13 +8541,17 @@ function _stmtChangeDataFromRecord(rec) {
   return d;
 }
 
-function openStmtChangeModal(chg) {
+async function openStmtChangeModal(chg) {
   STMT.chgEditId = chg?.id || null;
   const d = chg?.change_data || {};
   const group = chg?.staff_group || 'admin';
   el('stmt-chg-title').textContent = chg ? 'تعديل سطر' : 'إضافة تعديل يدوي';
   STMT.chgGroup = group;
   _stmtSet('stmt-chg-group', group);
+  const q = el('stmt-chg-staff-q'); if (q) q.value = '';
+  // القوائم المرجعية قبل بناء الحقول: getLookup مخبّأةٌ لخمس دقائق فالفتحة
+  // الثانية فورية، والأولى تنتظر جلباً واحداً بدل أن تُرسم الحقول مرّتين.
+  await loadStmtChangeLookups();
   renderStmtChangeStaffPicker(group, chg?.staff_id || null);
   renderStmtChangeFields(group, d);
   _stmtSet('stmt-chg-event', chg?.event_type || '');
@@ -8384,7 +8595,10 @@ function closeStmtChangeModal() {
 }
 
 // تأكيد اقتراح مكتشَف: نفتح النافذة نفسها مملوءة، فالمدير يختار **السبب**.
-function _stmtConfirmSuggestion(staffId, changeType) {
+// async منذ صارت openStmtChangeModal تنتظر القوائم المرجعية: التصحيحات أدناه
+// يجب أن تقع **بعد** أن تفرغ النافذة من البناء، وإلّا صفّرت chgPending بعدها
+// فيُحفظ السطر بلا ارتباطٍ بالاقتراح المكتشَف ويُعاد اكتشافه الشهر القادم أبداً.
+async function _stmtConfirmSuggestion(staffId, changeType) {
   const sug = _stmtDetectChanges().find(s => s.staff_id === staffId && s.change_type === changeType);
   if (!sug) return;
   STMT.chgPending = { staff_id: staffId, change_type: changeType, detected: true };
@@ -8394,7 +8608,7 @@ function _stmtConfirmSuggestion(staffId, changeType) {
   const rec = STMT.staff.find(r => r.id === staffId);
   const data = rec ? _stmtChangeDataFromRecord(rec)
                    : { full_name: sug.name || '', job_title: sug.job || '' };
-  openStmtChangeModal({
+  await openStmtChangeModal({
     staff_group: group, staff_id: staffId, change_data: data,
     // اقتراح افتراضي للسبب حسب نوع التغيير — والمدير يبقى صاحب القرار.
     event_type: changeType === 'added' ? 'مباشرة' : '',

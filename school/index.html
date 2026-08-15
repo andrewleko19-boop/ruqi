@@ -1999,6 +1999,44 @@
       </div>
     </section>
 
+    <!-- ── سجلّ الإجازات ─────────────────────────────────────────────────────
+         الإجازة كانت تُدخَل في نافذةٍ تخصّ موظّفاً واحداً ولا تُقرأ إلا منها،
+         فلا موضعَ يقول للمدير «كم إجازةً في مدرستي هذا الشهر». -->
+    <section class="card" data-module="staff-hr">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-clipboard"/></svg>
+        <span>سجلّ الإجازات</span>
+        <button class="hdr-btn" id="btn-refresh-leaves" aria-label="تحديث"
+                style="margin-inline-start:auto">
+          <svg class="icon icon-sm"><use href="#ic-refresh"/></svg>
+        </button>
+      </div>
+      <div class="card-body">
+        <div class="lv-filters">
+          <div class="field-group">
+            <label for="lv-month">الشهر</label>
+            <select id="lv-month" class="field-input">
+              <option value="1">كانون الثاني</option><option value="2">شباط</option>
+              <option value="3">آذار</option><option value="4">نيسان</option>
+              <option value="5">أيار</option><option value="6">حزيران</option>
+              <option value="7">تموز</option><option value="8">آب</option>
+              <option value="9">أيلول</option><option value="10">تشرين الأول</option>
+              <option value="11">تشرين الثاني</option><option value="12">كانون الأول</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="lv-year">السنة</label>
+            <input id="lv-year" class="field-input" type="number" min="2020" max="2100" inputmode="numeric">
+          </div>
+        </div>
+        <div id="lv-totals" class="lv-totals" hidden></div>
+        <div id="lv-loading" class="loading-row" hidden><span class="spinner"></span></div>
+        <div id="lv-error" class="msg msg-error" hidden>تعذّر تحميل سجلّ الإجازات.</div>
+        <ul id="lv-list" class="reg-list"></ul>
+        <p id="lv-empty" class="empty-hint" hidden>لا إجازات مسجَّلة في هذا الشهر.</p>
+      </div>
+    </section>
+
     <!-- ── Modal: نموذج التكليف (إضافة / تعديل) ──────────────────────────────── -->
     <div id="modal-staff-assignment" class="overlay" hidden aria-modal="true" role="dialog"
          aria-label="بيانات التكليف">
@@ -3621,10 +3659,13 @@
         </select>
       </div>
       <div class="field-group">
-        <label for="stmt-chg-staff">تعبئة من سجلّ الكوادر</label>
-        <select id="stmt-chg-staff" class="field-input">
-          <option value="">— شخص خارج السجلّ (أدخل يدوياً) —</option>
+        <label for="stmt-chg-staff-q">تعبئة من سجلّ الكوادر</label>
+        <input id="stmt-chg-staff-q" class="field-input" type="search" autocomplete="off"
+               placeholder="ابحث بالاسم…" aria-label="ابحث في سجلّ الكوادر">
+        <select id="stmt-chg-staff" class="field-input" aria-label="اختر من سجلّ الكوادر">
+          <option value="">— أدخل البيانات يدوياً في الحقول أدناه —</option>
         </select>
+        <p class="form-hint" id="stmt-chg-staff-hint" hidden></p>
       </div>
 
       <p class="form-section-label">بيانات الورقة الرسمية</p>

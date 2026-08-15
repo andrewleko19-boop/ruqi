@@ -278,6 +278,43 @@
         </div>
       </section>
 
+      <!-- ── إجازات الكادر — مجاميع المحافظات ────────────────────────────────
+           بالمحافظات لا بالأسماء: الوزارة تُشرف على القطر ولا تحتاج سطراً
+           باسم موظّفٍ في مدرسة — ودالّة السجلّ الاسميّ ترفض نداءها أصلاً. -->
+      <section class="section-card" data-module="staff-hr">
+        <div class="section-header">
+          <div><span class="eyebrow">الموارد البشرية</span><h2>إجازات الكادر بالمحافظات</h2></div>
+          <div class="sdir-filters" style="margin:0">
+            <select id="mlv-month" aria-label="الشهر">
+              <option value="1">كانون الثاني</option><option value="2">شباط</option>
+              <option value="3">آذار</option><option value="4">نيسان</option>
+              <option value="5">أيار</option><option value="6">حزيران</option>
+              <option value="7">تموز</option><option value="8">آب</option>
+              <option value="9">أيلول</option><option value="10">تشرين الأول</option>
+              <option value="11">تشرين الثاني</option><option value="12">كانون الأول</option>
+            </select>
+            <input id="mlv-year" class="input-sm" type="number" min="2020" max="2100"
+                   inputmode="numeric" aria-label="السنة" />
+          </div>
+        </div>
+        <div class="struct-body">
+          <div id="mlv-loading" class="table-loading hidden">
+            <div class="spinner"></div><span>جارٍ التحميل…</span>
+          </div>
+          <div id="mlv-table-wrap" class="table-wrapper hidden">
+            <table class="data-table">
+              <thead>
+                <tr><th>#</th><th>المحافظة</th><th>موظّفون</th>
+                    <th>إجازات</th><th>مجموع الأيام</th><th>الأنواع</th></tr>
+              </thead>
+              <tbody id="mlv-tbody"></tbody>
+            </table>
+          </div>
+          <div id="mlv-empty" class="table-empty hidden">لا إجازات مسجَّلة في هذا الشهر.</div>
+          <div id="mlv-error" class="table-empty hidden">تعذّر تحميل مجاميع الإجازات.</div>
+        </div>
+      </section>
+
       <!-- الخريطة الوطنية + ترتيب المحافظات -->
       <div class="min-grid-2">
         <section class="section-card">
