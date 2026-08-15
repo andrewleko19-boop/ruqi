@@ -257,7 +257,7 @@ export async function runRpcScopeTests(report) {
       //     الدالّة لا تُرجع شيئاً لأحد — فيبدو الأمانُ عطلاً متنكّراً.
       await c.query(
         `insert into public.result_sheets (school_id, class_id, academic_year, term, status, snapshot_data)
-         values ($1, $2, '2025-2026', 'final', 'issued', $3::jsonb)`,
+         values ($1, $2, '2025-2026', 'year', 'issued', $3::jsonb)`,
         [f.schoolId, cls.id, JSON.stringify({
           classLabel: 'الصف 5 / A',
           students: [{ studentId: st.id, name: '__طالب اختبار التحقّق__', result: 'ناجح', finalPercent: 88.5 }],
@@ -289,6 +289,68 @@ export async function runRpcScopeTests(report) {
           : Report.row('fail', 'verify_certificate · جلاءٌ غير صادر',
               `⚠ نتيجةٌ تُعلَن قبل اعتماد المديرية: ${JSON.stringify(draft.rows)}`));
       await c.query('reset role');
+    });
+
+    // ── ٩) ربطُ وليّ الأمر يُسحب حين يتغيّر الرقم ───────────────────────────
+    //  الوصول مشتقٌّ من رقمٍ يتغيّر، وكلُّ مسارات الربط كانت إدراجاً فقط — فمن
+    //  كان رقمه مسجَّلاً لحظةَ التسجيل يبقى له سجلُّ الطفل بعد تصحيح الرقم.
+    await inTx(c, async () => {
+      const f = await seedForeign(c);
+      const { rows: [cls] } = await c.query(
+        `insert into public.classes (school_id, name, grade, section, academic_year)
+         values ($1, 'اختبار', '5', 'A', '2025-2026') returning id`, [f.schoolId]);
+
+      // حسابُ وليّ أمرٍ حقيقيّ: الزناد يقرأ auth.users.email لاشتقاق الرقم.
+      let parentId;
+      try {
+        const { rows: [p] } = await c.query(
+          `insert into auth.users (id, email)
+           values (gen_random_uuid(), '+963911111111@parent.nsams.local') returning id`);
+        parentId = p.id;
+      } catch (e) {
+        sec.rows.push(Report.row('warn', 'سحب ربط وليّ الأمر',
+          `تعذّر زرع حساب وليّ أمر: ${(e.message || '').slice(0, 70)}`));
+        return;
+      }
+
+      const { rows: [st] } = await c.query(
+        `insert into public.students (school_id, class_id, full_name, parent_phone)
+         values ($1, $2, '__طالب اختبار الربط__', '0911111111') returning id`,
+        [f.schoolId, cls.id]);
+      await c.query(
+        `insert into public.parent_links (user_id, student_id) values ($1, $2)`,
+        [parentId, st.id]);
+
+      const linksNow = async () => (await c.query(
+        'select count(*)::int as n from public.parent_links where user_id = $1 and student_id = $2',
+        [parentId, st.id])).rows[0].n;
+
+      // (أ) تغييرُ الصيغة وحدها ليس تغييرَ شخص — سحبٌ هنا يعني أباً يفقد سجلّ
+      //     ابنه بلا سبب، وهو خطأٌ أقسى من العلّة نفسها.
+      await c.query(`update public.students set parent_phone = '+963911111111' where id = $1`, [st.id]);
+      sec.rows.push(await linksNow() === 1
+        ? Report.row('pass', 'ربط وليّ الأمر · تغيّر صيغة الرقم', 'الربط باقٍ — الرقم نفسه')
+        : Report.row('fail', 'ربط وليّ الأمر · تغيّر صيغة الرقم',
+            '⚠ سُحب الربط لمجرّد اختلاف الصيغة — الأهل يفقدون سجلّ أبنائهم'));
+
+      // (ب) رقمٌ آخر فعلاً: يُسحب فوراً عند مصدر التغيير.
+      await c.query(`update public.students set parent_phone = '0922222222' where id = $1`, [st.id]);
+      sec.rows.push(await linksNow() === 0
+        ? Report.row('pass', 'ربط وليّ الأمر · تغيّر الرقم فعلاً', 'سُحب الربط فور التغيير')
+        : Report.row('fail', 'ربط وليّ الأمر · تغيّر الرقم فعلاً',
+            '⚠ صاحبُ الرقم القديم ما زال يقرأ علامات الطفل ودوامَه وحالة قيده'));
+
+      // (ج) رقمُ التواصل يكفي: تغييرُ أحد الحقلين لا يسحب ما يُثبته الآخر.
+      await c.query(
+        `update public.students set parent_phone = '0911111111', contact_phone = '0911111111' where id = $1`,
+        [st.id]);
+      await c.query(`insert into public.parent_links (user_id, student_id) values ($1, $2)
+                     on conflict do nothing`, [parentId, st.id]);
+      await c.query(`update public.students set parent_phone = '0933333333' where id = $1`, [st.id]);
+      sec.rows.push(await linksNow() === 1
+        ? Report.row('pass', 'ربط وليّ الأمر · رقم التواصل ما زال مطابقاً', 'الربط باقٍ')
+        : Report.row('fail', 'ربط وليّ الأمر · رقم التواصل ما زال مطابقاً',
+            '⚠ سُحب الربط رغم مطابقة رقم التواصل'));
     });
 
     return sec;
