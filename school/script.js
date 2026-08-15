@@ -3108,6 +3108,7 @@ async function initSubjectsTab() {
     console.warn('[Requests] could not load classes', e);
   }
   loadRequests();
+  void loadSchoolReports();   // البلاغات تشارك التبويب نفسه
 }
 
 // When correct_student class changes → load students for that class
@@ -3251,6 +3252,63 @@ function buildRequestCard(r) {
 }
 
 el('btn-refresh-requests')?.addEventListener('click', loadRequests);
+
+// ── بلاغات المدرسة ومصيرها ──────────────────────────────────────────────────
+//  كانت المدرسة ترفع البلاغ فترى إيصالاً مرّةً واحدة ثمّ ينقطع الخبر: لا شاشةَ
+//  تعرض بلاغاتها ولا حالتَها. واستلامُ المديرية أو معالجتُها يصل إشعاراً عابراً
+//  في الجرس يسقط بعد ثلاثين إشعاراً ولا يُستعاد. فكان المدير يتّصل هاتفياً
+//  ليسأل «هل وصلكم بلاغي؟» — وهو ما بُني التطبيق ليُغني عنه.
+const SREPORT_TYPE_AR = {
+  security_threat:       'تهديد أمني',
+  infrastructure_damage: 'ضرر في البنية',
+  health_emergency:      'طارئ صحّي',
+  natural_disaster:      'كارثة طبيعية',
+  teacher_shortage:      'نقص في الكادر',
+  other:                 'أخرى',
+};
+const SREPORT_STATE = {
+  open:         { txt: 'مفتوح — بانتظار المديرية', cls: 'req-status--pending'  },
+  acknowledged: { txt: 'استلمته المديرية ✓',        cls: 'req-status--approved' },
+  resolved:     { txt: 'عولج ✓',                    cls: 'req-status--approved' },
+};
+
+async function loadSchoolReports() {
+  const listEl  = el('sreport-list');
+  const loadEl  = el('sreport-loading');
+  const emptyEl = el('sreport-empty');
+  const errEl   = el('sreport-error');
+  if (!listEl || !S.school?.id) return;
+
+  show(loadEl); listEl.innerHTML = ''; hide(emptyEl); hide(errEl);
+  try {
+    const rows = await NDB.getReportsForSchool(S.school.id);
+    hide(loadEl);
+    if (!rows.length) { show(emptyEl); return; }
+    listEl.innerHTML = rows.map(r => {
+      const st = SREPORT_STATE[r.status] ?? SREPORT_STATE.open;
+      const type = SREPORT_TYPE_AR[r.type] ?? r.type ?? 'بلاغ';
+      const date = r.created_at
+        ? new Date(r.created_at).toLocaleDateString('ar-SY',
+            { day: 'numeric', month: 'short', year: 'numeric' })
+        : '';
+      // رقم الإيصال هو ما يذكره المدير حين يُتابع، فيُعرض دائماً.
+      const receipt = r.receipt_number ? ` · إيصال ${escapeHtml(String(r.receipt_number))}` : '';
+      return `<li class="req-card">
+        <div class="req-card-hdr">
+          <span class="req-type-label">${escapeHtml(type)}</span>
+          <span class="req-status ${st.cls}">${escapeHtml(st.txt)}</span>
+        </div>
+        <div class="req-date">${escapeHtml(date)}${receipt}</div>
+        ${r.description ? `<div class="req-reason">${escapeHtml(r.description)}</div>` : ''}
+      </li>`;
+    }).join('');
+  } catch (err) {
+    console.error('[Ruqi] loadSchoolReports', err);
+    hide(loadEl); show(errEl);
+  }
+}
+
+el('btn-refresh-sreports')?.addEventListener('click', loadSchoolReports);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Report cards (الشهادات)
@@ -3943,9 +4001,16 @@ async function loadGraceProposals(card) {
     graceProposalsList.querySelectorAll('[data-gp]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const li = btn.closest('[data-pid]');
+        /* الرفض يُطلب سببُه: صار المعلّم يُعلَم بالقرار (20260815000100)،
+           ورفضٌ بلا سببٍ يصله لا يُعلّمه شيئاً ولا يُصحّح اقتراحه القادم. */
+        let reason = null;
+        if (btn.dataset.gp === 'rejected') {
+          reason = (window.prompt('سبب رفض الاقتراح (يصل المعلّم):') ?? '').trim();
+          if (!reason) return;          // ألغى، أو تركه فارغاً
+        }
         btn.disabled = true;
         try {
-          await NDB.decideGraceProposal(li.dataset.pid, btn.dataset.gp);
+          await NDB.decideGraceProposal(li.dataset.pid, btn.dataset.gp, reason);
           toast(btn.dataset.gp === 'approved' ? 'اعتُمد الاقتراح' : 'رُفض الاقتراح', 'success');
           closeGraceModal();
           loadReports(_repData.class.id);

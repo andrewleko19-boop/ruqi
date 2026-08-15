@@ -1074,3 +1074,23 @@ select.csel-native {
   color: #dc2626;
 }
 .btn-danger:hover:not(:disabled) { background: #fee2e2; }
+
+/* ── اقتراحات الرأفة المُرسَلة ──────────────────────────────────────────────
+   المعلّم يرى ما أرسل ومصيره، بدل أن ينقطع الخبر بعد التوست. */
+#grace-out { margin-top: 18px; }
+.gr-row {
+  display: flex; align-items: center; gap: 10px;
+  background: #fff; border: 1.5px solid #E2E8F0; border-radius: 12px;
+  padding: 12px 14px; margin-bottom: 8px;
+}
+.gr-main { flex: 1; min-width: 0; }
+.gr-name { font-weight: 700; font-size: .88rem; color: #0F172A; overflow-wrap: anywhere; }
+.gr-meta { font-size: .75rem; color: #64748B; margin-top: 2px; }
+.gr-note { font-size: .75rem; color: #B45309; margin-top: 4px; overflow-wrap: anywhere; }
+.gr-badge {
+  flex-shrink: 0; padding: 4px 10px; border-radius: 999px;
+  font-size: .7rem; font-weight: 800; white-space: nowrap;
+}
+.gr-wait { background: #FEF3C7; color: #92400E; }
+.gr-ok   { background: #D1FAE5; color: #065F46; }
+.gr-no   { background: #FEE2E2; color: #991B1B; }

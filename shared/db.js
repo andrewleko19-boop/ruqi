@@ -959,6 +959,23 @@ async function getReportsForDirectorate(directorateId) {
   return (data || []).map((r) => ({ ...r, schoolName: r.school?.name ?? "Unknown" }));
 }
 
+/* بلاغات المدرسة نفسها ومصيرها.
+   كانت المدرسة ترفع البلاغ فترى إيصالاً مرّةً واحدة ثمّ ينقطع الخبر: لا شاشةَ
+   تعرض بلاغاتها ولا حالتَها. فإذا استلمت المديريةُ البلاغ أو عالجته، وصل ذلك
+   إشعاراً عابراً في الجرس يسقط بعد ثلاثين إشعاراً ولا يُستعاد. RLS يسمح
+   لمدير المدرسة بقراءة بلاغات مدرسته، والبيانات كانت متاحةً بلا قارئ. */
+async function getReportsForSchool(schoolId, limit = 50) {
+  const { data, error } = await db
+    .from('emergency_reports')
+    .select('id, type, description, severity, status, receipt_number, media_urls, ' +
+            'created_at, resolved_at')
+    .eq('school_id', schoolId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
 async function updateReportStatus(reportId, newStatus) {
   const allowed = ["open", "acknowledged", "resolved"];
   if (!allowed.includes(newStatus)) throw new Error(`Invalid status: ${newStatus}`);
@@ -3164,6 +3181,25 @@ async function setStudentGrace({ studentId, classId, items }) {
 // ─── Grace proposals (اقتراحات المعلّمين) ─────────────────────────────────────
 // A subject teacher proposes grace for their own subject; the school admin
 // approves (which folds it into student_grace via grant_grace) or rejects.
+/* اقتراحات الرأفة التي قدّمها المعلّم الحالي — عبر صفوفه كلّها لا صفٍّ واحد.
+   كان المعلّم يُرسل اقتراحه ثمّ لا يعرف مصيره أبداً: لا قائمةَ عنده ولا إشعار.
+   RLS يسمح للمُقترِح بقراءة صفوفه (grace_prop_teacher_rw)، فالبيانات كانت
+   متاحةً ولا شيء يقرؤها. */
+async function getMyGraceProposals(limit = 40) {
+  const { data: { user } } = await db.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await db
+    .from('grace_proposals')
+    .select('id, student_id, class_id, subject_id, marks, reason, status, ' +
+            'decided_at, decide_note, created_at, academic_year')
+    .eq('proposed_by', user.id)
+    .eq('academic_year', getAcademicYear())
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data ?? [];
+}
+
 async function getGraceProposals(classId, status = null) {
   const academicYear = getAcademicYear();
   let q = db
@@ -3209,10 +3245,12 @@ async function proposeGrace({ studentId, classId, schoolId, subjectId, marks, re
 
 // decision: 'approved' | 'rejected'. Approving applies the grace (caps re-checked
 // server-side) and notifies the parent.
-async function decideGraceProposal(proposalId, decision) {
+// reason يصل المعلّمَ صاحبَ الاقتراح في إشعار الرفض — رفضٌ بلا سببٍ لا يُعلّمه.
+async function decideGraceProposal(proposalId, decision, reason = null) {
   const { error } = await db.rpc('decide_grace_proposal', {
     p_id:       proposalId,
     p_decision: decision,
+    p_reason:   reason || null,
   });
   if (error) throw error;
   return true;
@@ -4384,6 +4422,7 @@ window.RUQI_DB = {
 
   // Directorate
   getReportsForDirectorate,
+  getReportsForSchool,
   updateReportStatus,
   getTodaySummary,
   getSchoolsAttendanceStatus,
@@ -4485,6 +4524,7 @@ window.RUQI_DB = {
   getClassGrace,
   setStudentGrace,
   getGraceProposals,
+  getMyGraceProposals,
   getGraceProposalById,
   proposeGrace,
   decideGraceProposal,

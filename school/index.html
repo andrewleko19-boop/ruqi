@@ -1836,6 +1836,24 @@
       <p id="req-list-empty" class="mng-empty" hidden>لا توجد طلبات مرسلة بعد.</p>
     </section>
 
+    <!-- بلاغات المدرسة ومصيرها. كانت تُرفع فيُرى الإيصال مرّةً ثمّ ينقطع
+         الخبر: لا شاشةَ تعرضها ولا حالتَها، وإشعارُ المديرية يسقط من الجرس. -->
+    <section class="mng-card">
+      <div class="mng-card-hd">
+        <svg class="icon"><use href="#ic-alert"/></svg>
+        <span>البلاغات المرسلة</span>
+        <button class="hdr-btn" id="btn-refresh-sreports" aria-label="تحديث" style="margin-inline-start:auto">
+          <svg class="icon icon-sm" id="sreports-refresh-icon"><use href="#ic-refresh"/></svg>
+        </button>
+      </div>
+      <div id="sreport-loading" hidden style="padding:8px 0">
+        <div class="dskel"></div><div class="dskel" style="width:60%"></div>
+      </div>
+      <ul id="sreport-list" class="req-list"></ul>
+      <p id="sreport-empty" class="mng-empty" hidden>لا توجد بلاغات مرسلة بعد.</p>
+      <p id="sreport-error" class="mng-empty" hidden>تعذّر تحميل البلاغات.</p>
+    </section>
+
   </main><!-- /page (requests) -->
 
   <!-- ═══ Report cards ══════════════════════════════════════════════════════ -->

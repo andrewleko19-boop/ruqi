@@ -31,6 +31,7 @@ const {
   saveStudentConduct,
   proposeGrace,
   getGraceProposals,
+  getMyGraceProposals,
   teacherCheckIn,
   teacherCheckOut,
   getMyStaffAttendanceToday,
@@ -580,6 +581,51 @@ async function loadClasses() {
   // homeroom teacher and subject teachers (أستاذ مادة).
   setupModeTabs();
   applyHomeMode();
+  void loadMyGraceProposals();   // مساعدٌ لا يحجب الصفوف
+}
+
+// ── اقتراحات الرأفة المُرسَلة ومصيرها ─────────────────────────────────────────
+//  كان المعلّم يُرسل الاقتراح فيقرأ «أُرسل الاقتراح لمدير المدرسة» ثمّ ينقطع
+//  الخبر: لا قائمةَ تعرض ما أرسل، ولا إشعارَ بالقرار. وقد يُرفض اقتراحُه فلا
+//  يعلم، فيعيد إرساله أو يظنّ النظامَ معطّلاً. القراءة كانت متاحةً في RLS
+//  ودالّتُها مستورَدةً في هذا الملفّ بلا استعمال — نصفُ الحلقة كان مبنياً.
+const GRACE_STATE = {
+  pending:  { txt: 'بانتظار قرار المدير', cls: 'gr-wait' },
+  approved: { txt: 'قُبل ✓',              cls: 'gr-ok'   },
+  rejected: { txt: 'رُفض ✗',              cls: 'gr-no'   },
+};
+
+async function loadMyGraceProposals() {
+  const box  = document.getElementById('grace-out');
+  const list = document.getElementById('grace-out-list');
+  if (!box || !list) return;
+
+  let rows = [];
+  try { rows = await getMyGraceProposals(); }
+  catch (e) { console.warn('[teacher] loadMyGraceProposals', e); hide(box); return; }
+  if (!rows.length) { hide(box); return; }
+
+  // أسماء الطلاب من الصفوف المحمَّلة أصلاً — لا استعلامَ لبيانٍ بين أيدينا.
+  const nameById = {};
+  for (const c of (S.classes || [])) {
+    for (const s of (c.students || [])) nameById[s.id] = s.full_name;
+  }
+
+  list.innerHTML = rows.map(r => {
+    const st = GRACE_STATE[r.status] ?? GRACE_STATE.pending;
+    const who = nameById[r.student_id] || 'طالب';
+    return `<div class="gr-row">
+      <div class="gr-main">
+        <div class="gr-name">${escapeHtml(who)}</div>
+        <div class="gr-meta">${escapeHtml(String(r.marks))} درجة${
+          r.reason ? ' · ' + escapeHtml(r.reason) : ''}</div>
+        ${r.status === 'rejected' && r.decide_note
+          ? `<div class="gr-note">السبب: ${escapeHtml(r.decide_note)}</div>` : ''}
+      </div>
+      <span class="gr-badge ${st.cls}">${st.txt}</span>
+    </div>`;
+  }).join('');
+  show(box);
 }
 
 // إعادة المحاولة يدوياً: أسرع من إغلاق التطبيق وفتحه بعد عودة الشبكة.
