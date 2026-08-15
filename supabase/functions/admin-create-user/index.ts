@@ -105,7 +105,11 @@ Deno.serve(async (req) => {
       const newId = created.user.id;
 
       const { error: uErr } = await admin.from("users").upsert({
-        id: newId, role: "school_admin", school_id: schoolId, full_name: fullName,
+        // permission_role يُضبط هنا صراحةً: تركُه فارغاً يجعل حلَّ الدور يعتمد
+        // على السقوط الاحتياطيّ في القاعدة، ولوحةُ المشرف تُظهر خياراً محدَّداً
+        // لصفٍّ قيمتُه NULL — فتعرض ما ليس مضبوطاً.
+        id: newId, role: "school_admin", permission_role: "school_admin",
+        school_id: schoolId, full_name: fullName,
       }, { onConflict: "id" });
       if (uErr) {
         await admin.auth.admin.deleteUser(newId);
@@ -146,7 +150,10 @@ Deno.serve(async (req) => {
       const newId = created.user.id;
 
       const { error: uErr } = await admin.from("users").upsert({
-        id: newId, role: "directorate_user", directorate_id: directorateId, full_name: fullName,
+        // 'directorate_staff' لا 'directorate_user': الأوّل مفتاح مصفوفة
+        // الصلاحيات، والثاني الدور التقنيّ. خلطُهما يُرجع صفر وحدات مفعّلة.
+        id: newId, role: "directorate_user", permission_role: "directorate_staff",
+        directorate_id: directorateId, full_name: fullName,
       }, { onConflict: "id" });
       if (uErr) {
         await admin.auth.admin.deleteUser(newId);

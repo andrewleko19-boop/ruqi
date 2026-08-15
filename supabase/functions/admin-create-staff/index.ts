@@ -101,7 +101,10 @@ Deno.serve(async (req) => {
 
       // upsert handles the case where a DB trigger already created the row.
       const { error: uErr } = await admin.from("users").upsert({
-        id: newId, role: "teacher", school_id: schoolId, full_name: fullName,
+        // permission_role صراحةً كبقية مسارات الإنشاء — لا اعتماداً على السقوط
+        // الاحتياطيّ في القاعدة، فيبقى ما تعرضه لوحة المشرف مطابقاً للمخزَّن.
+        id: newId, role: "teacher", permission_role: "teacher",
+        school_id: schoolId, full_name: fullName,
       }, { onConflict: "id" });
       if (uErr) {
         await admin.auth.admin.deleteUser(newId);

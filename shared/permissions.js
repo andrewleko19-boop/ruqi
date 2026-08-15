@@ -77,6 +77,17 @@ async function init(userId) {
   }
 
   const keys = data.map(r => (typeof r === 'string' ? r : r.get_my_module_permissions ?? r.module_key));
+
+  /* مصفوفةٌ فارغة ليست «لا وحدة مفعّلة» بل «لا أعرف».
+     الوحداتُ الأساسية (attendance-core، student-records، sysadmin-console)
+     مزروعةٌ لكلّ مفتاح دورٍ في المصفوفة، وزنادُ enforce_core_module_enabled
+     يمنع تعطيلها. فدورٌ معرَّفٌ فعلاً لا يمكن أن يُرجع صفراً؛ والصفرُ يعني
+     مفتاحَ دورٍ لا صفوف له أصلاً — أي خللَ إعداد.
+     وثمنُ الخطأ غير متكافئ: new Set([]) قيمةٌ صادقة، فيُخفي applyToDom كلَّ
+     عنصرٍ يحمل data-module — لوحةٌ بيضاء لا تبويب فيها ولا زرّ، ولا يستطيع
+     صاحبُها حتى الإبلاغ عمّا يراه. وهذه طبقةُ عرضٍ لا أمان: RLS هو الحارس. */
+  if (keys.length === 0) { _enabled = null; return null; }
+
   _cacheModules(uid, keys);
   _enabled = new Set(keys);
   _lastCheck = Date.now();      // يُضبط عند كلّ جلبٍ ناجح لا عند تحميل الملفّ

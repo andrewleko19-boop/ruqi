@@ -2217,35 +2217,89 @@ document.addEventListener('click', (e) => {
   document.getElementById('dir-stmt-modal').classList.remove('hidden');
 });
 
+/* ملخّصُ البيان الشهريّ الذي يقرؤه موظّف المديرية قبل أن يعتمد أو يرفض.
+ *
+ * ⚠ كان مكتوباً كلُّه على الصيغة الأولى للقطة، والمدرسةُ تُرسل الثانية منذ مدّة:
+ *   · snap.students صار كائناً { rows, totals, byCycle } لا مصفوفة، و
+ *     Array.isArray تردّ false فتبقى المجاميع أصفاراً.
+ *   · snap.staffCounts لا وجود له في الثانية أصلاً (صار teachingStaff و
+ *     adminStaff و workforce) فكلُّ أعداد العاملين أصفار.
+ *   · snap.leaveLines لا وجود له كذلك (صار leaves كائناتٍ لا نصوصاً) فالكتلة
+ *     لم تُعرَض لأيّ مدرسة قطّ.
+ *
+ * والنتيجة أخطر من كتلةٍ غائبة: شاشةُ الاعتماد كانت تعرض «عدد الشعب ٠، إجمالي
+ * الطلاب ٠، إجمالي العاملين ٠» لكلّ بيانٍ يصل — والصفرُ رقمٌ لا رسالةُ خطأ،
+ * فيوقّع الموظّف على اعتماد بيانٍ لم يرَ منه شيئاً، أو يرفض مدرسةً ملأته كاملاً.
+ *
+ * فالقراءة الآن من الصيغة الثانية، مع إبقاء الأولى للبيانات المحفوظة قبلها —
+ * وبيانٌ قديمٌ لا يُعاد تفسيره بصيغةٍ جديدة فتظهر أرقامه مقلوبة.
+ */
 function buildStmtSummary(snap) {
+  const v2   = Number(snap.schemaVersion) >= 2;
   const rows = [];
-  const students = Array.isArray(snap.students) ? snap.students : [];
-  let totSec = 0, totM = 0, totF = 0;
-  for (const s of students) {
-    totSec += (+s.sections || 0);
-    totM   += (+s.enM || 0) + (+s.frM || 0) + (+s.ruM || 0);
-    totF   += (+s.enF || 0) + (+s.frF || 0) + (+s.ruF || 0);
-  }
-  rows.push(['عدد الشعب', totSec]);
-  rows.push(['إجمالي الذكور', totM]);
-  rows.push(['إجمالي الإناث', totF]);
-  rows.push(['إجمالي الطلاب', totM + totF]);
+  const num  = (n) => Number(n) || 0;
 
-  const sc = snap.staffCounts || {};
-  const totalStaff = (sc.admin || 0) + (sc.teaching || 0) + (sc.professional || 0) + (sc.worker || 0) + (sc.guard || 0);
-  rows.push(['إجمالي العاملين', totalStaff]);
-  rows.push(['إداري / تدريسي', `${sc.admin || 0} / ${sc.teaching || 0}`]);
-  rows.push(['مهني / مستخدم / حارس', `${sc.professional || 0} / ${sc.worker || 0} / ${sc.guard || 0}`]);
+  if (v2) {
+    const t = snap.students?.totals || {};
+    const m = num(t.enM) + num(t.frM) + num(t.ruM);
+    const f = num(t.enF) + num(t.frF) + num(t.ruF);
+    rows.push(['عدد الشعب',      num(t.sections)]);
+    rows.push(['إجمالي الذكور',  m]);
+    rows.push(['إجمالي الإناث',  f]);
+    rows.push(['إجمالي الطلاب',  num(t.total) || (m + f)]);
+
+    const w = snap.workforce || {};
+    rows.push(['إجمالي العاملين', num(w.grand)]);
+    rows.push(['إداري / تدريسي', `${num(w.admin)} / ${num(w.full)}`]);
+    rows.push(['مهني / مستخدم / حارس',
+      `${num(w.professional)} / ${num(w.worker)} / ${num(w.guard)}`]);
+    // المعلّمون بلا اختصاصٍ مصنَّف: رقمٌ يقرّر الموظّفُ على أساسه، فلا يُطوى.
+    if (num(w.unclassified)) rows.push(['معلّمون بلا اختصاص مصنَّف', num(w.unclassified)]);
+  } else {
+    const students = Array.isArray(snap.students) ? snap.students : [];
+    let totSec = 0, totM = 0, totF = 0;
+    for (const s of students) {
+      totSec += num(s.sections);
+      totM   += num(s.enM) + num(s.frM) + num(s.ruM);
+      totF   += num(s.enF) + num(s.frF) + num(s.ruF);
+    }
+    rows.push(['عدد الشعب',     totSec]);
+    rows.push(['إجمالي الذكور', totM]);
+    rows.push(['إجمالي الإناث', totF]);
+    rows.push(['إجمالي الطلاب', totM + totF]);
+
+    const sc = snap.staffCounts || {};
+    rows.push(['إجمالي العاملين',
+      num(sc.admin) + num(sc.teaching) + num(sc.professional) + num(sc.worker) + num(sc.guard)]);
+    rows.push(['إداري / تدريسي', `${num(sc.admin)} / ${num(sc.teaching)}`]);
+    rows.push(['مهني / مستخدم / حارس',
+      `${num(sc.professional)} / ${num(sc.worker)} / ${num(sc.guard)}`]);
+  }
 
   let html = rows.map(([k, v]) =>
     `<div class="dir-req-detail"><span>${esc(k)}</span><strong>${esc(String(v ?? '—'))}</strong></div>`
   ).join('');
 
-  const leaves = Array.isArray(snap.leaveLines) ? snap.leaveLines : [];
-  if (leaves.length) {
+  // الإجازات: الصيغة الثانية تُرسل كائنات {type, days} بلا أسماء — والأسماء
+  // مقصودةٌ خارج اللقطة (تذهب إلى monthly_statement_rosters بصلاحياته). فنجمع
+  // حسب النوع: عددُ الإجازات ومجموعُ أيامها، وهو ما يحتاجه المُعتمِد فعلاً.
+  const lines = v2
+    ? (() => {
+        const byType = new Map();
+        for (const l of (Array.isArray(snap.leaves) ? snap.leaves : [])) {
+          const k = String(l?.type ?? '').trim() || 'غير محدّد';
+          const cur = byType.get(k) || { n: 0, days: 0 };
+          cur.n += 1; cur.days += num(l?.days);
+          byType.set(k, cur);
+        }
+        return [...byType].map(([k, v]) => `${k}: ${v.n} (${v.days} يوماً)`);
+      })()
+    : (Array.isArray(snap.leaveLines) ? snap.leaveLines.map(String) : []);
+
+  if (lines.length) {
     html += `<div class="dir-req-detail" style="flex-direction:column;align-items:flex-start;gap:4px">
       <span>إجازات الشهر</span>
-      <small style="color:var(--text-secondary)">${leaves.map(l => esc(l)).join(' — ')}</small>
+      <small style="color:var(--text-secondary)">${lines.map(l => esc(l)).join(' — ')}</small>
     </div>`;
   }
   return html;
