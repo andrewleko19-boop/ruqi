@@ -637,6 +637,36 @@ window.addEventListener('online', () => {
   if (classesFailed && !classesFailed.hidden) loadClasses();
 });
 
+/* ── تكليفٌ جديد يظهر دون إغلاق التطبيق ──────────────────────────────────────
+   قائمةُ الصفوف كانت تُقرأ عند الإقلاع وحده، وتطبيقُ PWA يبقى مفتوحاً أياماً.
+   فمديرٌ يُسند شعبةً لمعلّمٍ اليوم لا يراها المعلّم حتى يُغلق التطبيق ويفتحه —
+   ويمرّ اليوم الأوّل بلا حضورٍ مُسجَّل، ويُحسب على المدرسة تأخّراً في الالتزام.
+   (والإشعار وحده لا يكفي: يقرأ المعلّم «تكليفٌ جديد» ثمّ لا يجد الشعبة.)
+
+   والشروط تمنع الإزعاج: لا فحصَ وهو غير ظاهر ولا بلا اتصال، ولا قبل مضيّ حدٍّ
+   أدنى، ولا خارج الصفحة الرئيسية — إعادةُ رسمٍ والمعلّم في وسط تسجيل حضور
+   شعبةٍ تُفقده ما أدخل. */
+const CLASSES_RECHECK_MIN_MS = 2 * 60 * 1000;
+let _lastClassCheck = 0;
+
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible') return;
+  if (!navigator.onLine) return;
+  if (_currentView !== 'home') return;
+  if (!S.user?.user?.id) return;
+  if (Date.now() - _lastClassCheck < CLASSES_RECHECK_MIN_MS) return;
+  _lastClassCheck = Date.now();
+
+  // لا نُعِد الرسم إلا إن تغيّرت المجموعة فعلاً: applyHomeMode تمسح البطاقات
+  // وتُعيد بناءها، وفعلُها بلا داعٍ وميضٌ يقرؤه المعلّم خللاً.
+  const sig = (list) => (list ?? [])
+    .map(c => `${c.id}:${c.role}:${(c.subjectIds ?? []).join('.')}`)
+    .sort().join('|');
+  const before = sig(S.classes);
+  try { await loadClasses(); } catch { /* شاشةُ الفشل تتكفّل بالباقي */ return; }
+  if (sig(S.classes) !== before) toast('حُدِّثت قائمة صفوفك', 'info');
+});
+
 // ── Duty card: self check-in / out ──────────────────────────────────────────────
 // The teacher's school + work-start time come from their class assignment (all
 // classes are in the same school); the session also carries schoolId as a fallback.
