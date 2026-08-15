@@ -5672,15 +5672,30 @@ const delStaffName    = el('del-staff-name');
 const delStaffError   = el('del-staff-error');
 const btnConfirmDel   = el('btn-confirm-del-staff');
 
+/* صلاحيةُ المخبأ. كان يُمسح عند تسجيل الدخول وحده، وتطبيقُ PWA يبقى مسجَّلاً
+   أياماً — فمجمّعٌ تربويّ أو صفةٌ وظيفية يضيفها المشرف اليوم لا يراها مديرُ
+   مدرسةٍ مفتوحٌ عنده التطبيق، ولا سبيل عنده ليعرف أنّ القائمة قديمة. خمس
+   دقائق: قريبةٌ بما يكفي لتظهر إضافةُ المشرف في الجلسة نفسها، وبعيدةٌ بما
+   يكفي ألّا يُصيب فتحُ نافذةٍ عشرَ مرّات الشبكةَ عشرَ مرّات. */
+const LOOKUP_TTL_MS = 5 * 60 * 1000;
+
 async function getLookup(type) {
-  if (_lookupCache[type]) return _lookupCache[type];
+  const hit = _lookupCache[type];
+  if (hit && Date.now() - hit.at < LOOKUP_TTL_MS) return hit.vals;
   // School admins carry no directorate_id on their user row — the directorate
   // link lives on the school. Fall back to it so per-directorate lookups
   // (e.g. educational_zone) resolve. Global lookups (directorate_id IS NULL)
   // are always returned regardless, so other types are unaffected.
   const dirId = S.user?.directorateId ?? S.school?.directorate_id ?? null;
-  const vals = await NDB.getLookupList(type, dirId);
-  _lookupCache[type] = vals;
+  let vals;
+  try {
+    vals = await NDB.getLookupList(type, dirId);
+  } catch (err) {
+    // أوفلاين أو تعذّر الجلب: نسخةٌ قديمة خيرٌ من قائمةٍ فارغة تمنع الحفظ.
+    if (hit) return hit.vals;
+    throw err;
+  }
+  _lookupCache[type] = { vals, at: Date.now() };
   return vals;
 }
 

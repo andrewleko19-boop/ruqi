@@ -79,7 +79,43 @@ async function init(userId) {
   const keys = data.map(r => (typeof r === 'string' ? r : r.get_my_module_permissions ?? r.module_key));
   _cacheModules(uid, keys);
   _enabled = new Set(keys);
+  _lastCheck = Date.now();      // يُضبط عند كلّ جلبٍ ناجح لا عند تحميل الملفّ
+  _watchVisibility(uid);
   return _enabled;
+}
+
+/* ── إعادة الفحص عند العودة إلى التطبيق ──────────────────────────────────────
+   init() كانت تُستدعى مرّةً واحدة عند الإقلاع، ولوحة المشرف تَعِد صراحةً بأنّ
+   «التبديل ينعكس فوراً على واجهة المستخدمين». وهذا لم يكن صحيحاً: تطبيقُ PWA
+   يبقى مفتوحاً أياماً، فوحدةٌ يُفعّلها المشرف اليوم لا يراها المستخدم حتى
+   يُغلق التطبيق ويفتحه — ووحدةٌ يُعطّلها تبقى مستعملةً بلا حدّ. وهذا يُبطل
+   «الإظهار المرحلي» الذي بُني النظام لأجله.
+
+   العودةُ إلى التطبيق هي اللحظة الطبيعية للفحص: المستخدم يبدّل التطبيقات
+   عشرات المرّات يومياً على الجوّال، فيصل التغييرُ خلال دقائق عملياً. وحدٌّ
+   أدنى بين الفحصين يمنع أن يُصيب تبديلُ تبويبٍ سريع الشبكةَ في كلّ مرّة.
+
+   وهذه طبقة عرضٍ لا أمان: من يُبقي التطبيق مفتوحاً ليحتفظ بتبويبٍ عُطِّل لن
+   يجد وراءه بيانات — RLS هو الحارس. */
+const RECHECK_MIN_MS = 60 * 1000;
+let _watching = false;
+let _lastCheck = 0;
+
+function _watchVisibility(uid) {
+  if (_watching || typeof document === 'undefined') return;
+  _watching = true;
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible') return;
+    if (!navigator.onLine) return;
+    if (Date.now() - _lastCheck < RECHECK_MIN_MS) return;
+    _lastCheck = Date.now();
+    const before = _enabled ? [..._enabled].sort().join(',') : null;
+    try { await init(uid); } catch { return; }
+    const after = _enabled ? [..._enabled].sort().join(',') : null;
+    // لا تُعِد الرسم إلا إن تغيّر شيء فعلاً: applyToDom تمسح الشاشة وتُعيد
+    // إظهارها، وفعلُها بلا داعٍ وميضٌ يراه المستخدم كخلل.
+    if (before !== after) applyToDom();
+  });
 }
 
 /* true افتراضياً إن لم يُستدعَ init() بعد أو تعذّر تحميل المصفوفة تماماً —
