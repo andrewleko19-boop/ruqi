@@ -8983,6 +8983,10 @@ function loadExcelJS() {
   return _excelJsPromise ??= new Promise((res, rej) => {
     const s = document.createElement('script');
     s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    // بصمةُ سلامةٍ كنظيرتها في shared/import-parser.js — انظر التعليق هناك.
+    s.integrity   = 'sha384-Pqp51FUN2/qzfxZxBCtF0stpc9ONI6MYZpVqmo8m20SoaQCzf+arZvACkLkirlPz';
+    s.crossOrigin = 'anonymous';
+    s.referrerPolicy = 'no-referrer';
     s.onload = res;
     s.onerror = () => rej(new Error('تعذّر تحميل مكتبة Excel'));
     document.head.appendChild(s);

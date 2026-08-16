@@ -40,6 +40,9 @@ jobs:
       - name: HTML validation (all pages)
         run: npm run check:html
 
+      - name: Content-Security-Policy tags match generator
+        run: npm run check:csp
+
       - name: Cache-version check
         run: node tools/check-versions.mjs
 

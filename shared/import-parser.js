@@ -229,6 +229,12 @@
       if (window.ExcelJS) return resolve();
       const s = document.createElement('script');
       s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+      /* SRI: شيفرةٌ من طرفٍ ثالث تُحقن في صفحةٍ فيها جلسةُ المستخدم. بلا بصمةٍ
+         يكفي اختراقُ الـCDN — أو نشرُ نسخةٍ خبيثةٍ تحت الوسم نفسه — ليُنفَّذ
+         عندنا ما شاء. مع البصمة يُرفض المحتوى المخالف قبل تنفيذ حرفٍ منه. */
+      s.integrity   = 'sha384-Pqp51FUN2/qzfxZxBCtF0stpc9ONI6MYZpVqmo8m20SoaQCzf+arZvACkLkirlPz';
+      s.crossOrigin = 'anonymous';
+      s.referrerPolicy = 'no-referrer';
       s.onload = () => resolve();
       s.onerror = () => { _excelJs = null; reject(new Error('تعذّر تحميل مكتبة قراءة Excel — تحقّق من الاتصال.')); };
       document.head.appendChild(s);

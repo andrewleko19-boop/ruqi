@@ -416,6 +416,169 @@ export async function runRpcScopeTests(report) {
       }
     });
 
+    /* ── ١٢) دوالُّ المزامنة: أخطرُ سطحٍ في النظام ─────────────────────────
+       pull_*_delta تتجاوز RLS بالتصميم، و pull_students_delta تُرجع صفَّ
+       students كاملاً: الرقم الوطنيّ واسم الأمّ وهاتف الأهل والعنوان. كانت بلا
+       أيّ فحصِ صلاحية، فأيُّ حسابٍ مصادَق يقرأ سجلَّ أيّ صفٍّ في القطر بمعرّفه.
+       الحارسُ هنا يمنع عودتَها: مهاجمٌ يُرَدّ صفراً، وضابطٌ موجب يمنع أن يمرّ
+       الفحصُ لأنّ الدالّة عطبت وصارت تُرجع فراغاً للجميع. */
+    await inTx(c, async () => {
+      const f = await seedForeign(c);
+      const { rows: [cls] } = await c.query(
+        `insert into public.classes (school_id, name, grade, section, academic_year)
+         values ($1, 'خ', '5', 'A', '2025-2026') returning id`, [f.schoolId]);
+      await c.query(
+        `insert into public.students (school_id, class_id, full_name, national_id)
+         values ($1, $2, '__طالب__', '09999999999')`, [f.schoolId, cls.id]);
+
+      const DELTAS = ['pull_students_delta', 'pull_grades_delta',
+                      'pull_attendance_delta', 'pull_conduct_delta'];
+
+      // المهاجم: مدير مدرسةٍ أخرى تماماً (أدنى امتيازاً من اللازم لهذا الصفّ).
+      if (need('school_admin')) {
+        await become(c, by.school_admin.id);
+        for (const fn of DELTAS) {
+          const r = await callRpc(c,
+            `select 1 from public.${fn}($1, '2000-01-01'::timestamptz)`, [cls.id]);
+          sec.rows.push(!r.ok
+            ? Report.row('warn', `${fn} · صفٌّ أجنبيّ`, r.err.slice(0, 90))
+            : r.rows.length === 0
+              ? Report.row('pass', `${fn} · صفٌّ أجنبيّ`, 'نتيجةٌ فارغة — المعامل لا يوسّع النطاق')
+              : Report.row('fail', `${fn} · صفٌّ أجنبيّ`,
+                  `⚠ تسريب: ${r.rows.length} صفّاً من مدرسةٍ أخرى (RLS متجاوَز)`));
+        }
+      }
+
+      // ضابطٌ موجب: معلّمُ الصفّ يقرأ فعلاً.
+      // reset role أوّلاً: الفحص أعلاه تقمّص مدير مدرسة، والزرعُ يحتاج postgres.
+      await c.query('reset role');
+      const { rows: [tu] } = await c.query(
+        `insert into auth.users (id, email) values (gen_random_uuid(), 'sync-probe@t.local') returning id`);
+      await c.query(
+        `insert into public.users (id, role, permission_role, school_id, full_name, is_active)
+         values ($1, 'teacher', 'teacher', $2, '__معلّم__', true)`, [tu.id, f.schoolId]);
+      await c.query(
+        `insert into public.class_teacher (class_id, teacher_id, academic_year, role)
+         values ($1, $2, '2025-2026', 'homeroom')`, [cls.id, tu.id]);
+      await become(c, tu.id);
+      const ok = await callRpc(c,
+        `select 1 from public.pull_students_delta($1, '2000-01-01'::timestamptz)`, [cls.id]);
+      sec.rows.push(ok.ok && ok.rows.length === 1
+        ? Report.row('pass', 'ضابط موجب: معلّم الصفّ يزامن صفَّه',
+            'سطرٌ واحد — الحارس لا يمنع العمل المشروع')
+        : Report.row('fail', 'ضابط موجب: معلّم الصفّ يزامن صفَّه',
+            ok.ok ? `⚠ ${ok.rows.length} سطراً — المزامنة معطوبة والفحوص أعلاه مضلِّلة`
+                  : ok.err.slice(0, 90)));
+    });
+
+    /* ── ١٣) سجلّ دوام الكادر: المعلّم يكتب داتَه لا حكمَ مديره ─────────────
+       كانت على staff_attendance سياستان لكلّ أمر: محكمةٌ على authenticated
+       وتوأمٌ أرخى على PUBLIC. وسياساتُ الأمر الواحد تُجمَع بـ OR، فالأرخى هي
+       النافذة. النتيجة أنّ معلّماً سجّل عليه مديرُه «غائب» بعذرٍ موثَّق و٤٥
+       دقيقة تأخّر، كان يقلبه إلى «حاضر» ويمحو أثرَ التعديل — بلا إشعار، لأنّ
+       زناد trg_duty_adjusted يشترط adjusted_by وقد فرّغه.
+
+       هذه الفحوص تحرس الطبقتين معاً: RLS تحسم مَن يكتب وأين، والزنادُ
+       trg_staff_att_self_guard يحسم أيَّ عمود. وفيها ضابطان موجبان: تسجيلُ
+       الانصراف يبقى ممكناً، وإلّا كان «الأمان» تعطيلاً للبوّابة. */
+    await inTx(c, async () => {
+      const f = await seedForeign(c);
+      const { rows: [s2] } = await c.query(
+        `insert into public.schools (directorate_id, name, school_type)
+         values ($1, '__مدرسة ثانية للاختبار__', 'primary') returning id`, [f.dirId]);
+      const otherSchoolId = s2.id;
+      const { rows: [au] } = await c.query(
+        `insert into auth.users (id, email) values (gen_random_uuid(), 'att-probe@t.local') returning id`);
+      const { rows: [tu] } = await c.query(
+        `insert into public.users (id, role, permission_role, school_id, full_name, is_active)
+         values ($1, 'teacher', 'teacher', $2, '__معلّم دوام__', true) returning id`, [au.id, f.schoolId]);
+      const { rows: [ad] } = await c.query(
+        `insert into auth.users (id, email) values (gen_random_uuid(), 'att-adm@t.local') returning id`);
+      await c.query(
+        `insert into public.users (id, role, permission_role, school_id, full_name, is_active)
+         values ($1, 'school_admin', 'school_admin', $2, '__مدير دوام__', true)`, [ad.id, f.schoolId]);
+
+      // حكمُ المدير: غائبٌ بعذرٍ موثَّق وتأخّرٌ محسوب.
+      const { rows: [rec] } = await c.query(
+        `insert into public.staff_attendance
+           (school_id, date, kind, teacher_id, status, source,
+            adjusted_by, adjust_reason, late_minutes, recorded_by)
+         values ($1, current_date, 'teacher', $2, 'absent', 'manager', $3, 'تغيّب بلا عذر', 45, $3)
+         returning id`, [f.schoolId, tu.id, ad.id]);
+
+      await become(c, tu.id);
+
+      /** ينفّذ داخل نقطة حفظ فلا يُجهض الفحوصَ التالية عند الرفض. */
+      const attempt = async (sql, params) => {
+        await c.query('savepoint sa');
+        try { const r = await c.query(sql, params); await c.query('release savepoint sa'); return { ok: true, n: r.rowCount }; }
+        catch (e) { await c.query('rollback to savepoint sa'); return { ok: false, err: e.message }; }
+      };
+
+      // أ) المصدر يُحسم من هويّة الكاتب لا من حمولته.
+      const forged = await attempt(
+        `insert into public.staff_attendance (school_id, date, kind, teacher_id, status, source)
+         values ($1, current_date - 1, 'teacher', $2, 'present', 'manager')`, [f.schoolId, tu.id]);
+      if (!forged.ok) {
+        sec.rows.push(Report.row('warn', 'دوام · انتحال المصدر', forged.err.slice(0, 90)));
+      } else {
+        const { rows: [g] } = await c.query(
+          `select source, recorded_by from public.staff_attendance
+            where teacher_id = $1 and date = current_date - 1`, [tu.id]);
+        sec.rows.push(g.source === 'self' && g.recorded_by === tu.id
+          ? Report.row('pass', 'دوام · انتحال المصدر',
+              "أُرسل source='manager' فصُحِّح إلى 'self' — النسبة لا تُدّعى")
+          : Report.row('fail', 'دوام · انتحال المصدر',
+              `⚠ ثبت source='${g.source}' — تسجيلةُ المعلّم تظهر منسوبةً إلى المدير`));
+      }
+
+      // ب) العزل: لا كتابةَ في مدرسةٍ أجنبية. (مدرسةٌ ثانيةٌ مزروعةٌ في المعاملة
+      //    نفسها — لا نتّكل على بذرةٍ قد لا تكون موجودة.)
+      const cross = await attempt(
+        `insert into public.staff_attendance (school_id, date, kind, teacher_id, status)
+         values ($1, current_date - 2, 'teacher', $2, 'present')`, [otherSchoolId, tu.id]);
+      sec.rows.push(!cross.ok
+        ? Report.row('pass', 'دوام · كتابةٌ عابرةٌ للمدارس', 'مرفوضة — المدرسة تُشتقّ من الحساب')
+        : Report.row('fail', 'دوام · كتابةٌ عابرةٌ للمدارس',
+            '⚠ أُدرج صفٌّ في مدرسةٍ ليست مدرسةَ الكاتب'));
+
+      // جـ) لا تسجيلَ دوامٍ بتاريخٍ مستقبليّ.
+      const future = await attempt(
+        `insert into public.staff_attendance (school_id, date, kind, teacher_id, status)
+         values ($1, current_date + 9, 'teacher', $2, 'present')`, [f.schoolId, tu.id]);
+      sec.rows.push(!future.ok
+        ? Report.row('pass', 'دوام · تاريخٌ مستقبليّ', 'مرفوض')
+        : Report.row('fail', 'دوام · تاريخٌ مستقبليّ', '⚠ قُبل حضورٌ لم يقع بعد'));
+
+      // د) [الأشدّ] محوُ حكم المدير — يمرّ التحديثُ ولا يمسّ عموداً واحداً منه.
+      await attempt(
+        `update public.staff_attendance
+            set status='present', late_minutes=0, adjusted_by=null,
+                adjust_reason=null, source='self'
+          where id = $1`, [rec.id]);
+      // هـ) ضابطٌ موجب: الانصراف المشروع يمرّ فعلاً.
+      const out = await attempt(
+        `update public.staff_attendance set check_out = now() where id = $1`, [rec.id]);
+
+      await c.query('reset role');
+      const { rows: [a] } = await c.query(
+        `select status, late_minutes, adjusted_by, adjust_reason, source,
+                check_out is not null as checked_out
+           from public.staff_attendance where id = $1`, [rec.id]);
+      sec.rows.push(a.status === 'absent' && a.late_minutes === 45
+                 && a.adjusted_by === ad.id && a.source === 'manager'
+                 && a.adjust_reason === 'تغيّب بلا عذر'
+        ? Report.row('pass', 'دوام · محوُ حكم المدير',
+            'الحالةُ والتأخّرُ والمعدِّلُ والعذرُ كما تركها المدير')
+        : Report.row('fail', 'دوام · محوُ حكم المدير',
+            `⚠ الحكمُ تبدّل: ${a.status} · تأخّر ${a.late_minutes} · معدِّل ${a.adjusted_by ?? 'فارغ'}`));
+      sec.rows.push(out.ok && a.checked_out
+        ? Report.row('pass', 'ضابط موجب: تسجيل الانصراف',
+            'المعلّم يكتب عمودَه — الحارس لا يعطّل البوّابة')
+        : Report.row('fail', 'ضابط موجب: تسجيل الانصراف',
+            out.ok ? '⚠ مرّ التحديث ولم يُكتب check_out' : out.err.slice(0, 90)));
+    });
+
     return sec;
   } finally {
     await c.end();

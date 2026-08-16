@@ -98,6 +98,15 @@ async function main() {
   // العربية عمداً: العلّة التي أفلتت (أرقام عربية-هندية) لا تظهر بلغة C.
   const ctx = await browser.newContext({ locale: 'ar-SY', viewport: { width: 1280, height: 900 } });
 
+  /* كلُّ ما هو خارج الخادم المحلّيّ يُقطع فوراً. الفحصُ يسأل «هل تُحمَّل شيفرتُنا
+     بلا خطأ؟» لا «هل unpkg يعمل الآن؟». وقبل هذا القطع كان جوابُه يتبدّل بحال
+     الشبكة: حين يتأخّر الردُّ من الـCDN لا يبلغ networkidle فتسقط بوّابتا
+     الخرائط بمهلةٍ منتهية — سقوطٌ لا علاقةَ له بشيفرة المستودع. */
+  await ctx.route('**/*', (route) =>
+    route.request().url().startsWith(`http://127.0.0.1:${PORT}`)
+      ? route.continue()
+      : route.abort());
+
   for (const [name, path, mustExist] of PORTALS) {
     const page = await ctx.newPage();
     const errs = [];

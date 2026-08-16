@@ -11,7 +11,7 @@
  *
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'ruqi-v171';
+const CACHE = 'ruqi-v172';
 
 /* ⚠️ التقسيم مقصود ويعالج عطلاً حقيقياً.
    كان التثبيت كلّه على Promise.allSettled — يبتلع فشل أي ملفّ ويُعلن النجاح —
@@ -27,6 +27,8 @@ const CRITICAL = [
   './manifest.json',
   './shared/db.js',
   './shared/sw-register.js',
+  // سلوكُ الصفحة الرئيسة — نُقل من <script> سطريّ لأجل CSP بلا 'unsafe-inline'.
+  './shared/home.js',
   // مكتبة Supabase محلّية: بدونها لا تُنفَّذ db.js إطلاقاً فلا تعمل أي لوحة.
   './shared/vendor/supabase-js.mjs',
   /* ⚠️ حرِج رغم أنّه «طبقة عرض». كل بوّابة تُحمّله بـ<script type="module">، وأوّل
