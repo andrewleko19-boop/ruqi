@@ -82,8 +82,8 @@ html {
   font-size: 16px;
   -webkit-tap-highlight-color: transparent;
   scroll-behavior: smooth;
+  overflow-x: hidden;
 }
-
 body {
   font-family: 'Cairo', 'Tajawal', 'Segoe UI', system-ui, sans-serif;
   background: var(--clr-bg);

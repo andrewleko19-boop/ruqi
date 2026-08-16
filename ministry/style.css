@@ -50,6 +50,7 @@
    spinners span forever under a loaded table. One guard, applied everywhere,
    instead of chasing each component that grows a display rule later. */
 [hidden] { display: none !important; }
+html { overflow-x: hidden; }
 
 body {
   font-family: 'Segoe UI', system-ui, sans-serif;
