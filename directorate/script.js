@@ -3394,7 +3394,7 @@ function openAddDirSchool() {
   _dirEditingSchoolId = null;
   const title = document.getElementById('dir-school-modal-title');
   if (title) title.textContent = 'إضافة مدرسة';
-  ['dir-sm-name','dir-sm-lat','dir-sm-lng','dir-sm-total-students','dir-sm-total-teachers','dir-sm-complex-name'].forEach(id => {
+  ['dir-sm-name','dir-sm-lat','dir-sm-lng','dir-sm-total-students','dir-sm-total-teachers'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   ['dir-sm-classification','dir-sm-education-type','dir-sm-shift','dir-sm-student-type'].forEach(id => {
@@ -3428,7 +3428,6 @@ function openEditDirSchool(schoolId) {
   set('dir-sm-student-type', s.student_type);
   set('dir-sm-total-students', s.total_students);
   set('dir-sm-total-teachers', s.total_teachers);
-  set('dir-sm-complex-name', s.complex_name);
   // كانت القوائم المخصّصة لا تُحدَّث بعد ضبط القيم برمجياً، فتبقى معروضة على
   // اختيار المدرسة السابقة رغم أنّ <select> الأصلي تغيّر.
   ['dir-sm-school-type','dir-sm-classification','dir-sm-education-type','dir-sm-shift','dir-sm-student-type']
@@ -3452,13 +3451,9 @@ function setupDirSchools() {
     const name = document.getElementById('dir-sm-name')?.value.trim() ?? '';
     const errEl = document.getElementById('dir-school-modal-error');
     const saveBtn = document.getElementById('dir-school-modal-save');
-    const complex = document.getElementById('dir-sm-complex-name')?.value.trim() ?? '';
     const stype   = document.getElementById('dir-sm-school-type')?.value ?? '';
     const fail = (m) => { if (errEl) { errEl.textContent = m; errEl.hidden = false; } };
     if (!name) { fail('اسم المدرسة مطلوب.'); return; }
-    // المجمّع يُطبَع في ترويسة بطاقة العلامات وورقة «لا مانع» — غيابه يُخرِج
-    // وثيقة رسمية ناقصة.
-    if (!complex) { fail('اسم المجمع المدرسي مطلوب — يظهر في ترويسة الوثائق المطبوعة.'); return; }
     if (!stype)   { fail('يجب اختيار نوع المدرسة.'); return; }
     if (errEl) { errEl.textContent = ''; errEl.hidden = true; }
     if (saveBtn) saveBtn.disabled = true;
@@ -3479,7 +3474,6 @@ function setupDirSchools() {
       student_type:    getVal('dir-sm-student-type')     || null,
       total_students:  getInt('dir-sm-total-students'),
       total_teachers:  getInt('dir-sm-total-teachers'),
-      complex_name:    complex,
     };
 
     try {

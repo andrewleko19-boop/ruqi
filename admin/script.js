@@ -111,7 +111,6 @@ const smShift           = document.getElementById('sm-shift');
 const smStudentType     = document.getElementById('sm-student-type');
 const smTotalStudents   = document.getElementById('sm-total-students');
 const smTotalTeachers   = document.getElementById('sm-total-teachers');
-const smComplexName     = document.getElementById('sm-complex-name');
 
 // User modal
 const userModal         = document.getElementById('user-modal');
@@ -582,7 +581,7 @@ document.getElementById('schools-show-archived')?.addEventListener('change', () 
 function openAddSchool() {
   editingSchoolId = null;
   schoolModalTitle.textContent = 'إضافة مدرسة';
-  [smName, smLat, smLng, smTotalStudents, smTotalTeachers, smComplexName].forEach(el => el.value = '');
+  [smName, smLat, smLng, smTotalStudents, smTotalTeachers].forEach(el => el.value = '');
   smDirectorate.value = '';
   // ابتدائي افتراضاً — نفس default القاعدة، فلا يمرّ خيار فارغ إلى قيد CHECK.
   smSchoolType.value = 'primary';
@@ -612,7 +611,6 @@ function openEditSchool(schoolId) {
   smStudentType.value     = s.student_type ?? '';
   smTotalStudents.value   = s.total_students ?? '';
   smTotalTeachers.value   = s.total_teachers ?? '';
-  smComplexName.value     = s.complex_name ?? '';
   [smDirectorate, smSchoolType, smClassification, smEducationType, smShift, smStudentType].forEach(s => CustomSelect.refresh(s));
   clearError(schoolModalError);
   show(schoolModal);
@@ -628,12 +626,8 @@ schoolModalSave.addEventListener('click', async () => {
   clearError(schoolModalError);
   const name = smName.value.trim();
   const dirId = smDirectorate.value;
-  const complex = smComplexName.value.trim();
   if (!name)    { showError(schoolModalError, 'اسم المدرسة مطلوب.'); return; }
   if (!dirId)   { showError(schoolModalError, 'يجب اختيار المديرية.'); return; }
-  // المجمّع يُطبَع في ترويسة بطاقة العلامات وورقة «لا مانع»، فغيابه يُخرِج
-  // وثيقة رسمية ناقصة — لذلك صار إجبارياً هنا لا اختيارياً.
-  if (!complex) { showError(schoolModalError, 'اسم المجمع المدرسي مطلوب — يظهر في ترويسة الوثائق المطبوعة.'); return; }
   if (!smSchoolType.value) { showError(schoolModalError, 'يجب اختيار نوع المدرسة.'); return; }
 
   schoolModalSave.disabled = true;
@@ -650,7 +644,6 @@ schoolModalSave.addEventListener('click', async () => {
       student_type:    smStudentType.value      || null,
       total_students:  smTotalStudents.value !== '' ? parseInt(smTotalStudents.value, 10) : null,
       total_teachers:  smTotalTeachers.value !== '' ? parseInt(smTotalTeachers.value, 10) : null,
-      complex_name:    complex,
     };
 
     let err;
@@ -1309,67 +1302,6 @@ function syncLookupDir() {
   lkDirWrap.style.display = lkIsPerDirectorate() ? 'inline-block' : 'none';
 }
 
-const lookupsOrphans = document.getElementById('lookups-orphans');
-
-/* ── قيمٌ مستعمَلةٌ وليست في القائمة ──────────────────────────────────────────
-   القائمةُ المرجعية لا تُغني ما لم تحوِ ما تستعمله المدارس فعلاً. ومديرُ مدرسةٍ
-   حُفظ لها «مدينة اللاذقية» يفتح الحقل فيجد أربعةَ خيارات ليس فيها ما عنده —
-   فيبقى المحفوظُ معلّقاً وحده، أو يختار أقربَ شبيهٍ فيتفتّت التجميع. والمشرفُ
-   لا يعلم بالنقص أصلاً: لا شيء في لوحته يقول إنّ قيمةً تُستعمل وليست عنده.
-
-   فنعرضها هنا بضغطةِ إضافة. (المجمّع التربوي والمنطقة التعليمية صارا قائمةً
-   واحدة، فمصدرُ الاستعمال هو schools.complex_name وحقلُ البيان معاً.) */
-async function renderLookupOrphans(listType, dirId) {
-  if (!lookupsOrphans) return;
-  hide(lookupsOrphans);
-  if (listType !== 'educational_zone' || !dirId) return;
-
-  let used = [];
-  try {
-    const { data, error } = await supabase
-      .from('schools')
-      .select('complex_name')
-      .eq('directorate_id', dirId)
-      .is('archived_at', null)
-      .not('complex_name', 'is', null);
-    if (error) throw error;
-    used = data ?? [];
-  } catch (e) {
-    console.warn('[admin] renderLookupOrphans', e);
-    return;                       // مساعدٌ لا يُعلَن عطلُه صاخباً
-  }
-
-  const have = new Set(allLookups.map(r => (r.value || '').trim()));
-  const missing = [...new Set(used
-    .map(r => (r.complex_name || '').trim())
-    .filter(v => v && !have.has(v)))];
-  if (!missing.length) return;
-
-  lookupsOrphans.innerHTML =
-    `<p class="lk-orphans-hd">قيمٌ تستعملها مدارسُ هذه المديرية وليست في القائمة:</p>` +
-    missing.map(v =>
-      `<span class="lk-orphan"><b>${esc(v)}</b>` +
-      `<button class="btn btn-ghost btn-sm" data-add-orphan="${esc(v)}">أضِف</button></span>`).join('');
-
-  lookupsOrphans.querySelectorAll('[data-add-orphan]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      try {
-        const { error } = await supabase.from('lookup_lists').insert({
-          list_type: 'educational_zone', value: btn.dataset.addOrphan,
-          directorate_id: dirId, sort_order: (allLookups.length + 1), active: true,
-        });
-        if (error) throw error;
-        await loadLookups();
-      } catch (e) {
-        console.error('[admin] addOrphan', e);
-        btn.disabled = false;
-      }
-    });
-  });
-  show(lookupsOrphans);
-}
-
 async function loadLookups() {
   syncLookupDir();
   const listType = lkTypeFilter.value;
@@ -1379,7 +1311,6 @@ async function loadLookups() {
   hide(lookupsTableWrap);
   hide(lookupsEmpty);
   hide(lookupsHint);
-  hide(lookupsOrphans);
 
   // القوائم المديريّة تحتاج اختيار مديرية أولاً
   if (per && !dirId) {
@@ -1406,8 +1337,6 @@ async function loadLookups() {
   }
   hide(lookupsLoading);
   lookupsCount.textContent = allLookups.length;
-
-  void renderLookupOrphans(listType, dirId);
 
   if (!allLookups.length) { show(lookupsEmpty); return; }
 
@@ -2172,12 +2101,9 @@ function renderOverview() {
       text: `${countAr(orphan.length)} بلا حساب مدير — لا أحد يستطيع رفع حضورها.`,
       names: orphan.slice(0, 6).map(s => s.name).join('، ') });
   }
-  const noComplex = active.filter(s => !s.complex_name);
-  if (noComplex.length) {
-    alerts.push({ tone: 'warn',
-      text: `${countAr(noComplex.length)} بلا مجمّع مدرسي — تخرج ترويسة بطاقة العلامات وورقة «لا مانع» ناقصة.`,
-      names: noComplex.slice(0, 6).map(s => s.name).join('، ') });
-  }
+  /* «بلا مجمّع مدرسي» رُفع من هنا: المشرف لم يعد يملأ هذا الحقل — مديرُ
+     المدرسة يختاره من «إعدادات المدرسة» من قائمة المناطق التعليمية. وتنبيهٌ
+     لا يملك قارئُه فعلاً حياله ضجيجٌ يُدرَّب على تجاهله. */
   if (!alerts.length) alerts.push({ tone: 'ok', text: 'لا شيء يحتاج تدخّلاً الآن.' });
 
   const icon = { bad: 'warn', warn: 'warn', ok: 'check' };

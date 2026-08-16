@@ -996,8 +996,11 @@ async function getReportsForDirectorate(directorateId) {
 async function getReportsForSchool(schoolId, limit = 50) {
   const { data, error } = await db
     .from('emergency_reports')
+    /* resolved_by: كان يُكتب ولا يُقرأ — فتعرف المدرسة أنّ بلاغها حُلّ ولا
+       تعرف من حلّه، فلا تجد إلى من ترجع إن عاد. الانضمامُ يجلب الاسم لا
+       المعرّف: uuid على الشاشة ليس معلومة. */
     .select('id, type, description, severity, status, receipt_number, media_urls, ' +
-            'created_at, resolved_at')
+            'created_at, resolved_at, resolved_by, resolver:resolved_by(full_name)')
     .eq('school_id', schoolId)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -1659,8 +1662,21 @@ async function enqueueOrSyncStudent(item) {
     await syncStudentRecord(item);
     return { success: true, id: item.id, synced: true };
   } catch (err) {
+    /* ⚠ الطابور للانقطاع لا للرفض.
+       كان كلُّ خطأٍ يُصفّ ويُقال للمستخدم «سيُحدَّث عند الاتصال» — وهو متّصل،
+       والخادمُ رفض العملية رفضاً دائماً (قيدٌ أو صلاحية أو زنادٌ معطوب). فتُعاد
+       المحاولة عند كل مزامنة وتفشل أبداً، والمستخدم يظنّها محفوظةً تنتظر شبكة.
+       وقد حجب هذا انحداراً حقيقياً: زنادُ إشعار حالة الطالب كان يرفض كلَّ
+       تحويلِ حالة، والشاشةُ تقول «سيُحدَّث عند الاتصال» بدل أن تُظهر الخطأ.
+
+       فالطابورُ الآن لأخطاء الشبكة وحدها؛ ورفضُ الخادم يُرمى إلى المُنادي
+       ليعرضه للمستخدم كما هو. */
+    if (!isNetworkError(err)) {
+      console.error('[Ruqi] student write rejected by server', err);
+      throw err;
+    }
     await enqueueOutbox({ ...item, table: 'students' });
-    console.warn('[Ruqi] saveStudent: falling back to queue', err);
+    console.warn('[Ruqi] student write queued (network)', err);
     return { success: true, id: item.id, synced: false };
   }
 }

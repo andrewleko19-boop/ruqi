@@ -3335,6 +3335,14 @@ async function loadSchoolReports() {
         : '';
       // رقم الإيصال هو ما يذكره المدير حين يُتابع، فيُعرض دائماً.
       const receipt = r.receipt_number ? ` · إيصال ${escapeHtml(String(r.receipt_number))}` : '';
+      // من حلّ البلاغ ومتى: كان يُكتب في resolved_by ولا يُقرأ، فتعرف المدرسة
+      // أنّ بلاغها حُلّ ولا تعرف إلى من ترجع إن عاد.
+      const solved = r.status === 'resolved' && (r.resolver?.full_name || r.resolved_at)
+        ? `<div class="req-solved">حُلَّ${
+            r.resolver?.full_name ? ' — ' + escapeHtml(r.resolver.full_name) : ''}${
+            r.resolved_at ? ' · ' + escapeHtml(new Date(r.resolved_at)
+              .toLocaleDateString('ar-SY', { day: 'numeric', month: 'short' })) : ''}</div>`
+        : '';
       return `<li class="req-card">
         <div class="req-card-hdr">
           <span class="req-type-label">${escapeHtml(type)}</span>
@@ -3342,6 +3350,7 @@ async function loadSchoolReports() {
         </div>
         <div class="req-date">${escapeHtml(date)}${receipt}</div>
         ${r.description ? `<div class="req-reason">${escapeHtml(r.description)}</div>` : ''}
+        ${solved}
       </li>`;
     }).join('');
   } catch (err) {
@@ -5046,7 +5055,10 @@ el('btn-confirm-status').addEventListener('click', async () => {
     await loadStudents();
   } catch (err) {
     console.error('[Ruqi] setStudentStatus', err);
-    el('status-error').textContent = 'تعذّر تغيير الحالة.'; show(el('status-error'));
+    // رسالةُ الخادم كما هي: «تعذّر تغيير الحالة» وحدها لا تقول للمدير إن كان
+    // السبب قيداً أو صلاحيةً أو شبكة، فيعيد المحاولة بلا فائدة.
+    el('status-error').textContent = errMessage(err, 'تعذّر تغيير الحالة.');
+    show(el('status-error'));
   } finally {
     btn.disabled = false; hide(el('status-spinner'));
   }

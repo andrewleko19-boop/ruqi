@@ -2657,3 +2657,10 @@ select.csel-native {
 
 /* فاصلٌ خفيف بين مجموعتَي إعداداتٍ في بطاقةٍ واحدة. */
 .soft-sep { border: 0; border-top: 1px solid var(--clr-border, #E2E8F0); margin: 16px 0 12px; }
+
+/* من حلّ البلاغ ومتى — كان يُكتب في resolved_by ولا يُقرأ. */
+.req-solved {
+  margin-top: 6px; font-size: .76rem; font-weight: 600;
+  color: #166534; background: var(--clr-success-bg);
+  padding: 4px 9px; border-radius: var(--r-pill); display: inline-block;
+}
