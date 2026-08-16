@@ -1000,7 +1000,8 @@ async function getReportsForSchool(schoolId, limit = 50) {
        تعرف من حلّه، فلا تجد إلى من ترجع إن عاد. الانضمامُ يجلب الاسم لا
        المعرّف: uuid على الشاشة ليس معلومة. */
     .select('id, type, description, severity, status, receipt_number, media_urls, ' +
-            'created_at, resolved_at, resolved_by, resolver:resolved_by(full_name)')
+            'created_at, resolved_at, resolved_by, resolver:resolved_by(full_name), ' +
+            'acknowledged_at, acknowledged_by, ack:acknowledged_by(full_name)')
     .eq('school_id', schoolId)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -1023,6 +1024,9 @@ async function updateReportStatus(reportId, newStatus) {
     patch.resolved_by = null;
     patch.resolved_at = null;
   }
+  /* ختمُ المراجعة (acknowledged_by/at) يضعه الزنادُ t_report_ack_stamp في
+     القاعدة لا هنا: الحالة تُبدَّل من مسارين في هذه البوّابة (الجدول والبطاقة)،
+     ونسيانُ الختم في أحدهما لا يُرى إلّا حين تسأل مدرسةٌ «مَن راجع بلاغي؟». */
 
   const { error } = await db
     .from("emergency_reports")
@@ -4772,6 +4776,7 @@ window.RUQI_DB = {
   getMonthlyStatement,
   submitMonthlyStatement,
   getDirectorateStatements,
+  getStatementSnapshot,
   reviewMonthlyStatement,
 
   // البيان الشهري — المسودة الحيّة والتعديلات الطارئة (§20)
@@ -4828,6 +4833,8 @@ window.RUQI_DB = {
   getResultSheet,
   submitResultSheet,
   getDirectorateResultSheets,
+  getResultSheetSnapshot,
+  getResultSheetSnapshotsForDirectorate,
   reviewResultSheet,
   getMinistryResultSheets,
 
@@ -5063,9 +5070,14 @@ async function submitMonthlyStatement(schoolId, month, year, snapshot) {
 }
 
 // المديرية: كل بيانات مدارسها (RLS يُرشِّح تلقائياً) + اسم المدرسة
+/* ⚠ snapshot_data خارج قائمةِ العرض عمداً. كانت تُجلب مع ٣٠٠ صفّ، واللقطةُ
+   الواحدة تحمل كشفَ المدرسة كاملاً — فتصل ميغاباتٌ لرسم جدولٍ أعمدتُه: اسمُ
+   المدرسة والشهر والحالة. وهو سببُ ما رآه المستخدم: بطاقةُ «طلبات المدارس»
+   تظهر فوراً (استعلامُها خفيف) بينما تبقى الجلاءات والبيانات تدور ثمّ تظهر
+   وحدها بعد حين. تُجلب اللقطةُ الآن عند فتح النافذة وحدها — واحدةً لا ثلاثمئة. */
 async function getDirectorateStatements() {
   const { data, error } = await db.from('monthly_statements')
-    .select('id, school_id, month, year, status, notes, submitted_at, reviewed_at, snapshot_data, school:schools(name)')
+    .select('id, school_id, month, year, status, notes, submitted_at, reviewed_at, school:schools(name)')
     .order('submitted_at', { ascending: false }).limit(300);
   if (error) throw error;
   return data ?? [];    // الترتيب «المُرسَل أولاً» يتم في الواجهة
@@ -5326,9 +5338,38 @@ async function submitResultSheet(classId, schoolId, academicYear, term, snapshot
 }
 
 // المديرية: كل جلاءات مدارسها (RLS يُرشِّح تلقائياً) + اسم المدرسة والصف
+/* لقطةُ وثيقةٍ واحدة عند فتح نافذتها. الفارغُ حالةٌ مشروعة (وثيقةٌ قديمة بلا
+   لقطة) فتُعاد {} لا استثناءً — النافذةُ تعرض «لا تفصيل» ولا تُغلق في وجه
+   الموظّف. */
+async function getStatementSnapshot(id) {
+  const { data, error } = await db.from('monthly_statements')
+    .select('snapshot_data').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data?.snapshot_data ?? {};
+}
+
+/* لقطاتُ جلاءات المديرية دفعةً واحدة — للوحة الأكاديمية وحدها، وتُجلب عند
+   فتح تبويبها لا مع كلّ إقلاع. RLS تحصر النتيجة بمدارس المديرية كما تحصر
+   getDirectorateResultSheets نفسها. */
+async function getResultSheetSnapshotsForDirectorate() {
+  const { data, error } = await db.from('result_sheets')
+    .select('id, snapshot_data')
+    .order('submitted_at', { ascending: false }).limit(300);
+  if (error) throw error;
+  return data || [];
+}
+
+async function getResultSheetSnapshot(id) {
+  const { data, error } = await db.from('result_sheets')
+    .select('snapshot_data').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data?.snapshot_data ?? {};
+}
+
+// snapshot_data خارج القائمة — انظر تعليق getDirectorateStatements.
 async function getDirectorateResultSheets() {
   const { data, error } = await db.from('result_sheets')
-    .select('id, school_id, class_id, academic_year, term, status, notes, submitted_at, reviewed_at, issued_at, snapshot_data, school:schools(name), class:classes(grade, section)')
+    .select('id, school_id, class_id, academic_year, term, status, notes, submitted_at, reviewed_at, issued_at, school:schools(name), class:classes(grade, section)')
     .order('submitted_at', { ascending: false }).limit(300);
   if (error) throw error;
   return data ?? [];    // الترتيب «المُرسَل أولاً» يتم في الواجهة

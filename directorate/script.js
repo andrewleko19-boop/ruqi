@@ -22,8 +22,11 @@ const {
   getDirectorateRequests,
   reviewSchoolRequest,
   getDirectorateStatements,
+  getStatementSnapshot,
   reviewMonthlyStatement,
   getDirectorateResultSheets,
+  getResultSheetSnapshot,
+  getResultSheetSnapshotsForDirectorate,
   reviewResultSheet,
   resolveReportPhotos,
   purgeTenantCaches,
@@ -2303,7 +2306,6 @@ function buildStmtRow(s) {
     `<button class="btn btn-sm ${s.status === 'submitted' ? 'btn-primary' : 'btn-ghost'} dir-stmt-review-btn"
        data-id="${esc(s.id)}" data-status="${esc(s.status)}"
        data-school="${esc(schoolName)}" data-period="${esc(period)}"
-       data-snap='${esc(JSON.stringify(s.snapshot_data || {}))}'
        >${s.status === 'submitted' ? 'مراجعة' : 'عرض'}</button>` +
     (s.status !== 'submitted' && s.notes
       ? `<span class="dir-req-reason" style="display:block;margin-top:4px">${esc(s.notes)}</span>` : '');
@@ -2318,14 +2320,17 @@ function buildStmtRow(s) {
 }
 
 // فتح مودال مراجعة البيان
-document.addEventListener('click', (e) => {
+document.addEventListener('click', async (e) => {
   const btn = e.target.closest('.dir-stmt-review-btn');
   if (!btn) return;
   _reviewingStmtId = btn.dataset.id;
   const school = btn.dataset.school;
   const period = btn.dataset.period;
+  /* اللقطةُ تُجلب هنا لا مع القائمة: صفٌّ واحد بدل ثلاثمئة. وفشلُ الجلب لا
+     يُغلق النافذة — تُفتح بلا تفصيل، فيبقى القرارُ ممكناً على ما هو ظاهر. */
   let snap = {};
-  try { snap = JSON.parse(btn.dataset.snap || '{}'); } catch { /* tolerate */ }
+  try { snap = await getStatementSnapshot(_reviewingStmtId); }
+  catch (err) { console.warn('[Dir] statement snapshot', err); }
 
   const status = btn.dataset.status || 'submitted';
   const decided = status !== 'submitted';
@@ -2705,7 +2710,7 @@ function buildRsRow(s) {
        data-id="${esc(s.id)}" data-status="${esc(s.status)}"
        data-school="${esc(schoolName)}"
        data-label="${esc(clsLabel + ' — ' + termLabel)}"
-       data-snap='${esc(JSON.stringify(s.snapshot_data || {}))}'>${label}</button>` +
+       >${label}</button>` +
     (!actionable && s.notes
       ? `<div class="dir-req-reason" style="margin-top:4px">${esc(s.notes)}</div>` : '');
 
@@ -2868,13 +2873,15 @@ document.getElementById('dir-confirm-modal')?.addEventListener('click', (e) => {
   if (e.target.id === 'dir-confirm-modal') settleDirConfirm(false);
 });
 
-document.addEventListener('click', (e) => {
+document.addEventListener('click', async (e) => {
   const btn = e.target.closest('.dir-rs-review-btn');
   if (!btn) return;
   _reviewingSheetId = btn.dataset.id;
   _reviewingSheetStatus = btn.dataset.status;
+  // اللقطةُ عند الفتح — انظر تعليق نافذة البيان.
   let snap = {};
-  try { snap = JSON.parse(btn.dataset.snap || '{}'); } catch { /* tolerate */ }
+  try { snap = await getResultSheetSnapshot(_reviewingSheetId); }
+  catch (err) { console.warn('[Dir] result sheet snapshot', err); }
 
   const decided = _reviewingSheetStatus !== 'submitted' && _reviewingSheetStatus !== 'approved';
   const STATUS_AR = { issued: 'صادر ✓', rejected: 'مرفوض ✗', draft: 'مسودة' };
@@ -3006,11 +3013,34 @@ function setupAcademicTerm() {
   });
 }
 
+/* لقطاتُ الجلاءات للوحة الأكاديمية وحدها.
+   الجلاءُ يحمل كشفَ الصفّ كاملاً، ولوحةُ «المستوى الأكاديمي» تحتاجه لتعدّ
+   الناجحين والراسبين. لكنّ تبويب الاعتمادات لا يحتاجه ألبتّة — وكان يُجرّ معه
+   لثلاثمئة صفّ فيُبطئه حتى يظنّ الموظّفُ أنّ البطاقات لا تُحمَّل.
+   فصُلا: القائمةُ خفيفةٌ دائماً، واللقطاتُ تُجلب مرّةً عند فتح تبويب الأكاديمي. */
+let _acadSnaps = null;          // Map<sheetId, snapshot> — أو null قبل الجلب
+let _acadSnapsBusy = false;
+
+async function ensureAcademicSnapshots() {
+  if (_acadSnaps || _acadSnapsBusy) return;
+  _acadSnapsBusy = true;
+  try {
+    const rows = await getResultSheetSnapshotsForDirectorate();
+    _acadSnaps = new Map(rows.map(r => [r.id, r.snapshot_data]));
+    renderAcademic();
+  } catch (err) {
+    console.warn('[Dir] academic snapshots', err);
+    _acadSnaps = new Map();     // خريطةٌ فارغة: تُعرض أصفارٌ صادقة لا تعليقٌ أبديّ
+    renderAcademic();
+  } finally { _acadSnapsBusy = false; }
+}
+
 // Roll a set of sheets up into { total, passed, failed } over their snapshots.
 function _acadTally(sheets) {
   let total = 0, passed = 0, failed = 0;
   for (const sh of sheets) {
-    const students = Array.isArray(sh.snapshot_data?.students) ? sh.snapshot_data.students : [];
+    const snap = _acadSnaps?.get(sh.id) ?? sh.snapshot_data;
+    const students = Array.isArray(snap?.students) ? snap.students : [];
     total += students.length;
     for (const st of students) {
       if (st.result === 'ناجح') passed++;
@@ -3236,7 +3266,10 @@ function _dirActivateTab(tabName) {
 
   // Chart.js sizes to its container, which is 0×0 while the panel is hidden —
   // the same reason the map needs invalidateSize above.
-  if (tabName === 'academic') setTimeout(() => renderAcademic(), 0);
+  if (tabName === 'academic') {
+    void ensureAcademicSnapshots();
+    setTimeout(() => renderAcademic(), 0);
+  }
 }
 
 // Segmented control inside the "schools" section (schools ⇄ principals ⇄ import).
@@ -3277,11 +3310,18 @@ function refreshRailCounts() {
   };
   setCount('rail-count-reports', allReports.filter(r => r.status === 'open').length);
 
-  // Each list renders a review button only for rows still awaiting a decision,
-  // so counting those buttons is the same "pending" set the panels show.
-  const pendingRs   = document.querySelectorAll('#dir-rs-list   .dir-rs-review-btn').length;
-  const pendingStmt = document.querySelectorAll('#dir-stmt-list .dir-stmt-review-btn').length;
-  const pendingReq  = document.querySelectorAll('#dir-req-list  .dir-req-review-btn').length;
+  /* ⚠ كان العدُّ من الشاشة: عددُ أزرار .dir-*-review-btn، بحجّة أنّ الزرّ لا
+     يُرسم إلّا لصفٍّ ينتظر قراراً. ثمّ جُعل الزرُّ يُرسم دائماً («عرض» لما
+     بُتَّ فيه) كي لا تُحجَب وثيقةٌ رسمية بعد اعتمادها — فصار العدُّ عددَ
+     الصفوف كلِّها لا المعلَّق منها. ولهذا رأى المستخدمُ «٢٥» ثابتاً فوق
+     التبويب وكلُّ ما في الشاشة أمامه «مقبول ✓»: الرقمُ لا ينقص لأنّ البتَّ
+     في صفٍّ لا يحذف زرَّه.
+
+     والدرسُ أعمُّ من الرقم: عدُّ عناصرِ DOM يربط المعنى بالشكل، فيكذب الرقمُ
+     صامتاً كلَّما تغيّر الرسم. العدُّ الآن من البيانات نفسها. */
+  const pendingRs   = allResultSheets.filter(s => s.status === 'submitted').length;
+  const pendingStmt = allStatements.filter(s => s.status === 'submitted').length;
+  const pendingReq  = allRequests.filter(r => r.status === 'pending').length;
   setCount('rail-count-approvals', pendingRs + pendingStmt + pendingReq);
 }
 

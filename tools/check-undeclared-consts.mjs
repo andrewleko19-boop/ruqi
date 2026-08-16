@@ -50,6 +50,7 @@ const GLOBALS = new Set([
   'getComputedStyle','scrollTo','open','close','postMessage','atob','btoa','TextEncoder','TextDecoder',
   'Node','Element','HTMLElement','HTMLInputElement','HTMLSelectElement','DocumentFragment',
   'DOMParser','XMLSerializer','CSS','Notification','ServiceWorker','ServiceWorkerRegistration',
+  'createImageBitmap','ImageBitmap','OffscreenCanvas',
   'BroadcastChannel','Worker','WebSocket','MessageChannel','ReadableStream','TransformStream',
   // Service-worker
   'self','caches','clients','skipWaiting','registration','importScripts',

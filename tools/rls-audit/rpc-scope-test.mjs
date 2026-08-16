@@ -579,6 +579,83 @@ export async function runRpcScopeTests(report) {
             out.ok ? '⚠ مرّ التحديث ولم يُكتب check_out' : out.err.slice(0, 90)));
     });
 
+    /* ── ١٤) «إجازاتي»: الضابط الموجب أوّلاً، فالميزة كانت ميتةً وهي خضراء ──
+       سياسة staff_leaves_own_read كانت تستعلم من staff_records داخل تعبير
+       USING. وتعبيرُ USING يُنفَّذ بصلاحيات المستدعي، و staff_records سياستُه
+       الوحيدة لمدير المدرسة — فقرأ المعلّمُ صفراً، وقُيّم EXISTS كاذباً دائماً
+       ولو تطابق الاسمان حرفاً بحرف. الاختبارُ السابق فحص ar_norm ولم يفحص
+       القراءةَ من حسابٍ حقيقيّ، فمرّت السياسةُ وهي معطَّلة بالكامل.
+
+       الدرس مكتوبٌ في ترتيب الفحوص: الضابطُ الموجب أوّلاً. حارسٌ يفحص المنعَ
+       وحده يبقى أخضرَ على ميزةٍ لا تعمل لأحد. */
+    await inTx(c, async () => {
+      const f = await seedForeign(c);
+      const { rows: [s2] } = await c.query(
+        `insert into public.schools (directorate_id, name, school_type)
+         values ($1, '__مدرسة جارة للإجازات__', 'primary') returning id`, [f.dirId]);
+
+      const NAME = '__صاحبة الإجازة__';
+      const mk = async (email, name, school) => {
+        const { rows: [a] } = await c.query(
+          `insert into auth.users (id, email) values (gen_random_uuid(), $1) returning id`, [email]);
+        await c.query(
+          `insert into public.users (id, full_name, role, permission_role, school_id, is_active)
+           values ($1, $2, 'teacher', 'teacher', $3, true)`, [a.id, name, school]);
+        return a.id;
+      };
+      const owner  = await mk('lv-own@t.local',  NAME,              f.schoolId);
+      const peer   = await mk('lv-peer@t.local', '__زميل__',        f.schoolId);
+      const abroad = await mk('lv-far@t.local',  NAME,              s2.id);
+      const byAsn  = await mk('lv-asn@t.local',  '__اسم مغاير__',   f.schoolId);
+
+      const { rows: [sr] } = await c.query(
+        `insert into public.staff_records (school_id, full_name, staff_type, active)
+         values ($1, $2, 'teaching', true) returning id`, [f.schoolId, NAME]);
+      await c.query(
+        `insert into public.staff_leaves (staff_id, school_id, leave_type, leave_days, month, year)
+         values ($1, $2, 'صحية', 5, 8, 2026)`, [sr.id, f.schoolId]);
+      // الربط الصريح الذي تكتبه upsert_staff_assignment عند التكليف.
+      await c.query(
+        `insert into public.staff_assignments
+           (school_id, staff_id, user_id, assignment_kind, job_title, academic_year)
+         values ($1, $2, $3, 'technical', 'معلّم', '2025-2026')`, [f.schoolId, sr.id, byAsn]);
+
+      const seen = async (uid) => {
+        await become(c, uid);
+        const r = await c.query(
+          `select 1 from public.staff_leaves where school_id = $1`, [f.schoolId]);
+        await c.query('reset role');
+        return r.rowCount;
+      };
+
+      const nOwner = await seen(owner);
+      sec.rows.push(nOwner === 1
+        ? Report.row('pass', 'إجازاتي · ضابط موجب: صاحبتُها تقرؤها',
+            'سطرٌ واحد — الميزة حيّةٌ فعلاً لا خضراءَ على فراغ')
+        : Report.row('fail', 'إجازاتي · ضابط موجب: صاحبتُها تقرؤها',
+            `⚠ ${nOwner} صفّاً — إجازةٌ تُسجَّل على معلّمة ولا تصلها`));
+
+      const nAsn = await seen(byAsn);
+      sec.rows.push(nAsn === 1
+        ? Report.row('pass', 'إجازاتي · الربط بالتكليف',
+            'اسمٌ مغايرٌ والتكليفُ يربط — لا تُشترط مطابقةُ الإملاء')
+        : Report.row('fail', 'إجازاتي · الربط بالتكليف',
+            `⚠ ${nAsn} صفّاً — الرابط الصريح مهمَل`));
+
+      const nPeer = await seen(peer);
+      sec.rows.push(nPeer === 0
+        ? Report.row('pass', 'إجازاتي · زميلٌ في المدرسة نفسها', 'محجوبة')
+        : Report.row('fail', 'إجازاتي · زميلٌ في المدرسة نفسها',
+            `⚠ ${nPeer} صفّاً — معلّمٌ يقرأ إجازات زميله`));
+
+      const nFar = await seen(abroad);
+      sec.rows.push(nFar === 0
+        ? Report.row('pass', 'إجازاتي · اسمٌ مطابق في مدرسةٍ أخرى',
+            'محجوبة — التطابق مقيَّدٌ بالمدرسة')
+        : Report.row('fail', 'إجازاتي · اسمٌ مطابق في مدرسةٍ أخرى',
+            `⚠ ${nFar} صفّاً — الاسمُ وحده يفتح إجازاتِ غريب`));
+    });
+
     return sec;
   } finally {
     await c.end();

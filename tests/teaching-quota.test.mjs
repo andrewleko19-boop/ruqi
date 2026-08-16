@@ -1,10 +1,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  تنبيه نصاب التدريس في بوّابة المدرسة.
 //
-//  الخطأ المُكلف هنا ليس استثناءً بل تشهيرٌ بالبريء: معلّمٌ لم يُملأ حقلُ
-//  نصابه بعدُ (weekly_lessons = NULL) يظهر «متجاوزاً» لو عُومِل الفارغُ صفراً.
-//  فالنصاب الغائب حالةٌ ثالثة قائمة بذاتها: بيانٌ ناقص يُستكمل، لا مخالفةٌ
-//  تُساءل. الدالة SQL تُرجع excess = null لهذه الحالة، والواجهة تفصلها.
+//  الخطأ المُكلف هنا تشهيرٌ بالبريء. وقد وقع بصيغتين:
+//
+//   ١) الأولى: معلّمٌ لم يُملأ حقلُ نصابه يظهر «متجاوزاً» لو عُومِل الفارغُ
+//      صفراً. حُرست بأن صار الفارغ حالةً ثالثة لا مخالفة.
+//
+//   ٢) والثانية أدهى، وهي ما أبلغ عنه المستخدم: النصاب كان يُؤخَذ من
+//      staff_records.weekly_lessons — خانةٍ في سجلّ الشخص نفسه. فقرأ المدير
+//      «سناء — الحمل ١٦، النصاب ١٢، تجاوز ٤» بالأحمر، ولا يعرف مَن قرّر أنّ
+//      نصابها ١٢: لا هو ولا الوزارة. حكمٌ بلا حاكم. وصار النصاب يُشتقّ من
+//      سلطته: تجاوزُ المدرسة ← الحدُّ الوطنيّ ← لا شيء.
+//
+//  ومِن ذلك حالةٌ جديدة تُختبَر هنا: **لا جهةَ حدّدت نصاباً**. الصوابُ حينها
+//  جملةٌ واحدة تقول ذلك، لا سطرٌ لكلّ موظّف يتّهمه بأنّه «بلا نصاب» — العيبُ
+//  في الإعداد لا في الكادر.
 //
 //  ويُختبَر كذلك أنّ البطاقة تختفي حين لا شيء يُنبَّه عليه — تنبيهٌ دائم
 //  الظهور يُتجاهَل، فيضيع معه التنبيه الحقيقيّ حين يقع.
@@ -24,7 +34,9 @@ assert.ok(m, 'لم يُعثر على تعريف renderQuotaAlert في school/scr
 const store = {};
 const mk = (id) => (store[id] ??= {
   id, hidden: true, textContent: '', innerHTML: '',
-  classList: { _s: new Set(), toggle(c, on) { on ? this._s.add(c) : this._s.delete(c); },
+  classList: { _s: new Set(),
+               toggle(c, on) { on ? this._s.add(c) : this._s.delete(c); },
+               remove(c) { this._s.delete(c); },
                has(c) { return this._s.has(c); } },
 });
 const escapeHtml = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -41,10 +53,14 @@ const renderQuotaAlert = new Function(
 const render = () => renderQuotaAlert(
   mk, escapeHtml, show, hide, () => rows, () => expanded)();
 
-/** معلّم: نصابٌ (أو null) وحملٌ مسنَد. excess كما تحسبه الدالة SQL. */
-const t = (name, quota, assigned) => ({
-  full_name: name, quota, assigned,
-  excess: quota == null ? null : Math.max(0, assigned - quota),
+/** صفٌّ كما تبنيه get_teaching_load: الحدّان الفعليّان، والحمل، وفرقاهما. */
+const t = (name, { min = null, max = null, assigned = 0 } = {}) => ({
+  full_name: name,
+  quota:     max,
+  quota_min: min,
+  assigned,
+  excess:    max == null ? null : Math.max(0, assigned - max),
+  shortfall: min == null ? null : Math.max(0, min - assigned),
 });
 
 beforeEach(() => {
@@ -52,30 +68,102 @@ beforeEach(() => {
   rows = []; expanded = false;
 });
 
-describe('نصاب التدريس — التمييز بين التجاوز والنقص', () => {
-  test('نصابٌ فارغ ليس تجاوزاً — لا يُشهَّر بمن لم يُملأ حقلُه', () => {
-    rows = [t('سميرة', null, 22)];
+describe('نصاب التدريس — حين لا جهةَ حدّدته', () => {
+  /* هذه هي علّة المستخدم بعينها بعد إزالة الرقم المزروع: لو بقيت الواجهة على
+     منطقها القديم لعرضت سطراً لكلّ موظّف يقول «نصاب غير محدَّد» — قائمةٌ
+     بكامل الكادر تتّهمهم بعيبٍ ليس فيهم. */
+  test('رسالةٌ واحدة تشرح، لا سطرٌ لكلّ موظّف', () => {
+    rows = [t('أحمد', { assigned: 16 }), t('سميرة', { assigned: 9 }),
+            t('هالة', { assigned: 22 })];
     render();
-    assert.match(store['quota-alert-title'].textContent, /بلا نصابٍ محدَّد/);
-    assert.doesNotMatch(store['quota-alert-title'].textContent, /تجاوزوا/);
+    assert.match(store['quota-alert-title'].textContent, /لم يُحدَّد نصابُ التدريس/);
+    assert.equal((store['quota-alert-list'].innerHTML.match(/<li/g) || []).length, 1);
+    assert.equal(store['quota-alert'].hidden, false);
+  });
+
+  test('ليست حالةَ خطرٍ حمراء — العيب في الإعداد لا في الكادر', () => {
+    rows = [t('أحمد', { assigned: 40 })];
+    render();
     assert.equal(store['quota-alert'].classList.has('is-danger'), false);
   });
 
-  test('حملٌ يفوق نصاباً محدَّداً تجاوزٌ يُعلَن بالأحمر', () => {
-    rows = [t('أحمد', 15, 16)];
+  test('تُرشد إلى موضع الضبط', () => {
+    rows = [t('أحمد', { assigned: 16 })];
+    render();
+    assert.match(store['quota-alert-list'].innerHTML, /إعدادات المدرسة/);
+  });
+
+  test('لا اسمَ موظّفٍ في الرسالة — لا تشهيرَ بمن لا ذنبَ له', () => {
+    rows = [t('سناء مصطفى وليو', { assigned: 16 })];
+    render();
+    assert.doesNotMatch(store['quota-alert-list'].innerHTML, /سناء/);
+  });
+
+  test('زرُّ التوسيع يختفي — لا قائمةَ تُوسَّع', () => {
+    rows = [t('أ', { assigned: 1 }), t('ب', { assigned: 2 }),
+            t('ج', { assigned: 3 }), t('د', { assigned: 4 })];
+    render();
+    assert.equal(store['btn-quota-detail'].hidden, true);
+  });
+
+  test('لا كادرَ أصلاً: تختفي البطاقة ولا تُلقى محاضرةُ إعداد', () => {
+    rows = [];
+    render();
+    assert.equal(store['quota-alert'].hidden, true);
+  });
+});
+
+describe('نصاب التدريس — التمييز بين التجاوز والنقص', () => {
+  test('حملٌ يفوق الحدّ الأعلى تجاوزٌ يُعلَن بالأحمر', () => {
+    rows = [t('أحمد', { min: 12, max: 15, assigned: 16 })];
     render();
     assert.match(store['quota-alert-title'].textContent, /1 تجاوزوا النصاب/);
     assert.equal(store['quota-alert'].classList.has('is-danger'), true);
   });
 
-  /* كان هذا الاختبار يشترط «16 / 15 +1» — وهو ما ثبّت العلّة بدل أن يمسكها.
-     الرقمان مقطعان لاتينيّان والشرطةُ محايدة والفقرةُ عربية، فتعكس خوارزميةُ
-     ثنائية الاتجاه ترتيبَهما بصريّاً: يبنيه الكود «15/16» ويقرؤه المديرُ
-     «16/15». فمديرٌ أسند ١٥ درساً لمعلّمةٍ نصابُها ١٢ قرأ أنّها دون النصاب —
-     عكسُ الحقيقة، وفوقه عنوانٌ أحمر يقول «تجاوزوا النصاب». وهو ما أبلغ عنه
-     المستخدم حرفاً. والاختبار الآن يشترط النقيض: لا زوجَ أرقامٍ عارٍ ألبتّة. */
+  /* نصفُ الحدّ كان مهملاً: الدالّة تُرجع حدّاً أدنى ولا أحد يقرؤه، فمعلّمٌ
+     بأربع حصصٍ ونصابُه اثنتا عشرة يمرّ بلا كلمة. */
+  test('حملٌ دون الحدّ الأدنى نقصٌ يُعلَن — لا يمرّ صامتاً', () => {
+    rows = [t('سميرة', { min: 12, max: 24, assigned: 4 })];
+    render();
+    assert.match(store['quota-alert-title'].textContent, /1 دون النصاب/);
+    assert.doesNotMatch(store['quota-alert-title'].textContent, /تجاوزوا/);
+  });
+
+  test('النقص ليس حالةَ خطرٍ حمراء كالتجاوز', () => {
+    rows = [t('سميرة', { min: 12, max: 24, assigned: 4 })];
+    render();
+    assert.equal(store['quota-alert'].classList.has('is-danger'), false);
+  });
+
+  test('الحالتان معاً تُعدّان منفصلتين في العنوان', () => {
+    rows = [t('أحمد', { min: 12, max: 15, assigned: 18 }),
+            t('سميرة', { min: 12, max: 24, assigned: 9 }),
+            t('هالة',  { min: 12, max: 24, assigned: 4 })];
+    render();
+    assert.match(store['quota-alert-title'].textContent, /1 تجاوزوا النصاب/);
+    assert.match(store['quota-alert-title'].textContent, /2 دون النصاب/);
+  });
+
+  test('حملٌ بين الحدَّين لا يُنبَّه عليه', () => {
+    rows = [t('أحمد', { min: 12, max: 24, assigned: 15 })];
+    render();
+    assert.equal(store['quota-alert'].hidden, true);
+  });
+
+  test('حملٌ مساوٍ لحدٍّ ليس مخالفةً — الطرفان مسموحان', () => {
+    rows = [t('أ', { min: 12, max: 24, assigned: 24 }),
+            t('ب', { min: 12, max: 24, assigned: 12 })];
+    render();
+    assert.equal(store['quota-alert'].hidden, true);
+  });
+
+  /* كان اختبارٌ سابق يشترط «16 / 15 +1» — فثبّت العلّة بدل أن يمسكها. الرقمان
+     مقطعان لاتينيّان والشرطةُ محايدة والفقرةُ عربية، فتعكس خوارزميةُ ثنائية
+     الاتجاه ترتيبَهما بصريّاً: يبنيه الكود «15/16» ويقرؤه المديرُ «16/15».
+     والاختبار الآن يشترط النقيض: لا زوجَ أرقامٍ عارٍ ألبتّة. */
   test('كلُّ رقمٍ يسبقه اسمه — لا زوجَ أرقامٍ تعكسه ثنائيةُ الاتجاه', () => {
-    rows = [t('أحمد', 15, 16)];
+    rows = [t('أحمد', { min: 12, max: 15, assigned: 16 })];
     render();
     const h = store['quota-alert-list'].innerHTML;
     assert.match(h, /الحمل <b>16<\/b>/);
@@ -83,51 +171,47 @@ describe('نصاب التدريس — التمييز بين التجاوز وا�
     assert.match(h, /تجاوز <b>1<\/b>/);
   });
 
-  test('لا يتجاور رقمٌ برقمٍ في النصّ المعروض', () => {
-    rows = [t('أحمد', 15, 16)];
+  test('صفُّ النقص يعرض الحدَّ الأدنى لا الأعلى — وإلّا بدا الفرق مغلوطاً', () => {
+    rows = [t('سميرة', { min: 12, max: 24, assigned: 4 })];
     render();
-    // النصّ المرئيّ وحده (بلا وسوم): زوجٌ متجاورٌ بفاصلٍ محايد هو ما يُعكَس.
+    const h = store['quota-alert-list'].innerHTML;
+    assert.match(h, /الحمل <b>4<\/b>/);
+    assert.match(h, /النصاب <b>12<\/b>/);   // لا 24
+    assert.match(h, /نقص <b>8<\/b>/);
+  });
+
+  test('لا يتجاور رقمٌ برقمٍ في النصّ المعروض', () => {
+    rows = [t('أحمد', { min: 12, max: 15, assigned: 16 }),
+            t('سميرة', { min: 12, max: 24, assigned: 4 })];
+    render();
     const text = store['quota-alert-list'].innerHTML.replace(/<[^>]+>/g, ' ');
     assert.ok(!/\d+\s*[/\-–]\s*\d+/.test(text),
       `زوجُ أرقامٍ عارٍ عاد إلى الشاشة: ${text.trim()}`);
-  });
-
-  test('الحالتان معاً تُعدّان منفصلتين في العنوان', () => {
-    rows = [t('أحمد', 15, 18), t('سميرة', null, 9), t('هالة', null, 4)];
-    render();
-    assert.match(store['quota-alert-title'].textContent, /1 تجاوزوا النصاب/);
-    assert.match(store['quota-alert-title'].textContent, /2 بلا نصابٍ محدَّد/);
-  });
-
-  test('حملٌ مساوٍ للنصاب ليس تجاوزاً — الحدّ مسموح', () => {
-    rows = [t('أحمد', 15, 15)];
-    render();
-    assert.equal(store['quota-alert'].hidden, true);
   });
 });
 
 describe('نصاب التدريس — ظهور البطاقة', () => {
   test('تختفي حين لا تجاوز ولا نقص — تنبيهٌ دائم يُتجاهَل', () => {
-    rows = [t('أحمد', 15, 12), t('سميرة', 18, 18)];
+    rows = [t('أحمد', { min: 12, max: 15, assigned: 13 }),
+            t('سميرة', { min: 12, max: 18, assigned: 18 })];
     render();
     assert.equal(store['quota-alert'].hidden, true);
   });
 
-  test('تختفي حين لا معلّمين أصلاً', () => {
-    rows = [];
-    render();
-    assert.equal(store['quota-alert'].hidden, true);
-  });
-
-  test('تظهر ثلاثةً فقط وتُخفي الزرّ حين لا مزيد', () => {
-    rows = [t('أ', 15, 16), t('ب', 15, 17)];
+  test('تظهر اثنين وتُخفي الزرّ حين لا مزيد', () => {
+    rows = [t('أ', { min: 12, max: 15, assigned: 16 }),
+            t('ب', { min: 12, max: 15, assigned: 17 })];
     render();
     assert.equal((store['quota-alert-list'].innerHTML.match(/<li>/g) || []).length, 2);
     assert.equal(store['btn-quota-detail'].hidden, true);
   });
 
   test('أكثر من ثلاثة: ثلاثةٌ وزرٌّ يُعلن العدد الكامل', () => {
-    rows = [t('أ', 15, 16), t('ب', 15, 17), t('ج', 15, 18), t('د', 15, 19), t('هـ', null, 3)];
+    rows = [t('أ', { min: 12, max: 15, assigned: 16 }),
+            t('ب', { min: 12, max: 15, assigned: 17 }),
+            t('ج', { min: 12, max: 15, assigned: 18 }),
+            t('د', { min: 12, max: 15, assigned: 19 }),
+            t('هـ', { min: 12, max: 24, assigned: 3 })];
     render();
     assert.equal((store['quota-alert-list'].innerHTML.match(/<li>/g) || []).length, 3);
     assert.equal(store['btn-quota-detail'].hidden, false);
@@ -135,7 +219,10 @@ describe('نصاب التدريس — ظهور البطاقة', () => {
   });
 
   test('التوسيع يعرض الجميع', () => {
-    rows = [t('أ', 15, 16), t('ب', 15, 17), t('ج', 15, 18), t('د', 15, 19)];
+    rows = [t('أ', { min: 12, max: 15, assigned: 16 }),
+            t('ب', { min: 12, max: 15, assigned: 17 }),
+            t('ج', { min: 12, max: 15, assigned: 18 }),
+            t('د', { min: 12, max: 15, assigned: 19 })];
     expanded = true;
     render();
     assert.equal((store['quota-alert-list'].innerHTML.match(/<li>/g) || []).length, 4);
@@ -145,14 +232,17 @@ describe('نصاب التدريس — ظهور البطاقة', () => {
 
 describe('نصاب التدريس — السلامة', () => {
   test('اسمٌ فيه وسمٌ يُهرَّب', () => {
-    rows = [t('<img src=x>', 15, 20)];
+    rows = [t('<img src=x>', { min: 12, max: 15, assigned: 20 })];
     render();
     assert.doesNotMatch(store['quota-alert-list'].innerHTML, /<img/);
     assert.match(store['quota-alert-list'].innerHTML, /&lt;img/);
   });
 
   test('المتجاوزون يسبقون ناقصي النصاب في العرض المختصر', () => {
-    rows = [t('متجاوز', 15, 20), t('ناقص١', null, 5), t('ناقص٢', null, 6), t('ناقص٣', null, 7)];
+    rows = [t('متجاوز', { min: 12, max: 15, assigned: 20 }),
+            t('ناقص١', { min: 12, max: 24, assigned: 5 }),
+            t('ناقص٢', { min: 12, max: 24, assigned: 6 }),
+            t('ناقص٣', { min: 12, max: 24, assigned: 7 })];
     render();
     const h = store['quota-alert-list'].innerHTML;
     assert.ok(h.indexOf('متجاوز') < h.indexOf('ناقص١'), 'التجاوز يجب أن يتصدّر');

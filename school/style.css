@@ -2621,6 +2621,17 @@ select.csel-native {
   padding:1px 6px; border-radius:var(--r-pill);
   background:rgba(127,29,29,.1); opacity:1;
 }
+/* النقصُ عن النصاب ليس مخالفةً كالتجاوز: كهرمانٌ لا أحمر — نصفُ الحدّ كان
+   مهملاً، ويُعرَض الآن بلا أن يُساوى بما فوقه في الشدّة. */
+.qa-part.qa-under {
+  padding:1px 6px; border-radius:var(--r-pill);
+  background:rgba(180,83,9,.12); opacity:1;
+}
+/* «لم يُحدَّد نصاب»: جملةٌ واحدة تشرح، لا سطرٌ لكلّ موظّف يتّهمه بما لا ذنبَ له. */
+.qa-notice {
+  display:block; font-size:.8rem; line-height:1.7; opacity:.9;
+  font-weight:500; padding:2px 0;
+}
 .qa-num b { font-weight:800; }
 .qa-num.is-muted { font-weight:600; opacity:.85; }
 

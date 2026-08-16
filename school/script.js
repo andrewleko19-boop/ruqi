@@ -727,18 +727,57 @@ sevBtns.addEventListener('click', (e) => {
 });
 
 // Photo attachment
+/* ── إرفاق صورة البلاغ ────────────────────────────────────────────────────────
+   الحدُّ كان ٣ ميغا، وصورةُ جوّالٍ حديث تتجاوزه بيسر — فيُمنع المديرُ من إرفاق
+   الدليل في اللحظة التي يحتاجه فيها. رُفع إلى ٥.
+
+   لكنّ رفعَ الحدّ وحده يزيد العلّة: الصورة تُخزَّن data URI داخل صفّ القاعدة،
+   و base64 يُضخّمها الثلثَ — فخمسةُ ميغا تصير نحو ٦.٧ في صفٍّ واحد، وقائمةُ
+   البلاغات تجرّها كلَّها في كلّ فتحة. فالمقبول للإدخال شيء، والمخزَّن شيء:
+   نقبل ٥ ميغا ثمّ نُصغّر إلى حدٍّ يكفي للقراءة (١٦٠٠ بكسل على الضلع الأطول،
+   JPEG بجودة ٠.٨) — سقفٌ لا يُقرأ فيه شقُّ جدارٍ أقلَّ ممّا يُقرأ في الأصل.
+   وإن تعذّر التصغير (نوعٌ لا يفكّه المتصفّح) نرجع إلى الأصل بلا منعٍ للمدير. */
+const REPORT_PHOTO_MAX_MB   = 5;    // ما يُقبل من المستخدم
+const REPORT_PHOTO_MAX_EDGE = 1600; // ما يُخزَّن فعلاً
+
+/** يُصغّر صورةً إلى حدّ الضلع ويعيد {b64, mime}؛ أو null إن تعذّر. */
+async function downscaleImage(file, maxEdge = REPORT_PHOTO_MAX_EDGE) {
+  if (typeof createImageBitmap !== 'function' || !document.createElement('canvas').getContext) {
+    return null;
+  }
+  let bmp;
+  try { bmp = await createImageBitmap(file); } catch { return null; }
+  try {
+    const scale = Math.min(1, maxEdge / Math.max(bmp.width, bmp.height));
+    // أصغرُ من السقف أصلاً وليس ضخماً: يُترك كما هو، فإعادةُ الترميز تُفقد بلا مقابل.
+    if (scale === 1 && file.size <= 1024 * 1024) return null;
+    const w = Math.max(1, Math.round(bmp.width  * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(bmp, 0, 0, w, h);
+    const url = cv.toDataURL('image/jpeg', 0.8);
+    const b64 = url.split(',')[1];
+    if (!b64) return null;
+    return { b64, mime: 'image/jpeg' };
+  } catch { return null; }
+  finally { bmp.close?.(); }
+}
+
 rPhoto.addEventListener('change', async () => {
   const file = rPhoto.files[0];
   if (!file) return;
-  const MAX_MB = 3;
-  if (file.size > MAX_MB * 1024 * 1024) {
-    toast(`الصورة أكبر من ${MAX_MB} MB`, 'error');
+  if (file.size > REPORT_PHOTO_MAX_MB * 1024 * 1024) {
+    toast(`الصورة أكبر من ${REPORT_PHOTO_MAX_MB} MB`, 'error');
     rPhoto.value = '';
     return;
   }
   try {
-    S.photoB64  = await fileToBase64(file);
-    S.photoMime = file.type;
+    const small = await downscaleImage(file);
+    S.photoB64  = small ? small.b64  : await fileToBase64(file);
+    S.photoMime = small ? small.mime : file.type;
     photoLabel.classList.add('has-photo');
     photoText.textContent = `✓ ${file.name.length > 24 ? file.name.slice(0, 22) + '…' : file.name}`;
   } catch {
@@ -3337,12 +3376,21 @@ async function loadSchoolReports() {
       const receipt = r.receipt_number ? ` · إيصال ${escapeHtml(String(r.receipt_number))}` : '';
       // من حلّ البلاغ ومتى: كان يُكتب في resolved_by ولا يُقرأ، فتعرف المدرسة
       // أنّ بلاغها حُلّ ولا تعرف إلى من ترجع إن عاد.
-      const solved = r.status === 'resolved' && (r.resolver?.full_name || r.resolved_at)
-        ? `<div class="req-solved">حُلَّ${
-            r.resolver?.full_name ? ' — ' + escapeHtml(r.resolver.full_name) : ''}${
-            r.resolved_at ? ' · ' + escapeHtml(new Date(r.resolved_at)
-              .toLocaleDateString('ar-SY', { day: 'numeric', month: 'short' })) : ''}</div>`
-        : '';
+      /* خطُّ البلاغ من طرفيه لا من طرفه الأخير: مديرٌ رفع «انهيار سقف» يحتاج
+         أن يعرف أنّ بشراً رآه قبل أن يعرف بأسابيع أنّه حُلّ. فتُعرَض المراجعةُ
+         كما يُعرَض الحلّ — كلٌّ باسم صاحبه وتاريخه. */
+      const stamp = (d) => escapeHtml(new Date(d)
+        .toLocaleDateString('ar-SY', { day: 'numeric', month: 'short' }));
+      const line = (label, who, when) =>
+        `<div class="req-solved">${label}${who ? ' — ' + escapeHtml(who) : ''}${
+          when ? ' · ' + stamp(when) : ''}</div>`;
+
+      let solved = '';
+      if (r.status === 'resolved' && (r.resolver?.full_name || r.resolved_at)) {
+        solved = line('حُلَّ', r.resolver?.full_name, r.resolved_at);
+      } else if (r.acknowledged_at || r.ack?.full_name) {
+        solved = line('راجعته المديرية', r.ack?.full_name, r.acknowledged_at);
+      }
       return `<li class="req-card">
         <div class="req-card-hdr">
           <span class="req-type-label">${escapeHtml(type)}</span>
@@ -5311,9 +5359,15 @@ async function loadQuotaBounds() {
   catch { _quotaBounds = null; }   // تعذّر الجلب: لا حدَّ مخترَع يرفض إدخالاً سليماً
   const hint = el('sch-quota-national');
   if (hint) {
-    hint.textContent = _quotaBounds
-      ? `الحدّ الوطنيّ: من ${_quotaBounds.min_lessons} إلى ${_quotaBounds.max_lessons} حصة أسبوعياً.`
-      : 'تعذّر جلب الحدّ الوطنيّ.';
+    /* الوزارة قد لا تكون حدّدت شيئاً بعد — وهي حالٌ تُقال لا تُموَّه برقم.
+       التمييزُ بين «لم تحدّده الوزارة» و«تعذّر الجلب» مقصود: الأوّل ينتظر
+       قراراً، والثاني ينتظر شبكة. */
+    const nb = _quotaBounds;
+    hint.textContent =
+      !nb                                        ? 'تعذّر جلب الحدّ الوطنيّ.'
+      : nb.min_lessons == null && nb.max_lessons == null
+        ? 'لم تحدّد الوزارة حدّاً وطنياً بعد — الحدّان أدناه هما المرجع الوحيد لهذه المدرسة.'
+      : `الحدّ الوطنيّ: من ${nb.min_lessons ?? '—'} إلى ${nb.max_lessons ?? '—'} حصة أسبوعياً.`;
   }
   const mn = el('sch-quota-min'), mx = el('sch-quota-max');
   if (mn) mn.value = S.school?.quota_min_lessons ?? '';
@@ -6565,15 +6619,33 @@ function renderQuotaAlert() {
   const list  = el('quota-alert-list');
   if (!box || !title || !list) return;
 
-  const over    = _quotaRows.filter(r => r.excess != null && r.excess > 0);
-  const noQuota = _quotaRows.filter(r => r.quota == null);
-  const flagged = [...over, ...noQuota];
+  /* لا نصابَ محدَّداً أصلاً: رسالةٌ واحدة تقول ذلك، لا سطرٌ لكلّ موظّف.
+     كان الرقم يأتي من خانة الشخص نفسه فيُحاكَم بما كُتب في خانته؛ صار يأتي من
+     سلطته (تجاوزُ المدرسة ← الحدُّ الوطنيّ). وحين لا تحدّده جهةٌ، فالصوابُ أن
+     يُقال «لم يُحدَّد» مرّةً واحدة — لا أن يُخترَع رقمٌ ولا أن يُتَّهم كلُّ
+     الكادر بأنّهم «بلا نصاب». */
+  const anyBound = _quotaRows.some(r => r.quota != null || r.quota_min != null);
+  if (!anyBound) {
+    if (!_quotaRows.length) { hide(box); return; }
+    box.classList.remove('is-danger');
+    title.textContent = 'لم يُحدَّد نصابُ التدريس';
+    list.innerHTML =
+      '<li class="qa-notice">لا حدَّ وطنيّاً وضعته الوزارة، ولا حدَّ لهذه المدرسة. ' +
+      'حدِّده من «إعدادات المدرسة ← حدّ نصاب التدريس»، أو انتظر تحديد الوزارة.</li>';
+    const b0 = el('btn-quota-detail'); if (b0) b0.hidden = true;
+    show(box);
+    return;
+  }
+
+  const over   = _quotaRows.filter(r => r.excess    != null && r.excess    > 0);
+  const under  = _quotaRows.filter(r => r.shortfall != null && r.shortfall > 0);
+  const flagged = [...over, ...under];
   if (!flagged.length) { hide(box); return; }
 
   box.classList.toggle('is-danger', over.length > 0);
   title.textContent = [
-    over.length    ? `${over.length} تجاوزوا النصاب`      : '',
-    noQuota.length ? `${noQuota.length} بلا نصابٍ محدَّد` : '',
+    over.length  ? `${over.length} تجاوزوا النصاب`   : '',
+    under.length ? `${under.length} دون النصاب`      : '',
   ].filter(Boolean).join(' · ');
 
   // ثلاثةٌ افتراضاً: قائمةٌ طويلة فوق التكاليف تدفعها خارج الشاشة، والغرض
@@ -6588,15 +6660,20 @@ function renderQuotaAlert() {
      فلا نُبقي زوجاً عارياً يتّكل على الاتجاه: كلُّ رقمٍ يسبقه اسمه، ويُلفّ كلٌّ
      منها في عنصرٍ مستقلّ فلا يجاور رقمٌ رقماً وتنتفي المسألة من أصلها. */
   const shown = _quotaExpanded ? flagged : flagged.slice(0, 3);
-  list.innerHTML = shown.map(r => `
+  list.innerHTML = shown.map(r => {
+    const isOver = r.excess != null && r.excess > 0;
+    const bound  = isOver ? r.quota : r.quota_min;
+    const gap    = isOver ? r.excess : r.shortfall;
+    return `
     <li>
       <span class="qa-name">${escapeHtml(r.full_name)}</span>
-      <span class="qa-num${r.quota == null ? ' is-muted' : ''}">${r.quota == null
-        ? 'نصاب غير محدَّد'
-        : `<span class="qa-part">الحمل <b>${r.assigned}</b></span>`
-        + `<span class="qa-part">النصاب <b>${r.quota}</b></span>`
-        + `<span class="qa-part qa-over">تجاوز <b>${r.excess}</b></span>`}</span>
-    </li>`).join('');
+      <span class="qa-num">${
+          `<span class="qa-part">الحمل <b>${r.assigned}</b></span>`
+        + `<span class="qa-part">النصاب <b>${bound}</b></span>`
+        + `<span class="qa-part ${isOver ? 'qa-over' : 'qa-under'}">${
+             isOver ? 'تجاوز' : 'نقص'} <b>${gap}</b></span>`}</span>
+    </li>`;
+  }).join('');
 
   const btn = el('btn-quota-detail');
   if (btn) {
