@@ -3404,6 +3404,19 @@ function currentTerm() {
 
 async function initReportsTab() {
   if (!S.school?.id) return;
+
+  /* «نوع الشهادة» يفتح على ما أعلنته الوزارة لا على أوّل خيار.
+     كان المنتقي يبدأ دائماً على «شهادة السنة الكاملة» — فمديرٌ يطبع بطاقات
+     في نهاية الفصل الأول يُصدر وثيقةَ سنةٍ كاملة على درجاتٍ نصفية إن لم
+     ينتبه. والمدير يبقى صاحب القرار: هذا افتراضٌ لا قفل. */
+  try {
+    const term = await NDB.getCurrentTerm();
+    if (repTermSelect && !_repTermTouched) {
+      repTermSelect.value = term === 's1' ? 's1' : 'year';
+      CustomSelect.refresh(repTermSelect);
+    }
+  } catch { /* تعذّر الجلب: يبقى الخيار الظاهر */ }
+
   try {
     const classes = await NDB.getSchoolClasses(S.school.id);
     repClassSelect.innerHTML = '<option value="">— اختر صفاً —</option>';
@@ -3428,7 +3441,12 @@ repClassSelect.addEventListener('change', () => {
   if (id) loadReports(id);
   else { repListEl.innerHTML = ''; repEmpty.hidden = true; hide(btnPrintAll); hide(btnPromoteClass); }
 });
-repTermSelect.addEventListener('change', () => { if (repClassSelect.value) loadReports(repClassSelect.value); });
+// ما إن يختار المديرُ نوعاً بنفسه لا نُعيده إلى الافتراض الوطنيّ في هذه الجلسة.
+let _repTermTouched = false;
+repTermSelect.addEventListener('change', () => {
+  _repTermTouched = true;
+  if (repClassSelect.value) loadReports(repClassSelect.value);
+});
 btnRefreshReports.addEventListener('click', () => { if (repClassSelect.value) loadReports(repClassSelect.value); });
 
 btnPromoteClass?.addEventListener('click', async () => {

@@ -34,6 +34,7 @@ const {
   getGraceProposals,
   getMyGraceProposals,
   getMyStaffLeaves,
+  getCurrentTerm,
   teacherCheckIn,
   teacherCheckOut,
   getMyStaffAttendanceToday,
@@ -1629,6 +1630,9 @@ const G = {
   subjects: [],     // [{ id, name, max_total, pass_mark, is_core_arabic, components:[{id,name,max_mark}] }]
   editableIds: [],  // subject ids this teacher may EDIT in this class (others are read-only)
   semester: 1,
+  // الافتراضُ يأتي من إعداد الوزارة عند فتح الشاشة؛ هذه الراية تمنع
+  // إعادةَ الدهس بعد أن يبدّل المعلّم الفصلَ بنفسه في الجلسة نفسها.
+  semesterTouched: false,
   marks:    {},     // { [studentId]: { [componentId]: number|null } }
   dirty:    false,
 };
@@ -1736,6 +1740,17 @@ async function openGradesView(cls) {
       gradesSubjectSel.appendChild(opt);
     }
     CustomSelect.refresh(gradesSubjectSel);
+
+    /* الفصلُ يفتح على ما أعلنته الوزارة لا على «الأول» دائماً.
+       كان G.semester يبدأ 1 أبداً، فمعلّمٌ يُدخل درجات الفصل الثاني يكتبها
+       في الأول إن لم ينتبه — وهي درجاتٌ تُبنى عليها النتيجة النهائية. ولا
+       نُعيده إلى الافتراض بعد أن يبدّله بنفسه في هذه الجلسة. */
+    if (!G.semesterTouched) {
+      try {
+        const t = await getCurrentTerm();
+        G.semester = t === 's2' ? 2 : 1;
+      } catch { /* تعذّر الجلب: يبقى ما هو */ }
+    }
     gradesSemesterSel.value = String(G.semester);
     CustomSelect.refresh(gradesSemesterSel);
 
@@ -2036,7 +2051,10 @@ async function switchGradeContext() {
   await loadGradesForCurrent();
 }
 gradesSubjectSel.addEventListener('change', switchGradeContext);
-gradesSemesterSel.addEventListener('change', switchGradeContext);
+gradesSemesterSel.addEventListener('change', () => {
+  G.semesterTouched = true;   // اختيارُ المعلّم يعلو على الافتراض الوطنيّ
+  switchGradeContext();
+});
 
 // Save
 btnSaveGrades.addEventListener('click', async () => {
