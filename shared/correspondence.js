@@ -8,7 +8,13 @@
 //  الأرقام). فوحدةٌ واحدة تُستدعى بمعاملاتها.
 //
 //  الوسمُ يُبنى هنا لا في كلّ index.html: صفحةٌ تُضيف البطاقةَ بسطرٍ واحد.
+//
+//  الـ overlays تُلصق بـ document.body لا بـ mount: position:fixed لا يعمل
+//  بصورة موثوقة داخل حاوياتٍ قد يكون لها transform أو overflow، وموضعُ
+//  الغطاء الصحيح دائماً هو جذرُ الوثيقة.
 // ─────────────────────────────────────────────────────────────────────────────
+
+import { CustomSelect } from './csel.js';
 
 const esc = (s) => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -41,6 +47,7 @@ function fmtWhen(iso) {
 export function mountCorrespondence({ mount, side, db, peers = null, peerLabel = 'الجهة' }) {
   if (!mount) return { refresh: () => {}, unreadCount: () => 0 };
 
+  // ── قائمة الخيوط (تبقى داخل mount) ─────────────────────────────────────
   mount.innerHTML = `
     <div class="corr-head">
       <span class="corr-title">المراسلات</span>
@@ -50,43 +57,68 @@ export function mountCorrespondence({ mount, side, db, peers = null, peerLabel =
     <div class="corr-loading" data-el="loading" hidden><span class="spinner"></span></div>
     <p class="corr-error" data-el="error" hidden>تعذّر تحميل المراسلات.</p>
     <ul class="corr-list" data-el="list"></ul>
-    <p class="corr-empty" data-el="empty" hidden>لا مراسلات بعد.</p>
+    <p class="corr-empty" data-el="empty" hidden>لا مراسلات بعد.</p>`;
 
-    <div class="corr-overlay" data-el="thread" hidden>
-      <div class="corr-panel">
-        <div class="corr-panel-head">
-          <span data-el="th-subject"></span>
-          <button type="button" class="corr-x" data-act="close">✕</button>
-        </div>
-        <div class="corr-msgs" data-el="th-msgs"></div>
-        <div class="corr-reply">
-          <textarea data-el="th-body" rows="2" maxlength="2000" placeholder="اكتب ردَّك…"></textarea>
-          <button type="button" class="corr-send" data-act="send">إرسال</button>
-        </div>
-        <p class="corr-closed" data-el="th-closed" hidden>هذه المراسلة مغلقة.</p>
+  // ── غطاء الخيط — يُلصق بـ body مباشرةً ─────────────────────────────────
+  const threadEl = document.createElement('div');
+  threadEl.className = 'corr-overlay';
+  threadEl.hidden = true;
+  threadEl.innerHTML = `
+    <div class="corr-panel">
+      <div class="corr-panel-head">
+        <span data-el="th-subject"></span>
+        <button type="button" class="corr-x" data-act="close">✕</button>
       </div>
-    </div>
-
-    <div class="corr-overlay" data-el="compose" hidden>
-      <div class="corr-panel">
-        <div class="corr-panel-head">
-          <span>مراسلة جديدة</span>
-          <button type="button" class="corr-x" data-act="cancel">✕</button>
-        </div>
-        <label class="corr-field"><span>${esc(peerLabel)}</span>
-          <select data-el="c-peer"></select></label>
-        <label class="corr-field"><span>الموضوع</span>
-          <input type="text" data-el="c-subject" maxlength="120" placeholder="موضوع المراسلة"></label>
-        <label class="corr-field"><span>النصّ</span>
-          <textarea data-el="c-body" rows="4" maxlength="2000"></textarea></label>
-        <p class="corr-error" data-el="c-error" hidden></p>
-        <button type="button" class="corr-send" data-act="create">إرسال</button>
+      <div class="corr-msgs" data-el="th-msgs"></div>
+      <div class="corr-reply">
+        <textarea data-el="th-body" rows="2" maxlength="2000" placeholder="اكتب ردَّك…"></textarea>
+        <button type="button" class="corr-send" data-act="send">إرسال</button>
       </div>
+      <p class="corr-closed" data-el="th-closed" hidden>هذه المراسلة مغلقة.</p>
     </div>`;
+  document.body.appendChild(threadEl);
 
-  const q = (n) => mount.querySelector(`[data-el="${n}"]`);
-  const show = (n) => { const e = q(n); if (e) e.hidden = false; };
-  const hide = (n) => { const e = q(n); if (e) e.hidden = true; };
+  // ── غطاء التأليف — يُلصق بـ body مباشرةً ──────────────────────────────
+  const composeEl = document.createElement('div');
+  composeEl.className = 'corr-overlay';
+  composeEl.hidden = true;
+  composeEl.innerHTML = `
+    <div class="corr-panel">
+      <div class="corr-panel-head">
+        <span>مراسلة جديدة</span>
+        <button type="button" class="corr-x" data-act="cancel">✕</button>
+      </div>
+      <label class="corr-field"><span>${esc(peerLabel)}</span>
+        <select data-el="c-peer"></select></label>
+      <label class="corr-field"><span>الموضوع</span>
+        <input type="text" data-el="c-subject" maxlength="120" placeholder="موضوع المراسلة"></label>
+      <label class="corr-field"><span>النصّ</span>
+        <textarea data-el="c-body" rows="4" maxlength="2000"></textarea></label>
+      <p class="corr-error" data-el="c-error" hidden></p>
+      <button type="button" class="corr-send" data-act="create">إرسال</button>
+    </div>`;
+  document.body.appendChild(composeEl);
+
+  // قائمة الجهة: تُعزَّز فوراً فتظهر بواجهة التطبيق لا بواجهة النظام.
+  // refresh() يُعاد استدعاؤه في fillPeers() بعد ملء الخيارات.
+  if (peers) CustomSelect.enhance(composeEl.querySelector('[data-el="c-peer"]'));
+
+  // ── مساعدات ──────────────────────────────────────────────────────────────
+  function q(n) {
+    return mount.querySelector(`[data-el="${n}"]`)
+        || threadEl.querySelector(`[data-el="${n}"]`)
+        || composeEl.querySelector(`[data-el="${n}"]`);
+  }
+  const show = (n) => {
+    if (n === 'thread')  { threadEl.hidden  = false; return; }
+    if (n === 'compose') { composeEl.hidden = false; return; }
+    const e = q(n); if (e) e.hidden = false;
+  };
+  const hide = (n) => {
+    if (n === 'thread')  { threadEl.hidden  = true; return; }
+    if (n === 'compose') { composeEl.hidden = true; return; }
+    const e = q(n); if (e) e.hidden = true;
+  };
 
   let threads = [];
   let openId  = null;
@@ -141,7 +173,7 @@ export function mountCorrespondence({ mount, side, db, peers = null, peerLabel =
     const closed = t.status === 'closed';
     q('th-closed').hidden = !closed;
     q('th-body').disabled = closed;
-    mount.querySelector('[data-act="send"]').disabled = closed;
+    threadEl.querySelector('[data-act="send"]').disabled = closed;
     try {
       const msgs = await db.getCorrespondenceMessages(id);
       q('th-msgs').innerHTML = msgs.map(m => `
@@ -165,15 +197,25 @@ export function mountCorrespondence({ mount, side, db, peers = null, peerLabel =
     try { peerRows = await peers(); } catch { peerRows = []; }
     sel.innerHTML = peerRows.map(p =>
       `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+    // يُعاد بناء قائمة الخيارات في CustomSelect بعد ملء الـ <select>.
+    CustomSelect.refresh(sel);
   }
 
+  // ── البطاقة: تحديث، مراسلة جديدة، فتح خيط ──────────────────────────────
   mount.addEventListener('click', async (e) => {
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (act === 'refresh') { void refresh(); return; }
-    if (act === 'close')   { hide('thread'); openId = null; void refresh(); return; }
-    if (act === 'cancel')  { hide('compose'); return; }
     if (act === 'new')     { await fillPeers(); hide('c-error'); show('compose'); return; }
+    const row = e.target.closest('.corr-row');
+    if (row) void openThread(row.dataset.id);
+  });
 
+  // ── غطاء الخيط: إغلاق، إرسال ردّ ───────────────────────────────────────
+  threadEl.addEventListener('click', async (e) => {
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'close') {
+      hide('thread'); openId = null; void refresh(); return;
+    }
     if (act === 'send') {
       const body = q('th-body').value.trim();
       if (!body || !openId) return;
@@ -188,9 +230,13 @@ export function mountCorrespondence({ mount, side, db, peers = null, peerLabel =
       } catch (err) {
         console.warn('[corr] send', err);
       } finally { btn.disabled = false; }
-      return;
     }
+  });
 
+  // ── غطاء التأليف: إلغاء، إنشاء خيط جديد ───────────────────────────────
+  composeEl.addEventListener('click', async (e) => {
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'cancel') { hide('compose'); return; }
     if (act === 'create') {
       const subject = q('c-subject').value.trim();
       const body    = q('c-body').value.trim();
@@ -218,11 +264,7 @@ export function mountCorrespondence({ mount, side, db, peers = null, peerLabel =
         err.textContent = 'تعذّر إرسال المراسلة.';
         err.hidden = false;
       } finally { btn.disabled = false; }
-      return;
     }
-
-    const row = e.target.closest('.corr-row');
-    if (row) void openThread(row.dataset.id);
   });
 
   void refresh();
