@@ -4756,6 +4756,9 @@ window.RUQI_DB = {
   // البيان الشهري — القوائم المرجعية وسجل الكوادر
   getLookupList,
   getStaffRecords,
+  saveDailyAbsentStaff,
+  getDailyAbsentStaff,
+  getStaffAbsenceRegister,
   createStaffRecord,
   updateStaffRecord,
   softDeleteStaffRecord,
@@ -4883,6 +4886,54 @@ async function getLookupList(listType, directorateId = null) {
   const { data, error } = await withTimeout(q, OFFLINE_READ_TIMEOUT_MS);
   if (error) throw error;
   return (data || []).map(r => r.value);
+}
+
+/* ── غيابُ الكادر اليوميّ ─────────────────────────────────────────────────────
+   الأسماءُ كانت تُكتب في البيان ثمّ تُرمى: daily_attendance فيها عددُ الغائبين
+   لا مَن هم. تُحفظ الآن سجلّاً مستقلاًّ فيُعرف «كم يوماً غاب فلان».
+
+   الحفظُ استبدالٌ لليوم كلِّه لا إضافة: المدير قد يُرسل البيان مرّتين بعد
+   تصحيح، فالإضافةُ تُضاعف الغياب على البريء. */
+async function saveDailyAbsentStaff(schoolId, date, entries) {
+  if (!schoolId || !date) return;
+  const { data: auth } = await db.auth.getUser();
+  const uid = auth?.user?.id ?? null;
+
+  const { error: delErr } = await db.from('daily_absent_staff')
+    .delete().eq('school_id', schoolId).eq('date', date);
+  if (delErr) throw delErr;
+
+  const rows = (entries || [])
+    .filter(a => a && a.name)
+    .map(a => ({
+      school_id: schoolId, date,
+      staff_id: a.staffId ?? null,
+      staff_name: a.name,
+      kind: a.kind ?? 'admin',
+      created_by: uid,
+    }));
+  if (!rows.length) return;
+  const { error } = await db.from('daily_absent_staff').insert(rows);
+  if (error) throw error;
+}
+
+/** الغائبون المسجَّلون ليومٍ بعينه — لإعادة بناء الشاشة عند العودة إليها. */
+async function getDailyAbsentStaff(schoolId, date) {
+  const { data, error } = await db.from('daily_absent_staff')
+    .select('staff_id, staff_name, kind')
+    .eq('school_id', schoolId).eq('date', date)
+    .order('staff_name');
+  if (error) throw error;
+  return (data || []).map(r => ({ staffId: r.staff_id, name: r.staff_name, kind: r.kind }));
+}
+
+/** سجلّ الغياب: صفٌّ لكلّ شخصٍ بعدد أيّامه. النطاق يُشتقّ من الدور. */
+async function getStaffAbsenceRegister({ schoolId = null, month = null, year = null } = {}) {
+  const { data, error } = await db.rpc('get_staff_absence_register', {
+    p_school_id: schoolId, p_month: month, p_year: year,
+  });
+  if (error) throw error;
+  return data ?? [];
 }
 
 async function getStaffRecords(schoolId) {

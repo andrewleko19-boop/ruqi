@@ -726,16 +726,24 @@
         </div>
 
         <!-- Absent teachers -->
+        <!-- الغائبون يُختارون من سجلّ الكادر لا يُكتبون: الحقلُ الحرّ كان
+             يُنتج «سناء وليو» و«سناء مصطفى وليو» شخصين في أيّ عدٍّ لاحق،
+             ولا يُعرف من الاسم وحده أهو تدريسيٌّ أم إداريّ. والاختيار يملأ
+             عدّاد فئته تلقائياً. -->
         <div class="subsection">
-          <div class="sub-label">المعلمون الغائبون</div>
+          <div class="sub-label">الغائبون من الكادر</div>
           <ul class="absent-list" id="absent-list"></ul>
           <div class="add-row">
-            <input type="text" id="in-absent" class="field-input"
-                   placeholder="اسم المعلم الغائب" maxlength="80" />
+            <select id="in-absent" class="field-input">
+              <option value="">اختر الغائب…</option>
+            </select>
             <button type="button" class="btn btn-ghost btn-sm" id="btn-add-absent">
               <svg class="icon icon-sm"><use href="#ic-plus"/></svg>إضافة
             </button>
           </div>
+          <p class="form-hint" id="absent-hint">
+            الأعداد أدناه تُحسب من هذه القائمة: مَن لم يُختَر يُعدّ حاضراً.
+          </p>
         </div>
 
         <!-- Admins & workers — auto-filled from the staff register, editable -->
@@ -2089,6 +2097,46 @@
         <div id="lv-error" class="msg msg-error" hidden>تعذّر تحميل سجلّ الإجازات.</div>
         <ul id="lv-list" class="reg-list"></ul>
         <p id="lv-empty" class="empty-hint" hidden>لا إجازات مسجَّلة في هذا الشهر.</p>
+      </div>
+    </section>
+
+    <!-- ── سجلّ غياب الكادر ───────────────────────────────────────────────────
+         الأسماء كانت تُكتب في البيان اليوميّ ثمّ تُرمى — daily_attendance فيها
+         عددُ الغائبين لا مَن هم. فلا يستطيع أحدٌ أن يسأل «كم يوماً غاب فلان؟».
+         تُحفظ الآن، ويُقرأ منها هنا. -->
+    <section class="card" data-module="staff-hr">
+      <div class="card-hdr">
+        <svg class="icon"><use href="#ic-clipboard"/></svg>
+        <span>سجلّ غياب الكادر</span>
+        <button class="hdr-btn" id="btn-refresh-absence" aria-label="تحديث"
+                style="margin-inline-start:auto">
+          <svg class="icon icon-sm"><use href="#ic-refresh"/></svg>
+        </button>
+      </div>
+      <div class="card-body">
+        <div class="lv-filters">
+          <div class="field-group">
+            <label for="ab-month">الشهر</label>
+            <select id="ab-month" class="field-input">
+              <option value="">كل الأشهر</option>
+              <option value="1">كانون الثاني</option><option value="2">شباط</option>
+              <option value="3">آذار</option><option value="4">نيسان</option>
+              <option value="5">أيار</option><option value="6">حزيران</option>
+              <option value="7">تموز</option><option value="8">آب</option>
+              <option value="9">أيلول</option><option value="10">تشرين الأول</option>
+              <option value="11">تشرين الثاني</option><option value="12">كانون الأول</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="ab-year">السنة</label>
+            <input id="ab-year" class="field-input" type="number" min="2020" max="2100" inputmode="numeric">
+          </div>
+        </div>
+        <div id="ab-totals" class="lv-totals" hidden></div>
+        <div id="ab-loading" class="loading-row" hidden><span class="spinner"></span></div>
+        <div id="ab-error" class="msg msg-error" hidden>تعذّر تحميل سجلّ الغياب.</div>
+        <ul id="ab-list" class="reg-list"></ul>
+        <p id="ab-empty" class="empty-hint" hidden>لا غياباتٍ مسجَّلة في هذه المدّة.</p>
       </div>
     </section>
 

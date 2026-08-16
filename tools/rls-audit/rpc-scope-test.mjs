@@ -656,6 +656,87 @@ export async function runRpcScopeTests(report) {
             `⚠ ${nFar} صفّاً — الاسمُ وحده يفتح إجازاتِ غريب`));
     });
 
+    /* ── ١٥) سجلّ غياب الكادر ────────────────────────────────────────────────
+       الأسماءُ كانت تُكتب في البيان اليوميّ كلَّ صباحٍ ثمّ تُرمى: daily_attendance
+       فيها عددُ الغائبين لا مَن هم. فلا يستطيع أحدٌ أن يسأل «كم يوماً غاب فلان»
+       — لا المدير ولا المديرية ولا المعلّم. والغيابُ أساسُ الحسم، فبقاؤه بلا
+       سجلّ يعني إمّا ألّا يُحاسَب أحد أو أن يُحاسَب بذاكرةٍ لا بوثيقة.
+
+       والسجلُّ الجديد بياناتٌ شخصية، فنطاقُه يُحرَس هنا: صاحبُه يقرؤه، ومدرستُه،
+       ومديريتُها — لا أحدَ سواهم. */
+    await inTx(c, async () => {
+      const f = await seedForeign(c);
+      const { rows: [s2] } = await c.query(
+        `insert into public.schools (directorate_id, name, school_type)
+         values ($1, '__مدرسة جارة للغياب__', 'primary') returning id`, [f.dirId]);
+      const mk = async (email, name, role, school, dir) => {
+        const { rows: [a] } = await c.query(
+          `insert into auth.users (id, email) values (gen_random_uuid(), $1) returning id`, [email]);
+        await c.query(
+          `insert into public.users (id, full_name, role, school_id, directorate_id, is_active)
+           values ($1, $2, $3::public.user_role, $4, $5, true)`, [a.id, name, role, school, dir]);
+        return a.id;
+      };
+      const NAME  = '__غائبة__';
+      const admin = await mk('ab-a@t.local',  '__مدير__',    'school_admin',     f.schoolId, null);
+      const alien = await mk('ab-b@t.local',  '__مدير جار__', 'school_admin',     s2.id,      null);
+      const dirU  = await mk('ab-d@t.local',  '__مديرية__',   'directorate_user', null,       f.dirId);
+      const owner = await mk('ab-o@t.local',  NAME,          'teacher',          f.schoolId, null);
+      const { rows: [sr] } = await c.query(
+        `insert into public.staff_records (school_id, full_name, staff_type, active)
+         values ($1, $2, 'teaching', true) returning id`, [f.schoolId, NAME]);
+      for (const day of ['2026-08-03', '2026-08-04', '2026-08-05']) {
+        await c.query(
+          `insert into public.daily_absent_staff (school_id, date, staff_id, staff_name, kind)
+           values ($1, $2::date, $3, $4, 'teaching')`, [f.schoolId, day, sr.id, NAME]);
+      }
+
+      const call = async (uid, sql, p = []) => {
+        await become(c, uid);
+        const r = await callRpc(c, sql, p);
+        await c.query('reset role');
+        return r;
+      };
+
+      const mine = await call(admin,
+        `select days from public.get_staff_absence_register($1, null, 2026::smallint)`, [f.schoolId]);
+      sec.rows.push(mine.ok && mine.rows[0]?.days === 3
+        ? Report.row('pass', 'سجلّ الغياب · ضابط موجب: المدرسة تقرأ سجلَّها',
+            'ثلاثةُ أيّامٍ لشخصٍ واحد — العدُّ يجمع الأيّام لا يعدّ الصفوف')
+        : Report.row('fail', 'سجلّ الغياب · ضابط موجب: المدرسة تقرأ سجلَّها',
+            mine.ok ? `⚠ ${JSON.stringify(mine.rows)}` : mine.err.slice(0, 90)));
+
+      const dr = await call(dirU,
+        `select days from public.get_staff_absence_register(null, null, 2026::smallint)`);
+      sec.rows.push(dr.ok && dr.rows.length === 1
+        ? Report.row('pass', 'سجلّ الغياب · المديرية ترى مدارسها', 'صفٌّ واحد')
+        : Report.row('fail', 'سجلّ الغياب · المديرية ترى مدارسها',
+            dr.ok ? `⚠ ${dr.rows.length} صفّاً` : dr.err.slice(0, 90)));
+
+      const alienCall = await call(alien,
+        `select 1 from public.get_staff_absence_register($1, null, 2026::smallint)`, [f.schoolId]);
+      sec.rows.push(alienCall.ok && alienCall.rows.length === 0
+        ? Report.row('pass', 'سجلّ الغياب · مديرُ مدرسةٍ أخرى يمرّر مدرستي',
+            'نتيجةٌ فارغة — المعامل لا يوسّع النطاق')
+        : Report.row('fail', 'سجلّ الغياب · مديرُ مدرسةٍ أخرى يمرّر مدرستي',
+            alienCall.ok ? `⚠ تسريب: ${alienCall.rows.length} صفّاً` : alienCall.err.slice(0, 90)));
+
+      const ownRow = await call(owner,
+        `select 1 from public.daily_absent_staff where school_id = $1`, [f.schoolId]);
+      sec.rows.push(ownRow.ok && ownRow.rows.length === 3
+        ? Report.row('pass', 'سجلّ الغياب · صاحبتُه تقرؤه',
+            'ثلاثةُ صفوف — لا يُحسم من راتبٍ بما لا يُرى')
+        : Report.row('fail', 'سجلّ الغياب · صاحبتُه تقرؤه',
+            ownRow.ok ? `⚠ ${ownRow.rows.length} صفّاً` : ownRow.err.slice(0, 90)));
+
+      const alienRow = await call(alien,
+        `select 1 from public.daily_absent_staff where school_id = $1`, [f.schoolId]);
+      sec.rows.push(alienRow.ok && alienRow.rows.length === 0
+        ? Report.row('pass', 'سجلّ الغياب · مدرسةٌ أجنبية عبر RLS', 'محجوب')
+        : Report.row('fail', 'سجلّ الغياب · مدرسةٌ أجنبية عبر RLS',
+            `⚠ ${alienRow.rows?.length ?? '?'} صفّاً — غيابُ كادرٍ يُقرأ من مدرسةٍ أخرى`));
+    });
+
     return sec;
   } finally {
     await c.end();

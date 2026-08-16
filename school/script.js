@@ -581,19 +581,94 @@ function refreshTeacherUI() {
   if (present != null && String(present) !== prevPresent) animateBump(tPresent);
 }
 
+/* ── الغائبون من الكادر ───────────────────────────────────────────────────────
+   كان حقلاً حرّاً: يُكتب فيه الاسمُ كلَّ صباحٍ ثمّ يُرمى — daily_attendance فيها
+   عددُ الغائبين لا مَن هم. فيبذل المديرُ العملَ يومياً ولا يستطيع أحدٌ أن يسأل
+   «كم يوماً غاب فلان؟». ومع الحرّية كان «سناء وليو» و«سناء مصطفى وليو»
+   شخصين في أيّ عدّ.
+
+   الآن يُختار من سجلّ الكادر بمعرّفه، فتُعرَف فئتُه (تدريسيّ/إداريّ/عامل) من
+   staff_type ويُملأ عدّادُ فئته تلقائياً — ومَن لم يُختَر يُعدّ حاضراً. */
+const STAFF_KIND_OF = {
+  teaching: 'teaching', admin: 'admin', professional: 'admin',
+  worker: 'worker',     guard: 'worker',
+};
+const STAFF_KIND_AR = { teaching: 'تدريسي', admin: 'إداري', worker: 'مستخدم' };
+
+let _absentRoster = [];   // [{ id, full_name, kind }] من سجلّ الكادر النشط
+
+/** يملأ القائمة المنسدلة بالكادر، ويستثني مَن أُضيف غائباً بالفعل. */
+function fillAbsentPicker() {
+  if (!inAbsent || inAbsent.tagName !== 'SELECT') return;
+  const taken = new Set(S.absentTeachers.map(a => a.staffId).filter(Boolean));
+  const byKind = { teaching: [], admin: [], worker: [] };
+  for (const p of _absentRoster) {
+    if (taken.has(p.id)) continue;
+    (byKind[p.kind] ??= []).push(p);
+  }
+  const group = (kind) => byKind[kind].length
+    ? `<optgroup label="${STAFF_KIND_AR[kind]}">` + byKind[kind].map(p =>
+        `<option value="${escapeHtml(p.id)}">${escapeHtml(p.full_name)}</option>`).join('') +
+      '</optgroup>'
+    : '';
+  inAbsent.innerHTML = '<option value="">اختر الغائب…</option>'
+    + group('teaching') + group('admin') + group('worker');
+  CustomSelect.refresh?.(inAbsent);
+}
+
+async function loadAbsentRoster() {
+  if (!S.school?.id) return;
+  try {
+    const rows = await NDB.getStaffRecords(S.school.id);
+    _absentRoster = rows.map(r => ({
+      id: r.id, full_name: r.full_name,
+      kind: STAFF_KIND_OF[r.staff_type] ?? 'admin',
+    }));
+  } catch (err) {
+    console.warn('[Ruqi] loadAbsentRoster', err);
+    _absentRoster = [];
+  }
+  fillAbsentPicker();
+}
+
+/** أعدادُ الغائبين بحسب الفئة — تُشتقّ من القائمة لا تُكتب بيد. */
+function absentCounts() {
+  const c = { teaching: 0, admin: 0, worker: 0 };
+  for (const a of S.absentTeachers) c[a.kind] = (c[a.kind] ?? 0) + 1;
+  return c;
+}
+
 // ── Absent teachers list ──────────────────────────────────────────────────────
 function renderAbsentList() {
   absentList.innerHTML = '';
-  S.absentTeachers.forEach((name, idx) => {
+  S.absentTeachers.forEach((a, idx) => {
     const li = document.createElement('li');
     li.className = 'absent-item';
     li.innerHTML =
-      `<span class="absent-name">${escapeHtml(name)}</span>` +
-      `<button class="absent-del" data-i="${idx}" aria-label="حذف ${escapeHtml(name)}">` +
+      `<span class="absent-name">${escapeHtml(a.name)}</span>` +
+      `<span class="absent-kind">${escapeHtml(STAFF_KIND_AR[a.kind] ?? '')}</span>` +
+      `<button class="absent-del" data-i="${idx}" aria-label="حذف ${escapeHtml(a.name)}">` +
       `<svg class="icon icon-sm"><use href="#ic-x"/></svg></button>`;
     absentList.appendChild(li);
   });
+  fillAbsentPicker();
+  syncAbsentCounters();
   refreshTeacherUI();
+}
+
+/* عدّادا الإداريين والمستخدمين يُملآن من الاختيار. والحاضرون = الإجماليّ ناقص
+   الغائبين: «مَن لم يُختَر يُعدّ حاضراً» — لا يُترك للمدير أن يعدّ بيده ثمّ
+   يُخطئ فيتناقض العددُ مع القائمة تحته. */
+function syncAbsentCounters() {
+  const c = absentCounts();
+  const totalOf = (kind) => _absentRoster.filter(p => p.kind === kind).length;
+  const set = (input, v) => { if (input) input.value = String(Math.max(0, v)); };
+  set(inAdminAbsent,   c.admin);
+  set(inWorkerAbsent,  c.worker);
+  if (_absentRoster.length) {
+    set(inAdminPresent,  totalOf('admin')  - c.admin);
+    set(inWorkerPresent, totalOf('worker') - c.worker);
+  }
 }
 
 /* تقبل null/undefined وغير النصوص. تُستدعى من عشرات مواضع العرض على حقولٍ تسمح
@@ -611,21 +686,24 @@ function escapeHtml(str) {
 }
 
 function addAbsentTeacher() {
-  const name = inAbsent.value.trim();
-  if (!name) return;
-  if (S.absentTeachers.some((n) => n === name)) {
-    toast('هذا المعلم مضاف بالفعل', 'warning', 2500);
+  const staffId = inAbsent.value;
+  if (!staffId) return;                       // «اختر الغائب…» ليست اختياراً
+  const person = _absentRoster.find(p => p.id === staffId);
+  if (!person) return;
+  if (S.absentTeachers.some(a => a.staffId === staffId)) {
+    toast('هذا الشخص مضاف بالفعل', 'warning', 2500);
     return;
   }
-  S.absentTeachers.push(name);
+  S.absentTeachers.push({ staffId, name: person.full_name, kind: person.kind });
   inAbsent.value = '';
+  CustomSelect.refresh?.(inAbsent);
   renderAbsentList();
 }
 
 btnAddAbsent.addEventListener('click', addAbsentTeacher);
-inAbsent.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') { e.preventDefault(); addAbsentTeacher(); }
-});
+/* الاختيار وحده يُضيف: زرُّ «إضافة» يبقى لمن اعتاده، لكنّ انتظارَ ضغطةٍ بعد
+   اختيارٍ من قائمةٍ منسدلة خطوةٌ زائدة تُنسى فيظنّ المديرُ أنّه سجّل الغياب. */
+inAbsent.addEventListener('change', () => { if (inAbsent.value) addAbsentTeacher(); });
 absentList.addEventListener('click', (e) => {
   const btn = e.target.closest('.absent-del');
   if (!btn) return;
@@ -641,7 +719,9 @@ btnSubmitAtt.addEventListener('click', async () => {
   const adminAbsent   = parseInt(inAdminAbsent.value,   10) || 0;
   const workerPresent = parseInt(inWorkerPresent.value, 10) || 0;
   const workerAbsent  = parseInt(inWorkerAbsent.value,  10) || 0;
-  const absentCount = S.absentTeachers.length;
+  // «المعلّمون الغائبون» في العدّاد أعلى الشاشة تعني التدريسيّين وحدهم؛
+  // والإداريّون والمستخدمون لهم عدّاداهما. فلا يُجمع الكلُّ في خانةٍ واحدة.
+  const absentCount = absentCounts().teaching;
   const total       = S.school?.totalTeachers ?? 0;
 
   // منعُ إرسال سجلّ فارغ: teachers_present يُشتَقّ تلقائياً من عدد الكادر، فقد
@@ -649,7 +729,7 @@ btnSubmitAtt.addEventListener('click', async () => {
   // فعلاً (الأعداد المكتوبة + المعلّمون المُعلَّمون غائبين). تحقّقٌ في الواجهة
   // بالكامل فيعمل أوفلاين تماماً.
   const anyEntered = studPresent || studAbsent || adminPresent || adminAbsent
-                  || workerPresent || workerAbsent || absentCount;
+                  || workerPresent || workerAbsent || S.absentTeachers.length;
   if (!anyEntered) {
     toast('لم تُدخِل أيّ بيانات حضور — يرجى تعبئة الأعداد قبل الإرسال', 'warning', 4000);
     return;
@@ -677,6 +757,12 @@ btnSubmitAtt.addEventListener('click', async () => {
 
   try {
     const result = await saveAttendance(record);
+
+    /* أسماءُ الغائبين تُحفظ سجلّاً مستقلاًّ: البيانُ يحمل الأعداد، وهذا يحمل
+       مَن هم — فيُعرف بعد شهرٍ كم يوماً غاب فلان. ولا يُفشل البيانَ إن تعذّر:
+       إرسالُ الحضور هو الواجب اليوميّ، والسجلُّ تابعٌ له. */
+    try { await NDB.saveDailyAbsentStaff(S.school.id, record.date, S.absentTeachers); }
+    catch (err) { console.warn('[Ruqi] saveDailyAbsentStaff', err); }
 
     markAttendanceSubmitted(result.synced, record);
 
@@ -1162,6 +1248,14 @@ async function initApp() {
     hide(attDone);
     setStatusPending();
   }
+  /* الكادرُ يُجلب أوّلاً فتُبنى القائمةُ المنسدلة، ثمّ غائبو اليوم إن كان
+     البيانُ قد أُرسل — فيعود المديرُ إلى الشاشة فيجد ما سجّله لا فراغاً
+     يوحي بأنّ عملَه ضاع. */
+  await loadAbsentRoster();
+  try {
+    const saved = await NDB.getDailyAbsentStaff(S.school.id, todayISO());
+    if (saved.length) S.absentTeachers = saved;
+  } catch (err) { console.warn('[Ruqi] getDailyAbsentStaff', err); }
   renderAbsentList();
   resetReportForm();
   updateConnUI();
@@ -5965,7 +6059,11 @@ async function initRegistryTab() {
   const lvM = el('lv-month'), lvY = el('lv-year');
   if (lvM && !_leavesFilterTouched) { lvM.value = String(now.getMonth() + 1); CustomSelect.refresh(lvM); }
   if (lvY && !_leavesFilterTouched)   lvY.value = String(now.getFullYear());
-  await Promise.all([loadRegistryRecords(), loadAssignments(), loadLeavesRegister()]);
+  // سجلُّ الغياب يبدأ على السنة الجارية وكلِّ أشهرها — انظر تعليق loadAbsenceRegister.
+  const abY = el('ab-year');
+  if (abY && !abY.value) abY.value = String(now.getFullYear());
+  await Promise.all([loadRegistryRecords(), loadAssignments(),
+                     loadLeavesRegister(), loadAbsenceRegister()]);
 }
 
 async function loadRegistryRecords() {
@@ -6752,6 +6850,55 @@ let _leavesFilterTouched = false;
 el('btn-refresh-leaves')?.addEventListener('click', () => void loadLeavesRegister());
 el('lv-month')?.addEventListener('change', () => { _leavesFilterTouched = true; void loadLeavesRegister(); });
 el('lv-year') ?.addEventListener('change', () => { _leavesFilterTouched = true; void loadLeavesRegister(); });
+
+/* ── سجلّ غياب الكادر ─────────────────────────────────────────────────────────
+   يقرأ ما صار يُحفظ من البيان اليوميّ. «كل الأشهر» هو الافتراض عمداً: السؤالُ
+   الذي يُطرح فعلاً «كم غاب فلان هذا العام» لا «كم غاب في آب». */
+async function loadAbsenceRegister() {
+  const list = el('ab-list'); if (!list || !S.school?.id) return;
+  const mRaw  = el('ab-month')?.value ?? '';
+  const month = mRaw === '' ? null : parseInt(mRaw, 10);
+  const year  = parseInt(el('ab-year')?.value || String(new Date().getFullYear()), 10);
+
+  show(el('ab-loading')); hide(el('ab-error')); hide(el('ab-empty')); hide(el('ab-totals'));
+  list.innerHTML = '';
+  try {
+    const rows = await NDB.getStaffAbsenceRegister({ month, year });
+
+    const tot = el('ab-totals');
+    if (tot) {
+      const days = rows.reduce((n, r) => n + (r.days | 0), 0);
+      // كلُّ رقمٍ ومعه اسمه في عنصرٍ مستقلّ — لا زوجَ أرقامٍ عارٍ تعكسه
+      // ثنائيةُ الاتجاه كما وقع في تنبيه النصاب.
+      tot.innerHTML =
+        `<span class="lv-chip">أشخاص <b>${rows.length}</b></span>` +
+        `<span class="lv-chip lv-chip-days">أيام غياب <b>${days}</b></span>`;
+      tot.hidden = !rows.length;
+    }
+
+    if (!rows.length) { show(el('ab-empty')); return; }
+    list.innerHTML = rows.map(r => `
+      <li class="reg-row">
+        <div class="reg-main">
+          <div class="reg-name">${escapeHtml(r.staff_name)}</div>
+          <div class="reg-sub">${escapeHtml(STAFF_KIND_AR[r.kind] ?? r.kind ?? '—')}${
+            r.last_date ? ' · آخر غياب ' + escapeHtml(
+              new Date(r.last_date).toLocaleDateString('ar-SY',
+                { day: 'numeric', month: 'short' })) : ''}</div>
+        </div>
+        <span class="lv-days"><b>${r.days}</b> يوم</span>
+      </li>`).join('');
+  } catch (err) {
+    console.error('[Ruqi] loadAbsenceRegister', err);
+    show(el('ab-error'));
+  } finally {
+    hide(el('ab-loading'));
+  }
+}
+
+el('btn-refresh-absence')?.addEventListener('click', () => void loadAbsenceRegister());
+el('ab-month')?.addEventListener('change', () => void loadAbsenceRegister());
+el('ab-year') ?.addEventListener('change', () => void loadAbsenceRegister());
 
 // Segment switching
 document.querySelectorAll('.asn-seg-btn').forEach(btn => {
@@ -10033,6 +10180,9 @@ CustomSelect.enhance('noc-section-sel');
 CustomSelect.enhance('noc-reason-sel');
 // سجلّ الإجازات: قائمة الشهر كانت تفتح بواجهة النظام (بيضاء وسط لوحةٍ داكنة).
 CustomSelect.enhance('lv-month');
+// القوائمُ الجديدة بواجهة التطبيق كذلك — لا واجهةَ النظام.
+CustomSelect.enhance('ab-month');
+CustomSelect.enhance('in-absent');
 
 // ── طباعة «ورقة لا مانع» ──────────────────────────────────────────────────
 // نافذة طباعة كبقية مطبوعات البوابة (كشف الحضور، البيان) لا مكتبة PDF: المدير
