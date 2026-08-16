@@ -4756,6 +4756,12 @@ window.RUQI_DB = {
   // البيان الشهري — القوائم المرجعية وسجل الكوادر
   getLookupList,
   getStaffRecords,
+  getCorrespondenceThreads,
+  getCorrespondenceMessages,
+  openCorrespondence,
+  sendCorrespondence,
+  markCorrespondenceRead,
+  setCorrespondenceStatus,
   saveDailyAbsentStaff,
   getDailyAbsentStaff,
   getStaffAbsenceRegister,
@@ -4934,6 +4940,62 @@ async function getStaffAbsenceRegister({ schoolId = null, month = null, year = n
   });
   if (error) throw error;
   return data ?? [];
+}
+
+/* ── المراسلات الإدارية: الوزارة ↔ المديرية ↔ المدرسة ────────────────────────
+   قناةٌ نصّية حرّة لما لا يقع في نموذج: «متى يبدأ الدوام الصيفيّ؟»، «أرسلوا لنا
+   معلّم رياضيات». كان يُقال هاتفياً فلا يبقى منه أثر. */
+async function getCorrespondenceThreads() {
+  const { data, error } = await db.rpc('get_correspondence_threads');
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function getCorrespondenceMessages(threadId) {
+  const { data, error } = await db.from('correspondence_messages')
+    .select('id, body, sender_side, created_at, sender:sender_id(full_name)')
+    .eq('thread_id', threadId)
+    .order('created_at');
+  if (error) throw error;
+  return data ?? [];
+}
+
+/* الفتحُ ثمّ أوّلُ رسالةٍ عمليّةٌ واحدة في نظر المستخدم: خيطٌ بموضوعٍ بلا نصّ
+   يصل الطرفَ الآخر فارغاً فلا يعرف ما المطلوب. */
+async function openCorrespondence({ subject, directorateId, schoolId = null, side, body }) {
+  const { data: auth } = await db.auth.getUser();
+  const uid = auth?.user?.id ?? null;
+  const { data, error } = await db.from('correspondence_threads')
+    .insert({ subject, directorate_id: directorateId, school_id: schoolId,
+              opened_by: uid, opened_side: side })
+    .select('id').single();
+  if (error) throw error;
+  await sendCorrespondence(data.id, side, body);
+  return data.id;
+}
+
+async function sendCorrespondence(threadId, side, body) {
+  const { data: auth } = await db.auth.getUser();
+  const { error } = await db.from('correspondence_messages')
+    .insert({ thread_id: threadId, body, sender_side: side,
+              sender_id: auth?.user?.id ?? null });
+  if (error) throw error;
+}
+
+/* ختمُ القراءة لجانبي أنا وحدي — الزنادُ في القاعدة يُثبّت ختمَي الآخرَين
+   مهما أُرسل هنا، فلا يُخفي طرفٌ إشعارَ الآخر. */
+async function markCorrespondenceRead(threadId, side) {
+  const col = side === 'ministry' ? 'ministry_read_at'
+            : side === 'directorate' ? 'directorate_read_at' : 'school_read_at';
+  const { error } = await db.from('correspondence_threads')
+    .update({ [col]: new Date().toISOString() }).eq('id', threadId);
+  if (error) throw error;
+}
+
+async function setCorrespondenceStatus(threadId, status) {
+  const { error } = await db.from('correspondence_threads')
+    .update({ status }).eq('id', threadId);
+  if (error) throw error;
 }
 
 async function getStaffRecords(schoolId) {

@@ -1,5 +1,6 @@
 // directorate/script.js
 // ── DB من window.RUQI_DB (يُحمَّل عبر shared/db.js قبل هذا الملف) ──────────
+import { mountCorrespondence }               from '../shared/correspondence.js';
 import { CustomSelect }                      from '../shared/csel.js';
 import { setupPwToggle }                     from '../shared/pw-toggle.js';
 import { StatDrill }                         from '../shared/stat-drill.js';
@@ -1335,6 +1336,35 @@ async function loadDropoutSummary() {
 document.getElementById('reload-dropout-btn')?.addEventListener('click', loadDropoutSummary);
 document.getElementById('reload-periodic-btn')?.addEventListener('click', loadPeriodicReports);
 
+/* المراسلات: المديريةُ طرفٌ في اتّجاهين — مع مدارسها ومع الوزارة. فقائمةُ
+   الجهات تجمعهما، ويُميَّز خيطُ الوزارة بأنّ schoolId فيه فارغ (السطرُ بلا
+   directorateId، فتقرؤه الوحدةُ المشتركة خيطاً مع الوزارة). */
+let _corrMounted = false;
+function mountDirCorrespondence() {
+  const box = document.getElementById('corr-mount');
+  if (!box || _corrMounted || !currentUser?.directorateId) return;
+  _corrMounted = true;
+  mountCorrespondence({
+    mount: box, side: 'directorate', db: window.RUQI_DB, peerLabel: 'الجهة',
+    /* تُجلب عند الضغط على «مراسلة جديدة» لا مع الإقلاع: قائمةُ المدارس لا
+       يحتاجها إلّا مَن يفتح خيطاً، وجرُّها دائماً هو عينُ ما أبطأ تبويبَ
+       الاعتمادات. */
+    peers: async () => {
+      const { data } = await _sb.from('schools')
+        .select('id, name')
+        .eq('directorate_id', currentUser.directorateId)
+        .is('archived_at', null)
+        .order('name');
+      return [
+        { id: currentUser.directorateId, name: 'الوزارة' },
+        ...(data || []).map(s => ({
+          id: s.id, name: s.name, directorateId: currentUser.directorateId,
+        })),
+      ];
+    },
+  });
+}
+
 async function loadAll() {
   await Promise.allSettled([loadStats(), loadMapAndCompliance(), loadReports(), loadTrend(), loadRequests(), loadStatements(), loadResultSheets(), loadDropoutSummary(), loadPeriodicReports(), loadStructure()]);
   // After every list has settled. loadReports renders the queue too, but it
@@ -1342,6 +1372,7 @@ async function loadAll() {
   // arrays may still be empty — this pass is the one that sees all four.
   renderPendingList();
   refreshRailCounts();
+  mountDirCorrespondence();
 }
 
 // ══════════════════════════════════════════════

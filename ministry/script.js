@@ -15,6 +15,10 @@ import { CustomSelect } from '../shared/csel.js';
 import { StatDrill } from '../shared/stat-drill.js';
 import { detectAnomalies } from '../shared/data-alerts.js';
 import { fmtDateShort } from '../shared/date-format.js';
+import { mountCorrespondence } from '../shared/correspondence.js';
+
+// تُركَّب مرّةً: تحميلُ اللوحة يتكرّر مع كلّ تنقيب.
+let _corrMounted = false;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const loginScreen    = document.getElementById('login-screen');
@@ -264,6 +268,19 @@ async function loadAllData() {
       .order('governorate');
     if (dirErr) throw dirErr;
     if (!directorates || directorates.length === 0) { showEmpty('لا توجد مديريات.'); return; }
+
+    /* المراسلات: طرفُ الوزارة مديريةٌ دائماً (school_id فارغ)، فقائمةُ الجهات
+       هي المديرياتُ نفسُها المحمَّلة للتوّ — لا استعلامَ ثانياً لها. */
+    if (document.getElementById('corr-mount') && !_corrMounted) {
+      _corrMounted = true;
+      mountCorrespondence({
+        mount: document.getElementById('corr-mount'),
+        side: 'ministry', db: window.RUQI_DB, peerLabel: 'المديرية',
+        peers: async () => directorates.map(d => ({
+          id: d.id, name: `${d.name} — ${d.governorate}`,
+        })),
+      });
+    }
 
     const { data: schools, error: schErr } = await supabase
       .from('schools')

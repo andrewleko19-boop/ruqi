@@ -14,6 +14,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>رُقِيّ – سجل الحضور</title>
   <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="../shared/correspondence.css" />
   <!-- طبقة الكمبيوتر واللابتوب — محتواها كلّه داخل @media (min-width:1024px)،
        فلا يُطبَّق منها شيء على الجوّال. اقرأ رأس الملفّ قبل تعديله. -->
   <link rel="stylesheet" href="./desktop.css" />
@@ -826,6 +827,15 @@
         <div class="done-details" id="att-done-details"></div>
       </div>
     </div>
+
+
+    <!-- ── المراسلات الإدارية ─────────────────────────────────────────────────
+         كلُّ مسارٍ في النظام مقيَّدُ الشكل: طلبٌ يُقبل، بيانٌ يُعتمد، بلاغٌ
+         يُحَلّ. فما لا يقع في نموذجٍ منها كان يُقال هاتفياً فلا يبقى منه أثر.
+         الوسمُ يُبنى في shared/correspondence.js — هنا مرساه فقط. -->
+    <section class="card" id="corr-card">
+      <div class="card-body" id="corr-mount"></div>
+    </section>
 
   </main><!-- /page (attendance) -->
 

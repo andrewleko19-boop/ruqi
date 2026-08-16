@@ -2,6 +2,7 @@
 // Loaded as <script type="module"> after Supabase CDN and shared/db.js
 import { buildDateFields, setDateFields, readDateFields } from '../shared/date-fields.js';
 import { restoreTab } from '../shared/tab-restore.js';
+import { mountCorrespondence } from '../shared/correspondence.js';
 
 // ── Guard ─────────────────────────────────────────────────────────────────────
 if (!window.RUQI_DB) {
@@ -1251,6 +1252,17 @@ async function initApp() {
   /* الكادرُ يُجلب أوّلاً فتُبنى القائمةُ المنسدلة، ثمّ غائبو اليوم إن كان
      البيانُ قد أُرسل — فيعود المديرُ إلى الشاشة فيجد ما سجّله لا فراغاً
      يوحي بأنّ عملَه ضاع. */
+  /* المراسلات: طرفُ المدرسة واحدٌ دائماً — مديريتُها. فلا قائمةَ جهاتٍ
+     تُعرض عليها بل جهةٌ واحدة تُملأ آلياً. */
+  const _corrDir = S.user?.directorateId ?? S.school?.directorate_id ?? null;
+  if (el('corr-mount') && _corrDir && !el('corr-mount').dataset.ready) {
+    el('corr-mount').dataset.ready = '1';
+    mountCorrespondence({
+      mount: el('corr-mount'), side: 'school', db: NDB, peerLabel: 'المديرية',
+      peers: async () => [{ id: _corrDir, name: 'مديريتي' }],
+    });
+  }
+
   await loadAbsentRoster();
   try {
     const saved = await NDB.getDailyAbsentStaff(S.school.id, todayISO());

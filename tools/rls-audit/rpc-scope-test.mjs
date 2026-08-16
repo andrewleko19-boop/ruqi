@@ -737,6 +737,130 @@ export async function runRpcScopeTests(report) {
             `⚠ ${alienRow.rows?.length ?? '?'} صفّاً — غيابُ كادرٍ يُقرأ من مدرسةٍ أخرى`));
     });
 
+    /* ── ١٦) المراسلات الإدارية ──────────────────────────────────────────────
+       قناةٌ نصّية حرّة بين الوزارة والمديرية والمدرسة — وحرّيةُ النصّ تعني أنّ
+       ما يُكتب فيها لا يحدّه نموذج: أسماءُ طلاب، شكاوى، قراراتٌ لم تصدر بعد.
+       فالعزلُ هنا أخطرُ منه في جدولٍ مقيَّد الحقول.
+
+       والخيطُ بين طرفين اثنين لا أكثر، فتُفحص أربعةُ أوجه: أن يصل الطرفان،
+       وأن يُحجب الثالثُ (مدرسةٌ جارة، مديريةٌ أخرى، الوزارةُ في خيطٍ ليست
+       طرفاً فيه)، وأن يُرَدّ انتحالُ الجانب، وأن تبقى الرسالةُ لا تُمحى. */
+    await inTx(c, async () => {
+      const { rows: [d1] } = await c.query(
+        `insert into public.directorates (name, governorate) values ('__مراسلات١__','__g__') returning id`);
+      const { rows: [d2] } = await c.query(
+        `insert into public.directorates (name, governorate) values ('__مراسلات٢__','__g__') returning id`);
+      const { rows: [sc1] } = await c.query(
+        `insert into public.schools (directorate_id, name, school_type) values ($1,'__مر١__','primary') returning id`, [d1.id]);
+      const { rows: [sc2] } = await c.query(
+        `insert into public.schools (directorate_id, name, school_type) values ($1,'__مر٢__','primary') returning id`, [d1.id]);
+      const mk = async (email, name, role, school, dir) => {
+        const { rows: [a] } = await c.query(
+          `insert into auth.users (id, email) values (gen_random_uuid(), $1) returning id`, [email]);
+        await c.query(
+          `insert into public.users (id, full_name, role, school_id, directorate_id, is_active)
+           values ($1, $2, $3::public.user_role, $4, $5, true)`, [a.id, name, role, school, dir]);
+        return a.id;
+      };
+      const min  = await mk('c-m@t.local',  '__وزارة__',   'ministry_user',    null,   null);
+      const dir1 = await mk('c-d1@t.local', '__مديرية١__', 'directorate_user', null,   d1.id);
+      const dir2 = await mk('c-d2@t.local', '__مديرية٢__', 'directorate_user', null,   d2.id);
+      const sch1 = await mk('c-s1@t.local', '__مدرسة١__',  'school_admin',     sc1.id, null);
+      const sch2 = await mk('c-s2@t.local', '__مدرسة٢__',  'school_admin',     sc2.id, null);
+
+      const as = async (uid, sql, p = []) => {
+        await c.query('savepoint cp');
+        let out;
+        try {
+          await become(c, uid);
+          const r = await c.query(sql, p);
+          out = { ok: true, n: r.rowCount, rows: r.rows };
+          await c.query('release savepoint cp');
+        } catch (e) { out = { ok: false, err: e.message }; await c.query('rollback to savepoint cp'); }
+        await c.query('reset role');
+        return out;
+      };
+      const say = (ok, label, detail) => sec.rows.push(
+        ok ? Report.row('pass', label, detail) : Report.row('fail', label, '⚠ ' + detail));
+
+      // المدرسة تفتح خيطاً مع مديريتها، ثمّ تكتب.
+      const opened = await as(sch1,
+        `insert into public.correspondence_threads (subject, directorate_id, school_id, opened_by, opened_side)
+         values ('نقص معلّم رياضيات', $1, $2, $3, 'school') returning id`, [d1.id, sc1.id, sch1]);
+      const th = opened.rows?.[0]?.id;
+      say(opened.ok && !!th, 'مراسلات · المدرسة تفتح خيطاً مع مديريتها',
+          opened.ok ? 'فُتح' : opened.err.slice(0, 80));
+      if (!th) return;
+      await as(sch1,
+        `insert into public.correspondence_messages (thread_id, body, sender_id, sender_side)
+         values ($1, 'نحتاج معلّم رياضيات للصفّ السابع', $2, 'school')`, [th, sch1]);
+
+      const seen = await as(dir1, `select unread from public.get_correspondence_threads()`);
+      say(seen.ok && seen.rows.length === 1 && seen.rows[0].unread === 1,
+          'مراسلات · ضابط موجب: المديرية ترى الخيط وغيرَ المقروء',
+          seen.ok ? `${seen.rows.length} خيط · غير مقروء ${seen.rows[0]?.unread}` : seen.err.slice(0, 80));
+
+      const replied = await as(dir1,
+        `insert into public.correspondence_messages (thread_id, body, sender_id, sender_side)
+         values ($1, 'سيُنقل إليكم معلّمٌ الأسبوع القادم', $2, 'directorate')`, [th, dir1]);
+      say(replied.ok, 'مراسلات · ضابط موجب: المديرية تردّ',
+          replied.ok ? 'وصل الردّ' : replied.err.slice(0, 80));
+
+      for (const [uid, label] of [[sch2, 'مدرسةٌ جارة'], [dir2, 'مديريةٌ أخرى'],
+                                  [min, 'الوزارة في خيطِ مديرية↔مدرسة']]) {
+        const r = await as(uid, `select 1 from public.correspondence_threads where id = $1`, [th]);
+        say(r.ok && r.rows.length === 0, `مراسلات · ${label} لا ترى الخيط`,
+            r.ok ? 'محجوب' : r.err.slice(0, 80));
+      }
+
+      const spoof = await as(sch1,
+        `insert into public.correspondence_messages (thread_id, body, sender_id, sender_side)
+         values ($1, 'أنا الوزارة', $2, 'ministry')`, [th, sch1]);
+      say(!spoof.ok, 'مراسلات · انتحالُ جانب المرسِل', 'مرفوض');
+
+      /* لا سياسةَ DELETE ولا UPDATE على الرسائل ولا منحَ بهما: قناةٌ إدارية
+         يُحتجّ بها، فمحوُ رسالةٍ بعد قراءتها يُفرغها من قيمتها. والمقياسُ هنا
+         بقاءُ الرسالة لا صيغةُ الرفض — يستوي أن يُرَدّ النداء عند الباب أو
+         يمرّ بلا أثر، والخطأ الوحيد أن تختفي. */
+      const before = (await c.query(
+        `select count(*)::int n, min(body) b from public.correspondence_messages where thread_id = $1`, [th])).rows[0];
+      await as(dir1, `delete from public.correspondence_messages where thread_id = $1`, [th]);
+      await as(dir1, `update public.correspondence_messages set body = 'مبدَّل' where thread_id = $1`, [th]);
+      const after = (await c.query(
+        `select count(*)::int n, min(body) b from public.correspondence_messages where thread_id = $1`, [th])).rows[0];
+      say(after.n === before.n && after.b === before.b,
+          'مراسلات · الرسالة لا تُحذف ولا تُعدَّل',
+          `${after.n} رسالة كما كانت`);
+
+      // خيطُ وزارة↔مديرية لا تراه المدرسة.
+      const mth = await as(min,
+        `insert into public.correspondence_threads (subject, directorate_id, opened_by, opened_side)
+         values ('تعميم الدوام الصيفيّ', $1, $2, 'ministry') returning id`, [d1.id, min]);
+      say(mth.ok, 'مراسلات · الوزارة تفتح خيطاً مع مديرية',
+          mth.ok ? 'فُتح' : mth.err.slice(0, 80));
+      if (mth.rows?.[0]?.id) {
+        const hidden = await as(sch1,
+          `select 1 from public.correspondence_threads where id = $1`, [mth.rows[0].id]);
+        say(hidden.ok && hidden.rows.length === 0,
+            'مراسلات · المدرسة لا ترى خيطَ وزارة↔مديرية', 'محجوب');
+      }
+
+      // خيطٌ مغلق لا يُكتب فيه.
+      await c.query(`update public.correspondence_threads set status = 'closed' where id = $1`, [th]);
+      const closed = await as(dir1,
+        `insert into public.correspondence_messages (thread_id, body, sender_id, sender_side)
+         values ($1, 'بعد الإغلاق', $2, 'directorate')`, [th, dir1]);
+      say(!closed.ok, 'مراسلات · الكتابة في خيطٍ مغلق', 'مرفوضة');
+
+      // ولا يمحو طرفٌ ختمَ قراءة الآخر فيُخفي عنه إشعاره.
+      await c.query(
+        `update public.correspondence_threads set status='open', school_read_at = now() where id = $1`, [th]);
+      await as(dir1, `update public.correspondence_threads set school_read_at = null where id = $1`, [th]);
+      const { rows: [chk] } = await c.query(
+        `select school_read_at is null as cleared from public.correspondence_threads where id = $1`, [th]);
+      say(!chk.cleared, 'مراسلات · طرفٌ لا يمحو ختمَ قراءة الآخر', 'الختم صامد');
+    });
+
     return sec;
   } finally {
     await c.end();

@@ -11,7 +11,7 @@
  *
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'ruqi-v173';
+const CACHE = 'ruqi-v174';
 
 /* ⚠️ التقسيم مقصود ويعالج عطلاً حقيقياً.
    كان التثبيت كلّه على Promise.allSettled — يبتلع فشل أي ملفّ ويُعلن النجاح —
@@ -29,6 +29,9 @@ const CRITICAL = [
   './shared/sw-register.js',
   // سلوكُ الصفحة الرئيسة — نُقل من <script> سطريّ لأجل CSP بلا 'unsafe-inline'.
   './shared/home.js',
+  /* ⚠ حرِج: تستوردها ثلاثُ بوّابات بـimport ساكن، فغيابُها يمنع تنفيذ
+     ملفّ البوّابة كلِّه لا بطاقةَ المراسلات وحدها. */
+  './shared/correspondence.js',
   // مكتبة Supabase محلّية: بدونها لا تُنفَّذ db.js إطلاقاً فلا تعمل أي لوحة.
   './shared/vendor/supabase-js.mjs',
   /* ⚠️ حرِج رغم أنّه «طبقة عرض». كل بوّابة تُحمّله بـ<script type="module">، وأوّل
@@ -60,6 +63,8 @@ const OPTIONAL = [
   './shared/date-format.js',
   './shared/qr.js',
   './shared/import-parser.js',
+  // ورقةُ أنماط المراسلات: غيابُها يُشوّه البطاقة ولا يمنعها.
+  './shared/correspondence.css',
   // قالب البيان الشهري — التصدير يجلبه بـ fetch، فبدون تخزينه
   // مسبقاً لا يعمل «تصدير Excel» دون اتصال.
   './shared/statement_template.xlsx',
