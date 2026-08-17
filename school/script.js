@@ -1604,6 +1604,7 @@ async function loadAbsenceView() {
           ${s.stats.present > 0 ? `<span class="class-pill pill-done">${s.stats.present} حاضر</span>` : ''}
           ${s.stats.absent  > 0 ? `<span class="class-pill pill-rejected">${s.stats.absent} غائب</span>` : ''}
           ${s.stats.late    > 0 ? `<span class="class-pill pill-pending">${s.stats.late} متأخر</span>` : ''}
+          ${s.stats.excused > 0 ? `<span class="class-pill pill-excused">${s.stats.excused} معذور</span>` : ''}
         </div>
       </div>`).join('');
 }
@@ -2328,7 +2329,7 @@ tabSummaryReports?.addEventListener('click', () => switchTab('summary-reports'))
 tabAttendance.addEventListener('click', () => switchTab('attendance'));
 tabManage.addEventListener('click',     () => switchTab('manage'));
 tabStudents.addEventListener('click',   () => switchTab('students'));
-tabStaff.addEventListener('click',      () => switchTab('staff'));
+tabStaff?.addEventListener('click',     () => switchTab('staff'));
 tabSubjects.addEventListener('click',   () => switchTab('subjects'));
 tabReports.addEventListener('click',    () => switchTab('reports'));
 tabRegistry?.addEventListener('click',   () => switchTab('registry'));

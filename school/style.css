@@ -771,6 +771,8 @@ select.field-input option:disabled { color: var(--clr-text-3); }
 .pill-done     { background: #dcfce7; color: #166534; }
 .pill-pending  { background: #fef9c3; color: #92400e; }
 .pill-rejected { background: #fee2e2; color: #991b1b; }
+/* معذور: أزرقُ هادئ يميّزه عن الغائب الأحمر — الغيابُ بعذرٍ ليس غياباً. */
+.pill-excused  { background: #dbeafe; color: #1e40af; }
 
 /* Absence history rows */
 .absence-history-list { display: flex; flex-direction: column; gap: 8px; }

@@ -2621,14 +2621,12 @@ async function getSchoolDailySummary(schoolId, date) {
       OFFLINE_READ_TIMEOUT_MS,
     );
     if (clsRes.error) throw clsRes.error;
-    const allClasses = clsRes.data;
-
-    // Use the latest academic_year stored in DB (avoids JS vs SQL year-boundary mismatch)
-    const years = [...new Set((allClasses ?? []).map(c => c.academic_year).filter(Boolean))];
-    const latestYear = years.sort().at(-1) ?? null;
-    const classRows = latestYear
-      ? (allClasses ?? []).filter(c => c.academic_year === latestYear)
-      : (allClasses ?? []);
+    // كلُّ صفوف المدرسة تُعرَض — لا تصفيةَ بـ«أحدث عام». القيدُ
+    // UNIQUE(school_id, grade, section) يجعل لكلّ صفٍّ/شعبةٍ صفاً واحداً دائماً،
+    // فلا تراكمَ سنواتٍ يُخشى منه. وكانت تصفيةُ «أحدث عام» تُسقط صفاً حاليّاً
+    // خُتم بعامٍ خاطئ (خللُ add_class المُصلَح في هجرة 20260819000700) فتظهر
+    // الأعدادُ «—»؛ وهذا يطابق getSchoolClasses الذي تعتمده قائمةُ الطلاب.
+    const classRows = clsRes.data ?? [];
 
     const classIds = classRows.map(c => c.id);
     // مدرسةٌ بلا صفوف: فراغٌ حقيقي لا فشل — يُخبَّأ كي تعرضه الواجهة دون اتصال
@@ -3928,15 +3926,20 @@ async function initPushPrompt({ force = false } = {}) {
   });
   box.querySelector('.rpp-yes').addEventListener('click', async (ev) => {
     const btn = ev.currentTarget; btn.disabled = true; btn.textContent = '…';
+    let perm = 'default';
     try {
-      const perm = await Notification.requestPermission(); // إيماءة صالحة → يعمل على كل المتصفّحات
-      if (perm === 'granted') {
-        const status = await registerPushSubscription();
-        if (status !== 'ok') console.warn('[Ruqi] push register status:', status);
-      }
-    } catch (e) { console.warn('[Ruqi] push prompt failed', e); }
+      perm = await Notification.requestPermission(); // إيماءة صالحة → يعمل على كل المتصفّحات
+    } catch (e) { console.warn('[Ruqi] push permission failed', e); }
+    // أزِل النافذةَ فورَ بتِّ المستخدم في إذن المتصفّح — لا تُبقِها معلّقةً حتى
+    // ينتهيَ التسجيلُ الشبكيّ (VAPID + حفظُ الاشتراك)، فذاك يستغرق ثوانيَ على
+    // شبكةٍ بطيئة فتبدو النافذةُ عالقةً. التسجيلُ يُكمَل في الخلفية.
     try { localStorage.removeItem(PUSH_SNOOZE_KEY); } catch {}
     box.remove();
+    if (perm === 'granted') {
+      registerPushSubscription()
+        .then(status => { if (status !== 'ok') console.warn('[Ruqi] push register status:', status); })
+        .catch(e => console.warn('[Ruqi] push register failed', e));
+    }
   });
 }
 

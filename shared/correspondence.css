@@ -23,6 +23,9 @@
   display: flex; align-items: center; gap: 10px; cursor: pointer;
   padding: 10px 12px; border-radius: 10px;
   background: rgba(127, 127, 127, .07);
+  /* عنصرُ الشبكة يأخذ min-width:auto افتراضياً فلا يتقلّص، فيدفعه النصُّ
+     الطويل (nowrap) خارجَ البطاقة يساراً. صفرٌ يسمح بتقلّصه فيقتطع meta. */
+  min-width: 0;
 }
 .corr-row:hover { background: rgba(127, 127, 127, .13); }
 /* غيرُ المقروء يُميَّز بحافّةٍ لا بلونِ خلفيةٍ كاملة: القائمةُ تبقى هادئةً
