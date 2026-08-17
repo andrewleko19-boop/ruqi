@@ -33,18 +33,15 @@ const managed = (() => {
   return new Set([...block[0].matchAll(/^\s{2}([a-z_]+):/gm)].map(m => m[1]));
 })();
 
-describe('المجمّع التربوي والمنطقة التعليمية قائمةٌ واحدة', () => {
-  test('كلاهما يقرأ educational_zone', () => {
-    const fn = school.match(/async function fillComplexSelect\(\) \{[\s\S]*?\n\}/);
-    assert.ok(fn, 'لم يُعثر على fillComplexSelect');
-    assert.match(fn[0], /getLookup\('educational_zone'\)/,
-      'المجمّع التربوي يقرأ قائمةً ثانية — يملأ المشرفُ واحدةً وينسى الأخرى.');
-    assert.match(school, /getLookup\('educational_zone'\)/);
+describe('المجمّع التربوي محذوف من الواجهة والقاعدة', () => {
+  test('لا قراءةَ لـ school_complex في بوّابة المدرسة', () => {
+    assert.ok(!/getLookup\('school_complex'\)/.test(school),
+      'قائمة school_complex لا تزال مقروءة — يجب أن تُزال بالكامل.');
   });
 
-  test('لا قراءةَ لـ school_complex بعد التوحيد', () => {
-    assert.ok(!/getLookup\('school_complex'\)/.test(school),
-      'بقيت القائمة المنفصلة مقروءةً — فتعود المشكلة كما كانت.');
+  test('لا حقلَ sch-complex في كود المدرسة', () => {
+    assert.ok(!/sch-complex/.test(school),
+      'معرّف sch-complex لا يزال موجوداً في school/script.js');
   });
 });
 

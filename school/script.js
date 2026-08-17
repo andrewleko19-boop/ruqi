@@ -5341,41 +5341,12 @@ function setSelectPreserving(sel, value) {
   CustomSelect.refresh(sel);
 }
 
-/* المجمّع التربوي: القائمةُ نفسها التي يقرأ منها «المنطقة التعليمية» في البيان
-   (educational_zone)، وكلاهما يضبطه المشرف لكلّ مديرية.
-
-   كانت قائمةً ثانيةً منفصلة (school_complex)، وهذا خطأُ تصميمٍ لا خطأُ تنفيذ:
-   المجمّع التربوي والمنطقة التعليمية في التقسيم الإداريّ السوريّ الشيءُ نفسه —
-   مدينة اللاذقية، جبلة، الحفة، القرداحة. فقائمتان تعنيان أنّ المشرف يملأ
-   واحدةً وينسى الأخرى (وهو ما وقع فعلاً: المناطق خمسٌ والمجمّعات واحد)، ثمّ
-   يكتب المديرُ اسم مجمّعه على وجهٍ والبيانُ على وجهٍ آخر، فيتفتّت التجميع في
-   لوحتَي المديرية والوزارة — وهو بعينه ما بُنيت القائمة لمنعه. */
-async function fillComplexSelect() {
-  const sel = el('sch-complex'); if (!sel) return;
-  const cur = S.school?.complex_name ?? '';
-  // المحفوظ يظهر فوراً: القائمة تأتي من الشبكة وقد تتأخّر، ولا يصحّ أن يرى
-  // المديرُ حقلاً فارغاً لقيمةٍ هي محفوظةٌ فعلاً.
-  sel.innerHTML = '<option value="">— اختر —</option>';
-  setSelectPreserving(sel, cur);
-  let vals = [];
-  try { vals = await getLookup('educational_zone'); }
-  catch { /* أوفلاين أو تعذّر الجلب: يبقى المحفوظ وحده خياراً */ }
-  if (vals.length) {
-    sel.innerHTML = '<option value="">— اختر —</option>' +
-      vals.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
-    setSelectPreserving(sel, cur);
-  }
-  const hint = el('sch-complex-hint');
-  if (hint) hint.hidden = vals.length > 0;
-}
-
 function populateIdentityCard() {
   const s = S.school; if (!s) return;
   if (el('sch-classification')) el('sch-classification').value = s.classification ?? '';
   if (el('sch-edutype'))      { el('sch-edutype').value        = s.education_type ?? ''; CustomSelect.refresh(el('sch-edutype')); }
   if (el('sch-shift'))        { el('sch-shift').value          = s.shift ?? ''; CustomSelect.refresh(el('sch-shift')); }
   setSelectPreserving(el('sch-studenttype'), s.student_type);
-  void fillComplexSelect();
   void loadQuotaBounds();
   if (el('sch-lat'))            el('sch-lat').value            = s.lat ?? '';
   if (el('sch-lng'))            el('sch-lng').value            = s.lng ?? '';
@@ -5402,7 +5373,6 @@ el('btn-save-identity')?.addEventListener('click', async () => {
   const msg = el('sch-identity-msg');
   const latRaw = el('sch-lat').value.trim(), lngRaw = el('sch-lng').value.trim();
   const patch = {
-    complexName:   el('sch-complex').value.trim(),
     classification:el('sch-classification').value.trim(),
     educationType: el('sch-edutype').value.trim(),
     shift:         el('sch-shift').value,
@@ -5413,22 +5383,12 @@ el('btn-save-identity')?.addEventListener('click', async () => {
   if ((latRaw && Number.isNaN(patch.lat)) || (lngRaw && Number.isNaN(patch.lng))) {
     msg.className = 'msg msg-error'; msg.textContent = 'إحداثيات GPS غير صحيحة.'; show(msg); return;
   }
-  // المجمّع يُطبَع في ترويسة بطاقة العلامات وورقة «لا مانع». وهذا النموذج يرسل
-  // المفتاح دائماً، فحفظُه فارغاً كان **يمحو** قيمةً ضبطتها المديرية.
-  if (!patch.complexName) {
-    const noOptions = (el('sch-complex')?.options.length ?? 0) <= 1;
-    msg.className = 'msg msg-error';
-    msg.textContent = noOptions
-      ? 'لا توجد مجمّعات مُعرّفة لمديريتك — يضيفها المشرف من «القوائم المرجعية» ثم تختار منها.'
-      : 'المجمّع التربوي مطلوب — يظهر في ترويسة الوثائق المطبوعة.';
-    show(msg); return;
-  }
   const btn = el('btn-save-identity'); btn.disabled = true;
   try {
     await NDB.updateSchool(S.school.id, patch);
     // Reflect on the cached school object so the card persists across tabs.
     Object.assign(S.school, {
-      complex_name: patch.complexName || null, classification: patch.classification || null,
+      classification: patch.classification || null,
       education_type: patch.educationType || null, shift: patch.shift || null,
       student_type: patch.studentType || null, lat: patch.lat, lng: patch.lng,
     });
@@ -5893,7 +5853,6 @@ CustomSelect.enhance('stu-gov');
 CustomSelect.enhance('transfer-class');
 CustomSelect.enhance('sch-shift');
 CustomSelect.enhance('sch-edutype');
-CustomSelect.enhance('sch-complex');
 CustomSelect.enhance('sch-studenttype');
 CustomSelect.enhance('staff-status');
 CustomSelect.enhance('in-personnel-kind');

@@ -765,7 +765,6 @@ async function updateSchool(schoolId, patch) {
   if (patch.workStartTime    !== undefined) row.work_start_time     = patch.workStartTime || null;
   // School identity (هوية المدرسة) + GPS — reuses the existing lat/lng columns.
   if (patch.schoolType    !== undefined) row.school_type    = patch.schoolType;
-  if (patch.complexName   !== undefined) row.complex_name   = patch.complexName   || null;
   if (patch.classification!== undefined) row.classification = patch.classification|| null;
   if (patch.educationType !== undefined) row.education_type = patch.educationType || null;
   if (patch.shift         !== undefined) row.shift          = patch.shift         || null;
