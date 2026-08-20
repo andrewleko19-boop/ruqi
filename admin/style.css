@@ -197,6 +197,13 @@ body {
   border-radius: var(--radius);
   font-size: 13px;
 }
+.back-home {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin-top: 18px; font-size: .82rem; color: var(--text-dim);
+  text-decoration: none; transition: color .2s;
+}
+.back-home:hover { color: var(--indigo); }
+.back-home svg { flex-shrink: 0; }
 
 .success-msg {
   background: var(--green-bg);

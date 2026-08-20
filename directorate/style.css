@@ -169,6 +169,13 @@ body {
   background: var(--red-dim);
   border-radius: var(--radius-sm);
 }
+.back-home {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin-top: 18px; font-size: .82rem; color: var(--text-muted);
+  text-decoration: none; transition: color .2s;
+}
+.back-home:hover { color: var(--accent); }
+.back-home svg { flex-shrink: 0; }
 
 /* ══════════════════════════════════════════════
    TOP NAV

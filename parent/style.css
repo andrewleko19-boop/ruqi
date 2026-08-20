@@ -104,6 +104,13 @@ input, textarea, select { font-family: inherit; }
   font-size: .8rem; color: var(--clr-muted);
   text-align: center; margin-top: 16px;
 }
+.back-home {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin-top: 18px; font-size: .82rem; color: var(--clr-muted);
+  text-decoration: none; transition: color .2s;
+}
+.back-home:hover { color: var(--clr-primary); }
+.back-home svg { flex-shrink: 0; }
 .btn-back {
   position: absolute; top: 16px; left: 16px;
   width: 36px; height: 36px; border-radius: 50%;

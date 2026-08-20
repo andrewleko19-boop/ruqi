@@ -358,12 +358,12 @@ begin
                      * (0.55 + ((abs(hashtext(s.id::text || i || k || sem)) % 40) / 100.0)))::numeric,
                v_teacher
           from generate_series(1, 3) k, generate_series(1, 2) sem
-        on conflict (id) do nothing;
+        on conflict (student_id, component_id, semester, academic_year) do update set mark = excluded.mark;
       end loop;
       insert into public.student_conduct (id, student_id, class_id, school_id, academic_year, mark, recorded_by)
       values (pg_temp.did('cond:' || s.id::text), s.id, c.id, v_tareq, v_year,
               75 + (abs(hashtext(s.id::text)) % 25), v_teacher)
-      on conflict (id) do nothing;
+      on conflict (student_id, academic_year) do update set mark = excluded.mark;
     end loop;
   end loop;
 
@@ -386,7 +386,7 @@ begin
               values (pg_temp.did('att:' || s.id::text || d::text), s.id, c.id, r.id, d,
                       case when (abs(hashtext(s.id::text || d::text)) % 3) = 0 then 'excused' else 'absent' end,
                       null)
-              on conflict (id) do nothing;
+              on conflict (student_id, date) do update set status = excluded.status;
             else
               v_pre := v_pre + 1;
               insert into public.daily_student_attendance
@@ -394,7 +394,7 @@ begin
               values (pg_temp.did('att:' || s.id::text || d::text), s.id, c.id, r.id, d,
                       case when (abs(hashtext(s.id::text || d::text)) % 37) = 0 then 'late' else 'present' end,
                       null)
-              on conflict (id) do nothing;
+              on conflict (student_id, date) do update set status = excluded.status;
             end if;
           end loop;
         end loop;
@@ -409,7 +409,9 @@ begin
           greatest(1, (select count(*) from public.staff_records f
                         where f.school_id = r.id and f.staff_type = 'teaching' and f.active) - (i % 2)),
           i % 2, 1, 0, 1, 0
-        ) on conflict (id) do nothing;
+        ) on conflict (school_id, date) do update set
+            students_present = excluded.students_present,
+            students_absent  = excluded.students_absent;
 
         i := i + 1;
       end if;
@@ -499,7 +501,7 @@ begin
   -- ── ١٢) دوامُ الكادر اليوم ────────────────────────────────────────────────
   insert into public.staff_attendance (id, school_id, date, kind, teacher_id, status, recorded_by)
   values (pg_temp.did('sa-att:1'), v_tareq, current_date, 'teacher', v_teacher, 'present', v_admin_t)
-  on conflict (id) do nothing;
+  on conflict (teacher_id, date) do update set status = excluded.status;
 
   -- ── ١٣) وليُّ الأمر: الربطُ برقم الجوّال ──────────────────────────────────
   insert into public.parent_links (id, user_id, student_id)
