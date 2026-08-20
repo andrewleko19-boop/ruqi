@@ -90,6 +90,7 @@ jobs:
           # المستأجر. «tenant/user … not found» أو تعذّرُ الاتصال = العنقود
           # الخطأ فنُكمل؛ وأيّ خطأٍ آخر بعد نجاح الاتصال خطأُ هجرةٍ حقيقيّ فنتوقّف.
           applied=0
+          WORKING_URL=""
           for prefix in aws-0 aws-1 aws-2; do
             HOST="${prefix}-${REGION}.pooler.supabase.com"
             echo "محاولة عبر ${HOST} …"
@@ -97,6 +98,7 @@ jobs:
             if OUT=$(push "${URL}" 2>&1); then
               echo "${OUT}"
               applied=1
+              WORKING_URL="${URL}"
               break
             fi
             echo "${OUT}"
@@ -112,4 +114,46 @@ jobs:
             echo "::error::تعذّر إيجاد مستأجر المشروع على أيّ عنقود pooler للمنطقة ${REGION}. أضِف السرّ SUPABASE_DB_URL يدوياً من Supabase → Connect → Session pooler."
             exit 1
           fi
+
+          # ── تحقّقٌ إلزاميّ: «نجح db push» ليس «وصلت كلّ الهجرات» ────────────
+          # القاعدةُ تسجّل رقمَ النسخة لا اسمَ الملفّ، والسجلُّ لا يُمحى بـrevert.
+          # فملفٌّ جديدٌ يحمل رقماً سبق أن نُشر يُعَدّ مطبَّقاً سلفاً **فيُتخطّى
+          # صامتاً**: لا تحذير، ولا رمز خروجٍ غير صفر، و«✅» تُطبع كالعادة.
+          #
+          # وقع فعلاً: هجرةٌ تستعيد أعمدةً محذوفة من دالّتَي الإحصاء لم تصل
+          # القاعدةَ قطّ، فبقيت لوحتا المديرية والوزارة تعرضان أصفاراً أسبوعاً
+          # كاملاً بينما الشيفرة في المستودع صحيحة والنشرُ «ناجح».
+          #
+          # migration list هو الحَكَم: يقابل المحلّي بالبعيد صفّاً صفّاً.
+          echo "التحقّق من وصول كلّ هجرةٍ فعلاً…"
+          LIST=$(supabase migration list --db-url "${WORKING_URL}" 2>&1) || {
+            echo "${LIST}"
+            echo "::error::تعذّر قراءة سجلّ الهجرات للتحقّق."
+            exit 1
+          }
+          echo "${LIST}"
+          export MIG_LIST="${LIST}"
+          python3 <<'PY' || exit 1
+          import os, re, sys, pathlib
+          listing = os.environ["MIG_LIST"]
+          local = sorted(p.name for p in pathlib.Path("supabase/migrations").glob("*.sql"))
+          missing = []
+          for name in local:
+              m = re.match(r"(\d{14})_", name)
+              if not m:
+                  continue
+              ver = m.group(1)
+              # صفُّ الجدول: LOCAL │ REMOTE │ TIME. المطبَّقُ يذكر الرقمَ مرّتين.
+              row = next((l for l in listing.splitlines() if ver in l), None)
+              if row is None or row.count(ver) < 2:
+                  missing.append(name)
+          if missing:
+              print("::error::هجراتٌ لم تصل القاعدة رغم «نجاح» db push:")
+              for n in missing:
+                  print(f"  · {n}")
+              print("السببُ الأشيع: رقمُ نسخةٍ سبق أن نُشر ثمّ أُعيد استعمالُه لملفٍّ آخر.")
+              print("الحلّ: أعطِ الملفَّ رقماً أعلى من أعلى نسخةٍ مطبَّقة، وادفع ثانيةً.")
+              sys.exit(1)
+          print(f"✔ كلُّ الهجرات المحلّية ({len(local)}) مسجَّلةٌ في القاعدة.")
+          PY
           echo "✅ طُبّقت الهجرات بنجاح."
