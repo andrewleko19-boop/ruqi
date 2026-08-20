@@ -2749,7 +2749,7 @@ async function rejectClassSubmission(submissionId, confirmedBy, notes) {
 async function getSchoolSubjects(schoolId, grade = null) {
   let q = db
     .from('subjects')
-    .select('id, school_id, grade, name, max_total, pass_mark, is_core_arabic, is_core_math, allow_full_marks, sort_order, is_active')
+    .select('id, school_id, grade, name, max_total, pass_mark, is_core_arabic, is_core_math, is_foreign_language, allow_full_marks, sort_order, is_active')
     .eq('school_id', schoolId);
   if (grade != null) q = q.eq('grade', grade);
   const { data, error } = await q
@@ -2762,7 +2762,7 @@ async function getSchoolSubjects(schoolId, grade = null) {
 
 // catalogId: أصلُ المادّة في الفهرس المركزيّ حين تُنشأ منه. المزامنة تتبع هذا
 // المعرّف لا الاسم، فإعادةُ تسمية المادّة في الفهرس لا تقطع نسخ المدارس عنه.
-async function createSubject({ schoolId, grade, name, maxTotal = 100, passMark = 40, isCoreArabic = false, isCoreMath = false, allowFullMarks = false, sortOrder = null, catalogId = null }) {
+async function createSubject({ schoolId, grade, name, maxTotal = 100, passMark = 40, isCoreArabic = false, isCoreMath = false, isForeignLanguage = false, allowFullMarks = false, sortOrder = null, catalogId = null }) {
   const { data, error } = await db
     .from('subjects')
     .insert({
@@ -2773,6 +2773,7 @@ async function createSubject({ schoolId, grade, name, maxTotal = 100, passMark =
       pass_mark:        passMark,
       is_core_arabic:   isCoreArabic,
       is_core_math:     isCoreMath,
+      is_foreign_language: isForeignLanguage,
       allow_full_marks: allowFullMarks,
       sort_order:       sortOrder,
       catalog_id:       catalogId,
@@ -2791,6 +2792,7 @@ async function updateSubject(id, patch) {
   if (patch.passMark     !== undefined) row.pass_mark       = patch.passMark;
   if (patch.isCoreArabic !== undefined) row.is_core_arabic  = patch.isCoreArabic;
   if (patch.isCoreMath   !== undefined) row.is_core_math    = patch.isCoreMath;
+  if (patch.isForeignLanguage !== undefined) row.is_foreign_language = patch.isForeignLanguage;
   if (patch.allowFullMarks !== undefined) row.allow_full_marks = patch.allowFullMarks;
   if (patch.sortOrder    !== undefined) row.sort_order      = patch.sortOrder;
   if (patch.isActive     !== undefined) row.is_active       = patch.isActive;
@@ -2920,7 +2922,7 @@ async function countGradesForComponents(componentIds) {
 async function getSubjectCatalog() {
   const { data, error } = await db
     .from('subject_catalog')
-    .select('id, name, is_core_arabic, is_core_math, allow_full_marks, sort_order, active')
+    .select('id, name, is_core_arabic, is_core_math, is_foreign_language, allow_full_marks, sort_order, active')
     .eq('active', true)
     .order('sort_order', { ascending: true, nullsFirst: false })
     .order('name',       { ascending: true });
@@ -2928,11 +2930,12 @@ async function getSubjectCatalog() {
   return data ?? [];
 }
 
-async function createCatalogSubject({ name, isCoreArabic = false, isCoreMath = false, allowFullMarks = false, sortOrder = null }) {
+async function createCatalogSubject({ name, isCoreArabic = false, isCoreMath = false, isForeignLanguage = false, allowFullMarks = false, sortOrder = null }) {
   const { data, error } = await db
     .from('subject_catalog')
     .insert({
       name: name.trim(), is_core_arabic: isCoreArabic, is_core_math: isCoreMath,
+      is_foreign_language: isForeignLanguage,
       allow_full_marks: allowFullMarks, sort_order: sortOrder,
     })
     .select('id')
@@ -2946,6 +2949,7 @@ async function updateCatalogSubject(id, patch) {
   if (patch.name         !== undefined) row.name           = String(patch.name).trim();
   if (patch.isCoreArabic !== undefined) row.is_core_arabic = patch.isCoreArabic;
   if (patch.isCoreMath   !== undefined) row.is_core_math   = patch.isCoreMath;
+  if (patch.isForeignLanguage !== undefined) row.is_foreign_language = patch.isForeignLanguage;
   if (patch.allowFullMarks !== undefined) row.allow_full_marks = patch.allowFullMarks;
   if (patch.sortOrder    !== undefined) row.sort_order     = patch.sortOrder;
   if (patch.active       !== undefined) row.active         = patch.active;
@@ -3004,54 +3008,92 @@ async function setCatalogComponents(catalogId, components) {
   return data ?? [];
 }
 
-// درجة النجاح (٪) وفق اللائحة الرسمية — تُشتق من الصف ونوع المادة، لا تُدخل يدويّاً:
-//   الصفوف ١–٤ → ٤١ ؛ الصفوف ٥ فأعلى → ٤٠، والعربي/الرياضيات الأساسية → ٥٠.
-function passMarkFor(grade, isCoreArabic, isCoreMath) {
-  const g = parseInt(grade, 10) || 0;
-  if (g >= 1 && g <= 4) return 41;
-  return (isCoreArabic || isCoreMath) ? 50 : 40;
-}
+/* قاعدةُ إسعافٍ حين تعذّر جلبُ القواعد (أوفلاين، أو جدولٌ لم يُزرع بعد).
+   ليست «الافتراض الصحيح» بل أقربُ ما يمكن قولُه بلا مصدر — واللائحةُ الحقيقية
+   في grade_pass_rules تُزرع بالهجرة وتُعدَّل من لوحة المشرف. */
+const FALLBACK_PASS_RULES = [
+  { grade_from: 1,  grade_to: 4,  default_pass: 41, arabic_pass: 41, math_is_core: true,
+    free_fails: 0, quarter_fails: 0, quarter_pct: 0,  require_foreign_language: false,
+    conduct_min: null, total_min: null },
+  { grade_from: 5,  grade_to: 9,  default_pass: 40, arabic_pass: 50, math_is_core: false,
+    free_fails: 1, quarter_fails: 2, quarter_pct: 25, require_foreign_language: false,
+    conduct_min: null, total_min: null },
+  { grade_from: 10, grade_to: 12, default_pass: 40, arabic_pass: 50, math_is_core: false,
+    free_fails: 1, quarter_fails: 2, quarter_pct: 25, require_foreign_language: true,
+    conduct_min: null, total_min: null },
+];
 
-// قواعد النجاح القابلة للتعديل من لوحة المشرف — درجة دنيا لكل مجموعة صفوف.
+const PASS_RULE_COLS =
+  'id, grade_from, grade_to, default_pass, arabic_pass, math_is_core, ' +
+  'free_fails, quarter_fails, quarter_pct, require_foreign_language, ' +
+  'conduct_min, total_min, sort_order';
+
+// قواعد النجاح القابلة للتعديل من لوحة المشرف — قاعدةٌ كاملةٌ لكل مجموعة صفوف.
 async function getGradePassRules() {
   const { data, error } = await db
     .from('grade_pass_rules')
-    .select('id, grade_from, grade_to, default_pass, core_pass, sort_order')
+    .select(PASS_RULE_COLS)
     .order('sort_order', { ascending: true, nullsFirst: false })
     .order('grade_from', { ascending: true });
   if (error) throw error;
   return data ?? [];
 }
 
-// Overwrite all rules. rules: [{ gradeFrom, gradeTo, defaultPass, corePass }].
+/* استبدالٌ ذرّيّ عبر RPC.
+   ⚠️ كان حذفاً شاملاً ثمّ إدراجاً بنداءَين منفصلين: فشلُ الإدراج بعد نجاح
+   الحذف يترك القُطر كلَّه بلا قواعدِ نجاح، ولا سبيل إلى اكتشاف ذلك إلّا بفتح
+   النافذة. الآن جسمُ دالّةٍ واحدة = معاملةٌ ضمنية. */
 async function setGradePassRules(rules) {
-  const { error: delErr } = await db
-    .from('grade_pass_rules').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-  if (delErr) throw delErr;
-  const rows = (rules ?? [])
+  const payload = (rules ?? [])
     .filter(r => r.gradeFrom && r.gradeTo)
-    .map((r, i) => ({
+    .map(r => ({
       grade_from:   Number(r.gradeFrom),
       grade_to:     Number(r.gradeTo),
-      default_pass: Number(r.defaultPass) || 0,
-      core_pass:    Number(r.corePass)    || 0,
-      sort_order:   i,
+      default_pass: Number(r.defaultPass),
+      arabic_pass:  Number(r.arabicPass),
+      math_is_core: !!r.mathIsCore,
+      free_fails:    Number(r.freeFails),
+      quarter_fails: Number(r.quarterFails),
+      quarter_pct:   Number(r.quarterPct),
+      require_foreign_language: !!r.requireForeignLanguage,
+      conduct_min: r.conductMin === '' || r.conductMin == null ? null : Number(r.conductMin),
+      total_min:   r.totalMin   === '' || r.totalMin   == null ? null : Number(r.totalMin),
     }));
-  if (rows.length === 0) return [];
-  const { data, error } = await db
-    .from('grade_pass_rules').insert(rows)
-    .select('id, grade_from, grade_to, default_pass, core_pass, sort_order');
+  if (payload.length === 0) throw new Error('قواعد النجاح لا يجوز أن تكون فارغة.');
+  const { data, error } = await db.rpc('set_grade_pass_rules', { p_rules: payload });
   if (error) throw error;
   return data ?? [];
 }
 
-// Resolve a subject's pass mark from the configured rules; falls back to the
-// hardcoded regulation rule when no rule matches / none configured yet.
-function resolvePassMark(rules, grade, isCoreArabic, isCoreMath) {
+/* تنزيلُ العتبات على subjects.pass_mark القائمة.
+   بدونها يبقى تعديلُ القواعد بلا أثرٍ على مدرسةٍ أنشأت موادَّها سابقاً. */
+async function syncPassMarksFromRules() {
+  const { data, error } = await db.rpc('sync_pass_marks_from_rules');
+  if (error) throw error;
+  return data ?? {};
+}
+
+/** القاعدةُ التي تحكم صفّاً بعينه. */
+function ruleForGrade(rules, grade) {
   const g = parseInt(grade, 10) || 0;
-  const rule = (rules ?? []).find(r => g >= Number(r.grade_from) && g <= Number(r.grade_to));
-  if (!rule) return passMarkFor(grade, isCoreArabic, isCoreMath);
-  return (isCoreArabic || isCoreMath) ? Number(rule.core_pass) : Number(rule.default_pass);
+  const list = (rules ?? []).length ? rules : FALLBACK_PASS_RULES;
+  return list.find(r => g >= Number(r.grade_from) && g <= Number(r.grade_to))
+      ?? FALLBACK_PASS_RULES.find(r => g >= r.grade_from && g <= r.grade_to)
+      ?? FALLBACK_PASS_RULES[1];
+}
+
+/* عتبةُ نجاح مادّةٍ (٪ من نهايتها العظمى) — تُشتقّ من **دور المادة** لا من
+   كونها «أساسية» عموماً.
+
+   ⚠️ كانت `isCoreArabic || isCoreMath` تعطي عتبةَ العربية (٥٠٪) للرياضيات في
+   كلّ الصفوف. واللائحةُ تجعل الرياضياتِ أساسيةً في الصفوف ١–٤ وحدها؛ ومن
+   الخامس فصاعداً حدُّها ٤٠٪ كسائر المواد، والعربيةُ وحدها ٥٠٪. فكان طالبُ
+   التاسع يُحسَب راسباً في الرياضيات عند ٤٥٪ وهو ناجحٌ نظاماً. */
+function resolvePassMark(rules, grade, isCoreArabic, isCoreMath) {
+  const rule = ruleForGrade(rules, grade);
+  if (isCoreArabic) return Number(rule.arabic_pass);
+  if (isCoreMath && rule.math_is_core) return Number(rule.arabic_pass);
+  return Number(rule.default_pass);
 }
 
 // School admin: create the chosen catalog subjects in ALL the chosen grades at
@@ -3080,6 +3122,7 @@ async function applyCatalogSubjectsToGrades(schoolId, grades, catalogIds) {
       const subjectId = await createSubject({
         schoolId, grade, name: c.name, maxTotal, passMark,
         isCoreArabic: c.is_core_arabic, isCoreMath: c.is_core_math,
+        isForeignLanguage: c.is_foreign_language,
         allowFullMarks: c.allow_full_marks,
         catalogId: c.id,          // النسب يُسجَّل عند النسخ لا يُستنتج بالاسم لاحقاً
       });
@@ -3382,16 +3425,26 @@ async function decideGraceProposal(proposalId, decision, reason = null) {
   return true;
 }
 
-// ─── Report-card result rule (شروط النجاح والرسوب — مديرية التربية) ───────────
-// Three grade bands, result is ناجح/راسب only (no مكمّل for basic education):
-//   • Band A (grades 1-4): fail if MORE THAN ONE of the core areas
-//     (is_core_arabic ×2 + is_core_math) is "weak" (percent < 50).
-//   • Band B (grades 5-6): pass needs ALL of — total ≥ 50%, the combined Arabic
-//     unit ≥ 50%, at most TWO non-Arabic subjects below 40%, and attendance ≥
-//     the school's minimum. Grace marks are applied before this check.
-//   • Band C (grades 7+): same as B PLUS conduct ≥ 60%.
-// ctx = { band, subjects:[{percent,isCoreArabic,isCoreMath}], totalPercent,
-//         arabicPercent, conductPercent, attendancePercent, minAttendancePct }.
+/* ─── محرّكُ النجاح والرسوب — يقرأ اللائحةَ ولا يخترعها ─────────────────────
+   ⚠️ كانت كلُّ عتبةٍ هنا رقماً حرفيّاً، وكان الجدولُ الذي يعدّله المشرف لا يصل
+   هذا الموضعَ إطلاقاً. فيعدّل ويحفظ ويرى «تمّ»، والنتيجةُ لا تتغيّر. الآن
+   القاعدةُ تُمرَّر فتُقرأ، وما لا تحدّده اللائحةُ لا يُشترَط.
+
+   خمسُ مخالفاتٍ صُحّحت بهذه الكتابة:
+    ١ الرياضياتُ كانت تأخذ عتبةَ العربية في كلّ الصفوف — وهي أساسيةٌ في ١–٤ وحدها
+    ٢ «المجموع ≥ ٥٠٪» كان شرطاً لازماً ولا وجودَ له في اللائحة
+    ٣ «حتى مادّتين تمرّان دائماً» — والصوابُ: واحدةٌ حرّة، ومادّتان بشرط الربع
+    ٤ الصفوف ١–٤ كانت بعتبتين متناقضتين (٤١ في السطر، ٥٠ في الحكم)
+    ٥ «السلوك ≥ ٦٠٪» كان لازماً وليس في اللائحة
+
+   ctx = {
+     grade, rule,
+     subjects: [{ percent, mark, maxTotal, passMark,
+                  isCoreArabic, isCoreMath, isForeignLanguage }],
+     totalPercent, conductPercent, attendancePercent, minAttendancePct,
+   }
+   والنتيجةُ «ناجح» أو «راسب» — لا «مكمّل»: قيدُ student_year_results يمنعه،
+   وإضافتُه تحتاج تغييرَ مخطّطٍ في أربعة مواضع. */
 function promotionBand(grade) {
   if (grade <= 4) return 'A';
   if (grade <= 6) return 'B';
@@ -3399,25 +3452,53 @@ function promotionBand(grade) {
 }
 
 function computeYearResult(ctx) {
-  if (ctx.band === 'A') {
-    const weak = ctx.subjects.filter(s =>
-      (s.isCoreArabic || s.isCoreMath) && s.percent != null && s.percent < 50).length;
-    return weak > 1 ? 'راسب' : 'ناجح';
+  const rule    = ctx.rule ?? ruleForGrade(null, ctx.grade);
+  const graded  = (ctx.subjects ?? []).filter(s => s.percent != null);
+
+  /* الحلقةُ الأولى (١–٤): تقديراتٌ لا قاعدةَ تجاوز. يرسب بأكثر من «ضعيف» واحدٍ
+     في الأساسيات الثلاث — شفويّ عربي، كتابيّ عربي، رياضيات.
+     والعتبةُ عتبةُ المادة نفسها (passMark) لا رقمٌ ثانٍ: فسطرُ المادة والحكمُ
+     النهائيّ يقولان الشيءَ نفسه. */
+  if (rule.math_is_core) {
+    const weakCore = graded.filter(s =>
+      (s.isCoreArabic || s.isCoreMath) && s.percent < Number(s.passMark)).length;
+    return weakCore > 1 ? 'راسب' : 'ناجح';
   }
-  // Bands B and C
-  const totalOk    = ctx.totalPercent != null && ctx.totalPercent >= 50;
-  const arabicOk   = ctx.arabicPercent == null || ctx.arabicPercent >= 50;
-  const belowForty = ctx.subjects.filter(s =>
-    !s.isCoreArabic && s.percent != null && s.percent < 40).length;
-  const fortyOk    = belowForty <= 2;
-  // Attendance only gates when we have both a recorded % and a configured min.
-  const attOk      = ctx.attendancePercent == null || ctx.minAttendancePct == null
-                     || ctx.attendancePercent >= ctx.minAttendancePct;
-  let ok = totalOk && arabicOk && fortyOk && attOk;
-  if (ctx.band === 'C') {
-    ok = ok && (ctx.conductPercent != null && ctx.conductPercent >= 60);
+
+  const failed = graded.filter(s => s.percent < Number(s.passMark));
+
+  // العربيةُ لا تُتجاوَز: الرسوبُ فيها رسوبٌ حتميّ مهما كان الباقي.
+  if (failed.some(s => s.isCoreArabic)) return 'راسب';
+
+  /* العاشر والحادي عشر: يجب النجاحُ بلغةٍ أجنبيةٍ واحدة على الأقلّ. لا يُشترَط
+     إلّا حيث توجد موادُّ لغةٍ أجنبيةٍ مصنَّفة — وإلّا لأرسبَ الشرطُ مدرسةً لم
+     تُعلّم موادَّها بعد. */
+  if (rule.require_foreign_language) {
+    const langs = graded.filter(s => s.isForeignLanguage);
+    if (langs.length > 0 && !langs.some(s => s.percent >= Number(s.passMark))) return 'راسب';
   }
-  return ok ? 'ناجح' : 'راسب';
+
+  // شرطُ الحضور: سياسةٌ مدرسيةٌ قائمة، لا يُقيّد إلّا حين يوجد رقمٌ وحدٌّ معاً.
+  if (ctx.attendancePercent != null && ctx.minAttendancePct != null
+      && ctx.attendancePercent < ctx.minAttendancePct) return 'راسب';
+
+  // شرطا المجموع والسلوك: فارغان في اللائحة، ولا يُقيّدان إلّا إن ضبطهما المشرف.
+  if (rule.total_min != null
+      && (ctx.totalPercent == null || ctx.totalPercent < Number(rule.total_min))) return 'راسب';
+  if (rule.conduct_min != null
+      && (ctx.conductPercent == null || ctx.conductPercent < Number(rule.conduct_min))) return 'راسب';
+
+  // قاعدةُ التجاوز: مادّةٌ حرّة، ثمّ مادّتان بشرط الربع، وما فوقُ رسوبٌ حتميّ.
+  if (failed.length <= Number(rule.free_fails)) return 'ناجح';
+  if (failed.length <= Number(rule.quarter_fails)) {
+    /* شرطُ الربع يُحسب على **الدرجات الخام** لا على متوسّط النسب: مادّةٌ نهايتُها
+       ٦٠٠ ليست كمادّةٍ نهايتُها ١٠٠ في الميزان. */
+    const sumMark = failed.reduce((a, s) => a + (Number(s.mark) || 0), 0);
+    const sumMax  = failed.reduce((a, s) => a + (Number(s.maxTotal) || 0), 0);
+    if (sumMax > 0 && (sumMark / sumMax) * 100 >= Number(rule.quarter_pct)) return 'ناجح';
+    return 'راسب';
+  }
+  return 'راسب';
 }
 
 // ⚠️ مرحلة مشتقّة من **رقم الصف** لبطاقات العلامات — ليست schools.school_type.
@@ -3445,7 +3526,7 @@ async function getClassReportCards(classId, academicYear = getAcademicYear(), te
   const stage = stageForGrade(cls.grade);
   const band  = promotionBand(cls.grade);
 
-  const [students, subjectsRaw, gradesRes, attRes, conduct, grace, schoolRes] = await Promise.all([
+  const [students, subjectsRaw, gradesRes, attRes, conduct, grace, schoolRes, passRules] = await Promise.all([
     getClassStudents(classId),
     getSchoolSubjects(cls.school_id, cls.grade),
     db.from('student_grades')
@@ -3459,9 +3540,13 @@ async function getClassReportCards(classId, academicYear = getAcademicYear(), te
     getClassConduct(classId).catch(() => ({})),
     getClassGrace(classId).catch(() => ({})),
     db.from('schools').select('min_attendance_pct, directorate:directorates(name)').eq('id', cls.school_id).single(),
+    /* اللائحةُ من مصدرها. تعذّرُ الجلب لا يمنع البطاقةَ: ruleForGrade تسقط إلى
+       النصّ الوطنيّ المعروف بدل أن تُرسِب الصفَّ كلَّه بخطأ شبكة. */
+    getGradePassRules().catch(() => []),
   ]);
   if (gradesRes.error) throw gradesRes.error;
   if (attRes.error) throw attRes.error;
+  const passRule = ruleForGrade(passRules, cls.grade);
 
   const subjects = subjectsRaw.filter(s => s.is_active);
   const minAttendancePct = Number(schoolRes?.data?.min_attendance_pct ?? 75);
@@ -3528,6 +3613,7 @@ async function getClassReportCards(classId, academicYear = getAcademicYear(), te
         name:         sub.name,
         isCoreArabic: !!sub.is_core_arabic,
         isCoreMath:   !!sub.is_core_math,
+        isForeignLanguage: !!sub.is_foreign_language,
         maxTotal,
         passMark:     Number(sub.pass_mark),
         sem1:         s1,
@@ -3567,11 +3653,21 @@ async function getClassReportCards(classId, academicYear = getAcademicYear(), te
     // First-semester certificate shows marks + average only — no year verdict.
     const result = (!isS1 && complete)
       ? computeYearResult({
-          band,
+          grade: cls.grade,
+          rule:  passRule,
+          /* الدرجاتُ الخام تُمرَّر مع النسب: شرطُ الربع يوازن مادّةً نهايتُها
+             ٦٠٠ بمادّةٍ نهايتُها ١٠٠، ولا يصحّ حسابُه على متوسّط النسب. وهي
+             درجاتُ ما بعد الرأفة، اتّساقاً مع النسبة المستعملة في الحكم. */
           subjects: subjResults.map(s => ({
-            percent: s.percentWithGrace, isCoreArabic: s.isCoreArabic, isCoreMath: s.isCoreMath,
+            percent:  s.percentWithGrace,
+            mark:     s.markWithGrace,
+            maxTotal: s.maxTotal,
+            passMark: s.passMark,
+            isCoreArabic: s.isCoreArabic,
+            isCoreMath:   s.isCoreMath,
+            isForeignLanguage: s.isForeignLanguage,
           })),
-          totalPercent, arabicPercent,
+          totalPercent,
           conductPercent: conductMark, attendancePercent, minAttendancePct,
         })
       : null;
@@ -4681,10 +4777,13 @@ window.RUQI_DB = {
   syncFullMarksFromCatalog,
   getCatalogComponents,
   setCatalogComponents,
-  passMarkFor,
   getGradePassRules,
   setGradePassRules,
+  syncPassMarksFromRules,
   resolvePassMark,
+  ruleForGrade,
+  // يُصدَّر للاختبار: كان خاصّاً بالوحدة فتعذّر التحقّق من أخطر منطقٍ في النظام.
+  computeYearResult,
   applyCatalogSubjectsToGrades,
   getClassGradeSubjects,
   getClassGrades,

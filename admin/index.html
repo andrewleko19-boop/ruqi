@@ -887,7 +887,12 @@
           <label><input type="checkbox" id="sc-arabic" /> مادة عربية أساسية</label>
         </div>
         <div class="form-group">
-          <label><input type="checkbox" id="sc-math" /> رياضيات أساسية</label>
+          <label><input type="checkbox" id="sc-math" /> رياضيات (أساسية في الصفوف ١–٤)</label>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label><input type="checkbox" id="sc-lang" /> مادة لغة أجنبية</label>
         </div>
       </div>
       <div class="form-row">
@@ -950,7 +955,7 @@
   </div>
 
   <div id="pass-rules-modal" class="modal-overlay hidden">
-    <div class="modal" style="max-width:560px">
+    <div class="modal" style="max-width:720px">
       <div class="modal-header">
         <span class="modal-title">قواعد النجاح حسب مجموعة الصفوف</span>
         <button class="btn btn-icon btn-sm" id="pass-rules-close">
@@ -958,12 +963,28 @@
         </button>
       </div>
       <div id="pass-rules-error" class="error-msg hidden"></div>
-      <p style="font-size:.82rem;color:var(--text-dim);margin:0 0 8px">
-        درجة النجاح تُطبَّق تلقائيّاً على المواد حسب صفّها. «العربي/الرياضيات» = المواد المعلَّمة أساسية.
+      <p style="font-size:.82rem;color:var(--text-dim);margin:0 0 8px;line-height:1.8">
+        العتباتُ نسبٌ مئوية من النهاية العظمى لكل مادة، وتُطبَّق على المواد حسب صفّها.
+        <b>العربية</b> عتبتُها الخاصة دائماً؛ و<b>الرياضيات</b> تأخذ عتبةَ العربية في
+        النطاق الذي تُعلَّم فيه «أساسية» (الصفوف ١–٤ نظاماً).
+        <br />
+        <b>التجاوز:</b> عددُ المواد التي يُتجاوَز الرسوبُ فيها بلا شرط، ثمّ العددُ الذي
+        يُتجاوَز بشرط الربع (مجموعُ درجاتها ≥ النسبة من مجموع نهاياتها). وما فوقَه
+        رسوبٌ حتميّ. والرسوبُ في العربية لا يُتجاوَز أبداً.
+        <br />
+        <b>المجموع والسلوك:</b> اتركهما فارغين ما لم تشترطهما — واللائحةُ لا تشترطهما.
       </p>
-      <div style="display:flex;gap:8px;font-size:.72rem;color:var(--text-dim);font-weight:700;padding:0 2px 4px">
-        <span style="flex:1">من الصف</span><span style="flex:1">إلى الصف</span>
-        <span style="flex:1">درجة عادية</span><span style="flex:1">العربي/الرياضيات</span><span style="width:52px"></span>
+      <div class="pr-head">
+        <span>من الصف</span><span>إلى الصف</span>
+        <span>عادية ٪</span><span>العربية ٪</span>
+        <span title="الرياضيات أساسية في هذا النطاق">ر. أساسية</span>
+        <span title="مواد يُتجاوَز الرسوب فيها بلا شرط">حرّة</span>
+        <span title="حتى كم مادة بشرط الربع">بالربع</span>
+        <span title="نسبة شرط الربع">٪الربع</span>
+        <span title="يجب النجاح بلغة أجنبية واحدة على الأقل">لغة أجنبية</span>
+        <span title="أدنى نسبة مجموع — فارغ = لا شرط">مجموع ٪</span>
+        <span title="أدنى نسبة سلوك — فارغ = لا شرط">سلوك ٪</span>
+        <span class="pr-del-col"></span>
       </div>
       <div id="pass-rules-list"></div>
       <button type="button" class="btn btn-ghost btn-sm" id="pass-rules-add" style="margin-top:4px">
@@ -975,6 +996,7 @@
       </div>
     </div>
   </div>
+
 
   <!-- ══════════════════════════════════════════════
        Modal: حدّ نصاب التدريس (وطنيّ)

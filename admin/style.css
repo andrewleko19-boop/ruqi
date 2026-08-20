@@ -1007,3 +1007,24 @@ tbody tr.is-off td:not(.row-actions-cell) { opacity: .5; }
   background: var(--accent-tint, #dbeafe); border-color: var(--accent, #2563eb);
   color: var(--accent, #2563eb);
 }
+
+/* ── قواعد النجاح: شبكةٌ واحدة للترويسة والصفوف ─────────────────────────────
+   العمودُ يبقى محاذياً لعنوانه مهما تغيّر عددُ القواعد. وكانت الترويسةُ flex
+   والصفُّ flex مستقلَّين، فتنزلقان عن بعضهما بمجرّد اختلاف عرضِ حقل. */
+.pr-head, .pass-rule-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(46px, 1fr)) 58px repeat(3, minmax(42px, 1fr))
+                         62px repeat(2, minmax(46px, 1fr)) 52px;
+  gap: 6px; align-items: center;
+}
+.pr-head {
+  font-size: .68rem; color: var(--text-dim); font-weight: 700;
+  padding: 0 2px 4px; text-align: center;
+}
+.pass-rule-row { margin-bottom: 6px; }
+.pass-rule-row input[type="number"] { width: 100%; min-width: 0; text-align: center; }
+.pass-rule-row input[type="checkbox"] { justify-self: center; }
+/* أحدَ عشرَ عموداً: تُمرَّر النافذةُ أفقياً على الشاشات الضيّقة بدل أن تدفع
+   الصفحةَ كلَّها يميناً ويساراً. */
+#pass-rules-list, .pr-head { min-width: 640px; }
+#pass-rules-modal .modal { overflow-x: auto; }

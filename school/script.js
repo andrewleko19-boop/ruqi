@@ -2699,6 +2699,7 @@ const subjMaxIn      = el('subj-max');
 const subjPassIn     = el('subj-pass');
 const subjArabicIn   = el('subj-arabic');
 const subjMathIn     = el('subj-math');
+const subjLangIn     = el('subj-lang');
 const subjFullMarksIn = el('subj-full-marks');
 const subjCompList   = el('subj-comp-list');
 const btnAddComp     = el('btn-add-comp');
@@ -2713,6 +2714,9 @@ let _mngSubjectsInit  = false;
 let _subjGrade        = 1;
 let _editingSubjectId = null;
 let _editingComps = [];   // [{ id, name }] كما كانت في القاعدة لحظة الفتح
+/* قواعدُ النجاح الوطنية — تُجلب مرّةً عند فتح النافذة وتُخبَّأ. الفشلُ يُترك
+   مصفوفةً فارغة، وresolvePassMark تسقط عندها إلى اللائحة المعروفة. */
+let _passRulesCache = [];
 
 // Map a Supabase error to a clear Arabic message. 42501 / "permission denied
 // for table" means the grades tables haven't been granted to the app role yet.
@@ -2938,14 +2942,23 @@ async function openSubjectModal(sub) {
   subjError.hidden = true;
   subjNameIn.value   = sub?.name ?? '';
   subjMaxIn.value    = sub?.max_total ?? 100;
-  subjPassIn.value   = sub?.pass_mark ?? 40;
   subjArabicIn.checked = !!sub?.is_core_arabic;
   subjMathIn.checked   = !!sub?.is_core_math;
+  subjLangIn.checked   = !!sub?.is_foreign_language;
   subjFullMarksIn.checked = !!sub?.allow_full_marks;
   subjCompList.innerHTML = '';
 
   show(modalSubject);
   document.body.style.overflow = 'hidden';
+
+  /* العتبةُ من اللائحة. المادّةُ القائمة تُعرَض بعتبتها المحفوظة أوّلاً كي لا
+     يرى المديرُ رقماً يقفز أمامه، ثمّ تُصحَّح إن خالفت القاعدةَ — والمادّةُ
+     الجديدة تبدأ صحيحةً من أوّل لحظة. */
+  subjPassIn.value = sub?.pass_mark ?? '';
+  try {
+    if (_passRulesCache.length === 0) _passRulesCache = await NDB.getGradePassRules();
+  } catch (e) { console.warn('[Ruqi] getGradePassRules', e); }
+  if (!sub) syncSubjPassFromRules();
 
   if (sub) {
     try {
@@ -2984,10 +2997,19 @@ btnSubjSingle.addEventListener('click', () => {
 });
 
 subjMaxIn.addEventListener('input', updateCompSum);
-subjArabicIn.addEventListener('change', () => {
-  // Convenience: Arabic parts pass at 50% by default.
-  if (subjArabicIn.checked && (Number(subjPassIn.value) || 0) < 50) subjPassIn.value = 50;
-});
+/* عتبةُ المادة تتبع اللائحةَ لا رقماً محشوّاً.
+   ⚠️ كانت النافذةُ اليدوية تتجاهل قواعدَ النجاح كلَّها: ٤٠ افتراضاً، ثمّ ٥٠ إن
+   أُشّرت «عربية». فيصير في المدرسة الواحدة مصدران للعتبة — واحدٌ للموادّ
+   المنسوخة من الفهرس (يقرأ القواعد) وآخرُ للموادّ المضافة يدوياً (لا يقرؤها).
+   والرياضياتُ كانت تُعطى ٥٠٪ في كلّ الصفوف وهي أساسيةٌ في ١–٤ وحدها. */
+function syncSubjPassFromRules() {
+  if (typeof NDB.resolvePassMark !== 'function') return;
+  const mark = NDB.resolvePassMark(
+    _passRulesCache, _subjGrade, subjArabicIn.checked, subjMathIn.checked);
+  if (Number.isFinite(mark)) subjPassIn.value = mark;
+}
+subjArabicIn.addEventListener('change', syncSubjPassFromRules);
+subjMathIn.addEventListener('change', syncSubjPassFromRules);
 
 btnSaveSubject.addEventListener('click', async () => {
   const name = subjNameIn.value.trim();
@@ -3047,6 +3069,7 @@ btnSaveSubject.addEventListener('click', async () => {
       await NDB.updateSubject(subjectId, {
         name, maxTotal, passMark,
         isCoreArabic: subjArabicIn.checked, isCoreMath: subjMathIn.checked,
+        isForeignLanguage: subjLangIn.checked,
         allowFullMarks: subjFullMarksIn.checked,
       });
     } else {
@@ -3054,6 +3077,7 @@ btnSaveSubject.addEventListener('click', async () => {
         schoolId: S.school.id, grade: _subjGrade,
         name, maxTotal, passMark,
         isCoreArabic: subjArabicIn.checked, isCoreMath: subjMathIn.checked,
+        isForeignLanguage: subjLangIn.checked,
         allowFullMarks: subjFullMarksIn.checked,
       });
     }
@@ -5551,6 +5575,8 @@ el('btn-save-counts')?.addEventListener('click', async () => {
 let _credList = [];        // [{ id, userId, username, password, createdAt }]
 let _teacherNames = {};    // userId → fullName (from getTeachersBySchool)
 let _credEditUserId = null;
+// اسمُ المستخدم عند التغيير: حقلُه مخفيٌّ في هذه الحالة، ولوحةُ التسليم تعرضه.
+let _credEditUsername = null;
 
 const credListEl = el('cred-list');
 const modalTeacher = el('modal-teacher');
@@ -5594,7 +5620,7 @@ function renderCredentials() {
           `<div class="cred-line">اسم المستخدم: <code>${escapeHtml(c.username)}</code></div>` +
           (hasPw
             ? `<div class="cred-line">كلمة المرور: <code class="cred-pw" data-pw="${escapeHtml(c.password)}">••••••••</code></div>`
-            : `<div class="cred-line cred-line-muted">كلمة المرور غير محفوظة — استعمل «تغيير كلمة المرور» لتعيين واحدة جديدة.</div>`) +
+            : `<div class="cred-line cred-line-muted">كلمة المرور لا تُحفظ لدواعي الأمان — تظهر مرّةً واحدة عند تعيينها. إن نسيها صاحبها عيّن واحدة جديدة.</div>`) +
         `</div>` +
         `<div class="cred-acts">` +
           (hasPw
@@ -5664,7 +5690,8 @@ el('btn-confirm-del-teacher')?.addEventListener('click', async () => {
 });
 
 function openTeacherModal(cred) {
-  _credEditUserId = cred?.userId ?? null;
+  _credEditUserId   = cred?.userId ?? null;
+  _credEditUsername = cred?.username ?? null;
   const editing = !!cred;
   el('tch-modal-title').textContent = editing ? 'تغيير كلمة المرور' : 'إضافة معلّم';
   el('tch-save-label').textContent  = editing ? 'حفظ كلمة المرور' : 'إنشاء الحساب';
@@ -5675,10 +5702,41 @@ function openTeacherModal(cred) {
   el('tch-name-group').hidden = editing;
   el('tch-username-group').hidden = editing;
   hide(el('tch-error'));
+  // النافذةُ تُعاد لحالة النموذج دائماً: فتحُها بعد تسليمٍ سابق كان سيُظهر
+  // بيانات المعلّم السابق بدل حقولٍ فارغة.
+  el('tch-form').hidden    = false;
+  el('tch-handoff').hidden = true;
   show(modalTeacher);
 }
 el('btn-add-teacher').addEventListener('click', () => openTeacherModal(null));
 el('btn-close-teacher').addEventListener('click', () => hide(modalTeacher));
+
+/* لوحةُ التسليم — تُعرَض بعد نجاح الحفظ.
+   كلمةُ المرور لا تُحفظ نصّاً صريحاً في القاعدة (قرارٌ أمنيّ في
+   admin-create-staff: «Do NOT persist the plaintext password»، والتغييرُ يمسح
+   أيَّ نصٍّ قديم). فهذه هي المرّةُ الوحيدة التي يراها فيها المدير — وإغلاقُ
+   النافذة صامتاً بعد الحفظ كان يُضيّعها، فيبقى الحساب بكلمةٍ لا يعرفها أحد. */
+let _tchHandoff = null;
+function showTeacherHandoff({ name, username, password, editing }) {
+  _tchHandoff = { name, username, password };
+  el('tch-ho-title').textContent = editing ? 'تمّ تغيير كلمة المرور' : 'تمّ إنشاء الحساب';
+  el('tch-ho-name').textContent  = name || '—';
+  el('tch-ho-user').textContent  = username || '—';
+  el('tch-ho-pass').textContent  = password;
+  el('tch-form').hidden    = true;
+  el('tch-handoff').hidden = false;
+}
+el('btn-tch-copy')?.addEventListener('click', async () => {
+  if (!_tchHandoff) return;
+  const text = `${_tchHandoff.name}\nاسم المستخدم: ${_tchHandoff.username}\n` +
+               `كلمة المرور: ${_tchHandoff.password}`;
+  try { await navigator.clipboard.writeText(text); toast('تم نسخ بيانات الدخول', 'success'); }
+  catch { toast('تعذّر النسخ — انسخها يدوياً', 'error'); }
+});
+el('btn-tch-done')?.addEventListener('click', () => {
+  _tchHandoff = null;
+  hide(modalTeacher);
+});
 
 el('btn-save-teacher').addEventListener('click', async () => {
   hide(el('tch-error'));
@@ -5693,15 +5751,21 @@ el('btn-save-teacher').addEventListener('click', async () => {
   if (password.length < 6) { return showTchErr('كلمة المرور ٦ أحرف على الأقل.'); }
   const btn = el('btn-save-teacher'); btn.disabled = true; show(el('tch-spinner'));
   try {
+    let shownName = fullName, shownUser = username;
     if (editing) {
       await NDB.updateTeacherCredential({ userId: _credEditUserId, password });
-      toast('تم تحديث كلمة المرور', 'success');
+      // عند التغيير الحقلان مخفيّان، فالاسمُ يُقرأ من السجلّ لا من النموذج.
+      shownName = _teacherNames[_credEditUserId] || '—';
+      shownUser = _credEditUsername || '—';
     } else {
       await NDB.createTeacherAccount({ fullName, username, password });
-      toast('تم إنشاء حساب المعلّم', 'success');
     }
-    hide(modalTeacher);
-    await Promise.all([loadStaffCredentials(), loadRosterCard()]);
+    // لا إغلاقَ صامت: تُعرَض كلمةُ المرور مرّةً ليسلّمها المدير، ثمّ يُغلق بنفسه.
+    showTeacherHandoff({ name: shownName, username: shownUser, password, editing });
+    /* تحديثُ القوائم بعد التسليم لا قبله، وبلا رمي: الحسابُ حُفظ فعلاً، ففشلُ
+       جلبٍ تالٍ لا يجوز أن يقفز إلى catch فيكتب «تعذّر الحفظ» — وأسوأ، الرسالةُ
+       داخل النموذج المخفيّ الآن فلا تُرى أصلاً وتضيع كلمةُ المرور معها. */
+    await Promise.allSettled([loadStaffCredentials(), loadRosterCard()]);
   } catch (err) {
     console.error('[Ruqi] save teacher account', err);
     showTchErr(errMessage(err, 'تعذّر الحفظ.'));

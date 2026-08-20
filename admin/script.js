@@ -1575,6 +1575,7 @@ const scModalSave       = document.getElementById('subject-cat-modal-save');
 const scName            = document.getElementById('sc-name');
 const scArabic          = document.getElementById('sc-arabic');
 const scMath            = document.getElementById('sc-math');
+const scLang            = document.getElementById('sc-lang');
 const scFullMarks       = document.getElementById('sc-full-marks');
 const scSort            = document.getElementById('sc-sort');
 const scActive          = document.getElementById('sc-active');
@@ -1677,6 +1678,7 @@ function openAddCatalog() {
   scName.value = '';
   scArabic.checked = false;
   scMath.checked = false;
+  scLang.checked = false;
   scFullMarks.checked = false;
   scSort.value = allCatalogSubjects.length ? (Math.max(...allCatalogSubjects.map(r => r.sort_order || 0)) + 1) : 0;
   scActive.value = 'true'; CustomSelect.refresh(scActive);
@@ -1697,6 +1699,7 @@ async function openEditCatalog(id) {
   scName.value = r.name;
   scArabic.checked = !!r.is_core_arabic;
   scMath.checked = !!r.is_core_math;
+  scLang.checked = !!r.is_foreign_language;
   scFullMarks.checked = !!r.allow_full_marks;
   scSort.value = r.sort_order ?? 0;
   scActive.value = r.active ? 'true' : 'false'; CustomSelect.refresh(scActive);
@@ -1729,6 +1732,7 @@ scModalSave.addEventListener('click', async () => {
     name,
     is_core_arabic:   scArabic.checked,
     is_core_math:     scMath.checked,
+    is_foreign_language: scLang.checked,
     allow_full_marks: scFullMarks.checked,
     sort_order:       Number(scSort.value) || 0,
     active:           scActive.value === 'true',
@@ -1827,16 +1831,40 @@ const passRulesError  = document.getElementById('pass-rules-error');
 const passRulesList   = document.getElementById('pass-rules-list');
 const passRulesAdd    = document.getElementById('pass-rules-add');
 
+/* اللائحةُ السورية الافتراضية — تُعرَض حين يتعذّر الجلب أو يكون الجدولُ فارغاً.
+   ثلاثةُ نطاقاتٍ لا اثنان: الحلقةُ الثانية والثانويُّ يفترقان في شرط اللغة
+   الأجنبية، فدمجُهما في «٥–١٢» كان يُسقط الشرط عن العاشر والحادي عشر. */
+const DEFAULT_PASS_RULES = [
+  { grade_from: 1,  grade_to: 4,  default_pass: 41, arabic_pass: 41, math_is_core: true,
+    free_fails: 0, quarter_fails: 0, quarter_pct: 0,  require_foreign_language: false },
+  { grade_from: 5,  grade_to: 9,  default_pass: 40, arabic_pass: 50, math_is_core: false,
+    free_fails: 1, quarter_fails: 2, quarter_pct: 25, require_foreign_language: false },
+  { grade_from: 10, grade_to: 12, default_pass: 40, arabic_pass: 50, math_is_core: false,
+    free_fails: 1, quarter_fails: 2, quarter_pct: 25, require_foreign_language: true },
+];
+
 function passRuleRow(r = {}) {
   const row = document.createElement('div');
   row.className = 'pass-rule-row';
-  row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px';
+  const num = (cls, val, min, max) =>
+    `<input type="number" class="${cls}" min="${min}" max="${max}" value="${esc(val ?? '')}" />`;
+  const chk = (cls, on) =>
+    `<input type="checkbox" class="${cls}"${on ? ' checked' : ''} />`;
   row.innerHTML =
-    '<input type="number" class="pr-from" min="1" max="12" style="flex:1" value="' + esc(r.grade_from ?? '') + '" />' +
-    '<input type="number" class="pr-to" min="1" max="12" style="flex:1" value="' + esc(r.grade_to ?? '') + '" />' +
-    '<input type="number" class="pr-default" min="0" max="100" style="flex:1" value="' + esc(r.default_pass ?? '') + '" />' +
-    '<input type="number" class="pr-core" min="0" max="100" style="flex:1" value="' + esc(r.core_pass ?? '') + '" />' +
-    '<button type="button" class="btn btn-danger btn-sm pr-del" style="width:52px">حذف</button>';
+    num('pr-from',    r.grade_from,    1, 12) +
+    num('pr-to',      r.grade_to,      1, 12) +
+    num('pr-default', r.default_pass,  0, 100) +
+    num('pr-arabic',  r.arabic_pass,   0, 100) +
+    chk('pr-mathcore', r.math_is_core) +
+    num('pr-free',    r.free_fails,    0, 12) +
+    num('pr-qfails',  r.quarter_fails, 0, 12) +
+    num('pr-qpct',    r.quarter_pct,   0, 100) +
+    chk('pr-lang',    r.require_foreign_language) +
+    // فارغٌ يعني «لا شرط» — لا صفراً. الصفرُ هنا شرطٌ يُحقَّق دائماً، والفراغُ
+    // غيابُ الشرط. الفرقُ ليس تجميلياً: صفرٌ في السلوك يُخفي أنّه غيرُ مشترَط.
+    num('pr-total',   r.total_min,     0, 100) +
+    num('pr-conduct', r.conduct_min,   0, 100) +
+    '<button type="button" class="btn btn-danger btn-sm pr-del">حذف</button>';
   row.querySelector('.pr-del').addEventListener('click', () => row.remove());
   passRulesList.appendChild(row);
 }
@@ -1847,15 +1875,12 @@ async function openPassRules() {
   show(passRulesModal);
   try {
     const rules = await window.RUQI_DB.getGradePassRules();
-    if (rules.length) {
-      rules.forEach(passRuleRow);
-    } else {
-      passRuleRow({ grade_from: 1, grade_to: 4,  default_pass: 41, core_pass: 41 });
-      passRuleRow({ grade_from: 5, grade_to: 12, default_pass: 40, core_pass: 50 });
-    }
+    (rules.length ? rules : DEFAULT_PASS_RULES).forEach(passRuleRow);
   } catch (e) {
     console.error('[admin] getGradePassRules', e);
-    passRuleRow();
+    // لا صفٌّ فارغ: قواعدُ اللائحة خيرٌ من شبكةٍ بيضاء يملؤها المشرف تخميناً.
+    DEFAULT_PASS_RULES.forEach(passRuleRow);
+    showError(passRulesError, 'تعذّر جلبُ القواعد المحفوظة — المعروضُ هو اللائحة الافتراضية.');
   }
 }
 
@@ -1990,19 +2015,69 @@ passRulesModal.addEventListener('click', e => { if (e.target === passRulesModal)
 passRulesAdd.addEventListener('click', () => passRuleRow());
 
 passRulesSave.addEventListener('click', async () => {
+  const val = (r, cls) => r.querySelector(cls).value.trim();
   const rules = [...passRulesList.querySelectorAll('.pass-rule-row')].map(r => ({
-    gradeFrom:   Number(r.querySelector('.pr-from').value),
-    gradeTo:     Number(r.querySelector('.pr-to').value),
-    defaultPass: Number(r.querySelector('.pr-default').value),
-    corePass:    Number(r.querySelector('.pr-core').value),
+    gradeFrom:    Number(val(r, '.pr-from')),
+    gradeTo:      Number(val(r, '.pr-to')),
+    defaultPass:  Number(val(r, '.pr-default')),
+    arabicPass:   Number(val(r, '.pr-arabic')),
+    mathIsCore:   r.querySelector('.pr-mathcore').checked,
+    freeFails:    Number(val(r, '.pr-free')),
+    quarterFails: Number(val(r, '.pr-qfails')),
+    quarterPct:   Number(val(r, '.pr-qpct')),
+    requireForeignLanguage: r.querySelector('.pr-lang').checked,
+    // الفراغُ يبقى فراغاً: «لا شرط» حقيقةٌ تُقال لا تُخفى بصفر.
+    totalMin:     val(r, '.pr-total')   === '' ? null : Number(val(r, '.pr-total')),
+    conductMin:   val(r, '.pr-conduct') === '' ? null : Number(val(r, '.pr-conduct')),
   })).filter(r => r.gradeFrom && r.gradeTo);
-  for (const r of rules) {
-    if (r.gradeFrom > r.gradeTo) { showError(passRulesError, 'نطاق صفوف غير صحيح (من > إلى).'); return; }
+
+  if (rules.length === 0) {
+    showError(passRulesError, 'لا يمكن الحفظ بلا قاعدةٍ واحدة على الأقلّ.'); return;
   }
+  for (const r of rules) {
+    if (r.gradeFrom > r.gradeTo) {
+      showError(passRulesError, 'نطاق صفوف غير صحيح (من > إلى).'); return;
+    }
+    if (r.quarterFails < r.freeFails) {
+      showError(passRulesError,
+        `النطاق ${r.gradeFrom}–${r.gradeTo}: «بالربع» لا يجوز أن يقلّ عن «حرّة».`); return;
+    }
+  }
+  /* التداخلُ يُمنع هنا وفي القاعدة معاً. سببُه أنّ حلَّ القاعدة يأخذ **أوّل**
+     نطاقٍ مطابق — فنطاقان يشملان الصفَّ نفسه يجعلان الحكمَ رهنَ ترتيب الصفوف
+     في الشاشة لا رهنَ اللائحة، وهو أسوأُ من خطأٍ ظاهر لأنّه يبدو صحيحاً. */
+  const sorted = [...rules].sort((a, b) => a.gradeFrom - b.gradeFrom);
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].gradeFrom <= sorted[i - 1].gradeTo) {
+      showError(passRulesError,
+        `نطاقان متداخلان: ${sorted[i - 1].gradeFrom}–${sorted[i - 1].gradeTo} و` +
+        `${sorted[i].gradeFrom}–${sorted[i].gradeTo}. لكلّ صفٍّ قاعدةٌ واحدة.`);
+      return;
+    }
+  }
+  // فجوةٌ في التغطية ليست خطأً يمنع الحفظ، لكنّها تُقال: صفٌّ بلا قاعدةٍ يسقط
+  // إلى اللائحة الافتراضية بصمت، فيظنّ المشرفُ أنّه ضبطه وهو لم يُضبط.
+  const covered = new Set();
+  for (const r of sorted) for (let g = r.gradeFrom; g <= r.gradeTo; g++) covered.add(g);
+  const gaps = [];
+  for (let g = 1; g <= 12; g++) if (!covered.has(g)) gaps.push(g);
+
   passRulesSave.disabled = true;
   try {
     await window.RUQI_DB.setGradePassRules(rules);
+    // القواعدُ تنزل على الموادّ القائمة فوراً — وإلّا بقي التعديلُ حبراً على
+    // الجدول ولم تتغيّر عتبةُ مادّةٍ واحدة في أيّ مدرسة.
+    let syncMsg = '';
+    try {
+      const res = await window.RUQI_DB.syncPassMarksFromRules();
+      syncMsg = ` (حُدّثت ${res?.synced ?? 0} مادة)`;
+    } catch (e) {
+      console.warn('[admin] syncPassMarksFromRules', e);
+      syncMsg = ' — لكن تعذّر تحديثُ عتبات المواد القائمة، أعِد الحفظ لاحقاً.';
+    }
     closePassRules();
+    const gapMsg = gaps.length ? ` · صفوفٌ بلا قاعدة: ${gaps.join('، ')}` : '';
+    alertModal(`تم حفظ قواعد النجاح${syncMsg}${gapMsg}`);
   } catch (e) {
     showError(passRulesError, errMessage(e, 'تعذّر حفظ قواعد النجاح.'));
   } finally {
