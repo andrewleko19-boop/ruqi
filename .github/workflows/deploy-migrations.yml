@@ -57,6 +57,39 @@ jobs:
           # آخر ما في جدول السجلّ — لازمٌ للتطبيق الأول. الرابط لا يُطبَع أبداً.
           push() { supabase db push --db-url "$1" --include-all; }
 
+          # ── مصالحةُ نسخةٍ نُشرت ثمّ حُذف ملفُّها (revert أو إعادة ترقيم) ────
+          # جدولُ سجلّ الهجرات يحتفظ بالرقم، فيرفض db push المتابعةَ برسالة
+          # «Remote migration versions not found in local migrations directory».
+          # نُصالح — لكن **بضيقٍ محسوب**: لا يُقبل إلّا رقمٌ يشهد تاريخُ git أنّ
+          # ملفَّه حُذف عمداً. فحذفٌ مقصود يُصالَح آلياً، أمّا نسخةُ عملٍ ناقصة
+          # أو checkout فاسد فيبقى الفشلُ عالياً كما يجب.
+          # ⚠️ لا `… | grep -q` تحت pipefail: grep يخرج عند أوّل تطابقٍ فيغلق
+          # الأنبوب، فيتلقّى المُنتِجُ SIGPIPE (141) وتُقرأ الحالةُ فشلاً —
+          # فينقلب «وجدتُه» إلى «لم أجده» صامتاً. تُلتقط المخرجاتُ مرّةً ثمّ
+          # تُفحَص في الذاكرة.
+          DELETED_MIGS=$(git log --all --pretty=format: --name-only --diff-filter=D \
+                          -- supabase/migrations || true)
+
+          repair_orphans() {
+            local url="$1" out="$2" ver ok=0
+            for ver in $(echo "${out}" | grep -oE 'migration repair --status reverted [0-9]{14}' \
+                                        | grep -oE '[0-9]{14}' | sort -u); do
+              if compgen -G "supabase/migrations/${ver}_*.sql" > /dev/null; then
+                echo "::error::${ver} موجودٌ محلّياً — الرفضُ ليس يُتماً، لا تُصالِح."
+                return 1
+              fi
+              case "${DELETED_MIGS}" in
+                *"/${ver}_"*) ;;
+                *) echo "::error::${ver} في القاعدة ولا أثرَ لحذفه في تاريخ git — نسخةُ عملٍ ناقصة؟"
+                   return 1 ;;
+              esac
+              echo "مصالحة: ${ver} حُذف ملفُّه عمداً، يُعلَّم مُراجَعاً."
+              supabase migration repair --status reverted "${ver}" --db-url "${url}" || return 1
+              ok=1
+            done
+            [ "${ok}" = "1" ]
+          }
+
           # مسارٌ يدويّ صريح إن زُوّد.
           if [ -n "${DB_URL_MANUAL}" ]; then
             echo "استعمال SUPABASE_DB_URL المزوّد يدوياً."
@@ -105,6 +138,19 @@ jobs:
             if echo "${OUT}" | grep -qiE "tenant/user .* not found|failed to connect|ENOTFOUND|no such host|could not translate host"; then
               echo "→ العنقود ${prefix} ليس مستأجَر المشروع، أُكمل للتالي."
               continue
+            fi
+            # وصلنا القاعدةَ فعلاً: يُتمُ نسخةٍ حُذف ملفُّها يُصالَح ثمّ يُعاد الدفع مرّةً.
+            if echo "${OUT}" | grep -q "Remote migration versions not found in local migrations directory"; then
+              if repair_orphans "${URL}" "${OUT}"; then
+                echo "أُعيد الدفعُ بعد المصالحة…"
+                if OUT2=$(push "${URL}" 2>&1); then
+                  echo "${OUT2}"
+                  applied=1
+                  WORKING_URL="${URL}"
+                  break
+                fi
+                echo "${OUT2}"
+              fi
             fi
             echo "::error::فشل db push بخطأٍ ليس اتصالاً (خطأ هجرةٍ محتمل). راجع المخرجات أعلاه."
             exit 1

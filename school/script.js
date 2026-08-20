@@ -1189,7 +1189,9 @@ async function initApp() {
   RUQI_PERMISSIONS.applyToDom();
   showScreen('app');
   // العنوانُ يُقرأ قبل أن يُكتب: هو ما ينجو من التحديث، وهو ما يقول أين كنّا.
-  const _startTab = restoreTab(Object.keys(TABS), 'attendance');
+  // ولا يُرشَّح إلّا المسموح: رابطٌ محفوظٌ لوحدةٍ عُطّلت لا يفتحها بعد اليوم.
+  const _allowedTabs = Object.keys(TABS).filter(isTabAllowed);
+  const _startTab = restoreTab(_allowedTabs, firstAllowedTab());
   history.replaceState({ tab: _startTab, d: 0 }, '', '#' + _startTab);
   _navDepth = 0;
   if (backNavBtn) backNavBtn.hidden = true;
@@ -2241,6 +2243,28 @@ const TABS = {
   noc:        { tab: tabNoc,        view: viewNoc },
 };
 
+/* ─── وحدةٌ معطَّلة تعني لوحةً لا تُفتَح، لا زرّاً يختفي ───────────────────────
+   الإخفاء كلُّه في permissions.js: `hidden` على كلّ عنصرٍ يحمل data-module.
+   لكنّ الوسم في بوّابة المدرسة على **زرّ التبويب** لا على اللوحة، وتبويبُ
+   الإقلاع يُقرأ من عنوان الصفحة بلا تصفية. فمن يحفظ `school/#statement` يصل
+   «البيان» كاملاً بعد تعطيل وحدته — الزرُّ مخفيٌّ واللوحةُ مفتوحة.
+
+   لوحةُ المديرية تحرس هذا (directorate/script.js) والمدرسةُ لم تكن.
+
+   ⚠️ التبويب بلا زرٍّ **مسموحٌ دائماً**: «إعدادات المدرسة» رُفعت من شبكة
+   التبويبات عمداً ويُوصَل إليها من أيقونة الترس، فـTABS.staff.tab قيمتُه null.
+   قراءتُها «ممنوعة» تُغلق بابَ الإعدادات كلَّه. */
+function isTabAllowed(name) {
+  const btn = TABS[name]?.tab;
+  return !btn || !btn.hidden;
+}
+
+/** أوّلُ تبويبٍ يستطيع هذا المستخدم فتحه — مرجعٌ حين يُطلَب ممنوع. */
+function firstAllowedTab() {
+  return Object.keys(TABS).find(n => TABS[n]?.tab && !TABS[n].tab.hidden)
+      ?? 'attendance';
+}
+
 /* ─── أقسام تحتاج الخادم فعلاً ────────────────────────────────────────────────
    الحضور والصفوف والطلاب والكادر تعمل من المخبأ. أمّا هذه فتُصدِر وثائق رسمية
    أو تكتب عبر RPC، ولا يجوز أن تعمل على نسخة قديمة: جلاء مبنيّ على درجات
@@ -2281,6 +2305,12 @@ function clearOfflineGate(view) {
 }
 
 function switchTab(tab, fromHistory = false) {
+  /* حارسُ الوحدات: طلبُ لوحةٍ وحدتُها معطَّلة يُحوَّل إلى أوّل تبويبٍ مسموح.
+     يُحرَس هنا لا عند النقر وحده، لأنّ المسار الخطر هو العنوان لا الزرّ. */
+  if (!isTabAllowed(tab)) {
+    const fallback = firstAllowedTab();
+    if (fallback !== tab) return switchTab(fallback, fromHistory);
+  }
   for (const [name, { tab: t, view: v }] of Object.entries(TABS)) {
     const active = name === tab;
     if (v) v.hidden = !active;
