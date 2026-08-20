@@ -18,7 +18,11 @@ jobs:
 
     steps:
       - name: Checkout
+        # العمقُ الكامل: حارسُ تصادم أرقام الهجرات في check-sql-drift يقرأ
+        # تاريخ git كلَّه — الملفُّ المحذوف هو بيتُ الداء، والسطحيُّ لا يراه.
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
