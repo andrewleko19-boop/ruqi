@@ -46,18 +46,27 @@ create or replace function pg_temp.mk_user(
 ) returns uuid language plpgsql as $$
 declare v_id uuid := pg_temp.did('user:' || p_email);
 begin
+  -- ⚠️ أعمدةُ الرموز المؤقّتة (confirmation_token وأخواتها) يجب أن تكون
+  -- نصّاً فارغاً '' لا NULL: GoTrue يقرأها كـstring صرفٍ عند تسجيل الدخول،
+  -- و NULL فيها يُسقِط الطلبَ بخطإ ٥٠٠ «Scan error … converting NULL to string».
   insert into auth.users (
     id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
-    raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, recovery_token, email_change_token_new, email_change,
+    email_change_token_current, phone_change, phone_change_token, reauthentication_token
   ) values (
     v_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
     p_email, extensions.crypt('TestPass123', extensions.gen_salt('bf')), now(),
     '{"provider":"email","providers":["email"]}'::jsonb,
-    jsonb_build_object('full_name', p_name), now(), now()
+    jsonb_build_object('full_name', p_name), now(), now(),
+    '', '', '', '', '', '', '', ''
   )
   on conflict (id) do update
     set encrypted_password = excluded.encrypted_password,
-        email_confirmed_at = excluded.email_confirmed_at;
+        email_confirmed_at = excluded.email_confirmed_at,
+        confirmation_token = '', recovery_token = '', email_change_token_new = '',
+        email_change = '', email_change_token_current = '', phone_change = '',
+        phone_change_token = '', reauthentication_token = '';
 
   -- ⚠️ هذا الصفُّ هو الفرق بين حسابٍ يعمل وحسابٍ يرفض الدخول.
   insert into auth.identities (
