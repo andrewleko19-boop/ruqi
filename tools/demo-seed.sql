@@ -207,7 +207,7 @@ begin
               'الصف ' || g::text || ' - ' || chr(1571 + g),
               (case r.sty when 'primary' then g when 'preparatory' then g + 6 else g + 9 end)::text,
               chr(1571 + g), v_year, 'انكليزي')
-      on conflict (id) do nothing;
+      on conflict (school_id, grade, section) do nothing;
 
       n_boys  := r.per_section / 2;
       n_girls := r.per_section - n_boys;
@@ -298,13 +298,13 @@ begin
   -- بياناتُ دخول المعلّم في تبويب «الكادر» لدى مديره.
   insert into public.staff_credentials (id, school_id, user_id, username, password, created_by)
   values (pg_temp.did('cred:moalem'), v_tareq, v_teacher, 'moalem', null, v_admin_t)
-  on conflict (id) do nothing;
+  on conflict (username) do nothing;
 
   -- ── ٤) المعلّم مربوطٌ بصفوفه وحصصه ────────────────────────────────────────
   for c in select id, grade from public.classes where school_id = v_tareq order by grade loop
     insert into public.class_teacher (id, class_id, teacher_id, academic_year, role)
     values (pg_temp.did('ct:' || c.id::text), c.id, v_teacher, v_year, 'homeroom')
-    on conflict (id) do nothing;
+    on conflict (class_id, teacher_id, academic_year) do nothing;
 
     insert into public.staff_assignments (
       id, school_id, staff_id, user_id, assignment_kind, job_title,
@@ -432,7 +432,7 @@ begin
     (pg_temp.did('er:3'), v_tareq, v_admin_t, 'teacher_shortage',
      'نقصٌ في معلّمي مادة الرياضيات للصفوف الثلاثة.', 2, 'resolved',
      'BLG-' || to_char(now(), 'YYYYMMDD') || '-003', now() - interval '6 days')
-  on conflict (id) do nothing;
+  on conflict (receipt_number) do update set status = excluded.status, severity = excluded.severity;
   update public.emergency_reports
      set resolved_by = v_dirstaff, resolved_at = now() - interval '2 days'
    where id = pg_temp.did('er:3');
@@ -463,7 +463,7 @@ begin
      extract(year from current_date)::smallint, 'approved', '{}'::jsonb, now() - interval '9 days'),
     (pg_temp.did('ms:3'), v_tareq, (extract(month from current_date) - 1)::smallint,
      extract(year from current_date)::smallint, 'approved', '{}'::jsonb, now() - interval '35 days')
-  on conflict (id) do nothing;
+  on conflict (school_id, year, month) do update set status = excluded.status;
 
   -- ── ١٠) الجلاءات — واحدٌ صادرٌ يُفتح للقراءة في المديرية والوزارة ─────────
   for c in select id, grade from public.classes where school_id = v_tareq order by grade limit 1 loop
@@ -479,7 +479,7 @@ begin
              )), '[]'::jsonb)),
            now() - interval '10 days', now() - interval '3 days', v_dirstaff
       from public.students st where st.class_id = c.id
-    on conflict (id) do nothing;
+    on conflict (class_id, academic_year, term) do update set status = excluded.status, snapshot_data = excluded.snapshot_data;
   end loop;
 
   -- ── ١١) وثيقةُ نقلٍ «لا مانع» ─────────────────────────────────────────────
@@ -495,7 +495,7 @@ begin
       v_osama, 'أسامة بن زيد', '3',
       v_tareq, 'طارق بن زياد', '3', 'اللاذقية',
       v_year, 1041, 'pending', 'انتقال سكن الأسرة', v_admin_o, 'سميرة أحمد ديب', now() - interval '4 days'
-    ) on conflict (id) do nothing;
+    ) on conflict (to_school_id, academic_year, outgoing_number) do update set status = excluded.status;
   end loop;
 
   -- ── ١٢) دوامُ الكادر اليوم ────────────────────────────────────────────────
@@ -508,7 +508,7 @@ begin
   select pg_temp.did('pl:' || st.id::text), v_parent, st.id
     from public.students st
    where st.parent_phone = '0955123456'
-  on conflict (id) do nothing;
+  on conflict (user_id, student_id) do nothing;
 
   raise notice 'الزرعة اكتملت.';
 end $seed2$;
