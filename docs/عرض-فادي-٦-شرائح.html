@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>رُقِيّ — ستُّ شرائح للتصوير</title>
+<link rel="stylesheet" href="../shared/vendor/fonts/fonts.css" />
+<style>
+/* ══════════════════════════════════════════════════════════════════════════
+   ستُّ شرائحَ للفيديو — مختصرةٌ عمداً عن عرض الـ١٢ شريحة الكامل، لأنّ هذه
+   تُصوَّر لا تُقرأ: كلُّ شريحةٍ تُعرض ٣–٥ ثوانٍ فلا تحتمل نصّاً كثيفاً.
+
+   الرموزُ منسوخةٌ حرفياً من index.html — لا لونَ ولا خطَّ مخترَع. الغرضُ أن
+   ينتقل المشاهدُ من الشريحة إلى لقطة التطبيق بلا أن يشعر بقطعٍ بصريّ.
+   ══════════════════════════════════════════════════════════════════════════ */
+:root{
+  color-scheme: dark;
+  --paper:#11182b; --paper-2:#182140; --paper-3:#1e2a4f;
+  --line:#2b3557; --line-soft:#202a48;
+  --ink:#eef1f8; --ink-soft:#aab3c8; --ink-faint:#75809c;
+  --accent:#35b3ac; --accent-ink:#08201f; --accent-tint:#14312f;
+  --brass:#d4a24e; --brass-tint:#3a2c14;
+  --good:#3fbd80; --warn:#e0a83f; --bad:#e2685a; --none:#7d8296;
+  --r-sm:6px; --r:10px; --r-lg:16px; --r-xl:22px;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 24px 60px -28px rgba(0,0,0,.85);
+  --ui:'Cairo',-apple-system,'Segoe UI',system-ui,sans-serif;
+  --latin:'DM Sans',sans-serif; --ar:'Tajawal',sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+body{font-family:var(--ui);background:var(--paper);color:var(--ink);
+     line-height:1.6;overflow:hidden;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(900px 460px at 50% -8%, rgba(53,179,172,.14), transparent 62%),
+    radial-gradient(700px 380px at 90% 100%, rgba(212,162,78,.06), transparent 60%)}
+
+.deck{position:relative;width:100vw;height:100vh;z-index:1}
+.slide{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;padding:56px 72px 84px;
+  opacity:0;visibility:hidden;transition:opacity .45s ease}
+.slide.on{opacity:1;visibility:visible}
+.eyebrow{color:var(--brass);font-size:.95rem;font-weight:700;letter-spacing:.04em;
+  margin-bottom:14px}
+h1{font-size:clamp(2.6rem,7vw,5.4rem);font-weight:900;line-height:1.15}
+h2{font-size:clamp(1.7rem,3.4vw,2.7rem);font-weight:800;margin-bottom:8px}
+.sub{color:var(--ink-soft);font-size:clamp(1rem,1.5vw,1.25rem);max-width:60ch;
+  text-align:center}
+.rule{width:88px;height:3px;background:var(--accent);border-radius:2px;margin:22px 0}
+
+/* ١ الغلاف */
+.brand{display:flex;align-items:center;gap:18px;margin-bottom:6px}
+.brand .ar{font-size:clamp(3.4rem,9vw,7rem);font-weight:900;letter-spacing:-.02em}
+.brand .lat{font-family:var(--latin);font-size:clamp(1.2rem,2.4vw,2rem);
+  color:var(--accent);font-weight:700;opacity:.9}
+
+/* ٢ البوّابات */
+.grid6{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;
+  width:min(1020px,92vw);margin-top:26px}
+.card{background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:20px 18px;text-align:center;box-shadow:var(--shadow)}
+.card .ic{width:44px;height:44px;margin:0 auto 10px;display:grid;place-items:center;
+  border-radius:12px;background:var(--accent-tint);color:var(--accent)}
+.card h3{font-size:1.05rem;font-weight:800;margin-bottom:4px}
+.card p{font-size:.82rem;color:var(--ink-faint);line-height:1.7}
+
+/* ٣ الخريطة */
+.mapwrap{display:flex;gap:34px;align-items:center;margin-top:20px}
+.legend{display:grid;gap:10px;font-size:.9rem}
+.legend div{display:flex;align-items:center;gap:9px;color:var(--ink-soft)}
+.dot{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+
+/* ٤ الإحصاءات */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;
+  width:min(1000px,92vw);margin:22px 0 20px}
+.kpi{background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:18px 12px;text-align:center}
+.kpi b{display:block;font-family:var(--latin);font-size:clamp(1.9rem,4vw,3rem);
+  font-weight:800;color:var(--accent);line-height:1.1}
+.kpi span{font-size:.84rem;color:var(--ink-faint)}
+table{border-collapse:collapse;width:min(760px,90vw);font-size:.95rem}
+th,td{padding:10px 14px;border-bottom:1px solid var(--line-soft);text-align:center}
+th{color:var(--ink-faint);font-weight:700;font-size:.84rem}
+td:first-child{text-align:right;font-weight:700}
+td b{font-family:var(--latin);color:var(--accent)}
+
+/* ٥ وليّ الأمر */
+.split{display:flex;align-items:center;gap:56px;width:min(1040px,92vw)}
+.phone{width:250px;height:490px;border:9px solid #232c4a;border-radius:38px;
+  background:var(--paper-2);flex-shrink:0;padding:20px 14px;box-shadow:var(--shadow);
+  position:relative}
+.notch{width:96px;height:20px;background:#232c4a;border-radius:0 0 12px 12px;
+  position:absolute;top:0;left:50%;transform:translateX(-50%)}
+.notif{margin-top:44px;background:var(--paper-3);border:1px solid var(--line);
+  border-right:3px solid var(--bad);border-radius:var(--r);padding:12px 13px}
+.notif b{display:block;font-size:.88rem;margin-bottom:4px}
+.notif p{font-size:.78rem;color:var(--ink-soft);line-height:1.65}
+.notif time{display:block;margin-top:8px;font-size:.68rem;color:var(--ink-faint)}
+.quote{font-size:clamp(1.4rem,2.9vw,2.2rem);font-weight:800;line-height:1.6}
+
+/* ٦ الخاتمة */
+.final{font-size:clamp(2rem,5vw,3.6rem);font-weight:900;text-align:center;
+  line-height:1.4;max-width:20ch}
+.final em{font-style:normal;color:var(--accent)}
+
+.nav{position:fixed;bottom:22px;left:0;right:0;display:flex;justify-content:center;
+  gap:8px;z-index:5}
+.nav i{width:26px;height:4px;border-radius:2px;background:var(--line);
+  transition:background .3s}
+.nav i.on{background:var(--accent)}
+.hint{position:fixed;bottom:44px;left:0;right:0;text-align:center;
+  font-size:.74rem;color:var(--ink-faint);z-index:5}
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+  <!-- ١ ── الغلاف -->
+  <section class="slide on">
+    <div class="brand"><span class="ar">رُقِيّ</span><span class="lat">Ruqi</span></div>
+    <div class="rule"></div>
+    <div class="eyebrow">النظام الوطنيّ لإدارة المدارس</div>
+    <p class="sub">الجمهورية العربية السورية — وزارة التربية والتعليم</p>
+  </section>
+
+  <!-- ٢ ── البوّابات الستّ -->
+  <section class="slide">
+    <h2>ستُّ بوّاباتٍ، لا تطبيقٌ واحد</h2>
+    <p class="sub">كلُّ جهةٍ ترى ما يخصُّها وحدها — والحاجزُ مبنيٌّ في قاعدة البيانات لا في الواجهة.</p>
+    <div class="grid6">
+      <div class="card"><div class="ic">🏫</div><h3>المدرسة</h3><p>الحضور، الطلاب، الكادر، البيان الشهريّ</p></div>
+      <div class="card"><div class="ic">📋</div><h3>المعلّم</h3><p>صفوفه وحصصه ودرجات طلابه وإجازاته</p></div>
+      <div class="card"><div class="ic">👨‍👩‍👦</div><h3>وليّ الأمر</h3><p>حضور ابنه ودرجاته، وإشعارٌ فوريّ عند الغياب</p></div>
+      <div class="card"><div class="ic">🏛️</div><h3>المديرية</h3><p>مدارسها، طلباتها، بلاغاتها، جلاءاتها</p></div>
+      <div class="card"><div class="ic">🗺️</div><h3>الوزارة</h3><p>القُطر كلُّه على خريطةٍ حيّة بأرقامٍ لحظية</p></div>
+      <div class="card"><div class="ic">⚙️</div><h3>لوحة المشرف</h3><p>الوحدات، الفصل الحاليّ، النصاب الوطنيّ</p></div>
+    </div>
+  </section>
+
+  <!-- ٣ ── الخريطة الحيّة -->
+  <section class="slide">
+    <h2>كلُّ مدرسةٍ على الخريطة، بحالتها اليوم</h2>
+    <p class="sub">لا تقريرٌ يُنتظر آخر الشهر — الحالةُ تُقرأ الآن.</p>
+    <div class="mapwrap">
+      <svg width="430" height="360" viewBox="0 0 430 360" aria-label="خريطة سوريا">
+        <path d="M96 40 L188 26 L262 46 L332 40 L360 84 L346 140 L372 178 L352 236
+                 L296 268 L246 330 L196 322 L150 268 L112 236 L74 176 L86 108 Z"
+              fill="#182140" stroke="#2b3557" stroke-width="2"/>
+        <circle cx="128" cy="118" r="8" fill="#3fbd80"/>
+        <circle cx="150" cy="150" r="7" fill="#3fbd80"/>
+        <circle cx="196" cy="240" r="8" fill="#e0a83f"/>
+        <circle cx="238" cy="176" r="7" fill="#3fbd80"/>
+        <circle cx="262" cy="128" r="7" fill="#e2685a"/>
+        <circle cx="292" cy="212" r="7" fill="#7d8296"/>
+        <circle cx="206" cy="96"  r="7" fill="#3fbd80"/>
+        <text x="112" y="106" fill="#aab3c8" font-size="12" text-anchor="end">اللاذقية</text>
+        <text x="212" y="262" fill="#aab3c8" font-size="12">دمشق</text>
+        <text x="252" y="196" fill="#aab3c8" font-size="12">حمص</text>
+      </svg>
+      <div class="legend">
+        <div><span class="dot" style="background:#3fbd80"></span> طبيعيّ</div>
+        <div><span class="dot" style="background:#e0a83f"></span> تغطيةٌ منخفضة</div>
+        <div><span class="dot" style="background:#e2685a"></span> بلاغٌ طارئ</div>
+        <div><span class="dot" style="background:#7d8296"></span> لم تُسجّل بعد</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ٤ ── الإحصاءات الوطنية -->
+  <section class="slide">
+    <h2>البنية الوطنية</h2>
+    <div class="kpis">
+      <div class="kpi"><b>14</b><span>محافظة</span></div>
+      <div class="kpi"><b>6</b><span>بوّابات حيّة</span></div>
+      <div class="kpi"><b>49</b><span>جدول قاعدة بيانات</span></div>
+      <div class="kpi"><b>369</b><span>اختبار آليّ يمرّ</span></div>
+    </div>
+    <table>
+      <thead><tr><th>المحافظة</th><th>المدارس</th><th>الطلاب</th><th>المدرّسون</th></tr></thead>
+      <tbody>
+        <tr><td>اللاذقية</td><td><b>5</b></td><td><b>387</b></td><td><b>27</b></td></tr>
+        <tr><td>دمشق</td><td><b>3</b></td><td><b>283</b></td><td><b>18</b></td></tr>
+        <tr><td>حمص</td><td><b>2</b></td><td><b>92</b></td><td><b>9</b></td></tr>
+      </tbody>
+    </table>
+    <p class="sub" style="margin-top:18px">الفرقُ بين المحافظات لم يكتبه أحد — النظامُ حسبه.</p>
+  </section>
+
+  <!-- ٥ ── بوّابة وليّ الأمر -->
+  <section class="slide">
+    <div class="split">
+      <div style="flex:1">
+        <div class="eyebrow">بوّابة وليّ الأمر</div>
+        <p class="quote">الأهلُ ما بيروحوا للمدرسة يسألوا.<br>
+          بلحظة الغياب — <span style="color:var(--accent)">بيوصلهم إشعار</span>.</p>
+        <div class="rule"></div>
+        <p class="sub" style="text-align:right">دخولٌ برقم الجوّال بلا كلمة مرور · حضورُ الطفل يوماً بيوم ·
+          درجاتُه وسلوكه · وتقديمُ عذرِ غيابٍ من التطبيق نفسه مع صورة التقرير الطبيّ.</p>
+      </div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="notif">
+          <b>تنبيه غياب</b>
+          <p>ابنُك <strong>محمد العلي</strong> غائبٌ اليوم عن مدرسة طارق بن زياد.</p>
+          <time>اليوم · ٨:١٥ ص</time>
+        </div>
+        <div class="notif" style="border-right-color:var(--good);margin-top:12px">
+          <b>عذرٌ مقبول</b>
+          <p>قُبل عذرُ الغياب المقدَّم عن يوم الأحد.</p>
+          <time>أمس · ١:٤٠ م</time>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ٦ ── الخاتمة -->
+  <section class="slide">
+    <p class="final">مو تجربة.<br><em>نظامٌ مبنيٌّ، مُختبَر، وشغّالٌ الآن.</em></p>
+    <div class="rule"></div>
+    <div class="eyebrow">رُقِيّ — جاهزٌ للتبنّي الوزاريّ</div>
+  </section>
+</div>
+
+<div class="nav" id="nav"></div>
+<div class="hint">← → أو الفراغ أو نقرة</div>
+
+<script>
+/* تنقّلٌ بسيط: الشرائحُ تُعرض واحدةً واحدة، والمؤشّرُ أسفلها يقول أين نحن.
+   لا مكتبة — الصفحةُ تُفتح بلا اتصالٍ وتُصوَّر كما هي. */
+(function () {
+  var slides = [].slice.call(document.querySelectorAll('.slide'));
+  var nav = document.getElementById('nav');
+  var at = 0;
+  slides.forEach(function () { nav.appendChild(document.createElement('i')); });
+  var dots = [].slice.call(nav.children);
+  function show(i) {
+    at = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach(function (s, k) { s.classList.toggle('on', k === at); });
+    dots.forEach(function (d, k) { d.classList.toggle('on', k === at); });
+  }
+  show(0);
+  document.addEventListener('keydown', function (e) {
+    // RTL: السهمُ الأيسر يتقدّم لأنّ القراءة من اليمين لليسار.
+    if (e.key === 'ArrowLeft' || e.key === ' ' || e.key === 'PageDown') { show(at + 1); e.preventDefault(); }
+    if (e.key === 'ArrowRight' || e.key === 'PageUp') { show(at - 1); e.preventDefault(); }
+    if (e.key === 'Home') show(0);
+    if (e.key === 'End') show(slides.length - 1);
+  });
+  document.addEventListener('click', function (e) {
+    show(e.clientX < window.innerWidth / 2 ? at + 1 : at - 1);
+  });
+})();
+</script>
+</body>
+</html>
