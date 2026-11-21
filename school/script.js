@@ -510,6 +510,21 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+/* يقرؤه shared/sw-register.js قبل أن يُعيد تحميل الصفحة لتحديث عامل الخدمة.
+   كان معرَّفاً في بوّابة المعلّم وحدها — فمديرٌ في منتصف إدخال البيان اليوميّ
+   (أعداد، غائبون، ملاحظات) أو كتابة بلاغ كان يفقد ما كتب حين يصل تحديث. */
+window.ruqiHasUnsavedWork = () => {
+  try {
+    const formTouched = !S.attSubmitted && (
+      S.absentTeachers.length > 0 || inNotes.value.trim() !== '' ||
+      [inStuPresent, inStuAbsent, inAdminPresent, inAdminAbsent, inWorkerPresent, inWorkerAbsent]
+        .some(i => (parseInt(i.value, 10) || 0) > 0)
+    );
+    const reportOpen = !modalReport.hidden && rDesc.value.trim() !== '';
+    return formTouched || reportOpen;
+  } catch { return false; }
+};
+
 // ── Status Card ───────────────────────────────────────────────────────────────
 function setStatusDone(synced) {
   statusCard.className = 'status-card status-done';
