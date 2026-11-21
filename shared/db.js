@@ -124,6 +124,7 @@ const QUEUE_GRADES     = 'nsams_pending_grades';
 const QUEUE_CONDUCT    = 'nsams_pending_conduct';
 const QUEUE_STAFF_ATT  = 'nsams_pending_staff_att';
 const QUEUE_STUDENTS   = 'nsams_pending_students';
+const QUEUE_ABSENT_STAFF = 'nsams_pending_absent_staff';
 
 // Default work-start time used for the lateness calculation when a school has
 // not configured `schools.work_start_time`.
@@ -330,6 +331,7 @@ const _LS_QUEUE_TABLE = {
   [QUEUE_CONDUCT]:    'student_conduct',
   [QUEUE_STAFF_ATT]: 'staff_attendance',
   [QUEUE_STUDENTS]:   'students',
+  [QUEUE_ABSENT_STAFF]: 'daily_absent_staff',
 };
 
 // table name → LS key (للسقوط الآمن عند تعذّر IDB)
@@ -365,7 +367,10 @@ async function enqueueOutbox(record) {
       deviceId: record.deviceId || getDeviceId(),
     });
   } catch {
-    const lsKey = _TABLE_LS_QUEUE[record.table] || QUEUE_STUDENTS;
+    /* جدولٌ بلا طابورٍ احتياطيّ يرمي — لا يسقط صامتاً في طابور الطلاب كما
+       كان: syncStudentRecord لا يعرف عمليّته فيُعلّمه «مُزامَناً» ويضيع. */
+    const lsKey = _TABLE_LS_QUEUE[record.table];
+    if (!lsKey) throw new Error(`لا طابور احتياطيّ للجدول ${record.table}`);
     const q = readQueue(lsKey); q.push(record); writeQueue(lsKey, q);
   }
   if ('serviceWorker' in navigator && 'SyncManager' in window) {
@@ -3755,6 +3760,7 @@ async function syncPendingV2({ classId } = {}) {
     conduct:    { synced: 0, failed: 0 },
     staffAtt:   { synced: 0, failed: 0 },
     students:   { synced: 0, failed: 0 },
+    absentStaff: { synced: 0, failed: 0 },
   };
 
   // المرحلة 0: هجرة LS→IDB لمرة واحدة (idempotent بعد أول تشغيل)
@@ -3769,6 +3775,7 @@ async function syncPendingV2({ classId } = {}) {
     student_conduct:          syncStudentConductRecord,
     staff_attendance:         syncStaffAttendanceRecord,
     students:                 syncStudentRecord,
+    daily_absent_staff:       syncDailyAbsentStaffRecord,
   };
   const _idbResultKey = {
     attendance_submissions:   'attendance',
@@ -3778,6 +3785,7 @@ async function syncPendingV2({ classId } = {}) {
     student_conduct:          'conduct',
     staff_attendance:         'staffAtt',
     students:                 'students',
+    daily_absent_staff:       'absentStaff',
   };
   for (const item of await readOutbox()) {
     const syncFn  = _idbSyncFn[item.table];
@@ -3837,6 +3845,15 @@ async function syncPendingV2({ classId } = {}) {
       markStaffAttSynced(payload.localId);
       results.staffAtt.synced++;
     } catch { results.staffAtt.failed++; }
+  }
+
+  for (const item of readQueue(QUEUE_ABSENT_STAFF).filter(r => !r.synced)) {
+    try {
+      await syncDailyAbsentStaffRecord(item);
+      writeQueue(QUEUE_ABSENT_STAFF,
+        readQueue(QUEUE_ABSENT_STAFF).filter(r => r.createdAt !== item.createdAt));
+      results.absentStaff.synced++;
+    } catch { results.absentStaff.failed++; }
   }
 
   for (const item of getPendingStudents()) {
@@ -5048,12 +5065,23 @@ async function getLookupList(listType, directorateId = null) {
    لا مَن هم. تُحفظ الآن سجلّاً مستقلاًّ فيُعرف «كم يوماً غاب فلان».
 
    الحفظُ استبدالٌ لليوم كلِّه لا إضافة: المدير قد يُرسل البيان مرّتين بعد
-   تصحيح، فالإضافةُ تُضاعف الغياب على البريء. */
-async function saveDailyAbsentStaff(schoolId, date, entries) {
-  if (!schoolId || !date) return;
-  const { data: auth } = await db.auth.getUser();
-  const uid = auth?.user?.id ?? null;
+   تصحيح، فالإضافةُ تُضاعف الغياب على البريء.
 
+   ⚠️ دون اتصال. كان الحفظ شبكياً صرفاً (بل يبدأ بـauth.getUser() الشبكيّ)،
+   والمستدعي يبتلع خطأه — فالمدير الذي يُرسل البيان دون اتصال يفقد أسماءَ
+   الغائبين بصمت، ثمّ يجد القائمةَ فارغة عند إعادة التحميل. الآن:
+   ١) تُكتب القائمة فوراً في مخبأٍ مؤرَّخ على الجهاز (تُقرأ منه دون اتصال)؛
+   ٢) تُرسَل، أو تدخل الطابور بمفتاحٍ ثابتٍ لكلّ مدرسةٍ ويوم — فحفظٌ ثانٍ
+      يستبدل الأوّل في الطابور بدل أن يُعاد الاثنان بترتيبٍ قد يخطئ؛
+   ٣) نجاحُ الإرسال المباشر يحذف أيَّ نسخةٍ أقدم عالقة في الطابور، كي لا
+      تُعاد لاحقاً فوق الأحدث.
+   والحذفُ ثمّ الإدراج غيرُ ذرّيّ على الخادم، لكنّ العنصر لا يغادر الطابور إلّا
+   بنجاحهما معاً، فأيُّ فشلٍ بينهما يُصحَّح بالمحاولة التالية. */
+const DAILY_ABSENT_CACHE_PFX = 'nsams_dabs_';
+const _absentOutboxId = (schoolId, date) => `das_${schoolId}_${date}`;
+
+async function syncDailyAbsentStaffRecord(item) {
+  const { schoolId, date, entries, createdBy } = item;
   const { error: delErr } = await db.from('daily_absent_staff')
     .delete().eq('school_id', schoolId).eq('date', date);
   if (delErr) throw delErr;
@@ -5065,21 +5093,69 @@ async function saveDailyAbsentStaff(schoolId, date, entries) {
       staff_id: a.staffId ?? null,
       staff_name: a.name,
       kind: a.kind ?? 'admin',
-      created_by: uid,
+      created_by: createdBy ?? null,
     }));
-  if (!rows.length) return;
+  if (!rows.length) return true;
   const { error } = await db.from('daily_absent_staff').insert(rows);
   if (error) throw error;
+  return true;
 }
 
-/** الغائبون المسجَّلون ليومٍ بعينه — لإعادة بناء الشاشة عند العودة إليها. */
+async function saveDailyAbsentStaff(schoolId, date, entries) {
+  if (!schoolId || !date) return { synced: true };
+  const clean = (entries || [])
+    .filter(a => a && a.name)
+    .map(a => ({ staffId: a.staffId ?? null, name: a.name, kind: a.kind ?? 'admin' }));
+  _writeDatedCache(DAILY_ABSENT_CACHE_PFX + schoolId, date, clean);
+
+  const item = {
+    localId:   _absentOutboxId(schoolId, date),
+    table:     'daily_absent_staff',
+    schoolId, date, entries: clean,
+    // معرّفُ المستخدم من الجلسة المحلّية — لا auth.getUser() الذي يضرب الشبكة.
+    createdBy: getOfflineUserId(),
+    synced: false, createdAt: new Date().toISOString(),
+  };
+
+  if (isOnline()) {
+    try {
+      await syncDailyAbsentStaffRecord(item);
+      await deleteOutboxItem(item.localId);
+      return { synced: true };
+    } catch (err) {
+      console.warn('[Ruqi] saveDailyAbsentStaff: falling back to queue', err);
+    }
+  }
+  await enqueueOutbox(item);
+  return { synced: false };
+}
+
+/** الغائبون المسجَّلون ليومٍ بعينه — لإعادة بناء الشاشة عند العودة إليها.
+    ما في الطابور أحدثُ من الخادم بالتعريف، فيُقدَّم عليه. */
 async function getDailyAbsentStaff(schoolId, date) {
-  const { data, error } = await db.from('daily_absent_staff')
-    .select('staff_id, staff_name, kind')
-    .eq('school_id', schoolId).eq('date', date)
-    .order('staff_name');
-  if (error) throw error;
-  return (data || []).map(r => ({ staffId: r.staff_id, name: r.staff_name, kind: r.kind }));
+  const key = DAILY_ABSENT_CACHE_PFX + schoolId;
+  const queued = (await readOutbox()).find(i => i.localId === _absentOutboxId(schoolId, date))
+              ?? readQueue(QUEUE_ABSENT_STAFF).filter(i => !i.synced && i.schoolId === schoolId && i.date === date).pop();
+  if (queued) return queued.entries;
+
+  if (!isOnline()) return _readDatedCache(key, date) ?? [];
+  try {
+    const { data, error } = await withTimeout(
+      db.from('daily_absent_staff')
+        .select('staff_id, staff_name, kind')
+        .eq('school_id', schoolId).eq('date', date)
+        .order('staff_name'),
+      OFFLINE_READ_TIMEOUT_MS,
+    );
+    if (error) throw error;
+    const out = (data || []).map(r => ({ staffId: r.staff_id, name: r.staff_name, kind: r.kind }));
+    _writeDatedCache(key, date, out);
+    return out;
+  } catch (err) {
+    const hit = _readDatedCache(key, date);
+    if (hit) { console.warn('[Ruqi] غائبو اليوم من المخبأ', err); return hit; }
+    throw err;
+  }
 }
 
 /** سجلّ الغياب: صفٌّ لكلّ شخصٍ بعدد أيّامه. النطاق يُشتقّ من الدور. */
@@ -5778,6 +5854,7 @@ const TENANT_CACHE_PREFIXES = [
   'nsams_catt_',      // حضور طلاب الصفّ لليوم — بيانات طلاب باسمهم
   'nsams_spers_',     // سجلّ الكادر: أسماء وأرقام وطنية
   'nsams_srec_',      // staff_records: قائمة الغائبين من الكادر (أسماء وأرقام وطنية)
+  'nsams_dabs_',      // غائبو الكادر اليوم بأسمائهم
   'nsams_satt_',      // دوام الكادر لليوم
   'nsams_sroster_',   // السجلّ الكامل مع أسماء المستخدمين
   'nsams_sreq_',      // طلبات المدرسة (قد تحمل بيانات طلاب/كادر في payload)
