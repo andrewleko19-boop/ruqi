@@ -477,13 +477,14 @@ window.addEventListener('offline', updateConnUI);
 // ── Sync ──────────────────────────────────────────────────────────────────────
 let syncing = false;
 
-async function doSync() {
+// force: من زرّ المزامنة — يتجاوز تأجيلَ الإعادة ويُعيد ما رفضه الخادم أيضاً.
+async function doSync({ force = false } = {}) {
   if (syncing) return;
   syncing = true;
   syncIcon.classList.add('syncing');
   toast('جاري المزامنة…', 'info', 8000);
   try {
-    const { attendance, reports } = await syncPending();
+    const { attendance, reports } = await syncPending({ force });
     _dismissToast('info:جاري المزامنة…', true);
     const total = attendance.synced + reports.synced;
     if (total > 0) {
@@ -502,7 +503,7 @@ async function doSync() {
   }
 }
 
-btnSync.addEventListener('click', doSync);
+btnSync.addEventListener('click', () => doSync({ force: true }));
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (e) => {
@@ -1217,6 +1218,7 @@ if (backNavBtn) {
 // ── App init ──────────────────────────────────────────────────────────────────
 async function initApp() {
   void window.RUQI_DB.ensurePersistentStorage();   // الطابور لا يُمحى عند ضيق المساحة
+  window.RUQI_DB.startAutoSync();                  // يُعيد المعلَّق تلقائياً حين يعود الاتصال
   await RUQI_PERMISSIONS.init(S.user?.user?.id);
   RUQI_PERMISSIONS.applyToDom();
   showScreen('app');

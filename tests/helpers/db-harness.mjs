@@ -107,8 +107,8 @@ function makeIndexedDB() {
  * @param {object} [opts.storage]          initial localStorage entries
  * @param {boolean} [opts.idb=true]        false → no indexedDB (LS fallback path)
  */
-export async function loadDb({ layer = 'teacher', online = true, storage = {}, idb = true, userId } = {}) {
-  const env = { online };
+export async function loadDb({ layer = 'teacher', online = true, storage = {}, idb = true, userId, sw = false } = {}) {
+  const env = { online, swListeners: [] };
   // الجلسة المزيّفة: صاحبُ الطابور هو «آخر مستخدم» في هذه البوّابة، والمزامنة
   // لا تُرسل إلّا بجلسة صاحبه. userId: null ← بلا جلسة ولا مستخدمٍ أخير.
   const lastKey = `nsams_lastuser_${layer}`;
@@ -123,7 +123,11 @@ export async function loadDb({ layer = 'teacher', online = true, storage = {}, i
   globalThis.localStorage = makeStorage(storage);
   Object.defineProperty(globalThis, 'navigator', {
     configurable: true,
-    value: { get onLine() { return env.online; } },
+    value: {
+      get onLine() { return env.online; },
+      // sw: true ← عامل خدمة مزيّف يلتقط مستمعي الرسائل (لاختبار BG_SYNC).
+      ...(sw ? { serviceWorker: { addEventListener: (t, fn) => { if (t === 'message') env.swListeners.push(fn); } } } : {}),
+    },
   });
   globalThis.document = {
     createElement: () => ({}), head: { appendChild() {} },

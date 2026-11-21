@@ -11,7 +11,7 @@
  *
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'ruqi-v186';
+const CACHE = 'ruqi-v187';
 
 /* ⚠️ التقسيم مقصود ويعالج عطلاً حقيقياً.
    كان التثبيت كلّه على Promise.allSettled — يبتلع فشل أي ملفّ ويُعلن النجاح —
@@ -311,16 +311,25 @@ self.addEventListener('pushsubscriptionchange', (event) => {
 });
 
 // Background Sync — يوقظ الـ client النشط ليُشغّل syncPendingV2
-// (الـ SW لا يملك auth session مباشرةً → postMessage → doSync في الواجهة)
+// (الـ SW لا يملك auth session مباشرةً → postMessage → المزامنة في الواجهة)
+//
+// ⚠️ كان الحدث يُحسَم ناجحاً فور إرسال الرسالة — قبل أن تُعرف نتيجة المزامنة —
+//    فلا يُعيده المتصفّح أبداً حتى لو فشلت كلُّها. الآن ننتظر جواب الصفحة عبر
+//    MessageChannel (shared/db.js)، و«لم تكتمل» أو الصمتُ دقيقةً ← نرفض الحدث
+//    فيُعيده المتصفّح لاحقاً بتأجيله الخاصّ. بلا نافذة مفتوحة لا جلسة تُزامن
+//    بها — فتحُ التطبيق التالي يُزامن بنفسه.
+const BG_SYNC_REPLY_TIMEOUT_MS = 60000;
 self.addEventListener('sync', (event) => {
-  if (event.tag === 'nsams-sync') {
-    event.waitUntil(
-      self.clients.matchAll({ type: 'window', includeUncontrolled: false })
-        .then((windowClients) => {
-          if (windowClients.length > 0) {
-            windowClients[0].postMessage({ type: 'BG_SYNC' });
-          }
-        })
-    );
-  }
+  if (event.tag !== 'nsams-sync') return;
+  event.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: false });
+    if (!wins.length) return;
+    const ok = await new Promise((resolve) => {
+      const ch    = new MessageChannel();
+      const timer = setTimeout(() => resolve(false), BG_SYNC_REPLY_TIMEOUT_MS);
+      ch.port1.onmessage = (e) => { clearTimeout(timer); resolve(Boolean(e.data && e.data.ok)); };
+      wins[0].postMessage({ type: 'BG_SYNC' }, [ch.port2]);
+    });
+    if (!ok) throw new Error('nsams-sync: لم تكتمل المزامنة — يُعاد لاحقاً');
+  })());
 });

@@ -322,6 +322,26 @@ async function idbDelete(storeName, key) {
   });
 }
 
+/* تعديلٌ مشروط داخل معاملةٍ واحدة: يُقرأ العنصر ويُكتب/يُحذف في الـtx نفسه.
+   ضروريّ لعناصر بمفتاحٍ ثابت (غائبو اليوم): لو حفظ المدير قائمةً جديدة أثناء
+   إرسال القديمة، فلا يجوز أن يحذفها نجاحُ القديمة ولا أن يُعيدها فشلُها. */
+async function idbUpdateIf(storeName, key, update) {
+  const idb = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx    = idb.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    const get   = store.get(key);
+    get.onsuccess = () => {
+      const next = update(get.result);         // undefined: لا تغيير · null: احذف · كائن: اكتب
+      if (next === null) store.delete(key);
+      else if (next !== undefined) store.put(next);
+    };
+    get.onerror   = () => reject(get.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror    = () => reject(tx.error);
+  });
+}
+
 // LS key → table name (لاستخدامهما في الهجرة والسقوط الآمن)
 const _LS_QUEUE_TABLE = {
   [QUEUE_ATTENDANCE]: 'attendance_submissions',
@@ -3801,6 +3821,59 @@ async function getStudentReportCard(classId, studentId, academicYear = getAcadem
 }
 
 // ─── Sync ─────────────────────────────────────────────────────────────────────
+/* ─── تصنيفُ فشل المزامنة ─────────────────────────────────────────────────
+   كان كلُّ فشلٍ يُعدّ ويُنسى: لا عدّاد محاولات، ولا تأجيل، ولا تمييز بين
+   «الشبكة لم تعد بعد» و«الخادم يرفض هذا الصفّ». فالأوّل لا يُعاد إلّا بحدثٍ
+   خارجيّ (online/فتح/زرّ) — وحدثُ online يسبق عادةً جاهزيةَ الشبكة فتفشل
+   محاولتُه الوحيدة — والثاني يُعاد بلا نهاية ولا يراه أحد.
+   - عابر (شبكة، مهلة، 5xx، توكن منتهٍ، تعارضٌ مؤقّت في القاعدة) ← يُعاد بتأجيلٍ
+     متصاعد: 30ث، 1د، 2د… حتى 30د.
+   - دائم (رمز SQLSTATE أو PGRST: قيد، صلاحية RLS، عمودٌ مجهول…) ← يبقى في
+     الطابور مُعلَّماً failed، لا يُعاد تلقائياً، ويظهر للمستخدم مع زرّ إعادة.
+   لا يُحذف عنصرٌ من الطابور إلّا بنجاحه. والمجهولُ يُعدّ عابراً: إعادةٌ
+   زائدة أرخصُ من بيانٍ يُعلَّق صامتاً. */
+const _TRANSIENT_SQLSTATE = /^(08|40|53|57)/;   // اتصال، تعارض، موارد، إلغاء/مهلة
+function _isTransientSyncError(err) {
+  if (!err) return true;
+  if (err.name === 'TimeoutError' || err.name === 'AuthRetryableFetchError') return true;
+  if (isNetworkError(err)) return true;
+  const code = String(err.code ?? '');
+  if (code === 'PGRST301' || /jwt expired/i.test(err.message || '')) return true;
+  if (/^\d{2}[0-9A-Z]{3}$/.test(code)) return _TRANSIENT_SQLSTATE.test(code);
+  if (/^PGRST/.test(code)) return false;
+  const st = Number(err.status ?? err.statusCode ?? 0);
+  if (st >= 400 && st < 500 && st !== 401 && st !== 408 && st !== 429) return false;
+  return true;
+}
+const SYNC_BACKOFF_BASE_MS = 30 * 1000;
+const SYNC_BACKOFF_MAX_MS  = 30 * 60 * 1000;
+const _backoffMs = (attempts) =>
+  Math.min(SYNC_BACKOFF_MAX_MS, SYNC_BACKOFF_BASE_MS * 2 ** Math.max(0, attempts - 1));
+
+const _sameVersion = (a, b) => a && b && a.createdAt === b.createdAt && a.localTs === b.localTs;
+
+async function _outboxSucceeded(item) {
+  try { await idbUpdateIf('outbox', item.localId, (cur) => (_sameVersion(cur, item) ? null : undefined)); }
+  catch { await deleteOutboxItem(item.localId); }
+}
+
+async function _outboxFailed(item, err) {
+  const transient = _isTransientSyncError(err);
+  const attempts  = (item.attempts ?? 0) + 1;
+  try {
+    await idbUpdateIf('outbox', item.localId, (cur) => (_sameVersion(cur, item) ? {
+      ...cur, attempts,
+      failed:        !transient,
+      nextAt:        transient ? Date.now() + _backoffMs(attempts) : null,
+      lastError:     String(err?.message ?? err ?? '').slice(0, 300),
+      lastErrorCode: err?.code ?? null,
+      lastTriedAt:   Date.now(),
+    } : undefined));
+  } catch { /* غير قاتل: يبقى العنصر كما كان ويُعاد */ }
+  if (!transient) console.warn('[Ruqi] عنصرٌ رفضه الخادم — باقٍ في الطابور', item.table, err);
+  return transient;
+}
+
 function _emptySyncResults() {
   return {
     attendance: { synced: 0, failed: 0 },
@@ -3811,6 +3884,9 @@ function _emptySyncResults() {
     staffAtt:   { synced: 0, failed: 0 },
     students:   { synced: 0, failed: 0 },
     absentStaff: { synced: 0, failed: 0 },
+    retrying: 0,   // فشلٌ عابر في هذه الدورة — سيُعاد تلقائياً
+    stuck:    0,   // مرفوضٌ من الخادم، باقٍ في الطابور ينتظر قراراً
+    deferred: 0,   // لم يحن موعدُ إعادته بعد
   };
 }
 
@@ -3840,7 +3916,46 @@ function syncPendingV2(opts = {}) {
   return _syncInFlight;
 }
 
-async function _syncPendingCore({ classId } = {}) {
+/* ─── المزامنة التلقائية ────────────────────────────────────────────────────
+   مؤقّتٌ خفيف كلَّ ٣٠ ثانية: لا يُطلق مزامنةً إلّا إن كان في الطابور عنصرٌ لهذا
+   المستخدم حان موعدُه — فتكلفتُه حين لا شيء معلّق قراءةٌ محلّية واحدة. هو ما
+   يجعل «عاد الاتصال» يعني «وصلت البيانات» دون أن يضغط أحدٌ زرّاً، ويلتقط إعادةَ
+   ما فشل لأنّ حدث online سبق جاهزيةَ الشبكة. */
+const AUTO_SYNC_INTERVAL_MS = 30 * 1000;
+let _autoSyncTimer = null;
+
+async function _hasDueOutbox() {
+  const mine = _ownedBy(getOfflineUserId());
+  const now  = Date.now();
+  if ((await readOutbox()).some(i => mine(i) && !i.failed && !(i.nextAt > now))) return true;
+  return Object.keys(_LS_QUEUE_TABLE).some(k => readQueue(k).some(r => !r.synced && mine(r)));
+}
+
+function startAutoSync() {
+  if (_autoSyncTimer) return;
+  _autoSyncTimer = setInterval(async () => {
+    if (!isOnline() || document.visibilityState === 'hidden') return;
+    try { if (await _hasDueOutbox()) await syncPendingV2(); } catch { /* الدورة التالية */ }
+  }, AUTO_SYNC_INTERVAL_MS);
+}
+
+/* Background Sync: عامل الخدمة لا يملك جلسةً، فيطلب من الصفحة أن تُزامن ويسأل
+   عن النتيجة عبر MessageChannel. «لم تكتمل» ← يرفض العاملُ الحدثَ فيعيده
+   المتصفّح لاحقاً بتأجيله الخاصّ. (كان يُعلن النجاح فور إرسال الرسالة، فلا
+   يُعيد المتصفّح شيئاً أبداً.) */
+if (typeof navigator !== 'undefined' && navigator.serviceWorker?.addEventListener) {
+  navigator.serviceWorker.addEventListener('message', async (e) => {
+    if (e.data?.type !== 'BG_SYNC' || !e.ports?.[0]) return;
+    let ok = false;
+    try {
+      const r = await syncPendingV2();
+      ok = !r.busy && !r.authRequired && r.retrying === 0;
+    } catch { ok = false; }
+    e.ports[0].postMessage({ ok });
+  });
+}
+
+async function _syncPendingCore({ classId, force = false } = {}) {
   const results = _emptySyncResults();
 
   // المرحلة 0: هجرة LS→IDB لمرة واحدة (idempotent بعد أول تشغيل)
@@ -3873,15 +3988,22 @@ async function _syncPendingCore({ classId } = {}) {
     students:                 'students',
     daily_absent_staff:       'absentStaff',
   };
+  const now = Date.now();
   for (const item of (await readOutbox()).filter(mine)) {
     const syncFn  = _idbSyncFn[item.table];
     const rKey    = _idbResultKey[item.table];
     if (!syncFn || !rKey) continue;
+    // force: زرُّ المزامنة اليدويّ — يتجاوز التأجيل ويُعيد المرفوض أيضاً.
+    if (!force && item.failed)                       { results.stuck++;    continue; }
+    if (!force && item.nextAt && item.nextAt > now)  { results.deferred++; continue; }
     try {
       await syncFn(item);
-      await deleteOutboxItem(item.localId);
+      await _outboxSucceeded(item);
       results[rKey].synced++;
-    } catch { results[rKey].failed++; }
+    } catch (err) {
+      results[rKey].failed++;
+      if (await _outboxFailed(item, err)) results.retrying++; else results.stuck++;
+    }
   }
 
   // المرحلة 1ب: تصريف قوائم LS القديمة (fallback + عناصر ما قبل الهجرة)
@@ -3890,7 +4012,7 @@ async function _syncPendingCore({ classId } = {}) {
       await syncAttendanceRecord(record);
       markAttendanceSynced(record.localId);
       results.attendance.synced++;
-    } catch { results.attendance.failed++; }
+    } catch { results.attendance.failed++; results.retrying++; }
   }
 
   for (const report of getPendingReports().filter(mine)) {
@@ -3898,7 +4020,7 @@ async function _syncPendingCore({ classId } = {}) {
       await syncReportRecord(report);
       markReportSynced(report.localId);
       results.reports.synced++;
-    } catch { results.reports.failed++; }
+    } catch { results.reports.failed++; results.retrying++; }
   }
 
   for (const payload of getPendingStudentAttendance().filter(mine)) {
@@ -3906,7 +4028,7 @@ async function _syncPendingCore({ classId } = {}) {
       await syncStudentAttendanceRecord(payload);
       markStudentAttSynced(payload.localId);
       results.studentAtt.synced++;
-    } catch { results.studentAtt.failed++; }
+    } catch { results.studentAtt.failed++; results.retrying++; }
   }
 
   for (const payload of getPendingStudentGrades().filter(mine)) {
@@ -3914,7 +4036,7 @@ async function _syncPendingCore({ classId } = {}) {
       await syncStudentGradesRecord(payload);
       markStudentGradesSynced(payload.localId);
       results.grades.synced++;
-    } catch { results.grades.failed++; }
+    } catch { results.grades.failed++; results.retrying++; }
   }
 
   for (const payload of getPendingStudentConduct().filter(mine)) {
@@ -3922,7 +4044,7 @@ async function _syncPendingCore({ classId } = {}) {
       await syncStudentConductRecord(payload);
       markStudentConductSynced(payload.localId);
       results.conduct.synced++;
-    } catch { results.conduct.failed++; }
+    } catch { results.conduct.failed++; results.retrying++; }
   }
 
   for (const payload of getPendingStaffAttendance().filter(mine)) {
@@ -3930,7 +4052,7 @@ async function _syncPendingCore({ classId } = {}) {
       await syncStaffAttendanceRecord(payload);
       markStaffAttSynced(payload.localId);
       results.staffAtt.synced++;
-    } catch { results.staffAtt.failed++; }
+    } catch { results.staffAtt.failed++; results.retrying++; }
   }
 
   for (const item of readQueue(QUEUE_ABSENT_STAFF).filter(r => !r.synced && mine(r))) {
@@ -3939,7 +4061,7 @@ async function _syncPendingCore({ classId } = {}) {
       writeQueue(QUEUE_ABSENT_STAFF,
         readQueue(QUEUE_ABSENT_STAFF).filter(r => r.createdAt !== item.createdAt));
       results.absentStaff.synced++;
-    } catch { results.absentStaff.failed++; }
+    } catch { results.absentStaff.failed++; results.retrying++; }
   }
 
   for (const item of getPendingStudents().filter(mine)) {
@@ -3947,7 +4069,7 @@ async function _syncPendingCore({ classId } = {}) {
       await syncStudentRecord(item);
       markStudentSynced(item.localId);
       results.students.synced++;
-    } catch { results.students.failed++; }
+    } catch { results.students.failed++; results.retrying++; }
   }
 
   // المرحلة 2: سحب تدريجي من الخادم (يتطلّب classId من الواجهة)
@@ -3955,6 +4077,8 @@ async function _syncPendingCore({ classId } = {}) {
     await pullAllDelta(classId).catch(() => {});
   }
 
+  // البوّابات تُحدّث أشرطتها من هنا — والمزامنة قد تجري من المؤقّت لا من زرّها.
+  try { window.dispatchEvent?.(new CustomEvent('ruqi:sync', { detail: results })); } catch { /* غير قاتل */ }
   return results;
 }
 
@@ -4957,6 +5081,7 @@ window.RUQI_DB = {
   syncPending: syncPendingV2,
   ensurePersistentStorage,
   getOutboxSummary,
+  startAutoSync,
 
   // Notifications & Web Push
   getNotifications,

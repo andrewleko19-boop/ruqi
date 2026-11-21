@@ -54,7 +54,9 @@ describe('غائبو الكادر دون اتصال', () => {
 
     const srv = fakeFrom();
     supabase.from = srv.from;
-    assert.equal((await DB.syncPending()).absentStaff.synced, 1);
+    // الإعادة التلقائية تنتظر موعدها (تأجيلٌ متصاعد)؛ زرُّ المزامنة يتجاوزه.
+    assert.equal((await DB.syncPending()).deferred, 1);
+    assert.equal((await DB.syncPending({ force: true })).absentStaff.synced, 1);
     assert.ok(srv.calls.some(c => c.op === 'insert'));
   });
 

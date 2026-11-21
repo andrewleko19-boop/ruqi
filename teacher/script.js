@@ -411,12 +411,13 @@ window.addEventListener('offline', updateConnUI);
 // ── Sync ──────────────────────────────────────────────────────────────────────
 let syncing = false;
 
-async function doSync() {
+// force: من زرّ المزامنة — يتجاوز تأجيلَ الإعادة ويُعيد ما رفضه الخادم أيضاً.
+async function doSync({ force = false } = {}) {
   if (syncing || !navigator.onLine) return;
   syncing = true;
   syncIcon.classList.add('syncing');
   try {
-    const result = await syncPending();
+    const result = await syncPending({ force });
     const total  = (result.studentAtt?.synced ?? 0)
                  + (result.attendance?.synced ?? 0)
                  + (result.reports?.synced    ?? 0)
@@ -434,8 +435,8 @@ async function doSync() {
   }
 }
 
-btnSync.addEventListener('click', doSync);
-btnSyncBar.addEventListener('click', doSync);
+btnSync.addEventListener('click', () => doSync({ force: true }));
+btnSyncBar.addEventListener('click', () => doSync({ force: true }));
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (e) => {
@@ -546,6 +547,7 @@ btnLogoutOk.addEventListener('click', async () => {
 async function initApp() {
   sweepOldDrafts();
   void window.RUQI_DB.ensurePersistentStorage();   // الطابور والمسودّات لا تُمحى عند ضيق المساحة
+  window.RUQI_DB.startAutoSync();                  // يُعيد المعلَّق تلقائياً حين يعود الاتصال
   await RUQI_PERMISSIONS.init(S.user?.user?.id);
   RUQI_PERMISSIONS.applyToDom();
   showScreen('app');
