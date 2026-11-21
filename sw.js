@@ -11,7 +11,7 @@
  *
  * Bump CACHE on every deploy so old caches are purged on activate.
  */
-const CACHE = 'ruqi-v177';
+const CACHE = 'ruqi-v178';
 
 /* ⚠️ التقسيم مقصود ويعالج عطلاً حقيقياً.
    كان التثبيت كلّه على Promise.allSettled — يبتلع فشل أي ملفّ ويُعلن النجاح —
@@ -49,17 +49,33 @@ const CRITICAL = [
      script.js. وفشلُ استيرادٍ ساكن يُسقط الوحدة كلَّها قبل أن يُنفَّذ منها سطر —
      فلا تظهر اللوحة أصلاً، لا أنّ ميزةً تتعطّل. */
   './shared/tab-restore.js',
+  /* تستوردها correspondence.js (CRITICAL) استيراداً ساكناً — فغيابُها يُسقطها
+     ويُسقط معها بوّابة المدرسة كلَّها. كانت في OPTIONAL. */
+  './shared/csel.js',
   './shared/vendor/fonts/fonts.css',
   './icons/eagle-mark.png',
   './icons/icon-192.png',
+
+  /* ⚠️ بوّابتا العمل اليوميّ دون اتصال: المعلّم والمدرسة.
+     كانت قشرتاهما في OPTIONAL — تُثبَّت بـallSettled فيفشل تنزيلُ أيّ ملفٍّ منها
+     صامتاً، ثمّ يحذف activate الكاشَ القديم السليم. فيفتح المستخدمُ البوّابةَ
+     دون اتصال على صفحةٍ بيضاء أو بلا سكربت، والصفحةُ الرئيسة تعمل فيظنّ أنّ
+     «الأوفلاين يعمل». الثمنُ المقبول: تثبيتٌ يتعثّر على شبكةٍ رديئة يُرفض كلُّه،
+     فيبقى العاملُ السابق وكاشُه الكامل يخدمان — لا نسخةٌ ناقصة.
+     tools/check-precache.mjs يفرض هذا لكامل إغلاق الاستيراد في CI. */
+  './teacher/index.html',
+  './teacher/script.js',
+  './teacher/style.css',
+  './school/index.html',
+  './school/script.js',
+  './school/style.css',
+  './shared/date-fields.js',   // school/script.js يستوردها استيراداً ساكناً
 ];
 
 const OPTIONAL = [
-  './shared/csel.js',
   './shared/pw-toggle.js',
   './shared/stat-drill.js',
   './shared/data-alerts.js',
-  './shared/date-fields.js',
   './shared/date-format.js',
   './shared/qr.js',
   './shared/import-parser.js',
@@ -81,13 +97,7 @@ const OPTIONAL = [
   './shared/vendor/fonts/tajawal-latin-800.woff2',
   './verify.html',
   './verify.js',
-  './school/index.html',
-  './school/script.js',
-  './school/style.css',
   './school/desktop.css',
-  './teacher/index.html',
-  './teacher/script.js',
-  './teacher/style.css',
   './directorate/index.html',
   './directorate/script.js',
   './directorate/style.css',
