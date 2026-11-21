@@ -220,6 +220,17 @@ function isNetworkError(err) {
   return /failed to fetch|networkerror|network request failed|load failed|ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED|ERR_NETWORK|ERR_CONNECTION|fetch failed|timeout|aborted/i.test(s);
 }
 
+/* فشلُ مصادقةٍ عابر (شبكة/خادم غير متاح) لا رفضٌ صريح للرمز.
+   AuthRetryableFetchError هو ما يرميه supabase-js حين لا يصل خادمَ المصادقة —
+   ورسالتُه قد تكون «{}» فلا يلتقطها isNetworkError بالنصّ وحده.
+   ولا يُعدّ رمزُ 5xx هنا عابراً بنفسه: ما لا يصنّفه supabase-js «قابلاً للإعادة»
+   يمحو معه الجلسةَ المخزّنة، فالدخولُ بالمخبأ بعدها يُراكم كتاباتٍ لا تُزامَن. */
+function _isTransientAuthError(err) {
+  if (!err) return false;
+  if (err.name === 'AuthRetryableFetchError' || Number(err.status) === 0) return true;
+  return isNetworkError(err);
+}
+
 /** يُرجع رسالة عربية موجِّهة للمستخدم. `fallback` نصّ السياق عند الاستدعاء. */
 function errMessage(err, fallback = 'تعذّر إتمام العملية. أعد المحاولة.') {
   if (!err) return fallback;
@@ -650,17 +661,26 @@ function getOfflineUserId() { return _cachedLastUser()?.id ?? null; }
 async function getCurrentUser() {
   // getSession() محلّي، لكنّه قد يُطلق تحديث توكن شبكياً بلا سقف على شبكة ميتة →
   // نُسابقه بمهلة قصيرة. أيّ تعلّق يسقط لهوية أوفلاين مخبّأة بدل تجميد الواجهة.
-  let session;
+  let session, sessionErr = null;
   try {
     const res = await withTimeout(db.auth.getSession(), 3500);
-    session = res?.data?.session ?? null;
+    session    = res?.data?.session ?? null;
+    sessionErr = res?.error ?? null;
   } catch {
     return getCurrentUserOffline();
   }
   if (!session) {
-    // لا جلسة: خروجٌ حقيقي (أونلاين → شاشة الدخول) أو توكنٌ انتهى بعد طول انقطاع
-    // (أوفلاين → ادخل بالمخبأ). التمييز بحالة الاتصال؛ RLS يحمي الخادم أيّاً كان.
-    return isOnline() ? null : getCurrentUserOffline();
+    // لا جلسة: خروجٌ حقيقي (← شاشة الدخول) أو توكنٌ انتهى ولم يُجدَّد لأنّ الشبكة
+    // غائبة (← ادخل بالمخبأ). RLS يحمي الخادم أيّاً كان.
+    //
+    // ⚠️ كان التمييز بـnavigator.onLine وحده. لكنّه true على واي‑فاي المدرسة بلا
+    //    خطّ إنترنت — الحالة الأشيع — فيفشل تجديدُ التوكن (عمرُه ساعة) فوراً،
+    //    ويُعيد getSession جلسةً فارغة **بلا رمي**، فيُرمى المعلّمُ إلى شاشة دخولٍ
+    //    لا تعمل دون اتصال. لم يكن يمرّ إلّا «Offline» في أدوات المطوّر.
+    //    الآن: فشلُ التجديد لسببٍ شبكيّ يُعامَل كانقطاع. أمّا رفضُه الصريح
+    //    (رمزٌ أُبطِل/حُذف المستخدم) فـsupabase-js يمحو الجلسة معه فنعود للدخول.
+    if (!isOnline() || _isTransientAuthError(sessionErr)) return getCurrentUserOffline();
+    return null;
   }
 
   let profile = null;
