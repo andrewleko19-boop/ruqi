@@ -1113,3 +1113,9 @@ select.csel-native {
 .lv-main { flex: 1; min-width: 0; }
 .lv-type { font-weight: 800; font-size: .9rem; color: var(--ink, #0f172a); }
 .lv-meta { font-size: .78rem; color: var(--ink-3, #64748b); margin-top: 2px; }
+
+/* تحذيرُ الخروج وفي الجهاز سجلّاتٌ لم تُرسَل بعد. */
+.logout-pending-warn {
+  color: var(--clr-danger);
+  font-weight: 600;
+}

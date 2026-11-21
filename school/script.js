@@ -1020,7 +1020,23 @@ const modalConfirmLogout = el('modal-confirm-logout');
 const btnLogoutCancel    = el('btn-logout-cancel');
 const btnLogoutOk        = el('btn-logout-ok');
 
-btnLogout.addEventListener('click', () => { modalConfirmLogout.hidden = false; _pushModalHistory(); });
+btnLogout.addEventListener('click', async () => {
+  await refreshLogoutPendingWarn(S.user?.user?.id);
+  modalConfirmLogout.hidden = false; _pushModalHistory();
+});
+
+/* الخروج لا يمحو الطابور، لكنّ ما فيه لا يُرسَل إلّا بجلسة صاحبه — فيجب أن
+   يعرف المدير أنّ في الجهاز بياناً أو بلاغاً لم يصل قبل أن يخرج. */
+async function refreshLogoutPendingWarn(ownerId) {
+  const warn = el('logout-pending-warn');
+  if (!warn) return;
+  let n = 0;
+  try { n = (await window.RUQI_DB.getOutboxSummary({ ownerId })).total; } catch { /* غير قاتل */ }
+  warn.textContent = n
+    ? `في هذا الجهاز ${n} سجلّ لم يُرسَل بعد. يبقى محفوظاً ويُرسَل حين تدخل بحسابك هذا من جديد وهو متّصل — لا تمسح بيانات المتصفّح قبل ذلك.`
+    : '';
+  warn.hidden = !n;
+}
 btnLogoutCancel.addEventListener('click', () => _closeModalViaUI(() => { modalConfirmLogout.hidden = true; }));
 modalConfirmLogout.addEventListener('click', e => {
   if (e.target === modalConfirmLogout) _closeModalViaUI(() => { modalConfirmLogout.hidden = true; });

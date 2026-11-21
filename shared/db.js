@@ -376,8 +376,14 @@ async function ensurePersistentStorage() {
   } catch { return null; }
 }
 
+/* ⚠️ كلُّ عنصرٍ يحمل صاحبَه. الطابور واحدٌ للأصل كلِّه — تتشاركه البوّابات الستّ
+   وكلُّ من يدخل على الجهاز. وبلا صاحب كانت مزامنةُ المستخدم التالي تُرسل
+   كشوفَ سابقه بجلسته هو: يرفضها RLS في كلّ مرّة بصمت، ويبقى عملُ الأوّل عالقاً
+   لا يصل. الآن لا يُزامَن عنصرٌ إلّا بجلسة صاحبه؛ والعناصر القديمة بلا صاحب
+   تُحاوَل كما كانت. */
 async function enqueueOutbox(record) {
   void ensurePersistentStorage();
+  record = { ...record, ownerId: record.ownerId ?? getOfflineUserId() };
   try {
     await idbPut('outbox', {
       ...record,
@@ -404,6 +410,29 @@ async function readOutbox() {
 
 async function deleteOutboxItem(localId) {
   try { await idbDelete('outbox', localId); } catch { /* non-fatal */ }
+}
+
+const _ownedBy = (ownerId) => (r) => !ownerId || !r.ownerId || r.ownerId === ownerId;
+
+/* ما ينتظر الإرسال على هذا الجهاز لهذا المستخدم: الطابور في IndexedDB **و**
+   الطوابير الاحتياطية في localStorage. (كانت أشرطة «في انتظار المزامنة» تقرأ
+   localStorage وحده — والمسارُ العاديّ يكتب IndexedDB — فلا تُظهر شيئاً.) */
+async function getOutboxSummary({ ownerId = getOfflineUserId() } = {}) {
+  const mine  = _ownedBy(ownerId);
+  const items = (await readOutbox()).filter(mine);
+  for (const [lsKey, table] of Object.entries(_LS_QUEUE_TABLE)) {
+    for (const r of readQueue(lsKey)) if (!r.synced && mine(r)) items.push({ ...r, table });
+  }
+  const byTable = {};
+  for (const i of items) byTable[i.table] = (byTable[i.table] ?? 0) + 1;
+  return { total: items.length, byTable };
+}
+
+async function _sessionUserId() {
+  try {
+    const r = await withTimeout(db.auth.getSession(), 3500);
+    return r?.data?.session?.user?.id ?? null;
+  } catch { return null; }
 }
 
 // ─── Delta pull (سحب تدريجي من الخادم — المرحلة 4ب) ─────────────────────────
@@ -3784,6 +3813,12 @@ async function syncPendingV2({ classId } = {}) {
   // المرحلة 0: هجرة LS→IDB لمرة واحدة (idempotent بعد أول تشغيل)
   await migrateQueuesFromLS().catch(() => {});
 
+  /* بلا جلسةٍ حيّة لا يمرّ شيءٌ من RLS — المحاولة تُراكم إخفاقاتٍ لا معنى لها.
+     ولا يُرسَل عنصرٌ إلّا بجلسة صاحبه (انظر enqueueOutbox). */
+  const uid = await _sessionUserId();
+  if (!uid) { results.authRequired = true; return results; }
+  const mine = _ownedBy(uid);
+
   // المرحلة 1أ: تصريف IDB outbox (العناصر الجديدة)
   const _idbSyncFn = {
     attendance_submissions:   syncAttendanceRecord,
@@ -3805,7 +3840,7 @@ async function syncPendingV2({ classId } = {}) {
     students:                 'students',
     daily_absent_staff:       'absentStaff',
   };
-  for (const item of await readOutbox()) {
+  for (const item of (await readOutbox()).filter(mine)) {
     const syncFn  = _idbSyncFn[item.table];
     const rKey    = _idbResultKey[item.table];
     if (!syncFn || !rKey) continue;
@@ -3817,7 +3852,7 @@ async function syncPendingV2({ classId } = {}) {
   }
 
   // المرحلة 1ب: تصريف قوائم LS القديمة (fallback + عناصر ما قبل الهجرة)
-  for (const record of getPendingAttendance()) {
+  for (const record of getPendingAttendance().filter(mine)) {
     try {
       await syncAttendanceRecord(record);
       markAttendanceSynced(record.localId);
@@ -3825,7 +3860,7 @@ async function syncPendingV2({ classId } = {}) {
     } catch { results.attendance.failed++; }
   }
 
-  for (const report of getPendingReports()) {
+  for (const report of getPendingReports().filter(mine)) {
     try {
       await syncReportRecord(report);
       markReportSynced(report.localId);
@@ -3833,7 +3868,7 @@ async function syncPendingV2({ classId } = {}) {
     } catch { results.reports.failed++; }
   }
 
-  for (const payload of getPendingStudentAttendance()) {
+  for (const payload of getPendingStudentAttendance().filter(mine)) {
     try {
       await syncStudentAttendanceRecord(payload);
       markStudentAttSynced(payload.localId);
@@ -3841,7 +3876,7 @@ async function syncPendingV2({ classId } = {}) {
     } catch { results.studentAtt.failed++; }
   }
 
-  for (const payload of getPendingStudentGrades()) {
+  for (const payload of getPendingStudentGrades().filter(mine)) {
     try {
       await syncStudentGradesRecord(payload);
       markStudentGradesSynced(payload.localId);
@@ -3849,7 +3884,7 @@ async function syncPendingV2({ classId } = {}) {
     } catch { results.grades.failed++; }
   }
 
-  for (const payload of getPendingStudentConduct()) {
+  for (const payload of getPendingStudentConduct().filter(mine)) {
     try {
       await syncStudentConductRecord(payload);
       markStudentConductSynced(payload.localId);
@@ -3857,7 +3892,7 @@ async function syncPendingV2({ classId } = {}) {
     } catch { results.conduct.failed++; }
   }
 
-  for (const payload of getPendingStaffAttendance()) {
+  for (const payload of getPendingStaffAttendance().filter(mine)) {
     try {
       await syncStaffAttendanceRecord(payload);
       markStaffAttSynced(payload.localId);
@@ -3865,7 +3900,7 @@ async function syncPendingV2({ classId } = {}) {
     } catch { results.staffAtt.failed++; }
   }
 
-  for (const item of readQueue(QUEUE_ABSENT_STAFF).filter(r => !r.synced)) {
+  for (const item of readQueue(QUEUE_ABSENT_STAFF).filter(r => !r.synced && mine(r))) {
     try {
       await syncDailyAbsentStaffRecord(item);
       writeQueue(QUEUE_ABSENT_STAFF,
@@ -3874,7 +3909,7 @@ async function syncPendingV2({ classId } = {}) {
     } catch { results.absentStaff.failed++; }
   }
 
-  for (const item of getPendingStudents()) {
+  for (const item of getPendingStudents().filter(mine)) {
     try {
       await syncStudentRecord(item);
       markStudentSynced(item.localId);
@@ -4888,6 +4923,7 @@ window.RUQI_DB = {
   // Sync
   syncPending: syncPendingV2,
   ensurePersistentStorage,
+  getOutboxSummary,
 
   // Notifications & Web Push
   getNotifications,

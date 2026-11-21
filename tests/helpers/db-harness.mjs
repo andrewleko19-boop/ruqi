@@ -107,8 +107,17 @@ function makeIndexedDB() {
  * @param {object} [opts.storage]          initial localStorage entries
  * @param {boolean} [opts.idb=true]        false → no indexedDB (LS fallback path)
  */
-export async function loadDb({ layer = 'teacher', online = true, storage = {}, idb = true } = {}) {
+export async function loadDb({ layer = 'teacher', online = true, storage = {}, idb = true, userId } = {}) {
   const env = { online };
+  // الجلسة المزيّفة: صاحبُ الطابور هو «آخر مستخدم» في هذه البوّابة، والمزامنة
+  // لا تُرسل إلّا بجلسة صاحبه. userId: null ← بلا جلسة ولا مستخدمٍ أخير.
+  const lastKey = `nsams_lastuser_${layer}`;
+  if (userId === undefined) {
+    userId = storage[lastKey] ? JSON.parse(storage[lastKey]).id : 'u1';
+  }
+  if (userId && !storage[lastKey]) {
+    storage = { ...storage, [lastKey]: JSON.stringify({ id: userId, email: null }) };
+  }
   globalThis.window = globalThis;
   globalThis.location = { pathname: `/ruqi/${layer}/`, href: `http://localhost/ruqi/${layer}/` };
   globalThis.localStorage = makeStorage(storage);
@@ -132,6 +141,9 @@ export async function loadDb({ layer = 'teacher', online = true, storage = {}, i
   // supabase-js يرى window+document فيبدأ مؤقّت تجديدٍ تلقائيّ يُبقي Node حيّاً
   // إلى الأبد. لا شبكة في الاختبار، فلا معنى له.
   try { await mod.supabase.auth.stopAutoRefresh(); } catch { /* غير قاتل */ }
+  mod.supabase.auth.getSession = async () => ({
+    data: { session: userId ? { user: { id: userId, email: null } } : null }, error: null,
+  });
   return { mod, DB: globalThis.RUQI_DB, supabase: mod.supabase, env, ls: globalThis.localStorage };
 }
 

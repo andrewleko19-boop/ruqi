@@ -510,8 +510,23 @@ const btnLogoutOk        = document.getElementById('btn-logout-ok');
 
 btnLogout.addEventListener('click', async () => {
   if (S.isDirty && !(await askConfirm('يوجد تغييرات غير محفوظة. هل تريد الخروج؟', 'خروج'))) return;
+  await refreshLogoutPendingWarn(S.user?.user?.id);
   modalConfirmLogout.hidden = false;
 });
+
+/* الخروج لا يمحو الطابور، لكنّ ما فيه لا يُرسَل إلّا بجلسة صاحبه. فمن يخرج وفي
+   جهازه كشوفٌ لم تصل يجب أن يعرف ذلك — قبل أن يمسح بيانات المتصفّح أو يُعطي
+   الجهاز لغيره ظانّاً أنّ عمله وصل. */
+async function refreshLogoutPendingWarn(ownerId) {
+  const warn = document.getElementById('logout-pending-warn');
+  if (!warn) return;
+  let n = 0;
+  try { n = (await window.RUQI_DB.getOutboxSummary({ ownerId })).total; } catch { /* غير قاتل */ }
+  warn.textContent = n
+    ? `في هذا الجهاز ${n} سجلّ لم يُرسَل بعد. يبقى محفوظاً ويُرسَل حين تدخل بحسابك هذا من جديد وهو متّصل — لا تمسح بيانات المتصفّح قبل ذلك.`
+    : '';
+  warn.hidden = !n;
+}
 btnLogoutCancel.addEventListener('click', () => { modalConfirmLogout.hidden = true; });
 modalConfirmLogout.addEventListener('click', e => {
   if (e.target === modalConfirmLogout) modalConfirmLogout.hidden = true;

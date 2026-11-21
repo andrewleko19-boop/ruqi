@@ -55,7 +55,7 @@ describe('هويةٌ مخبّأة حين يتعذّر تجديد الجلسة', 
   });
 
   test('لا هويةَ مخبّأة ← null مهما كانت الشبكة (لا دخول أوّل دون اتصال)', async () => {
-    const { DB, supabase } = await loadDb({ online: true });
+    const { DB, supabase } = await loadDb({ online: true, userId: null });
     supabase.auth.getSession = async () => ({
       data: { session: null }, error: { name: 'AuthRetryableFetchError', status: 0 },
     });

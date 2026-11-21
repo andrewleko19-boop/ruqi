@@ -2691,3 +2691,9 @@ select.csel-native {
   color: #166534; background: var(--clr-success-bg);
   padding: 4px 9px; border-radius: var(--r-pill); display: inline-block;
 }
+
+/* تحذيرُ الخروج وفي الجهاز سجلّاتٌ لم تُرسَل بعد. */
+.logout-pending-warn {
+  color: var(--clr-danger);
+  font-weight: 600;
+}
