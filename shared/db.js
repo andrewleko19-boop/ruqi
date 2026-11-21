@@ -353,6 +353,10 @@ async function migrateQueuesFromLS() {
           deviceId: item.deviceId || getDeviceId(),
         });
       }
+      /* ⚠️ كانت الهجرة تنسخ ولا تمحو: يبقى العنصر في localStorage وفي IndexedDB
+         معاً، فتُرسله المزامنة مرّتين (مرحلةُ IDB ثمّ مرحلةُ الطوابير القديمة) —
+         بلاغٌ مكرَّر. يُفرَّغ الطابور القديم بعد نسخه بنجاح. */
+      if (items.length) writeQueue(lsKey, []);
     }
     localStorage.setItem('nsams_idb_migrated', '1');
   } catch { /* IDB غير متاح — تبقى العناصر في LS وتُهاجَر في المرة القادمة */ }
@@ -3797,9 +3801,8 @@ async function getStudentReportCard(classId, studentId, academicYear = getAcadem
 }
 
 // ─── Sync ─────────────────────────────────────────────────────────────────────
-// يقبل opts.classId اختيارياً لتفعيل مرحلة السحب التدريجي (delta pull)
-async function syncPendingV2({ classId } = {}) {
-  const results = {
+function _emptySyncResults() {
+  return {
     attendance: { synced: 0, failed: 0 },
     reports:    { synced: 0, failed: 0 },
     studentAtt: { synced: 0, failed: 0 },
@@ -3809,6 +3812,36 @@ async function syncPendingV2({ classId } = {}) {
     students:   { synced: 0, failed: 0 },
     absentStaff: { synced: 0, failed: 0 },
   };
+}
+
+/* ⚠️ مزامنةٌ واحدة في كلّ لحظة — على الجهاز كلِّه لا الصفحة وحدها.
+   كانت تُطلَق من حدث online وفتح التطبيق ورسالة BG_SYNC وزرّ المزامنة، وحارسُها
+   علمٌ داخل كلّ بوّابة. فتبويبان مفتوحان (أو حدثان متقاربان) يقرآن الطابور نفسه
+   ويُرسلان العنصر نفسه معاً: الـupsert يحتمل ذلك، أمّا إدراجُ البلاغ فيتكرّر.
+   - في الصفحة نفسها: نداءٌ ثانٍ ينضمّ إلى الجاري ويأخذ نتيجتَه.
+   - بين التبويبات: Web Locks بـifAvailable — إن كان تبويبٌ آخر يُصرّف الطابور
+     فلا ننتظره ولا نكرّره؛ نُعيد busy:true ويُحدَّث العدّاد في الدورة التالية. */
+let _syncInFlight = null;
+
+// يقبل opts.classId اختيارياً لتفعيل مرحلة السحب التدريجي (delta pull)
+function syncPendingV2(opts = {}) {
+  if (_syncInFlight) return _syncInFlight;
+  _syncInFlight = (async () => {
+    try {
+      if (navigator.locks?.request) {
+        return await navigator.locks.request('ruqi-sync', { ifAvailable: true }, (lock) =>
+          lock ? _syncPendingCore(opts) : { ..._emptySyncResults(), busy: true });
+      }
+      return await _syncPendingCore(opts);
+    } finally {
+      _syncInFlight = null;
+    }
+  })();
+  return _syncInFlight;
+}
+
+async function _syncPendingCore({ classId } = {}) {
+  const results = _emptySyncResults();
 
   // المرحلة 0: هجرة LS→IDB لمرة واحدة (idempotent بعد أول تشغيل)
   await migrateQueuesFromLS().catch(() => {});
