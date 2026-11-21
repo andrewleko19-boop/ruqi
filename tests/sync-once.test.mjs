@@ -22,7 +22,7 @@ describe('مزامنةٌ واحدة في كلّ لحظة', () => {
     env.online = true;
 
     const [a, b] = await Promise.all([DB.syncPending(), DB.syncPending()]);
-    assert.equal(srv.calls.filter(c => c.table === 'emergency_reports').length, 1, 'بلاغٌ مكرَّر');
+    assert.equal(srv.calls.filter(c => c.table === 'emergency_reports' && c.op !== 'select').length, 1, 'بلاغٌ مكرَّر');
     assert.equal(a, b);
   });
 
@@ -52,7 +52,7 @@ describe('مزامنةٌ واحدة في كلّ لحظة', () => {
     supabase.from = srv.from;
 
     const r = await DB.syncPending();
-    assert.equal(srv.calls.filter(c => c.table === 'emergency_reports').length, 1, 'أُرسل مرّتين: من IDB ومن localStorage');
+    assert.equal(srv.calls.filter(c => c.table === 'emergency_reports' && c.op !== 'select').length, 1, 'أُرسل مرّتين: من IDB ومن localStorage');
     assert.equal(r.reports.synced, 1);
     assert.equal(JSON.parse(ls.getItem('nsams_pending_reports')).length, 0);
   });

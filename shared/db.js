@@ -143,8 +143,16 @@ function generateLocalId() {
   return `local_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function generateReceiptNumber() {
-  return `RPT-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+/* رقمُ البلاغ يُولَّد على الجهاز بصيغة الخادم نفسها (reports_set_receipt:
+   RPT-YYYYMMDD-XXXX) ويُرسَل معه — فهو مفتاحُ عدم التكرار (UNIQUE) والرقمُ الذي
+   يراه المدير لحظةَ الإرسال هو نفسه في القاعدة. (كان يُرى رقمٌ محلّيّ ثمّ يولّد
+   الخادم رقماً آخر: إيصالٌ لا وجود له في النظام.) عشرةُ محارف عشوائية لا ستّة:
+   المفتاح فريدٌ على مستوى الوطن، وتصادمٌ يُسقط بلاغاً. */
+function generateReceiptNumber(d = new Date()) {
+  const ymd  = localDateISO(d).replace(/-/g, '');
+  const rand = (crypto.randomUUID?.() ?? `${Math.random()}${Date.now()}`)
+    .replace(/[^0-9a-f]/gi, '').slice(0, 10).toUpperCase();
+  return `RPT-${ymd}-${rand}`;
 }
 
 function isOnline() { return navigator.onLine; }
@@ -312,6 +320,15 @@ async function idbGetAll(storeName) {
   });
 }
 
+async function idbGet(storeName, key) {
+  const idb = await openIDB();
+  return new Promise((resolve, reject) => {
+    const req = idb.transaction(storeName, 'readonly').objectStore(storeName).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
+  });
+}
+
 async function idbDelete(storeName, key) {
   const idb = await openIDB();
   return new Promise((resolve, reject) => {
@@ -400,6 +417,31 @@ async function ensurePersistentStorage() {
   } catch { return null; }
 }
 
+/* ─── سجلٌّ أحدث يُلغي الأقدم في الطابور ─────────────────────────────────────
+   كشفُ الصفّ ليومٍ والبيانُ اليوميّ للمدرسة يُرسَلان كاملَين في كلّ مرّة، فالأحدث
+   يُغني عن الأقدم. وبقاءُ الأقدم في الطابور ليس هدراً فحسب: إن أُرسل الأحدث
+   مباشرةً (عاد الاتصال) ثمّ صُرّف الطابور، كتب القديمُ فوقه — فتعود غياباتٌ
+   صحّحها المعلّم. (دوامُ الكادر مستثنى عمداً: الحضورُ والانصراف عمليّتان على
+   الصفّ نفسه بأعمدةٍ مختلفة، ودمجُهما يُضيّع إحداهما.) */
+const _SUPERSEDE_KEY = {
+  daily_student_attendance: (r) => (r.classId && r.date ? `${r.classId}|${r.date}` : null),
+  attendance_submissions:   (r) => (r.school_id && r.date ? `${r.school_id}|${r.date}` : null),
+};
+
+async function _dropSupersededQueued(record) {
+  const keyOf = _SUPERSEDE_KEY[record.table];
+  const k     = keyOf?.(record);
+  if (!k) return;
+  const owner = record.ownerId ?? getOfflineUserId() ?? null;
+  for (const it of await readOutbox()) {
+    if (it.table !== record.table || it.localId === record.localId) continue;
+    if (keyOf(it) !== k || (it.ownerId ?? null) !== owner) continue;
+    if ((it.createdAt ?? '') > (record.createdAt ?? '')) continue;   // الأحدث لا يُلغى
+    await idbUpdateIf('outbox', it.localId, (cur) => (_sameVersion(cur, it) ? null : undefined))
+      .catch(() => {});
+  }
+}
+
 /* ⚠️ كلُّ عنصرٍ يحمل صاحبَه. الطابور واحدٌ للأصل كلِّه — تتشاركه البوّابات الستّ
    وكلُّ من يدخل على الجهاز. وبلا صاحب كانت مزامنةُ المستخدم التالي تُرسل
    كشوفَ سابقه بجلسته هو: يرفضها RLS في كلّ مرّة بصمت، ويبقى عملُ الأوّل عالقاً
@@ -414,6 +456,7 @@ async function enqueueOutbox(record) {
       localTs:  record.localTs  || Date.now(),
       deviceId: record.deviceId || getDeviceId(),
     });
+    await _dropSupersededQueued(record).catch(() => {});
   } catch {
     /* جدولٌ بلا طابورٍ احتياطيّ يرمي — لا يسقط صامتاً في طابور الطلاب كما
        كان: syncStudentRecord لا يعرف عمليّته فيُعلّمه «مُزامَناً» ويضيع. */
@@ -995,6 +1038,7 @@ const DAILY_ATTENDANCE_COLS = [
 ];
 const EMERGENCY_REPORT_COLS = [
   'school_id', 'submitted_by', 'type', 'description', 'severity', 'status', 'media_urls',
+  'receipt_number',
 ];
 
 function _pickCols(record, cols) {
@@ -1024,6 +1068,7 @@ async function saveAttendance(record) {
 
   try {
     await syncAttendanceRecord(enriched);
+    await _dropSupersededQueued({ ...enriched, table: 'attendance_submissions' }).catch(() => {});
     return { success: true, localId, synced: true };
   } catch {
     await enqueueOutbox({ ...enriched, table: 'attendance_submissions' });
@@ -1043,18 +1088,38 @@ function markAttendanceSynced(localId) {
 }
 
 // ─── Reports ──────────────────────────────────────────────────────────────────
+/* ⚠️ إدراجٌ لا يتكرّر. كان insert عارياً: إن وصل البلاغ وانقطع الردّ (شبكة
+   المدرسة)، بقي العنصر في الطابور فأُرسل ثانيةً — بلاغان عن حادثةٍ واحدة،
+   وإشعاران للمديرية. الآن رقمُ البلاغ مفتاحٌ: ON CONFLICT DO NOTHING (يكفيه
+   سياسةُ الإدراج)، فإن لم يُعِد صفّاً فالبلاغ وصل من قبل ونقرؤه برقمه. */
 async function syncReportRecord(report) {
   const payload = _pickCols(report, EMERGENCY_REPORT_COLS);   // انظر DAILY_ATTENDANCE_COLS
+  payload.receipt_number = payload.receipt_number ?? report.receiptNumber ?? generateReceiptNumber();
   // Upload inline photos to Storage; the row stores only URLs (or data URIs on
   // failure). Runs on both the online path and on offline-queue sync.
   payload.media_urls = await materialisePhotos(payload.media_urls);
+  const cols = 'id, receipt_number, created_at, status';
   const { data, error } = await db
     .from("emergency_reports")
-    .insert(payload)
-    .select("id, receipt_number, created_at, status")
-    .single();
+    .upsert(payload, { onConflict: 'receipt_number', ignoreDuplicates: true })
+    .select(cols);
   if (error) throw error;
-  return data;
+  if (Array.isArray(data) && data.length) return data[0];
+
+  const { data: prior, error: readErr } = await db
+    .from("emergency_reports").select(cols)
+    .eq('receipt_number', payload.receipt_number).maybeSingle();
+  if (readErr) throw readErr;
+  if (prior) return prior;
+  // الرقم مأخوذٌ ولا نرى صاحبه ← ليس بلاغَنا (بلاغُنا من مدرستنا فتُظهره RLS):
+  // تصادمٌ مع مدرسةٍ أخرى، شبه مستحيل بعشرة محارف. ابتلاعه يُسقط البلاغ صامتاً،
+  // فنُدرجه برقمٍ جديد.
+  const { data: fresh, error: freshErr } = await db
+    .from("emergency_reports")
+    .insert({ ...payload, receipt_number: generateReceiptNumber() })
+    .select(cols).single();
+  if (freshErr) throw freshErr;
+  return fresh;
 }
 
 async function submitReport(report) {
@@ -2257,7 +2322,7 @@ function markStudentAttSynced(localId) {
 
 // Core sync function – called both directly (online path) and by syncPendingV2.
 async function syncStudentAttendanceRecord(payload) {
-  const { records, classId, schoolId, date, teacherId } = payload;
+  const { records, classId, schoolId, date, teacherId, createdAt } = payload;
 
   const rows = records.map(r => ({
     student_id:  r.studentId,
@@ -2283,7 +2348,11 @@ async function syncStudentAttendanceRecord(payload) {
         school_id:    schoolId,
         date,
         submitted_by: teacherId,
-        submitted_at: new Date().toISOString(),
+        // وقتُ أخذ الكشف لا وقتُ وصوله: كشفٌ أُخذ ٧:٤٥ دون اتصال ووصل ١٣:٠٠ كان
+        // يُسجَّل «أُرسل ١٣:٠٠» — فيبدو المعلّم متأخّراً في تقارير المديرية.
+        submitted_at: createdAt ?? new Date().toISOString(),
+        // 'pending' لا يُنزّل كشفاً معتمَداً: RLS (subs_teacher_update) يرفض تعديل
+        // المعتمَد، فيبقى العنصر في الطابور مرفوضاً ظاهراً لا يكتب فوقه.
         status:       'pending',
       },
       { onConflict: 'class_id,date', ignoreDuplicates: false }
@@ -2307,6 +2376,7 @@ async function saveStudentAttendance({ records, classId, schoolId, date, teacher
 
   try {
     await syncStudentAttendanceRecord(payload);
+    await _dropSupersededQueued({ ...payload, table: 'daily_student_attendance' }).catch(() => {});
     return { success: true, localId, synced: true };
   } catch (err) {
     await enqueueOutbox({ ...payload, table: 'daily_student_attendance' });
@@ -3996,6 +4066,10 @@ async function _syncPendingCore({ classId, force = false } = {}) {
     // force: زرُّ المزامنة اليدويّ — يتجاوز التأجيل ويُعيد المرفوض أيضاً.
     if (!force && item.failed)                       { results.stuck++;    continue; }
     if (!force && item.nextAt && item.nextAt > now)  { results.deferred++; continue; }
+    // ما زال في الطابور؟ قد يكون أُلغي بسجلٍّ أحدث بعد قراءة الطابور — وإرسالُه
+    // الآن يكتب القديمَ فوق الأحدث.
+    const still = await idbGet('outbox', item.localId).catch(() => item);
+    if (!_sameVersion(still, item)) continue;
     try {
       await syncFn(item);
       await _outboxSucceeded(item);

@@ -73,7 +73,7 @@ describe('البلاغ الطارئ المحفوظ دون اتصال', () => {
   test('يصل الخادم عند المزامنة', async () => {
     const { DB, supabase, env } = await loadDb({ layer: 'school', online: false });
     const srv = strictServer((call) => (call.table === 'emergency_reports'
-      ? { data: { id: 'r1', receipt_number: call.values.receipt_number ?? 'RPT-x', created_at: 'now', status: 'open' }, error: null }
+      ? { data: { id: 'r1', receipt_number: call.values?.receipt_number ?? 'RPT-x', created_at: 'now', status: 'open' }, error: null }
       : { data: null, error: null }));
     supabase.from = srv.from;
 
