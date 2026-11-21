@@ -530,6 +530,7 @@ btnLogoutOk.addEventListener('click', async () => {
 // ── App Init ──────────────────────────────────────────────────────────────────
 async function initApp() {
   sweepOldDrafts();
+  void window.RUQI_DB.ensurePersistentStorage();   // الطابور والمسودّات لا تُمحى عند ضيق المساحة
   await RUQI_PERMISSIONS.init(S.user?.user?.id);
   RUQI_PERMISSIONS.applyToDom();
   showScreen('app');

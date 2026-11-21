@@ -88,3 +88,14 @@ describe('البلاغ الطارئ المحفوظ دون اتصال', () => {
     assert.equal(res.reports.synced, 1);
   });
 });
+
+describe('التخزين الدائم', () => {
+  test('أوّلُ عنصرٍ يدخل الطابور يطلب persist() — مرّةً واحدة', async () => {
+    const { DB } = await loadDb({ layer: 'school', online: false });
+    let asked = 0;
+    navigator.storage = { persisted: async () => false, persist: async () => { asked++; return true; } };
+    await DB.saveAttendance(attendance());
+    await DB.saveAttendance(attendance());
+    assert.equal(asked, 1);
+  });
+});

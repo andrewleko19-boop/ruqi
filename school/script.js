@@ -1185,6 +1185,7 @@ if (backNavBtn) {
 
 // ── App init ──────────────────────────────────────────────────────────────────
 async function initApp() {
+  void window.RUQI_DB.ensurePersistentStorage();   // الطابور لا يُمحى عند ضيق المساحة
   await RUQI_PERMISSIONS.init(S.user?.user?.id);
   RUQI_PERMISSIONS.applyToDom();
   showScreen('app');

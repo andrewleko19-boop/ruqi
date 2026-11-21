@@ -359,7 +359,25 @@ async function migrateQueuesFromLS() {
 }
 
 // إضافة عنصر إلى IDB outbox (مع سقوط آمن إلى LS الخاصة بالجدول)
+/* ⚠️ التخزين «مؤقّت» افتراضياً: للمتصفّح أن يمحوه عند ضيق المساحة، وSafari
+   يمحو تخزينَ موقعٍ غير مثبَّت بعد سبعة أيّامٍ بلا زيارة. وفيه الطابور: كشوفٌ
+   وبياناتٌ لم تصل الخادم بعد — محوُها فقدٌ نهائيّ لا يعلم به أحد.
+   persist() يطلب الإعفاء من هذا المحو. يُطلب عند دخول بوّابةٍ تعمل دون اتصال
+   وعند أوّل عنصرٍ يدخل الطابور — حيث يصير للمحو ثمن. أفضلُ جهد: رفضُه لا
+   يمنع شيئاً، ولا يُطلب مرّتين في الجلسة. */
+let _persistAsked = false;
+async function ensurePersistentStorage() {
+  if (_persistAsked) return null;
+  _persistAsked = true;
+  try {
+    if (!navigator.storage?.persist) return null;
+    if (await navigator.storage.persisted?.()) return true;
+    return await navigator.storage.persist();
+  } catch { return null; }
+}
+
 async function enqueueOutbox(record) {
+  void ensurePersistentStorage();
   try {
     await idbPut('outbox', {
       ...record,
@@ -4869,6 +4887,7 @@ window.RUQI_DB = {
 
   // Sync
   syncPending: syncPendingV2,
+  ensurePersistentStorage,
 
   // Notifications & Web Push
   getNotifications,
