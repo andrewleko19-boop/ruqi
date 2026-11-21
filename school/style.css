@@ -2697,3 +2697,19 @@ select.csel-native {
   color: var(--clr-danger);
   font-weight: 600;
 }
+
+/* زرُّ الإعادة في شريط الانتظار، وحالةُ «رفضه الخادم» التي لا تُعاد تلقائياً. */
+.pending-bar-btn {
+  margin-inline-start: auto;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+.pending-bar--failed {
+  background: var(--clr-danger-bg);
+  color: var(--clr-danger-hov);
+}

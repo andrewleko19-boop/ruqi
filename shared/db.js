@@ -492,7 +492,28 @@ async function getOutboxSummary({ ownerId = getOfflineUserId() } = {}) {
   }
   const byTable = {};
   for (const i of items) byTable[i.table] = (byTable[i.table] ?? 0) + 1;
-  return { total: items.length, byTable };
+  // failed: ما رفضه الخادم رفضاً دائماً — لا يُعاد تلقائياً وينتظر قراراً.
+  const rejected = items.filter(i => i.failed);
+  return {
+    total: items.length, byTable,
+    failed: rejected.length,
+    firstError: rejected[0]?.lastError ?? null,
+  };
+}
+
+/* خلاصةُ دورة مزامنة للواجهة: كم وصل، وكم يُعاد، وكم رُفض. مصدرٌ واحد للبوّابتين
+   بدل أن تجمع كلٌّ منهما بعضَ الجداول وتنسى غيرها (كان المعلّم لا يعدّ السلوك
+   والمدرسة لا تعدّ إلّا البيان والبلاغ، فتقول «لا يوجد سجلات معلقة» والطابور ملآن). */
+function summarizeSyncResult(r = {}) {
+  let synced = 0;
+  for (const v of Object.values(r)) if (v && typeof v === 'object' && 'synced' in v) synced += v.synced;
+  return {
+    synced,
+    retrying:     r.retrying ?? 0,
+    stuck:        r.stuck ?? 0,
+    authRequired: Boolean(r.authRequired),
+    busy:         Boolean(r.busy),
+  };
 }
 
 async function _sessionUserId() {
@@ -5156,6 +5177,7 @@ window.RUQI_DB = {
   ensurePersistentStorage,
   getOutboxSummary,
   startAutoSync,
+  summarizeSyncResult,
 
   // Notifications & Web Push
   getNotifications,

@@ -332,9 +332,10 @@
   </div>
 
   <!-- Pending sync bar -->
-  <div id="pending-bar" class="pending-bar" hidden>
+  <div id="pending-bar" class="pending-bar" hidden aria-live="polite">
     <svg class="icon icon-xs"><use href="#ic-clock"/></svg>
     <span id="pending-text">سجلات في انتظار المزامنة</span>
+    <button type="button" class="pending-bar-btn" id="btn-sync-bar">مزامنة الآن</button>
   </div>
 
   <!-- عمر البيانات المعروضة. شريط الاتصال يصف الشبكة لا ما تراه العين، وهما

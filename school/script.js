@@ -21,8 +21,6 @@ const {
   saveAttendance,
   submitReport,
   syncPending,
-  getPendingAttendance,
-  getPendingReports,
   localDateISO,
   changePassword,
   errMessage,
@@ -451,10 +449,22 @@ function refreshStaleBar() {
 // تحديثٌ دوري: العبور من «لحظية» إلى «قديمة» يحدث بمرور الوقت لا بحدثٍ يُنبّهنا.
 setInterval(refreshStaleBar, 60000);
 
-function refreshPendingBar() {
-  const n = getPendingAttendance().length + getPendingReports().length;
-  if (n > 0) {
-    pendingText.textContent = `${n} سجل في انتظار المزامنة`;
+/* ⚠️ كان العدّ من طوابير localStorage وحدها — والمسارُ العاديّ يكتب IndexedDB —
+   فيبقى الشريط مخفياً وفي الجهاز بيانٌ أو بلاغ لم يصل. الآن من getOutboxSummary
+   (الطابوران معاً)، ويُفرَد ما رفضه الخادم: لا يُعاد تلقائياً، فلا بدّ أن يُرى. */
+let _pendingSeq = 0;
+async function refreshPendingBar() {
+  const seq = ++_pendingSeq;
+  let s;
+  try { s = await window.RUQI_DB.getOutboxSummary({ ownerId: S.user?.user?.id }); }
+  catch { return; }                         // غير قاتل — يبقى الشريط كما كان
+  if (seq !== _pendingSeq) return;          // نداءٌ أحدث سبقنا
+  if (s.total > 0) {
+    pendingText.textContent = s.failed
+      ? `${s.total} سجل لم يُرسَل — ${s.failed} منها رفضه الخادم. اضغط «مزامنة الآن» لإعادة المحاولة.`
+      : `${s.total} سجل في انتظار المزامنة`;
+    pendingText.title = s.firstError ?? '';
+    pendingBar.classList.toggle('pending-bar--failed', s.failed > 0);
     show(pendingBar);
   } else {
     hide(pendingBar);
@@ -477,21 +487,36 @@ window.addEventListener('offline', updateConnUI);
 // ── Sync ──────────────────────────────────────────────────────────────────────
 let syncing = false;
 
+/* رسالةُ نتيجة المزامنة — للزرّ وللمزامنة التلقائية معاً. كانت تعدّ البيان
+   والبلاغ وحدهما وتقول «لا يوجد سجلات معلقة» مهما فشل — فيظنّ المدير أنّ كلّ
+   شيءٍ وصل. */
+function announceSyncResult(r, { quietWhenNothing = true } = {}) {
+  const s = window.RUQI_DB.summarizeSyncResult(r);
+  if (s.busy) return;
+  if (s.authRequired) {
+    toast('انتهت جلستك — سجّل الدخول من جديد ليُرسَل ما حُفظ على الجهاز.', 'warning', 6000);
+    return;
+  }
+  if (s.synced > 0) toast(`تمت مزامنة ${s.synced} سجل بنجاح`, 'success');
+  if (s.stuck > 0)  toast(`رفض الخادم ${s.stuck} سجل — باقٍ على الجهاز. أعد المحاولة أو راجع المديرية.`, 'error', 7000);
+  else if (s.retrying > 0) toast(`تعذّر إرسال ${s.retrying} سجل — ستُعاد المحاولة تلقائياً.`, 'warning', 5000);
+  else if (!quietWhenNothing && s.synced === 0) toast('لا يوجد سجلات معلقة', 'info', 2000);
+}
+
 // force: من زرّ المزامنة — يتجاوز تأجيلَ الإعادة ويُعيد ما رفضه الخادم أيضاً.
 async function doSync({ force = false } = {}) {
   if (syncing) return;
+  if (!navigator.onLine) {
+    if (force) toast('لا يوجد اتصال — ستُرسَل السجلات تلقائياً عند عودته.', 'info', 3000);
+    return;
+  }
   syncing = true;
   syncIcon.classList.add('syncing');
   toast('جاري المزامنة…', 'info', 8000);
   try {
-    const { attendance, reports } = await syncPending({ force });
+    const result = await syncPending({ force });
     _dismissToast('info:جاري المزامنة…', true);
-    const total = attendance.synced + reports.synced;
-    if (total > 0) {
-      toast(`تمت مزامنة ${total} سجل بنجاح`, 'success');
-    } else {
-      toast('لا يوجد سجلات معلقة', 'info', 2000);
-    }
+    announceSyncResult(result, { quietWhenNothing: !force });
     refreshPendingBar();
   } catch (err) {
     _dismissToast('info:جاري المزامنة…', true);
@@ -504,6 +529,14 @@ async function doSync({ force = false } = {}) {
 }
 
 btnSync.addEventListener('click', () => doSync({ force: true }));
+el('btn-sync-bar')?.addEventListener('click', () => doSync({ force: true }));
+
+// المزامنة التلقائية (مؤقّت db.js أو Background Sync) تجري بلا doSync — فتُعلَن هنا.
+window.addEventListener('ruqi:sync', (e) => {
+  refreshPendingBar();
+  refreshStaleBar();
+  if (!syncing) announceSyncResult(e.detail);
+});
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (e) => {

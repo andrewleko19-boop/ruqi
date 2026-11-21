@@ -1119,3 +1119,10 @@ select.csel-native {
   color: var(--clr-danger);
   font-weight: 600;
 }
+
+/* شريط الانتظار حين في الطابور ما رفضه الخادم — لا يُعاد تلقائياً، فيجب أن يُرى. */
+.pending-bar--failed {
+  background: var(--clr-danger-bg);
+  border-bottom-color: var(--clr-danger-brd);
+  color: var(--clr-danger-hov);
+}

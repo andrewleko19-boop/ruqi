@@ -19,8 +19,6 @@ const {
   getClassSubmissionStatus,
   getClassAttendanceForDate,
   saveStudentAttendance,
-  getPendingStudentAttendance,
-  getPendingStudentGrades,
   syncPending,
   gradeNameAr,
   localDateISO,
@@ -394,11 +392,23 @@ function refreshStaleBar() {
 // تحديثٌ دوري: العبور من «لحظية» إلى «قديمة» يحدث بمرور الوقت لا بحدثٍ يُنبّهنا.
 setInterval(refreshStaleBar, 60000);
 
-function refreshPendingBar() {
-  const n = getPendingStudentAttendance().length
-          + (typeof getPendingStudentGrades === 'function' ? getPendingStudentGrades().length : 0);
-  if (n > 0) {
-    pendingText.textContent = `${n} كشف في انتظار المزامنة`;
+/* ⚠️ كان العدّ من طوابير localStorage وحدها — والمسارُ العاديّ يكتب IndexedDB —
+   فيبقى الشريط مخفياً وفي الجهاز كشوفٌ لم تصل، فيخرج المعلّم أو يُعيد الإرسال
+   ظانّاً أنّ لا شيء معلّق. الآن من getOutboxSummary (الطابوران معاً)، ويُفرَد
+   ما رفضه الخادم: لا يُعاد تلقائياً، فلا بدّ أن يراه أحد. */
+let _pendingSeq = 0;
+async function refreshPendingBar() {
+  const seq = ++_pendingSeq;
+  let s = { total: 0, failed: 0 };
+  try { s = await window.RUQI_DB.getOutboxSummary({ ownerId: S.user?.user?.id }); }
+  catch { /* غير قاتل — يبقى الشريط كما كان */ return; }
+  if (seq !== _pendingSeq) return;          // نداءٌ أحدث سبقنا
+  if (s.total > 0) {
+    pendingText.textContent = s.failed
+      ? `${s.total} سجل لم يُرسَل — ${s.failed} منها رفضه الخادم. اضغط «مزامنة الآن» لإعادة المحاولة.`
+      : `${s.total} سجل في انتظار المزامنة`;
+    pendingText.title = s.firstError ?? '';
+    pendingBar.classList.toggle('pending-bar--failed', s.failed > 0);
     show(pendingBar);
   } else {
     hide(pendingBar);
@@ -411,6 +421,21 @@ window.addEventListener('offline', updateConnUI);
 // ── Sync ──────────────────────────────────────────────────────────────────────
 let syncing = false;
 
+/* رسالةُ نتيجة المزامنة — للزرّ وللمزامنة التلقائية معاً. الصمتُ عن الفشل كان
+   أسوأ من الفشل: المعلّم يظنّ أنّ كشفه وصل. */
+function announceSyncResult(r, { quietWhenNothing = true } = {}) {
+  const s = window.RUQI_DB.summarizeSyncResult(r);
+  if (s.busy) return;
+  if (s.authRequired) {
+    toast('انتهت جلستك — سجّل الدخول من جديد ليُرسَل ما حُفظ على الجهاز.', 'warning', 6000);
+    return;
+  }
+  if (s.synced > 0) toast(`تمت مزامنة ${s.synced} سجل بنجاح`, 'success');
+  if (s.stuck > 0)  toast(`رفض الخادم ${s.stuck} سجل — باقٍ على الجهاز. راجع المدير أو أعد المحاولة.`, 'error', 7000);
+  else if (s.retrying > 0) toast(`تعذّر إرسال ${s.retrying} سجل — ستُعاد المحاولة تلقائياً.`, 'warning', 5000);
+  else if (!quietWhenNothing && s.synced === 0) toast('لا يوجد سجلات معلقة', 'info', 2000);
+}
+
 // force: من زرّ المزامنة — يتجاوز تأجيلَ الإعادة ويُعيد ما رفضه الخادم أيضاً.
 async function doSync({ force = false } = {}) {
   if (syncing || !navigator.onLine) return;
@@ -418,12 +443,7 @@ async function doSync({ force = false } = {}) {
   syncIcon.classList.add('syncing');
   try {
     const result = await syncPending({ force });
-    const total  = (result.studentAtt?.synced ?? 0)
-                 + (result.attendance?.synced ?? 0)
-                 + (result.reports?.synced    ?? 0)
-                 + (result.grades?.synced     ?? 0)
-                 + (result.staffAtt?.synced   ?? 0);
-    if (total > 0) toast(`تمت مزامنة ${total} سجل بنجاح`, 'success');
+    announceSyncResult(result, { quietWhenNothing: !force });
     if (result.staffAtt?.synced > 0) await loadDutyCard();
     refreshPendingBar();
   } catch (err) {
@@ -434,6 +454,16 @@ async function doSync({ force = false } = {}) {
     syncing = false;
   }
 }
+
+// المزامنة التلقائية (مؤقّت db.js أو Background Sync) تجري بلا doSync — فتُعلَن هنا.
+window.addEventListener('ruqi:sync', (e) => {
+  refreshPendingBar();
+  refreshStaleBar();
+  if (!syncing) {
+    announceSyncResult(e.detail);
+    if (e.detail?.staffAtt?.synced > 0) loadDutyCard().catch(() => {});
+  }
+});
 
 btnSync.addEventListener('click', () => doSync({ force: true }));
 btnSyncBar.addEventListener('click', () => doSync({ force: true }));

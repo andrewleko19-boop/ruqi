@@ -115,3 +115,24 @@ describe('Background Sync', () => {
     assert.deepEqual(await ask(), { ok: true });
   });
 });
+
+describe('ما تعرضه الواجهة', () => {
+  test('الملخّص يُفرد المرفوض مع سببه', async () => {
+    const { DB, supabase } = await queuedSheet();
+    supabase.from = fakeFrom(() => ({ data: null, error: { code: '42501', message: 'row-level security' } })).from;
+    await DB.syncPending();
+    const s = await DB.getOutboxSummary({ ownerId: 'u1' });
+    assert.equal(s.total, 1);
+    assert.equal(s.failed, 1);
+    assert.match(s.firstError, /row-level security/);
+  });
+
+  test('خلاصة الدورة تعدّ كلّ الجداول — لا البيان والبلاغ وحدهما', async () => {
+    const { DB } = await loadDb({ online: false });
+    const s = DB.summarizeSyncResult({
+      attendance: { synced: 1, failed: 0 }, conduct: { synced: 2, failed: 0 },
+      absentStaff: { synced: 1, failed: 0 }, retrying: 1, stuck: 2,
+    });
+    assert.deepEqual(s, { synced: 4, retrying: 1, stuck: 2, authRequired: false, busy: false });
+  });
+});
