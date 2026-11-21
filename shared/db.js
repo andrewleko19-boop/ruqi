@@ -33,7 +33,10 @@ function timedFetch(input, init) {
   const method = (init?.method
     ?? (typeof Request !== 'undefined' && input instanceof Request ? input.method : 'GET')
   ).toUpperCase();
-  if (method !== 'GET') return fetch(input, init);
+  // ردٌّ سليم على أيّ طلب (تجديد الجلسة، كتابة) دليلُ حياة الشبكة — انظر isOnline.
+  if (method !== 'GET') {
+    return fetch(input, init).then((res) => { if (res.ok) _deadNetworkAt = 0; return res; });
+  }
 
   const ctrl  = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), NETWORK_READ_TIMEOUT_MS);
@@ -60,6 +63,7 @@ const FRESH_STAMP_KEY = 'nsams_fresh_' + LAYER;
 let _lastStampWrite = 0;
 
 function _stampServerRead() {
+  _deadNetworkAt = 0;                 // وصلنا الخادم: الشبكة حيّة (انظر isOnline)
   const now = Date.now();
   // خنقٌ بسيط: لوحةٌ واحدة تُطلق عشرات الطلبات، ولا معنى لكتابةٍ متزامنة لكلٍّ
   // منها حين تكفي دقّةُ عشر ثوانٍ لعرضٍ بالدقائق.
@@ -101,7 +105,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 export { db as supabase };
 export { SUPABASE_URL as supabaseUrl };
 export { errMessage, isNetworkError };
-export { withTimeout, getOfflineUserId };
+export { withTimeout, getOfflineUserId, isOnline };
 export { getModuleCatalog, getRoleModulePermissions, setRoleModulePermission, updateUserPermissionRole };
 
 /* تسجيل عامل الخدمة انتقل إلى shared/sw-register.js كي تستعمله الصفحة
@@ -155,7 +159,19 @@ function generateReceiptNumber(d = new Date()) {
   return `RPT-${ymd}-${rand}`;
 }
 
-function isOnline() { return navigator.onLine; }
+/* «متّصل» لا تعني navigator.onLine وحدها: هي true على واي‑فاي بلا إنترنت. فإن
+   فشل تجديدُ الجلسة لسببٍ شبكيّ (getCurrentUser) فالشبكة ميتةٌ فعلاً — وكلُّ
+   طلبٍ بعدها ينتظر أوّلاً إعادةَ supabase-js للتجديد (حتى ~30ث) ثمّ مهلتَه هو،
+   فتتأخّر اللوحة ثوانيَ طويلة على مخبأٍ جاهز. نعدّها «غير متّصلة» دقيقةً:
+   القراءاتُ من المخبأ فوراً، والكتاباتُ إلى الطابور (آمنٌ دائماً). وأوّلُ قراءةٍ
+   ناجحة من الخادم تُلغي ذلك فوراً. */
+const DEAD_NETWORK_WINDOW_MS = 60 * 1000;
+let _deadNetworkAt = 0;
+function _markDeadNetwork() { _deadNetworkAt = Date.now(); }
+function isOnline() {
+  if (!navigator.onLine) return false;
+  return !(_deadNetworkAt && Date.now() - _deadNetworkAt < DEAD_NETWORK_WINDOW_MS);
+}
 
 /* مهلة زمنية لأيّ وعد شبكي. على شبكة «متصلة لكن ميتة» (راوتر بلا خطّ، واي‑فاي
    أسير) يبقى fetch معلّقاً بلا سقف فتتجمّد الواجهة — وهذا ما يجعل الدخول يستغرق
@@ -513,14 +529,16 @@ function summarizeSyncResult(r = {}) {
     stuck:        r.stuck ?? 0,
     authRequired: Boolean(r.authRequired),
     busy:         Boolean(r.busy),
+    offline:      Boolean(r.offline),
   };
 }
 
 async function _sessionUserId() {
   try {
     const r = await withTimeout(db.auth.getSession(), 3500);
+    if (!r?.data?.session && _isTransientAuthError(r?.error)) _markDeadNetwork();
     return r?.data?.session?.user?.id ?? null;
-  } catch { return null; }
+  } catch { _markDeadNetwork(); return null; }
 }
 
 // ─── Delta pull (سحب تدريجي من الخادم — المرحلة 4ب) ─────────────────────────
@@ -807,6 +825,8 @@ async function getCurrentUser() {
     session    = res?.data?.session ?? null;
     sessionErr = res?.error ?? null;
   } catch {
+    // getSession محلّيّ — تعلّقُه ٣٫٥ث يعني تجديدَ توكنٍ عالقاً على شبكةٍ ميتة.
+    _markDeadNetwork();
     return getCurrentUserOffline();
   }
   if (!session) {
@@ -819,7 +839,8 @@ async function getCurrentUser() {
     //    لا تعمل دون اتصال. لم يكن يمرّ إلّا «Offline» في أدوات المطوّر.
     //    الآن: فشلُ التجديد لسببٍ شبكيّ يُعامَل كانقطاع. أمّا رفضُه الصريح
     //    (رمزٌ أُبطِل/حُذف المستخدم) فـsupabase-js يمحو الجلسة معه فنعود للدخول.
-    if (!isOnline() || _isTransientAuthError(sessionErr)) return getCurrentUserOffline();
+    if (!isOnline()) return getCurrentUserOffline();
+    if (_isTransientAuthError(sessionErr)) { _markDeadNetwork(); return getCurrentUserOffline(); }
     return null;
   }
 
@@ -889,6 +910,10 @@ async function getSchoolStatus(schoolId, date) {
 // ما يفعله المستدعي في catch أصلاً) بدل تجميدٍ صامت.
 async function getDailyAttendance(schoolId, date) {
   const iso = date instanceof Date ? localDateISO(date) : date;
+  /* دون اتصال لا نحاول: بتوكنٍ منتهٍ يُعيد supabase-js محاولة التجديد بتأجيلٍ
+     حتى ~30ث قبل كلّ طلب، فيُستهلك سقفُ المهلة كاملاً على طلبٍ محكومٍ بالفشل
+     وتتأخّر بقيّةُ اللوحة خلفه. والمستدعي يعامل الرمي «غيرَ مُرسَل» أصلاً. */
+  if (!isOnline()) throw new TypeError('Failed to fetch (offline)');
   const { data, error } = await withTimeout(
     db.from("daily_attendance")
       .select("teachers_present,teachers_absent,admins_present,admins_absent,workers_present,workers_absent,students_present,notes,submitted_at")
@@ -1642,7 +1667,7 @@ async function getTeacherClasses(teacherId) {
   const academicYear = getAcademicYear();
 
   // دون اتصال: لا تُهدَر ثوانٍ في مهلة شبكة محكومة بالفشل — اقرأ المخبأ فوراً.
-  if (!navigator.onLine) {
+  if (!isOnline()) {
     const hit = getCachedTeacherClasses(teacherId, academicYear);
     if (hit) return hit;
   }
@@ -4055,7 +4080,7 @@ if (typeof navigator !== 'undefined' && navigator.serviceWorker?.addEventListene
     let ok = false;
     try {
       const r = await syncPendingV2();
-      ok = !r.busy && !r.authRequired && r.retrying === 0;
+      ok = !r.busy && !r.authRequired && !r.offline && r.retrying === 0;
     } catch { ok = false; }
     e.ports[0].postMessage({ ok });
   });
@@ -4070,7 +4095,12 @@ async function _syncPendingCore({ classId, force = false } = {}) {
   /* بلا جلسةٍ حيّة لا يمرّ شيءٌ من RLS — المحاولة تُراكم إخفاقاتٍ لا معنى لها.
      ولا يُرسَل عنصرٌ إلّا بجلسة صاحبه (انظر enqueueOutbox). */
   const uid = await _sessionUserId();
-  if (!uid) { results.authRequired = true; return results; }
+  if (!uid) {
+    // «لا جلسة» لسببين مختلفين جداً للمستخدم: شبكةٌ لا تصل خادمَ المصادقة (انتظر)،
+    // أو جلسةٌ انتهت فعلاً (سجّل الدخول). الخلطُ بينهما يطلب الدخولَ ممّن لا يستطيعه.
+    if (isOnline()) results.authRequired = true; else results.offline = true;
+    return results;
+  }
   const mine = _ownedBy(uid);
 
   // المرحلة 1أ: تصريف IDB outbox (العناصر الجديدة)
@@ -5558,6 +5588,8 @@ async function getStaffRecords(schoolId) {
   if (!isOnline()) {
     const hit = _readJSONCache(key);
     if (hit) return hit;
+    // لا مخبأ ولا شبكة: فشلٌ فوريّ بدل انتظار مهلةٍ كاملة (انظر getDailyAttendance).
+    throw new TypeError('Failed to fetch (offline, no cache)');
   }
   try {
     const { data, error } = await withTimeout(

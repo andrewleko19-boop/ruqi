@@ -67,3 +67,17 @@ describe('صاحبُ عنصر الطابور', () => {
     assert.equal(s.byTable.daily_student_attendance, 1);
   });
 });
+
+describe('بلا جلسة بسبب الشبكة لا بسبب الانتهاء', () => {
+  test('تجديدٌ فاشل شبكياً ← offline لا authRequired (لا نطلب الدخول ممّن لا يستطيعه)', async () => {
+    const { DB, supabase, env } = await loadDb({ online: false, userId: 'A' });
+    await DB.saveStudentAttendance(sheet);
+    env.online = true;
+    supabase.auth.getSession = async () => ({
+      data: { session: null }, error: { name: 'AuthRetryableFetchError', status: 0 },
+    });
+    const r = await DB.syncPending();
+    assert.equal(r.offline, true);
+    assert.equal(r.authRequired, undefined);
+  });
+});

@@ -133,6 +133,6 @@ describe('ما تعرضه الواجهة', () => {
       attendance: { synced: 1, failed: 0 }, conduct: { synced: 2, failed: 0 },
       absentStaff: { synced: 1, failed: 0 }, retrying: 1, stuck: 2,
     });
-    assert.deepEqual(s, { synced: 4, retrying: 1, stuck: 2, authRequired: false, busy: false });
+    assert.deepEqual(s, { synced: 4, retrying: 1, stuck: 2, authRequired: false, busy: false, offline: false });
   });
 });

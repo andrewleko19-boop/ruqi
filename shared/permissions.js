@@ -13,7 +13,7 @@
 // كل عنصر يحمل data-module="<مفتاح الوحدة>" يُخفى (hidden) تلقائياً إن كانت
 // الوحدة غير مفعّلة لدور المستخدم الحالي.
 
-import { supabase, withTimeout, getOfflineUserId } from './db.js';
+import { supabase, withTimeout, getOfflineUserId, isOnline } from './db.js';
 
 const LAYER = location.pathname.split('/').filter(Boolean).find(
   s => ['school', 'teacher', 'directorate', 'ministry', 'admin', 'parent'].includes(s)
@@ -57,8 +57,8 @@ async function init(userId) {
   if (!uid) uid = getOfflineUserId();
   if (!uid) { _enabled = null; return null; }
 
-  // أوفلاين: استعمل آخر مصفوفة مخبّأة مباشرة بلا إهدار مهلة على شبكة غائبة.
-  if (!navigator.onLine) {
+  // أوفلاين (أو شبكةٌ ميتة عرفها db.js): المصفوفة المخبّأة مباشرة بلا إهدار مهلة.
+  if (!isOnline()) {
     const cached = _cachedModules(uid);
     _enabled = cached ? new Set(cached) : null;
     return _enabled;

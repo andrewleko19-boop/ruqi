@@ -62,3 +62,20 @@ describe('هويةٌ مخبّأة حين يتعذّر تجديد الجلسة', 
     assert.equal(await DB.getCurrentUser(), null);
   });
 });
+
+describe('شبكةٌ ميتة عرفها تجديدُ الجلسة', () => {
+  test('بعد فشل التجديد الشبكيّ: الكتابة إلى الطابور مباشرةً بلا انتظار شبكة', async () => {
+    const { DB, supabase } = await loadDb({ online: true, storage: cachedIdentity });
+    supabase.auth.getSession = async () => ({
+      data: { session: null }, error: { name: 'AuthRetryableFetchError', status: 0 },
+    });
+    assert.ok(await DB.getCurrentUser());
+    supabase.from = () => { throw new Error('لُمست الشبكة والجلسةُ تقول إنّها ميتة'); };
+    const r = await DB.saveStudentAttendance({
+      records: [{ studentId: 'st1', status: 'absent' }], classId: 'c1', schoolId: 's1',
+      date: '2026-11-21', teacherId: UID,
+    });
+    assert.equal(r.synced, false);
+    assert.equal(DB.isOnline(), false);
+  });
+});

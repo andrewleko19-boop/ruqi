@@ -196,8 +196,10 @@ async function loadSchoolData() {
   const schoolId = S.user?.schoolId;
   if (!schoolId) throw new Error('No schoolId in session');
 
-  // 1. Try live fetch first (works online and when Supabase is reachable)
-  if (navigator.onLine) {
+  // 1. Try live fetch first (works online and when Supabase is reachable).
+  //    isOnline لا navigator.onLine: على شبكةٍ ميتة عرفها db.js من فشل تجديد
+  //    الجلسة، المخبأُ فوراً بدل انتظار مهلةٍ كاملة قبل أن تظهر اللوحة.
+  if (window.RUQI_DB.isOnline()) {
     try {
       const row    = await getSchoolById(schoolId);
       const school = normaliseSchool(row);
@@ -431,7 +433,8 @@ function removeBootSplash() {
 let _netDegraded = false;
 function updateConnUI() {
   const online   = navigator.onLine;
-  const degraded = online && _netDegraded;
+  // db.js يعرف الشبكة الميتة من فشل تجديد الجلسة قبل أن تفشل أيّ مزامنة.
+  const degraded = online && (_netDegraded || window.RUQI_DB?.isOnline?.() === false);
   connPill.classList.toggle('offline', !online || degraded);
   connLabel.textContent = !online ? 'غير متصل' : degraded ? 'اتصال متقطّع' : 'متصل';
   svgHref(connIcon, online && !degraded ? '#ic-wifi' : '#ic-wifi-off');
@@ -497,7 +500,7 @@ let syncing = false;
    شيءٍ وصل. */
 function announceSyncResult(r, { quietWhenNothing = true } = {}) {
   const s = window.RUQI_DB.summarizeSyncResult(r);
-  if (s.busy) return;
+  if (s.busy || s.offline) return;     // الشبكة ميتة: شريطُ الاتصال يقولها، لا إشعار
   if (s.authRequired) {
     toast('انتهت جلستك — سجّل الدخول من جديد ليُرسَل ما حُفظ على الجهاز.', 'warning', 6000);
     return;
@@ -541,7 +544,7 @@ window.addEventListener('ruqi:sync', (e) => {
   const r = e.detail || {};
   const s = window.RUQI_DB.summarizeSyncResult(r);
   if (!s.busy && !s.authRequired) {
-    _netDegraded = s.retrying > 0 && s.synced === 0;
+    _netDegraded = s.offline || (s.retrying > 0 && s.synced === 0);
     updateConnUI();
   }
   refreshPendingBar();

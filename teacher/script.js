@@ -375,7 +375,8 @@ window.addEventListener('popstate', e => {
 let _netDegraded = false;
 function updateConnUI() {
   const online   = navigator.onLine;
-  const degraded = online && _netDegraded;
+  // db.js يعرف الشبكة الميتة من فشل تجديد الجلسة قبل أن تفشل أيّ مزامنة.
+  const degraded = online && (_netDegraded || window.RUQI_DB?.isOnline?.() === false);
   connPill.classList.toggle('offline', !online || degraded);
   connLabel.textContent = !online ? 'غير متصل' : degraded ? 'اتصال متقطّع' : 'متصل';
   svgHref(connIcon, online && !degraded ? '#ic-wifi' : '#ic-wifi-off');
@@ -430,7 +431,7 @@ let syncing = false;
    أسوأ من الفشل: المعلّم يظنّ أنّ كشفه وصل. */
 function announceSyncResult(r, { quietWhenNothing = true } = {}) {
   const s = window.RUQI_DB.summarizeSyncResult(r);
-  if (s.busy) return;
+  if (s.busy || s.offline) return;     // الشبكة ميتة: شريطُ الاتصال يقولها، لا إشعار
   if (s.authRequired) {
     toast('انتهت جلستك — سجّل الدخول من جديد ليُرسَل ما حُفظ على الجهاز.', 'warning', 6000);
     return;
@@ -465,7 +466,7 @@ window.addEventListener('ruqi:sync', (e) => {
   const r = e.detail || {};
   const s = window.RUQI_DB.summarizeSyncResult(r);
   if (!s.busy && !s.authRequired) {
-    _netDegraded = s.retrying > 0 && s.synced === 0;
+    _netDegraded = s.offline || (s.retrying > 0 && s.synced === 0);
     updateConnUI();
   }
   refreshPendingBar();
