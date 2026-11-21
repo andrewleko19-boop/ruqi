@@ -905,8 +905,30 @@ async function reviewSchoolRequest(requestId, decision, reason = null) {
 }
 
 // ─── Attendance ───────────────────────────────────────────────────────────────
+/* ⚠️ قائمةٌ بيضاء لا «كلّ ما عدا…». كانت دالّتا المزامنة تنزعان localId وsynced
+   وcreatedAt ثمّ تُرسلان الباقي كما هو. لكنّ enqueueOutbox يضيف إلى كلّ سجلٍّ
+   table وlocalTs وdeviceId — وليست أعمدةً في الجدول — فيرفض PostgREST الصفَّ
+   في كلّ محاولة. والخطأ يُبتلَع في syncPendingV2، فبقي كلُّ بيانٍ يوميّ أُرسل
+   دون اتصال وكلُّ بلاغٍ طارئ عالقاً في الطابور إلى الأبد، والشاشة تقول
+   «لا يوجد سجلات معلقة». أيُّ حقلٍ داخليّ يُضاف للطابور لاحقاً لا يصل الخادم. */
+const DAILY_ATTENDANCE_COLS = [
+  'school_id', 'date',
+  'teachers_present', 'teachers_absent', 'students_present', 'students_absent',
+  'admins_present', 'admins_absent', 'workers_present', 'workers_absent',
+  'notes', 'submitted_by', 'submitted_at',
+];
+const EMERGENCY_REPORT_COLS = [
+  'school_id', 'submitted_by', 'type', 'description', 'severity', 'status', 'media_urls',
+];
+
+function _pickCols(record, cols) {
+  const out = {};
+  for (const c of cols) if (record[c] !== undefined) out[c] = record[c];
+  return out;
+}
+
 async function syncAttendanceRecord(record) {
-  const { localId, synced: _synced, createdAt: _c, ...payload } = record;
+  const payload = _pickCols(record, DAILY_ATTENDANCE_COLS);
   const { error } = await db.from("daily_attendance").upsert(payload, {
     onConflict: "school_id,date",
     ignoreDuplicates: false,
@@ -946,7 +968,7 @@ function markAttendanceSynced(localId) {
 
 // ─── Reports ──────────────────────────────────────────────────────────────────
 async function syncReportRecord(report) {
-  const { localId, synced: _synced, receiptNumber: _r, createdAt: _c, ...payload } = report;
+  const payload = _pickCols(report, EMERGENCY_REPORT_COLS);   // انظر DAILY_ATTENDANCE_COLS
   // Upload inline photos to Storage; the row stores only URLs (or data URIs on
   // failure). Runs on both the online path and on offline-queue sync.
   payload.media_urls = await materialisePhotos(payload.media_urls);
