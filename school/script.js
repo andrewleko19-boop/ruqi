@@ -551,7 +551,13 @@ window.addEventListener('ruqi:sync', (e) => {
   refreshStaleBar();
   if (!syncing) announceSyncResult(e.detail);
   // بيانٌ حُفظ دون اتصال وصل الآن: الحالة «تم الإرسال» لا «محفوظ محلياً».
-  if (e.detail?.attendance?.synced > 0 && S.attSubmitted && S.school?.id) void restoreSubmittedState();
+  // ⚠️ لا نسأل الخادم ثانيةً: قراءةٌ تتعثّر بعد المزامنة مباشرةً كانت تُعيد
+  //    النموذجَ الفارغ مكانَ بيانٍ وصل للتوّ. يكفي أن الطابور خلا منه.
+  if (e.detail?.attendance?.synced > 0 && S.attSubmitted && S.school?.id) {
+    window.RUQI_DB.getQueuedDailyAttendance(S.school.id, todayISO())
+      .then((q) => markAttendanceSubmitted(!q, q ?? S.attRec))
+      .catch(() => {});
+  }
 });
 
 if ('serviceWorker' in navigator) {
@@ -616,6 +622,7 @@ function renderAttDetails(rec) {
 // Reused by the submit handler and by initApp (restore on reload). DRY.
 function markAttendanceSubmitted(synced, rec) {
   S.attSubmitted = true;
+  S.attRec       = rec ?? S.attRec ?? null;   // ما يُعرض — لتحديث الحالة بعد المزامنة بلا شبكة
   hide(attCard);
   show(attDone);
   attDoneSub.textContent = `${formatDateAr(todayISO())} — ${synced ? 'تم الإرسال' : 'محفوظ محلياً'}`;
