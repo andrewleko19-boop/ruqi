@@ -369,11 +369,16 @@ window.addEventListener('popstate', e => {
 });
 
 // ── Connectivity ──────────────────────────────────────────────────────────────
+/* navigator.onLine يقول «متصل» على واي‑فاي المدرسة بلا خطّ إنترنت — الحالة
+   الأشيع والأخطر. فإن فشلت محاولةُ المزامنة لأسبابٍ عابرة ولم يصل شيء، فالشبكة
+   «متقطّعة» مهما قال المتصفّح؛ ويزول ذلك بأوّل نجاح. */
+let _netDegraded = false;
 function updateConnUI() {
-  const online = navigator.onLine;
-  connPill.classList.toggle('offline', !online);
-  connLabel.textContent = online ? 'متصل' : 'غير متصل';
-  svgHref(connIcon, online ? '#ic-wifi' : '#ic-wifi-off');
+  const online   = navigator.onLine;
+  const degraded = online && _netDegraded;
+  connPill.classList.toggle('offline', !online || degraded);
+  connLabel.textContent = !online ? 'غير متصل' : degraded ? 'اتصال متقطّع' : 'متصل';
+  svgHref(connIcon, online && !degraded ? '#ic-wifi' : '#ic-wifi-off');
   refreshPendingBar();
   refreshStaleBar();
 }
@@ -457,6 +462,12 @@ async function doSync({ force = false } = {}) {
 
 // المزامنة التلقائية (مؤقّت db.js أو Background Sync) تجري بلا doSync — فتُعلَن هنا.
 window.addEventListener('ruqi:sync', (e) => {
+  const r = e.detail || {};
+  const s = window.RUQI_DB.summarizeSyncResult(r);
+  if (!s.busy && !s.authRequired) {
+    _netDegraded = s.retrying > 0 && s.synced === 0;
+    updateConnUI();
+  }
   refreshPendingBar();
   refreshStaleBar();
   if (!syncing) {
