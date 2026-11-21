@@ -1493,16 +1493,21 @@ async function getTeacherClasses(teacherId) {
   return mapped;
 }
 
-// ─── Student cache (24-hour TTL) ─────────────────────────────────────────────
+// ─── Student cache ───────────────────────────────────────────────────────────
+/* ⚠️ كان للمخبأ عمرٌ أقصى ٢٤ ساعة. لكنّه لا يُقرأ إلّا حين تتعذّر الشبكة
+   (أونلاين يُجلب الكشفُ حيّاً دائماً ويُحدَّث المخبأ) — فلم يكن الحدُّ يحمي
+   من بياناتٍ قديمة، بل يرمي الكشفَ الوحيد المتاح: معلّمٌ أخذ حضورَ الخميس ثمّ
+   فتح التطبيق صباحَ الأحد دون اتصال وجد «لا توجد بيانات محفوظة لهذا الصف».
+   كشفُ طلابٍ عمرُه أيام أصدق بكثير من لا كشف؛ والتغييرات النادرة (طالبٌ
+   منقول) تُصحَّح عند المزامنة. */
 const STUDENTS_CACHE_PFX = 'nsams_stu_';
-const STUDENTS_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 function getCachedStudents(classId) {
   try {
     const raw = localStorage.getItem(STUDENTS_CACHE_PFX + classId);
     if (!raw) return null;
-    const { ts, data } = JSON.parse(raw);
-    return (Date.now() - ts < STUDENTS_CACHE_TTL) ? data : null;
+    const { data } = JSON.parse(raw);
+    return Array.isArray(data) ? data : null;
   } catch { return null; }
 }
 
@@ -5120,15 +5125,35 @@ async function setCorrespondenceStatus(threadId, status) {
   if (error) throw error;
 }
 
+/* مخبّأة على نمط getSchoolPersonnel: منها تُبنى قائمةُ «الغائبون من الكادر» في
+   شاشة الحضور اليوميّ. كانت بلا مخبأ ولا مهلة — فدون اتصال تفرغ القائمة ولا
+   يستطيع المدير تسجيلَ غائبٍ واحد، وعلى شبكةٍ ميتة تتعلّق الشاشة. */
+const STAFF_RECORDS_CACHE_PFX = 'nsams_srec_';
+
 async function getStaffRecords(schoolId) {
-  const { data, error } = await db.from('staff_records')
-    .select('*')
-    .eq('school_id', schoolId)
-    .eq('active', true)
-    .order('staff_type')
-    .order('full_name');
-  if (error) throw error;
-  return data || [];
+  const key = STAFF_RECORDS_CACHE_PFX + schoolId;
+  if (!isOnline()) {
+    const hit = _readJSONCache(key);
+    if (hit) return hit;
+  }
+  try {
+    const { data, error } = await withTimeout(
+      db.from('staff_records')
+        .select('*')
+        .eq('school_id', schoolId)
+        .eq('active', true)
+        .order('staff_type')
+        .order('full_name'),
+      OFFLINE_READ_TIMEOUT_MS,
+    );
+    if (error) throw error;
+    _writeJSONCache(key, data || []);
+    return data || [];
+  } catch (err) {
+    const hit = _readJSONCache(key);
+    if (hit) { console.warn('[Ruqi] سجلّ الكادر من المخبأ', err); return hit; }
+    throw err;
+  }
 }
 
 async function createStaffRecord(payload) {
@@ -5730,6 +5755,7 @@ const TENANT_CACHE_PREFIXES = [
   'nsams_csub_',      // حالة كشف الصفّ لليوم
   'nsams_catt_',      // حضور طلاب الصفّ لليوم — بيانات طلاب باسمهم
   'nsams_spers_',     // سجلّ الكادر: أسماء وأرقام وطنية
+  'nsams_srec_',      // staff_records: قائمة الغائبين من الكادر (أسماء وأرقام وطنية)
   'nsams_satt_',      // دوام الكادر لليوم
   'nsams_sroster_',   // السجلّ الكامل مع أسماء المستخدمين
   'nsams_sreq_',      // طلبات المدرسة (قد تحمل بيانات طلاب/كادر في payload)

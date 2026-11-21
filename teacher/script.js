@@ -595,6 +595,21 @@ async function loadClasses() {
   applyHomeMode();
   void loadMyGraceProposals();   // مساعدٌ لا يحجب الصفوف
   void loadMyLeaves();           // «إجازاتي»: لا يعلمها المعلّم اليوم
+  void prefetchRosters(S.classes);
+}
+
+/* كشفُ الطلاب لا يُخبَّأ إلّا لصفٍّ فُتح وهو متّصل. فمعلّمٌ له خمس شعب فتح
+   منها اثنتين أمس يجد الثلاثَ الباقية «لا توجد بيانات محفوظة» حين ينقطع
+   الاتصال صباحاً — وهي بالضبط اللحظة التي يحتاجها فيها. نجلبها كلَّها في
+   الخلفية بعد ظهور الصفوف: تتابعاً لا دفعةً (شبكة المدرسة ضعيفة)، ولا يحجب
+   شيئاً، وفشلُ واحدٍ لا يوقف البقيّة. getClassStudents تكتب المخبأ بنفسها. */
+async function prefetchRosters(classes) {
+  if (!navigator.onLine || !Array.isArray(classes)) return;
+  for (const cls of classes) {
+    if (!navigator.onLine) return;
+    try { await getClassStudents(cls.id); }
+    catch (err) { console.warn('[Ruqi-T] prefetch roster', cls.id, err); }
+  }
 }
 
 /* ── إجازاتي ───────────────────────────────────────────────────────────────
