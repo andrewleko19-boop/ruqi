@@ -177,15 +177,30 @@ self.addEventListener('fetch', (event) => {
     // origin+pathname (بلا query) كي لا يُفسد رابطٌ عميق مثل school/?n=… المفتاحَ.
     const shellPath = url.pathname.endsWith('/') ? url.pathname + 'index.html' : url.pathname;
     const shellUrl  = url.origin + shellPath;
+    // «school» بلا شرطة أخيرة: أونلاين يحوّلها GitHub Pages إلى «school/»، أمّا
+    // دون اتصال فلا تحويل — فكانت تسقط إلى الصفحة الرئيسة بدل البوّابة.
+    const lastSeg  = url.pathname.split('/').pop();
+    const dirShell = lastSeg && !lastSeg.includes('.') ? url.origin + url.pathname + '/index.html' : null;
     event.respondWith((async () => {
       const cache  = await caches.open(CACHE);
-      const cached = (await cache.match(req))
-                  || (await cache.match(shellUrl))
+      const cached = (await cache.match(shellUrl))
+                  || (await cache.match(req))
+                  || (dirShell && await cache.match(dirShell))
                   || (await cache.match('./index.html'));
       // تحديث في الخلفية لا يحجب الاستجابة إطلاقاً. يعيد دائماً استجابةً صريحة
       // (المخبأ إن وُجد وإلّا رسالة أوفلاين) كي لا يُمرَّر undefined لـrespondWith.
+      //
+      // ⚠️ لا يُخزَّن إلّا ردٌّ سليم. كان كلُّ ردٍّ يُخزَّن: صفحةُ 404، أو 5xx، أو
+      //    صفحةُ دخول شبكةٍ أسيرة (واي‑فاي المدرسة) تحلّ محلَّ القشرة السليمة،
+      //    فتُقدَّم هي عند الفتح التالي دون اتصال. والردُّ المحوَّل (redirected)
+      //    يرفضه المتصفّح إن قُدِّم لتنقّلٍ لاحق — فلا يُخزَّن كذلك.
+      //    والمفتاحُ هو المسار النظيف (shellUrl) لا الطلب بعنوانه: فلا تتراكم نسخةٌ
+      //    لكلّ ‎?n=…‎، ويُستبدل المخزَّنُ مسبقاً لا يجاوره نسخةٌ أقدم.
       const network = fetch(req)
-        .then((res) => { cache.put(req, res.clone()); return res; })
+        .then((res) => {
+          if (res.ok && res.type === 'basic' && !res.redirected) cache.put(shellUrl, res.clone());
+          return res;
+        })
         .catch(() => cached || new Response(
           'غير متوفّر دون اتصال',
           { status: 504, statusText: 'Offline',
