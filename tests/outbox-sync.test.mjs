@@ -99,3 +99,21 @@ describe('التخزين الدائم', () => {
     assert.equal(asked, 1);
   });
 });
+
+describe('حالة «أُرسل» بعد إعادة التحميل', () => {
+  test('البيانُ في الطابور يُستعاد بأحدث نسخة، ويختفي بعد وصوله', async () => {
+    const { DB, supabase, env } = await loadDb({ layer: 'school', online: false });
+    assert.equal(await DB.getQueuedDailyAttendance('s1', '2026-11-21'), null);
+
+    await DB.saveAttendance({ ...attendance(), students_present: 150 });
+    await new Promise(r => setTimeout(r, 2));
+    await DB.saveAttendance({ ...attendance(), students_present: 190 });
+    const q = await DB.getQueuedDailyAttendance('s1', '2026-11-21');
+    assert.equal(q.students_present, 190);
+
+    supabase.from = strictServer().from;
+    env.online = true;
+    await DB.syncPending();
+    assert.equal(await DB.getQueuedDailyAttendance('s1', '2026-11-21'), null);
+  });
+});

@@ -536,6 +536,8 @@ window.addEventListener('ruqi:sync', (e) => {
   refreshPendingBar();
   refreshStaleBar();
   if (!syncing) announceSyncResult(e.detail);
+  // بيانٌ حُفظ دون اتصال وصل الآن: الحالة «تم الإرسال» لا «محفوظ محلياً».
+  if (e.detail?.attendance?.synced > 0 && S.attSubmitted && S.school?.id) void restoreSubmittedState();
 });
 
 if ('serviceWorker' in navigator) {
@@ -605,6 +607,34 @@ function markAttendanceSubmitted(synced, rec) {
   attDoneSub.textContent = `${formatDateAr(todayISO())} — ${synced ? 'تم الإرسال' : 'محفوظ محلياً'}`;
   attDoneDetails.innerHTML = rec ? renderAttDetails(rec) : '';
   setStatusDone(synced);
+}
+
+/* حالةُ البيان اليوميّ بعد إعادة التحميل.
+   ⚠️ كانت من الخادم وحده: دون اتصال — أو قبل أن تصل المزامنة — يعود النموذج
+   فارغاً قابلاً للتحرير وكأنّ المديرَ لم يُرسل شيئاً، فيبدو عملُه ضائعاً ويُرسل
+   ثانيةً. الطابورُ أوّلاً (هو الأحدث بالتعريف: لم يصل بعد)، ثمّ الخادم. */
+async function restoreSubmittedState() {
+  const today = todayISO();
+  let queued = null;
+  try { queued = await window.RUQI_DB.getQueuedDailyAttendance(S.school.id, today); }
+  catch (e) { console.warn('[Ruqi] queued daily attendance', e); }
+  if (queued) { markAttendanceSubmitted(false, queued); return; }
+
+  let todayRec = null;
+  try {
+    todayRec = await getDailyAttendance(S.school.id, today);
+  } catch (e) {
+    // Offline or fetch error → conservatively show the pending form.
+    console.warn('[Ruqi] getDailyAttendance failed, treating as pending', e);
+  }
+  if (todayRec) {
+    markAttendanceSubmitted(true, todayRec);
+  } else {
+    S.attSubmitted = false;
+    show(attCard);
+    hide(attDone);
+    setStatusPending();
+  }
 }
 
 // ── Teacher counter ───────────────────────────────────────────────────────────
@@ -1301,23 +1331,7 @@ async function initApp() {
   inNotes.value      = '';
   btnSubmitAtt.disabled = false;
 
-  // Restore the submitted/pending state from the DB so a successful submit
-  // persists across reloads (no double-submit, no editable zeroed form).
-  let todayRec = null;
-  try {
-    todayRec = await getDailyAttendance(S.school.id, todayISO());
-  } catch (e) {
-    // Offline or fetch error → conservatively show the pending form.
-    console.warn('[Ruqi] getDailyAttendance failed, treating as pending', e);
-  }
-  if (todayRec) {
-    markAttendanceSubmitted(true, todayRec);
-  } else {
-    S.attSubmitted = false;
-    show(attCard);
-    hide(attDone);
-    setStatusPending();
-  }
+  await restoreSubmittedState();
   /* الكادرُ يُجلب أوّلاً فتُبنى القائمةُ المنسدلة، ثمّ غائبو اليوم إن كان
      البيانُ قد أُرسل — فيعود المديرُ إلى الشاشة فيجد ما سجّله لا فراغاً
      يوحي بأنّ عملَه ضاع. */

@@ -1097,6 +1097,21 @@ async function saveAttendance(record) {
   }
 }
 
+/* البيانُ اليوميّ لمدرسةٍ ويومٍ إن كان ما يزال في الطابور (لم يصل الخادم).
+   منه تستعيد بوّابةُ المدرسة حالة «أُرسل — محفوظ محلياً» بعد إعادة التحميل؛
+   كانت تسأل الخادمَ وحده، فدون اتصال (أو قبل المزامنة) يعود النموذج فارغاً
+   قابلاً للتحرير كأنّ شيئاً لم يُرسَل — فيبدو العمل ضائعاً ويُغري بإرسالٍ ثانٍ.
+   الأحدث إن وُجد أكثر من واحد. */
+async function getQueuedDailyAttendance(schoolId, date) {
+  const hit = (r) => r.school_id === schoolId && r.date === date;
+  const all = [
+    ...(await readOutbox()).filter(i => i.table === 'attendance_submissions' && hit(i)),
+    ...readQueue(QUEUE_ATTENDANCE).filter(r => !r.synced && hit(r)),
+  ];
+  all.sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
+  return all.pop() ?? null;
+}
+
 function getPendingAttendance() {
   return readQueue(QUEUE_ATTENDANCE).filter((r) => !r.synced);
 }
@@ -5178,6 +5193,7 @@ window.RUQI_DB = {
   getOutboxSummary,
   startAutoSync,
   summarizeSyncResult,
+  getQueuedDailyAttendance,
 
   // Notifications & Web Push
   getNotifications,
