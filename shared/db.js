@@ -908,22 +908,51 @@ async function getSchoolStatus(schoolId, date) {
 // withTimeout: هذه على مسار الإقلاع — initApp ينتظرها بعد إظهار اللوحة، فتعلّقُها
 // يترك المدير أمام لوحةٍ نصف مرسومة. مهلةٌ قصيرة تعني «اعتبره غير مُرسَل» (وهو
 // ما يفعله المستدعي في catch أصلاً) بدل تجميدٍ صامت.
+/* ─── أثرٌ محلّيّ لبيانٍ وصل الخادم ──────────────────────────────────────────
+   ⚠️ كان الأثرُ المحلّيّ الوحيد لبيانٍ يوميّ هو عنصرُ الطابور، والمزامنةُ تحذفه.
+   فبعد إرسالٍ ناجح (مباشرةً أو بعد مزامنة) ثمّ إعادة فتح الصفحة دون اتصال لا يجد
+   التطبيقُ ما يقوله — وgetDailyAttendance خادمٌ صرف — فيرسم النموذجَ القابل
+   للتحرير كأنّ شيئاً لم يُرسَل.
+   الآن: مدخلةٌ مؤرَّخة واحدة لكلّ مدرسة، تُكتب عند أيّ وصولٍ مؤكَّد للخادم
+   (نجاحُ الإرسال أو المزامنة، أو قراءةٌ ناجحة) وتُقرأ حين تتعذّر الشبكة فقط.
+   الخادمُ هو الحَكَم متى أجاب: قراءةٌ ناجحة تُرجع «لا بيان» تمحو الأثر، فصفٌّ
+   حُذف من القاعدة لا يبقى «مُرسَلاً» على الجهاز.
+   لا تُخفَّض: مزامنةُ سجلٍّ أقدم تأخّرت لا تكتب فوق أثر اليوم. */
+const DAILY_SUBMISSION_CACHE_PFX = 'nsams_dsub_';
+
+function _rememberDailySubmission(schoolId, date, data) {
+  if (!schoolId || !date) return;
+  const key = DAILY_SUBMISSION_CACHE_PFX + schoolId;
+  const cur = _readJSONCache(key);
+  if (cur?.date && cur.date > date) return;      // أحدث منه موجود — لا تُخفِّض
+  _writeDatedCache(key, date, data);
+}
+
 async function getDailyAttendance(schoolId, date) {
   const iso = date instanceof Date ? localDateISO(date) : date;
+  const key = DAILY_SUBMISSION_CACHE_PFX + schoolId;
   /* دون اتصال لا نحاول: بتوكنٍ منتهٍ يُعيد supabase-js محاولة التجديد بتأجيلٍ
      حتى ~30ث قبل كلّ طلب، فيُستهلك سقفُ المهلة كاملاً على طلبٍ محكومٍ بالفشل
-     وتتأخّر بقيّةُ اللوحة خلفه. والمستدعي يعامل الرمي «غيرَ مُرسَل» أصلاً. */
-  if (!isOnline()) throw new TypeError('Failed to fetch (offline)');
-  const { data, error } = await withTimeout(
-    db.from("daily_attendance")
-      .select("teachers_present,teachers_absent,admins_present,admins_absent,workers_present,workers_absent,students_present,notes,submitted_at")
-      .eq("school_id", schoolId)
-      .eq("date", iso)
-      .maybeSingle(),
-    OFFLINE_READ_TIMEOUT_MS,
-  );
-  if (error) throw error;
-  return data; // null when not yet submitted
+     وتتأخّر بقيّةُ اللوحة خلفه. نُجيب من الأثر المحلّيّ (أو null = لم يُرسَل). */
+  if (!isOnline()) return _readDatedCache(key, iso);
+  try {
+    const { data, error } = await withTimeout(
+      db.from("daily_attendance")
+        .select("teachers_present,teachers_absent,admins_present,admins_absent,workers_present,workers_absent,students_present,notes,submitted_at")
+        .eq("school_id", schoolId)
+        .eq("date", iso)
+        .maybeSingle(),
+      OFFLINE_READ_TIMEOUT_MS,
+    );
+    if (error) throw error;
+    _rememberDailySubmission(schoolId, iso, data ?? null);   // الخادم يحكم: null يمحو الأثر
+    return data; // null when not yet submitted
+  } catch (err) {
+    // شبكةٌ ميتة/مهلة: الأثرُ المحلّيّ أفضلُ من نموذجٍ فارغ. وما عدا ذلك يُرمى كما كان.
+    const hit = _readDatedCache(key, iso);
+    if (hit && isNetworkError(err)) { console.warn('[Ruqi] بيان اليوم من الأثر المحلّي', err); return hit; }
+    throw err;
+  }
 }
 
 async function getSchoolById(schoolId) {
@@ -1100,6 +1129,8 @@ async function syncAttendanceRecord(record) {
     ignoreDuplicates: false,
   });
   if (error) throw error;
+  // نقطةُ الكتابة الوحيدة لنجاح الإرسال: يمرّ منها المسارُ المباشر ومزامنةُ الطابور.
+  _rememberDailySubmission(payload.school_id, payload.date, payload);
   return true;
 }
 
@@ -6212,6 +6243,7 @@ const TENANT_CACHE_PREFIXES = [
   'nsams_spers_',     // سجلّ الكادر: أسماء وأرقام وطنية
   'nsams_srec_',      // staff_records: قائمة الغائبين من الكادر (أسماء وأرقام وطنية)
   'nsams_dabs_',      // غائبو الكادر اليوم بأسمائهم
+  'nsams_dsub_',      // أثرُ البيان اليوميّ المُرسَل (أرقام المدرسة وملاحظاتها)
   'nsams_satt_',      // دوام الكادر لليوم
   'nsams_sroster_',   // السجلّ الكامل مع أسماء المستخدمين
   'nsams_sreq_',      // طلبات المدرسة (قد تحمل بيانات طلاب/كادر في payload)
