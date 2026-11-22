@@ -276,7 +276,6 @@ const tAbsent       = el('t-absent');
 const tTotal        = el('t-total');
 const absentList    = el('absent-list');
 const inAbsent      = el('in-absent');
-const btnAddAbsent  = el('btn-add-absent');
 const inStuPresent  = el('in-stu-present');
 const inStuAbsent   = el('in-stu-absent');
 const inAdminPresent  = el('in-admin-present');
@@ -801,9 +800,8 @@ function addAbsentTeacher() {
   renderAbsentList();
 }
 
-btnAddAbsent.addEventListener('click', addAbsentTeacher);
-/* الاختيار وحده يُضيف: زرُّ «إضافة» يبقى لمن اعتاده، لكنّ انتظارَ ضغطةٍ بعد
-   اختيارٍ من قائمةٍ منسدلة خطوةٌ زائدة تُنسى فيظنّ المديرُ أنّه سجّل الغياب. */
+/* الاختيار وحده يُضيف: انتظارُ ضغطةٍ بعد اختيارٍ من قائمةٍ منسدلة خطوةٌ زائدة
+   تُنسى فيظنّ المديرُ أنّه سجّل الغياب — لذا لا زرَّ «إضافة» بجانب القائمة. */
 inAbsent.addEventListener('change', () => { if (inAbsent.value) addAbsentTeacher(); });
 absentList.addEventListener('click', (e) => {
   const btn = e.target.closest('.absent-del');

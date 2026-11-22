@@ -110,4 +110,94 @@
     border-radius: var(--r-md) var(--r-md) 0 0;
     padding-inline: 18px;
   }
+
+  /* ── ٧. الرئيسية: hero بعرض الصفحة ثم عمودان ─────────────────────────────
+     اليسار = نموذج السجلّ اليوميّ، واليمين = الإشعار + كشوف الفصول + المراسلات
+     (RTL: العمود الأوّل يمين). التخطيط بالشبكة وحدها: لا نقلَ لعنصر في الوسم.
+     • غلافُ «الحضور اليومي» يذوب (display:contents) فيشارك أبناؤه الشبكة، وسطحُ
+       الـhero هو ::before (عنصرُ شبكةٍ يمتدّ على الصفّين الأوّلين).
+     • الصفّ الأخير 1fr يمتصّ ارتفاعَ النموذج الزائد فلا تتمدّد بطاقاتُ اليمين. */
+  #view-attendance:not([hidden]) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.32fr) minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto auto 1fr;
+    gap: 20px;
+    align-items: start;
+    align-content: start;
+  }
+  #view-attendance:not([hidden])::before {
+    content: "";
+    grid-column: 1 / -1; grid-row: 1 / 3;
+    align-self: stretch;
+    background: #fff;
+    border: 1px solid var(--hm-line-2);
+    border-radius: var(--hm-r-hero);
+    box-shadow: var(--hm-shadow);
+  }
+  #view-attendance > .status-card-mockup { display: contents; }
+  #view-attendance .status-header-row { grid-column: 1; grid-row: 1; margin: 24px 24px 0; }
+  #view-attendance #class-filter-toggle {
+    grid-column: 2; grid-row: 1; justify-self: end; align-self: center;
+    width: 340px; max-width: calc(100% - 48px); margin: 24px 24px 0;
+  }
+  #view-attendance .wave-sep { display: none; }
+
+  #view-attendance #kpi-grid {
+    grid-column: 1; grid-row: 2;
+    margin: 0 24px 24px;
+    grid-template-columns: minmax(190px, auto) minmax(0, 1fr);
+    grid-auto-rows: auto;
+    gap: 8px 28px; align-items: center;
+  }
+  #view-attendance #kpi-grid .kpi-card:not(.kpi-amber) {
+    grid-column: 2;
+    flex-direction: row; justify-content: flex-start; gap: 14px;
+    padding: 10px 16px; text-align: start;
+  }
+  #view-attendance #kpi-grid .kpi-card:not(.kpi-amber) .kpi-num { font-size: 1.6rem; }
+  #view-attendance #kpi-grid .kpi-card:not(.kpi-amber) .kpi-lbl { margin-top: 0; }
+  /* نسبة الحضور = «الحلقة»: مسارٌ دائريّ والرقمُ في وسطه. القوسُ الملوَّن يحتاج
+     قيمةً رقميّة يقرؤها CSS (لا يقرأ نصَّ #kpi-rate) فبقي المسارُ وحده. */
+  #view-attendance #kpi-grid .kpi-amber {
+    grid-column: 1; grid-row: 1 / span 3; justify-self: center;
+    background: none; border: 0; padding: 0;
+    display: grid; grid-template-columns: 164px; grid-template-rows: 164px auto;
+    justify-items: center; align-items: center; row-gap: 6px;
+  }
+  #view-attendance #kpi-grid .kpi-amber::before {
+    content: ""; grid-area: 1 / 1; width: 164px; height: 164px;
+    border-radius: 50%; border: 12px solid #E3ECFB;
+  }
+  #view-attendance #kpi-grid .kpi-amber .kpi-num { grid-area: 1 / 1; font-size: 2.55rem; color: var(--hm-ink); margin-bottom: 18px; }
+  #view-attendance #kpi-grid .kpi-amber .kpi-lbl { grid-area: 1 / 1; color: var(--hm-ink-2); margin: 52px 0 0; }
+  #view-attendance #kpi-grid .kpi-amber .kpi-note { grid-area: 2 / 1; text-align: center; font-size: .8rem; }
+
+  #view-attendance > .status-card-mockup > .counters {
+    grid-column: 2; grid-row: 2; align-self: center;
+    margin: 0 24px 24px; padding-inline-start: 24px;
+    border-inline-start: 1px solid var(--hm-line-2);
+  }
+
+  #view-attendance #status-card   { grid-column: 1; grid-row: 3; }
+  #view-attendance #class-sub-card { grid-column: 1; grid-row: 4; }
+  #view-attendance #corr-card     { grid-column: 1; grid-row: 5; }
+  #view-attendance #att-card,
+  #view-attendance #att-done      { grid-column: 2; grid-row: 3 / -1; }
+
+  /* ── ٨. زرّ البلاغ الطارئ على الكمبيوتر ────────────────────────────────────
+     دائرةٌ تقيم في الهامش الجانبيّ خارج المحتوى؛ اسمُها يظهر عند المرور/التركيز.
+     أعرض من ١٤٤٠px يتّسع الهامشُ للحبّة كاملةً بتسميتها. وفي ١٠٢٤–١٢٥١px
+     يُزاح محتوى الرئيسية يساراً ٦٤px كي لا تلمسه الدائرة. */
+  .fab {
+    left: max(8px, calc((100vw - var(--page-max)) / 2 + var(--page-px) - 56px));
+    bottom: 24px; animation: none; padding-inline: 13px;
+  }
+  .fab-label { animation: none; max-width: 0; margin-inline-start: 0; opacity: 0; }
+  .fab:hover, .fab:focus-visible { padding-inline: 16px 18px; }
+  .fab:hover .fab-label, .fab:focus-visible .fab-label { max-width: 8em; margin-inline-start: 8px; opacity: 1; }
+  @media (max-width: 1251px) { #view-attendance { padding-left: 64px; } }
+  @media (min-width: 1440px) {
+    .fab { left: 24px; padding-inline: 16px 18px; }
+    .fab-label { max-width: 8em; margin-inline-start: 8px; opacity: 1; }
+  }
 }

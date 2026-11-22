@@ -1150,31 +1150,50 @@ select.field-input option:disabled { color: var(--clr-text-3); }
 .done-row .done-k { font-weight: 600; }
 .done-row .done-v { text-align: left; }
 
-/* ═══ FAB ════════════════════════════════════════════════════════════════════ */
+/* ═══ FAB (بلاغ طارئ) ═══════════════════════════════════════════════════════
+   الشكلُ والموضعُ فقط — العنصرُ والمعرّفُ والمعالجُ كما هي.
+   • حبّةٌ بلغة الأزرار نفسها: ارتفاع 48، خطّ .88rem/700 (= .btn)، أيقونةٌ 20px،
+     ظلٌّ أحمرُ خفيف، ولونٌ صلب #DC2626 (أبيض عليه 4.83:1).
+   • الموضع: الزاوية السفلى اليسرى (طرف السطر في RTL) كما كان، مع safe-area.
+   • أثناء التمرير تنكمش إلى دائرة 48px فتغطّي أقلّ ما يمكن من المحتوى (CSS خالص:
+     animation-timeline؛ المتصفّح الذي لا يدعمه يُبقي الحبّة كاملة). تعود موسومةً
+     عند المرور/التركيز كي لا تكون أيقونةً بلا اسم.
+   • سطح المكتب: القواعد في desktop.css (الدائرةُ تقيم في الهامش خارج المحتوى). */
 .fab {
   position: fixed;
-  bottom: 24px;
-  left: 20px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--clr-danger);
-  color: #fff;
-  padding: 13px 20px 13px 16px;
-  border-radius: var(--r-pill);
-  box-shadow: 0 4px 18px rgba(239,68,68,.45);
+  left: max(16px, env(safe-area-inset-left));
+  right: auto;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   z-index: 200;
-  font-size: 0.88rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  min-height: 48px;
+  padding: 0 18px 0 16px;
+  border-radius: var(--r-pill);
+  background: #DC2626;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.22);
+  font-size: .88rem;
   font-weight: 700;
-  transition:
-    background var(--dur),
-    transform var(--dur),
-    box-shadow var(--dur);
+  box-shadow: 0 10px 24px -10px rgba(220,38,38,.65), 0 2px 6px rgba(15,23,42,.14);
+  transition: background var(--dur), box-shadow var(--dur);
 }
-.fab:hover  { background: var(--clr-danger-hov); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(239,68,68,.5); }
-.fab:active { transform: scale(.96); }
+.fab .icon { width: 20px; height: 20px; }
+.fab:hover  { background: #B91C1C; box-shadow: 0 14px 28px -10px rgba(185,28,28,.7), 0 2px 6px rgba(15,23,42,.16); }
+.fab:active { filter: brightness(.95); }
+.fab:focus-visible { outline: 3px solid #FCA5A5; outline-offset: 2px; }
 
-.fab-label { white-space: nowrap; }
+.fab-label { white-space: nowrap; margin-inline-start: 8px; max-width: 8em; overflow: hidden; }
+
+@supports (animation-timeline: scroll()) {
+  .fab       { animation: fab-pad   linear both; animation-timeline: scroll(root block); animation-range: 0 140px; }
+  .fab-label { animation: fab-label linear both; animation-timeline: scroll(root block); animation-range: 0 140px; }
+  @keyframes fab-pad   { to { padding-inline: 13px; } }
+  @keyframes fab-label { to { max-width: 0; margin-inline-start: 0; opacity: 0; } }
+  .fab:hover, .fab:focus-visible { animation: none; }
+  .fab:hover .fab-label, .fab:focus-visible .fab-label { animation: none; max-width: 8em; margin-inline-start: 8px; opacity: 1; }
+}
 
 /* ═══ Modal / Sheet ══════════════════════════════════════════════════════════ */
 .overlay {
@@ -1391,7 +1410,6 @@ select.field-input option:disabled { color: var(--clr-text-3); }
 /* ═══ Responsive ═════════════════════════════════════════════════════════════ */
 @media (min-width: 480px) {
   .login-card { padding: 44px 36px 32px; }
-  .fab { bottom: 32px; left: 32px; }
   .sheet { border-radius: var(--r-xl) var(--r-xl) 0 0; }
 }
 
@@ -2734,4 +2752,314 @@ select.csel-native {
   display: inline-block; margin-inline-start: 6px; padding: 0 6px;
   border-radius: 999px; background: var(--clr-warning-bg);
   border: 1px solid var(--clr-warning-brd); font-size: .7rem; color: var(--clr-text-2);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   الرئيسية (#view-attendance) — التصميم المعتمَد من المعاينة
+   ═══════════════════════════════════════════════════════════════════════════
+   CSS فقط: لا نقلَ لعنصر ولا تغييرَ لمعرّف أو صنفٍ يقرؤه school/script.js.
+   كلُّ قاعدةٍ هنا محصورةٌ بـ #view-attendance كي لا تتسرّب إلى تبويبات الغياب
+   والتقارير (تشارك .status-card-mockup و.section-card و.counters).
+   تخطيط الكمبيوتر (عمودان + hero) في desktop.css ضمن كتلة ≥1024px الواحدة.
+
+   لوحةٌ واحدة: خمسة أدوار (info/ok/bad/warn/neu) لكلٍّ خلفيّة/حدّ/رقم/عنوان،
+   وكلُّ نصٍّ ≥4.5:1 على خلفيّته (محسوبٌ في المعاينة). */
+:root {
+  --hm-ink: #0F172A;  --hm-ink-2: #475569;  --hm-ink-3: #64748B;
+  --hm-line: #E2E8F0; --hm-line-2: #EDF2F7;
+  --hm-info-bg: #EFF6FF; --hm-info-bd: #BFDBFE; --hm-info-num: #1D4ED8; --hm-info-lbl: #1E40AF; --hm-info: #2563EB;
+  --hm-ok-bg:   #ECFDF5; --hm-ok-bd:   #A7F3D0; --hm-ok-num:   #047857; --hm-ok-lbl:   #065F46; --hm-ok:   #047857;
+  --hm-bad-bg:  #FEF2F2; --hm-bad-bd:  #FECACA; --hm-bad-num:  #B91C1C; --hm-bad-lbl:  #991B1B; --hm-bad:  #DC2626;
+  --hm-warn-bg: #FFFBEB; --hm-warn-bd: #FDE68A; --hm-warn-num: #B45309; --hm-warn-lbl: #92400E; --hm-warn: #D97706;
+  --hm-neu-bg:  #F8FAFC; --hm-neu-bd:  #E2E8F0; --hm-neu-num:  #0F172A; --hm-neu-lbl:  #475569;
+  --hm-r-hero: 28px; --hm-r-card: 20px; --hm-r-tile: 16px; --hm-r-chip: 12px;
+  --hm-pad: 18px;
+  --hm-gap: 16px;
+  --hm-shadow: 0 1px 2px rgba(15,23,42,.05), 0 8px 24px -12px rgba(15,23,42,.18);
+}
+
+#view-attendance { gap: var(--hm-gap); padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+
+/* أدوار اللون كمتغيّرات على العنصر نفسه: القاعدةُ الواحدة تقرؤها */
+#view-attendance .kpi-blue,  #view-attendance .counter-blue  { --t-bg: var(--hm-info-bg); --t-bd: var(--hm-info-bd); --t-num: var(--hm-info-num); --t-lbl: var(--hm-info-lbl); }
+#view-attendance .kpi-green, #view-attendance .counter-green { --t-bg: var(--hm-ok-bg);   --t-bd: var(--hm-ok-bd);   --t-num: var(--hm-ok-num);   --t-lbl: var(--hm-ok-lbl); }
+#view-attendance .kpi-red,   #view-attendance .counter-red   { --t-bg: var(--hm-bad-bg);  --t-bd: var(--hm-bad-bd);  --t-num: var(--hm-bad-num);  --t-lbl: var(--hm-bad-lbl); }
+#view-attendance .kpi-amber                                   { --t-bg: var(--hm-warn-bg); --t-bd: var(--hm-warn-bd); --t-num: var(--hm-warn-num); --t-lbl: var(--hm-warn-lbl); }
+
+/* ── ١. بلاطات المؤشّرات: لا فجوةَ صفر، وارتفاعٌ متساوٍ ─────────────────────── */
+#view-attendance .kpi-grid { margin-bottom: 0; grid-auto-rows: 1fr; gap: 10px; }
+#view-attendance .kpi-card,
+#view-attendance .counter {
+  background: var(--t-bg);
+  border: 1px solid var(--t-bd);
+  border-radius: var(--hm-r-tile);
+}
+#view-attendance .kpi-card {
+  padding: 14px 8px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+#view-attendance .kpi-num { font-size: 1.9rem; font-weight: 800; color: var(--t-num); line-height: 1.1; }
+#view-attendance .kpi-lbl { font-size: .82rem; font-weight: 700; color: var(--t-lbl); margin-top: 2px; }
+#view-attendance .kpi-note { font-size: .74rem; color: var(--hm-ink-3); min-height: .8em; }
+#view-attendance .counter { padding: 12px 6px; }
+#view-attendance .counter-num { color: var(--t-num); font-size: 1.9rem; line-height: 1.1; }
+#view-attendance .counter-lbl { color: var(--t-lbl); font-size: .82rem; font-weight: 700; margin-top: 2px; }
+
+/* ── ٢. البطاقة الرئيسة (الحضور اليومي) ───────────────────────────────────── */
+#view-attendance > .status-card-mockup {
+  margin-top: 0;               /* السحبُ السالب كان يُلصقها بالمؤشّرات (فجوة صفر) */
+  z-index: auto;
+  border-radius: var(--hm-r-hero);
+  border: 1px solid var(--hm-line-2);
+  box-shadow: var(--hm-shadow);
+  padding: calc(var(--hm-pad) + 4px);
+  display: grid;
+  gap: 18px;
+}
+#view-attendance .status-header-row { margin-bottom: 0; gap: 12px; }
+#view-attendance .status-icon-grad {
+  width: 46px; height: 46px; border-radius: 16px;
+  background: linear-gradient(135deg, #1E3A8A, #2563EB);
+  box-shadow: 0 8px 18px -8px rgba(37,99,235,.7);
+}
+#view-attendance .status-icon-grad .icon { width: 22px; height: 22px; }
+#view-attendance .status-title-lg { font-size: 1.15rem; font-weight: 800; }
+#view-attendance .status-date-sm  { font-size: .85rem; color: var(--hm-ink-3); margin-top: 0; }
+
+#view-attendance .status-toggle {
+  gap: 4px; padding: 4px; margin-bottom: 0;
+  border-radius: var(--r-pill);
+  background: var(--hm-neu-bg);
+  border: 1px solid var(--hm-line);
+}
+#view-attendance .toggle-btn {
+  padding: 8px 10px; border-radius: var(--r-pill);
+  font-size: .86rem; font-weight: 700; color: var(--hm-ink-2);
+}
+#view-attendance .toggle-btn.active {
+  background: var(--hm-info); color: #fff;
+  box-shadow: 0 4px 10px -4px rgba(37,99,235,.6);
+}
+/* الموجة الزخرفيّة تُستبدل بخطٍّ فاصل رفيع (aria-hidden أصلاً) */
+#view-attendance .wave-sep { margin: 0 -4px; height: 1px; background: var(--hm-line-2); opacity: 1; }
+#view-attendance .wave-sep svg { display: none; }
+
+/* ── ٣. شريط الحالة ────────────────────────────────────────────────────────── */
+#view-attendance #status-card {
+  padding: 14px var(--hm-pad); gap: 14px;
+  border-radius: var(--hm-r-card);
+  border: 1px solid var(--hm-warn-bd);
+  background: var(--hm-warn-bg);
+  box-shadow: var(--hm-shadow);
+}
+#view-attendance #status-card.status-done { border-color: var(--hm-ok-bd); background: var(--hm-ok-bg); }
+#view-attendance #status-card .status-icon-wrap {
+  width: 44px; height: 44px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: #fff; border: 1px solid var(--hm-warn-bd); color: var(--hm-warn-num);
+}
+#view-attendance #status-card.status-pending .status-icon-wrap { color: var(--hm-warn-num); }
+#view-attendance #status-card.status-done .status-icon-wrap    { color: var(--hm-ok-num); border-color: var(--hm-ok-bd); }
+#view-attendance #status-card .status-icon-wrap .icon { width: 22px; height: 22px; }
+#view-attendance #status-card .status-title { font-size: 1rem; font-weight: 800; color: var(--hm-warn-lbl); }
+#view-attendance #status-card .status-sub   { font-size: .84rem; color: #78350F; margin-top: 0; }
+#view-attendance #status-card.status-done .status-title { color: var(--hm-ok-lbl); }
+#view-attendance #status-card.status-done .status-sub   { color: #14532D; }
+
+/* ── ٤. البطاقات: شكلٌ واحد وترويسةٌ واحدة (كشوف الفصول · السجلّ · المراسلات) ──── */
+#view-attendance .section-card,
+#view-attendance #corr-card {
+  border-radius: var(--hm-r-card);
+  border: 1px solid var(--hm-line-2);
+  box-shadow: var(--hm-shadow);
+}
+#view-attendance .section-card-header {
+  background: none; color: var(--hm-ink);
+  padding: var(--hm-pad) var(--hm-pad) 0;
+  gap: 12px;
+  border-radius: var(--hm-r-card) var(--hm-r-card) 0 0;
+}
+#view-attendance .section-card-icon {
+  width: 42px; height: 42px; border-radius: 14px;
+  background: var(--hm-info-bg); color: var(--hm-info-num); border: 1px solid var(--hm-info-bd);
+}
+#view-attendance .section-card-title { font-size: 1.02rem; font-weight: 800; }
+#view-attendance .section-card-desc  { font-size: .82rem; color: var(--hm-ink-3); opacity: 1; margin-top: 0; }
+#view-attendance .section-card-header .hdr-btn {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: var(--hm-neu-bg); border: 1px solid var(--hm-line); color: var(--hm-ink-2);
+}
+#view-attendance .section-card-header .hdr-btn:hover { background: var(--hm-info-bg); color: var(--hm-info-num); }
+
+/* المراسلات: العنوان تبنيه shared/correspondence.js بأصنافه؛ هنا الشكلُ وحده
+   (لا تعديلَ في الملفّ المشترك بين البوّابات الثلاث). الأيقونةُ زخرفةٌ CSS. */
+#view-attendance #corr-card .card-body { padding: var(--hm-pad); gap: 0; }
+#view-attendance #corr-card .corr-head { gap: 12px; margin-bottom: 12px; }
+#view-attendance #corr-card .corr-head::before {
+  content: ""; flex: none; width: 42px; height: 42px; border-radius: 14px;
+  border: 1px solid var(--hm-info-bd);
+  background: var(--hm-info-bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231D4ED8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/%3E%3C/svg%3E") center / 20px no-repeat;
+}
+#view-attendance #corr-card .corr-title { font-size: 1.02rem; font-weight: 800; }
+#view-attendance #corr-card .corr-refresh { width: 38px; height: 38px; border-color: var(--hm-line); background: var(--hm-neu-bg); color: var(--hm-ink-2); opacity: 1; }
+#view-attendance #corr-card .corr-new { border-color: var(--hm-line); background: var(--hm-neu-bg); color: var(--hm-ink); opacity: 1; padding: 7px 14px; font-size: .88rem; border-radius: var(--hm-r-chip); }
+#view-attendance #corr-card .corr-empty { color: var(--hm-ink-3); opacity: 1; padding: 22px 0 14px; font-size: .9rem; }
+
+/* ── ٥. إشعار إسنادات العام السابق (المنطق في JS لم يُمسّ) ─────────────────── */
+#view-attendance .prev-year-notice {
+  position: relative;
+  margin: 14px var(--hm-pad) 0;
+  padding: 12px 14px; padding-inline-start: 42px;
+  border-radius: var(--hm-r-tile);
+  background: var(--hm-warn-bg); border: 1px solid var(--hm-warn-bd);
+  color: #78350F; font-size: .86rem; line-height: 1.7;
+}
+#view-attendance .prev-year-notice::before {
+  content: ""; position: absolute; inset-inline-start: 14px; top: 15px;
+  width: 20px; height: 20px; background-color: var(--hm-warn-num);
+  -webkit-mask: var(--hm-warn-ico) center / contain no-repeat; mask: var(--hm-warn-ico) center / contain no-repeat;
+  --hm-warn-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01'/%3E%3C/svg%3E");
+}
+#view-attendance .prev-year-notice .banner-link { color: var(--hm-info-num); font-weight: 700; text-underline-offset: 3px; }
+#view-attendance .prev-year-notice[hidden] { display: none; }
+
+/* حالات التحميل/الفراغ/الفشل: ألوانها في الوسم (#94A3B8 = 2.6:1) فلا يكفي CSS عاديّ */
+#view-attendance #class-sub-empty,
+#view-attendance #class-sub-failed { color: var(--hm-ink-3) !important; }
+
+/* ── ٦. صفوف كشوف الفصول (تُبنى بـ buildClassRow — الوسم ثابت) ────────────────
+   الصفُّ شبكة 3 أعمدة؛ غلافا .csub-main/.csub-foot يذوبان فتشارك أبناؤهما الشبكة:
+   [ميدالية | الاسم والمعلّم | الحالة] ثم [— | الإحصاءات | الإجراءات]. */
+#view-attendance #class-sub-list { padding: 6px 0 4px; }
+#view-attendance #class-sub-list .csub-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: 12px; row-gap: 10px; align-items: center;
+  padding: 14px var(--hm-pad);
+  border-bottom: 0; border-top: 1px solid var(--hm-line-2);
+  font-size: .875rem;
+}
+#view-attendance #class-sub-list .csub-row:first-child { border-top: 0; }
+#view-attendance #class-sub-list .csub-row[hidden] { display: none; }   /* فلتر الكشوف */
+#view-attendance .csub-main, #view-attendance .csub-foot { display: contents; }
+
+#view-attendance .csub-grade {
+  grid-column: 1; grid-row: 1;
+  width: 46px; height: 46px; border-radius: 16px;
+  background: var(--hm-info-bg); color: var(--hm-info-num); border: 1px solid var(--hm-info-bd);
+  font-size: 1.05rem;
+}
+#view-attendance .csub-info { grid-column: 2; grid-row: 1; }
+#view-attendance .csub-name { font-size: .98rem; font-weight: 700; color: var(--hm-ink); }
+#view-attendance .csub-teacher {
+  font-size: .84rem; color: var(--hm-ink-2); margin-top: 0;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+#view-attendance .csub-tag {
+  margin: 0; padding: 2px 9px; font-size: .74rem; font-weight: 700;
+  background: var(--hm-warn-bg); color: var(--hm-warn-lbl); border: 1px solid var(--hm-warn-bd);
+}
+
+/* الحالة: شارةٌ بنقطة. على الجوّال تنزل إلى السطر الثاني كي لا تضيّق الاسم */
+#view-attendance .csub-badge {
+  grid-column: 2 / -1; grid-row: 2; justify-self: start; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; font-size: .8rem;
+  background: var(--t-bg); color: var(--t-lbl); border: 1px solid var(--t-bd);
+}
+#view-attendance .csub-badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--t-num); }
+#view-attendance .csub-badge-none      { --t-bg: var(--hm-neu-bg);  --t-bd: var(--hm-neu-bd);  --t-num: var(--hm-neu-num);  --t-lbl: var(--hm-neu-lbl); }
+#view-attendance .csub-badge-pending   { --t-bg: var(--hm-warn-bg); --t-bd: var(--hm-warn-bd); --t-num: var(--hm-warn-num); --t-lbl: var(--hm-warn-lbl); }
+#view-attendance .csub-badge-confirmed { --t-bg: var(--hm-ok-bg);   --t-bd: var(--hm-ok-bd);   --t-num: var(--hm-ok-num);   --t-lbl: var(--hm-ok-lbl); }
+#view-attendance .csub-badge-rejected  { --t-bg: var(--hm-bad-bg);  --t-bd: var(--hm-bad-bd);  --t-num: var(--hm-bad-num);  --t-lbl: var(--hm-bad-lbl); }
+
+/* الإحصاءات: شارات بالألوان الدلاليّة نفسها */
+#view-attendance .csub-stats {
+  grid-column: 2 / -1; grid-row: 3; margin-inline-start: 0;
+  display: flex; flex-wrap: wrap; gap: 6px; font-size: .8rem;
+}
+#view-attendance .csub-stats > span {
+  padding: 3px 10px; border-radius: var(--hm-r-chip); font-weight: 800;
+  background: var(--t-bg); border: 1px solid var(--t-bd); color: var(--t-num);
+}
+#view-attendance .cstat-p { --t-bg: var(--hm-ok-bg);   --t-bd: var(--hm-ok-bd);   --t-num: var(--hm-ok-num); }
+#view-attendance .cstat-a { --t-bg: var(--hm-bad-bg);  --t-bd: var(--hm-bad-bd);  --t-num: var(--hm-bad-num); }
+#view-attendance .cstat-l { --t-bg: var(--hm-warn-bg); --t-bd: var(--hm-warn-bd); --t-num: var(--hm-warn-num); }
+#view-attendance .cstat-e { --t-bg: var(--hm-info-bg); --t-bd: var(--hm-info-bd); --t-num: var(--hm-info-num); }
+/* «—» حين لا بيانات: بلا شارة، ولونُه في الوسم (#CBD5E1 = 1.5:1) */
+#view-attendance .csub-stats > span:not([class]) {
+  background: none; border: 0; padding: 0; color: var(--hm-ink-3) !important; font-weight: 600;
+}
+
+#view-attendance .csub-actions { grid-column: 2 / -1; grid-row: 4; justify-self: start; margin-inline-start: 0; gap: 8px; }
+#view-attendance .csub-btn-confirm,
+#view-attendance .csub-btn-reject {
+  padding: 9px 18px; border-radius: var(--hm-r-chip); font-size: .88rem; font-weight: 700;
+}
+#view-attendance .csub-btn-confirm { background: var(--hm-ok); color: #fff; }
+#view-attendance .csub-btn-confirm:hover { background: #065F46; }
+#view-attendance .csub-btn-reject  { background: var(--hm-bad-bg); color: var(--hm-bad-lbl); border: 1px solid var(--hm-bad-bd); }
+#view-attendance .csub-btn-reject:hover { background: #FEE2E2; }
+
+/* ── ٧. نموذج السجلّ اليوميّ ───────────────────────────────────────────────── */
+#view-attendance #att-card .card-body { padding: var(--hm-pad); gap: 14px; }
+#view-attendance #att-card .block-label {
+  gap: 8px; font-size: .92rem; font-weight: 800; letter-spacing: 0; text-transform: none; color: var(--hm-ink);
+}
+#view-attendance #att-card .block-label .icon { width: 18px; height: 18px; color: var(--hm-info-num); }
+#view-attendance #att-card .sub-label { font-size: .92rem; font-weight: 800; color: var(--hm-ink); }
+#view-attendance #att-card .counter-num { font-size: 1.6rem; }
+#view-attendance #att-card .field-group label { font-size: .86rem; font-weight: 700; color: var(--hm-ink-2); }
+#view-attendance #att-card .optional { color: var(--hm-ink-3); font-weight: 600; font-size: inherit; }
+#view-attendance #att-card .twin-fields { gap: 12px; }
+#view-attendance #att-card .field-input {
+  min-height: 46px; border-radius: var(--hm-r-chip);
+  border: 1px solid #CBD5E1; background-color: #fff;
+  padding: 10px 14px; font-size: 1rem;
+}
+#view-attendance #att-card textarea.field-input { min-height: 84px; }
+#view-attendance #att-card .field-input[readonly] { background-color: var(--hm-neu-bg); color: var(--hm-ink-2); }
+/* قائمةُ «اختر الغائب…» (CustomSelect): نفسُ مظهر الحقول */
+#view-attendance #att-card .csel-trigger {
+  min-height: 46px; padding: 10px 14px;
+  border: 1px solid #CBD5E1; border-radius: var(--hm-r-chip);
+  background: #fff; font-size: 1rem;
+}
+#view-attendance #att-card .csel-label.is-placeholder { color: var(--hm-ink-3); }
+#view-attendance #att-card .csel-menu { border-radius: var(--hm-r-chip); }
+#view-attendance #att-card .csel-option { border-radius: 8px; }
+#view-attendance #att-card .divider { background: var(--hm-line-2); }
+#view-attendance #att-card .form-hint,
+#view-attendance #att-card p[style] {
+  font-size: .8rem !important; color: var(--hm-ink-3) !important; line-height: 1.6; margin: 0 !important;
+}
+#view-attendance #att-card .absent-item {
+  background: var(--hm-bad-bg); border-color: var(--hm-bad-bd); border-radius: var(--hm-r-chip);
+}
+#view-attendance #btn-submit-att {
+  min-height: 52px; font-size: 1rem; font-weight: 700;
+  border-radius: var(--hm-r-tile);
+  background: linear-gradient(135deg, #1D4ED8, #2563EB);
+  box-shadow: 0 10px 20px -10px rgba(37,99,235,.7);
+}
+
+/* ── ٨. بطاقة «أُرسل» ─────────────────────────────────────────────────────── */
+#view-attendance #att-done {
+  padding: var(--hm-pad);
+  border-radius: var(--hm-r-card);
+  border: 1px solid var(--hm-ok-bd);
+  background: var(--hm-ok-bg);
+  box-shadow: var(--hm-shadow);
+  color: var(--hm-ok-num);
+}
+#view-attendance #att-done[hidden] { display: none; }
+#view-attendance .done-title { font-size: 1rem; font-weight: 800; color: var(--hm-ok-lbl); }
+#view-attendance .done-sub   { font-size: .84rem; color: #14532D; margin-top: 0; }
+#view-attendance .done-row   { font-size: .8rem; color: #14532D; }
+
+/* ── ٩. شاشات الجوّال الضيّقة: الحالة تنزل سطراً ثانياً لا تضيّق الاسم ───────── */
+@media (min-width: 640px) {
+  #view-attendance .csub-badge { grid-column: 3; grid-row: 1; justify-self: end; }
+  #view-attendance .csub-stats { grid-column: 2; grid-row: 2; }
+  #view-attendance .csub-actions { grid-column: 3; grid-row: 2; justify-self: end; }
 }
