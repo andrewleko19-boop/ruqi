@@ -1154,6 +1154,12 @@ btnLogoutOk.addEventListener('click', async () => {
   // عليه مديرو مدارس مختلفة فعلياً، فالضمان الوحيد أن تبدأ الجلسة التالية من
   // صفحة نظيفة — وهو ما تفعله بوابة المديرية أصلاً.
   try { await NDB.purgeTenantCaches(); } catch { /* غير قاتل */ }
+  /* العنوان (hash) هو حاملُ التبويب النشط (shared/tab-restore.js) و location.reload()
+     يُبقيه — فمديرُ المدرسة التالية على الجهاز المشترك كان يُفتح على التبويب الذي
+     تركه سابقُه («الكادر»). يُمحى هنا قبل إعادة التحميل فتبدأ الجلسةُ التالية من
+     الافتراضيّ. replaceState لا يضيف خطوةً إلى التاريخ؛ و search يبقى (روابط
+     الإشعارات ?n=&e=). لا مفتاحَ تخزين: التحديثُ والمفضّلةُ يبقيان على الـhash. */
+  history.replaceState(null, '', location.pathname + location.search);
   location.reload();
 });
 
@@ -2441,8 +2447,12 @@ function isTabAllowed(name) {
   return !btn || !btn.hidden;
 }
 
-/** أوّلُ تبويبٍ يستطيع هذا المستخدم فتحه — مرجعٌ حين يُطلَب ممنوع. */
+/** التبويبُ الافتراضيّ ومرجعُ الممنوع: «الرئيسية» متى سُمح بها، وإلّا أوّلُ تبويبٍ
+    يستطيع هذا المستخدم فتحه. كان «أوّل مفتاحٍ في TABS» فيفتح البوّابةَ على
+    «الغياب والتقارير» (أوّلِ مفاتيح TABS) بدل الرئيسية — وترتيبُ TABS لا يُغيَّر
+    لأنّه ليس ترتيبَ العرض وحده. */
 function firstAllowedTab() {
+  if (TABS.attendance?.tab && !TABS.attendance.tab.hidden) return 'attendance';
   return Object.keys(TABS).find(n => TABS[n]?.tab && !TABS[n].tab.hidden)
       ?? 'attendance';
 }
