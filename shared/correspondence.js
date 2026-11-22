@@ -42,15 +42,18 @@ function fmtWhen(iso) {
  * @param {Function} o.peers     () => Promise<[{id, name, directorateId?}]>
  *                               الجهاتُ التي يجوز فتحُ خيطٍ معها. فارغةٌ ⇒ لا زرَّ فتح.
  * @param {string}   o.peerLabel نصُّ حقل الجهة («المدرسة» أو «المديرية»).
+ * @param {string}   [o.subtitle] سطرٌ ثانٍ اختياريّ تحت العنوان («مع مديرية التربية»)؛ بدونه يبقى الوسمُ كما كان.
  * @returns {{ refresh: Function, unreadCount: Function }}
  */
-export function mountCorrespondence({ mount, side, db, peers = null, peerLabel = 'الجهة' }) {
+export function mountCorrespondence({ mount, side, db, peers = null, peerLabel = 'الجهة', subtitle = '' }) {
   if (!mount) return { refresh: () => {}, unreadCount: () => 0 };
 
   // ── قائمة الخيوط (تبقى داخل mount) ─────────────────────────────────────
   mount.innerHTML = `
     <div class="corr-head">
-      <span class="corr-title">المراسلات</span>
+      ${subtitle
+        ? `<div class="corr-titles"><span class="corr-title">المراسلات</span><span class="corr-sub">${esc(subtitle)}</span></div>`
+        : '<span class="corr-title">المراسلات</span>'}
       <button type="button" class="corr-refresh" data-act="refresh" aria-label="تحديث">↻</button>
       ${peers ? '<button type="button" class="corr-new" data-act="new">مراسلة جديدة</button>' : ''}
     </div>

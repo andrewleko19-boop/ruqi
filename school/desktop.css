@@ -152,8 +152,7 @@
   }
   #view-attendance #kpi-grid .kpi-card:not(.kpi-amber) .kpi-num { font-size: 1.6rem; }
   #view-attendance #kpi-grid .kpi-card:not(.kpi-amber) .kpi-lbl { margin-top: 0; }
-  /* نسبة الحضور = «الحلقة»: مسارٌ دائريّ والرقمُ في وسطه. القوسُ الملوَّن يحتاج
-     قيمةً رقميّة يقرؤها CSS (لا يقرأ نصَّ #kpi-rate) فبقي المسارُ وحده. */
+  /* نسبة الحضور = «الحلقة»: مسارٌ دائريّ وقوسُ النسبة، والرقمُ في وسطه. */
   #view-attendance #kpi-grid .kpi-amber {
     grid-column: 1; grid-row: 1 / span 3; justify-self: center;
     background: none; border: 0; padding: 0;
@@ -162,15 +161,21 @@
   }
   #view-attendance #kpi-grid .kpi-amber::before {
     content: ""; grid-area: 1 / 1; width: 164px; height: 164px;
-    border-radius: 50%; border: 12px solid #E3ECFB;
+    border-radius: 50%;
+    /* القوس من --pct (يضعه syncRatePct من الرقم المعروض في #kpi-rate): يبدأ من
+       الأعلى ويدور عكس الساعة، اتّجاهُ RTL الطبيعيّ؛ والقناعُ يفرغ الوسط حلقةً. */
+    background: conic-gradient(from 0deg, #2563EB 0, #1E3A8A calc(var(--pct, 0) * 1%), #E3ECFB 0);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 12px), #000 calc(100% - 11px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 12px), #000 calc(100% - 11px));
+    transform: scaleX(-1);
   }
   #view-attendance #kpi-grid .kpi-amber .kpi-num { grid-area: 1 / 1; font-size: 2.55rem; color: var(--hm-ink); margin-bottom: 18px; }
   #view-attendance #kpi-grid .kpi-amber .kpi-lbl { grid-area: 1 / 1; color: var(--hm-ink-2); margin: 52px 0 0; }
   #view-attendance #kpi-grid .kpi-amber .kpi-note { grid-area: 2 / 1; text-align: center; font-size: .8rem; }
 
-  #view-attendance > .status-card-mockup > .counters {
-    grid-column: 2; grid-row: 2; align-self: center;
-    margin: 0 24px 24px; padding-inline-start: 24px;
+  #view-attendance > .status-card-mockup > .prog {
+    grid-column: 2; grid-row: 2; align-self: stretch; align-content: center;
+    margin: 0 24px 24px; padding-inline-start: 40px;
     border-inline-start: 1px solid var(--hm-line-2);
   }
 

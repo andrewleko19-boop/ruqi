@@ -558,18 +558,27 @@
         </svg>
       </div>
 
-      <div class="counters">
-        <div class="counter counter-green">
-          <span class="counter-num" id="cls-confirmed">—</span>
-          <span class="counter-lbl">مكتمل</span>
+      <!-- تقدّم كشوف الفصول اليوم: العنوان والعدّ والشريط تُملأ من الأعداد نفسها
+           (renderSheetsProgress)، والعدّادات الثلاثة تحتها مفتاحُ الألوان. -->
+      <div class="prog">
+        <div class="prog-top">
+          <h3 class="prog-title">كشوف الفصول اليوم</h3>
+          <span class="prog-count" id="att-prog-count">—</span>
         </div>
-        <div class="counter counter-red">
-          <span class="counter-num" id="cls-pending">—</span>
-          <span class="counter-lbl">معلّق</span>
-        </div>
-        <div class="counter counter-blue">
-          <span class="counter-num" id="cls-total">—</span>
-          <span class="counter-lbl">فصل</span>
+        <div class="prog-bar" id="att-prog-bar" role="img" aria-label="لا كشوف"></div>
+        <div class="counters counters--legend">
+          <div class="counter counter-green">
+            <span class="counter-num" id="cls-confirmed">—</span>
+            <span class="counter-lbl">مكتمل</span>
+          </div>
+          <div class="counter counter-red">
+            <span class="counter-num" id="cls-pending">—</span>
+            <span class="counter-lbl">معلّق</span>
+          </div>
+          <div class="counter counter-blue">
+            <span class="counter-num" id="cls-total">—</span>
+            <span class="counter-lbl">فصل</span>
+          </div>
         </div>
       </div>
     </div>

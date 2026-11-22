@@ -11,6 +11,7 @@ const html = read('school/index.html');
 const js   = read('school/script.js');
 const css  = read('school/style.css');
 const dcss = read('school/desktop.css');
+const corr = read('shared/correspondence.js');
 
 describe('الرئيسية — زرّ «إضافة» محذوف والاختيار وحده يُضيف', () => {
   test('لا أثر للزرّ في الوسم ولا في المعالج', () => {
@@ -73,5 +74,36 @@ describe('الرئيسية — المصفّي داخل بطاقة الكشوف',
   });
   test('لا قاعدةَ تخطيط تشير إلى موضعه القديم في الهيرو', () => {
     assert.ok(!/#view-attendance #class-filter-toggle/.test(dcss));
+  });
+});
+
+describe('الرئيسية — الحلقة وتقدّم الكشوف (عرضٌ فقط)', () => {
+  test('عنصرا التقدّم في الوسم وداخل بطاقة «الحضور اليومي»', () => {
+    const m = html.indexOf('class="status-card-mockup"');
+    const e = html.indexOf('id="class-sub-card"');
+    for (const id of ['att-prog-count', 'att-prog-bar', 'cls-confirmed', 'cls-pending', 'cls-total']) {
+      const i = html.indexOf(`id="${id}"`);
+      assert.ok(i > m && i < e, id + ' خارج البطاقة');
+    }
+  });
+  test('syncRatePct تقرأ #kpi-rate وتكتب --pct فقط، ويراقبه MutationObserver', () => {
+    const f = js.slice(js.indexOf('function syncRatePct'), js.indexOf('const toArabicDigits'));
+    assert.match(f, /el\('kpi-rate'\)/);
+    assert.match(f, /setProperty\('--pct'/);
+    assert.match(f, /MutationObserver\(syncRatePct\)/);
+    assert.ok(!/NDB|supabase|localStorage|fetch\(/.test(f), 'عرضٌ فقط: لا مصدر بيانات');
+  });
+  test('renderSheetsProgress تُستدعى بالأعداد المحسوبة نفسها ولا تلمس البيانات', () => {
+    assert.match(js, /renderSheetsProgress\(clsConfirmed, clsTotal\)/);
+    const f = js.slice(js.indexOf('function renderSheetsProgress'), js.indexOf('/* إسناداتٌ من عامٍ سابق'));
+    assert.ok(!/NDB|supabase|localStorage|fetch\(/.test(f));
+  });
+  test('القوس يقرأ --pct في CSS الكمبيوتر', () => {
+    assert.match(dcss, /conic-gradient\([^)]*var\(--pct/);
+  });
+  test('المراسلات: subtitle اختياريّ والوسمُ الافتراضيّ كما كان للبوّابات الأخرى', () => {
+    assert.match(corr, /subtitle = ''/);
+    assert.match(corr, /: '<span class="corr-title">المراسلات<\/span>'/);
+    assert.match(js, /subtitle: 'مع مديرية التربية'/);
   });
 });

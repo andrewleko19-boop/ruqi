@@ -1360,7 +1360,7 @@ async function initApp() {
   if (el('corr-mount') && _corrDir && !el('corr-mount').dataset.ready) {
     el('corr-mount').dataset.ready = '1';
     mountCorrespondence({
-      mount: el('corr-mount'), side: 'school', db: NDB, peerLabel: 'المديرية',
+      mount: el('corr-mount'), side: 'school', db: NDB, peerLabel: 'المديرية', subtitle: 'مع مديرية التربية',
       peers: async () => [{ id: _corrDir, name: 'مديريتي' }],
     });
   }
@@ -1537,6 +1537,41 @@ function renderKpis(summaries) {
   }
 }
 
+/* حلقة نسبة الحضور: القوسُ الملوَّن يحتاج قيمةً رقميّة يقرؤها CSS، ونصُّ #kpi-rate
+   لا يقرؤه CSS. فنقرأ الرقمَ المعروضَ فيه نفسَه (أيّاً كان كاتبُه) ونضعه متغيّراً
+   --pct على #kpi-grid. عرضٌ فقط: لا يكتب في أيّ بيان ولا يُنادي أيّ مصدر. */
+function syncRatePct() {
+  const n = el('kpi-rate'), g = el('kpi-grid');
+  if (!n || !g) return;
+  const latin = n.textContent.replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 0x660));
+  const m = latin.match(/\d+/);
+  g.style.setProperty('--pct', String(m ? Math.min(100, Number(m[0])) : 0));
+}
+{
+  const rateEl = el('kpi-rate');
+  if (rateEl) new MutationObserver(syncRatePct).observe(rateEl, { childList: true, characterData: true, subtree: true });
+  syncRatePct();
+}
+
+/* تقدّم كشوف اليوم في بطاقة «الحضور اليومي»: «١ من ٣ مؤكَّد» + شريطٌ مجزّأ بعدد
+   الفصول. من الأعداد التي حُسبت للتوّ من كشوف اليوم نفسها — لا نداء ولا كتابة. */
+const toArabicDigits = (n) => String(n).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
+function renderSheetsProgress(confirmed, total) {
+  const txt = el('att-prog-count'), bar = el('att-prog-bar');
+  if (!txt || !bar) return;
+  txt.textContent = total ? `${toArabicDigits(confirmed)} من ${toArabicDigits(total)} مؤكَّد` : '—';
+  bar.replaceChildren();
+  bar.classList.toggle('prog-bar--many', total > 16);
+  bar.style.setProperty('--n', String(Math.max(total, 1)));
+  for (let i = 0; i < total; i++) {
+    const seg = document.createElement('i');
+    seg.className = i < confirmed ? 'ok' : 'warn';
+    bar.appendChild(seg);
+  }
+  bar.setAttribute('aria-label', total
+    ? `${toArabicDigits(confirmed)} من ${toArabicDigits(total)} كشوف مؤكَّدة` : 'لا كشوف');
+}
+
 /* إسناداتٌ من عامٍ سابق لم تُجدَّد. شاشتا الإسناد وتبويبُ المعلّم تقرآن العامَ الحاليّ
    وحده، فمعلّمٌ إسنادُه كلُّه من العام الماضي يرى بوّابةً فارغة — وكان ذلك صامتاً.
    قراءةٌ فقط؛ لا يُعدَّل شيء من هنا. */
@@ -1614,6 +1649,7 @@ async function loadClassSummaries() {
     if (el('cls-confirmed')) el('cls-confirmed').textContent = clsConfirmed;
     if (el('cls-pending'))   el('cls-pending').textContent   = clsPending;
     if (el('cls-total'))     el('cls-total').textContent     = clsTotal;
+    renderSheetsProgress(clsConfirmed, clsTotal);
 
     renderKpis(summaries);
     void loadPrevYearNotice();

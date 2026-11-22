@@ -2805,6 +2805,27 @@ select.csel-native {
 #view-attendance .counter-num { color: var(--t-num); font-size: 1.9rem; line-height: 1.1; }
 #view-attendance .counter-lbl { color: var(--t-lbl); font-size: .82rem; font-weight: 700; margin-top: 2px; }
 
+/* ── تقدّم الكشوف داخل بطاقة «الحضور اليومي» ───────────────────────────────── */
+#view-attendance .prog { display: grid; gap: 12px; }
+#view-attendance .prog-top { display: flex; align-items: baseline; gap: 10px; }
+#view-attendance .prog-title { font-size: .98rem; font-weight: 800; }
+#view-attendance .prog-count { margin-inline-start: auto; font-size: .85rem; font-weight: 600; color: var(--hm-ink-2); }
+#view-attendance .prog-bar {
+  display: grid; grid-template-columns: repeat(var(--n, 1), 1fr); gap: 6px; min-height: 12px;
+}
+#view-attendance .prog-bar--many { gap: 2px; }
+#view-attendance .prog-bar i { height: 12px; border-radius: var(--r-pill); background: var(--hm-line); }
+#view-attendance .prog-bar i.ok   { background: linear-gradient(90deg, #10B981, #047857); }
+#view-attendance .prog-bar i.warn { background: #FBBF24; }
+/* مفتاح الألوان: ثلاث حبّات بالرقم قبل الاسم */
+#view-attendance .counters--legend { gap: 8px; }
+#view-attendance .counters--legend .counter {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 9px 6px; border-radius: var(--hm-r-chip); white-space: nowrap;
+}
+#view-attendance .counters--legend .counter-num { display: inline; font-size: 1.15rem; font-weight: 800; }
+#view-attendance .counters--legend .counter-lbl { display: inline; margin: 0; }
+
 /* ── ٢. البطاقة الرئيسة (الحضور اليومي) ───────────────────────────────────── */
 #view-attendance > .status-card-mockup {
   margin-top: 0;               /* السحبُ السالب كان يُلصقها بالمؤشّرات (فجوة صفر) */
@@ -2902,9 +2923,16 @@ select.csel-native {
   background: var(--hm-info-bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231D4ED8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/%3E%3C/svg%3E") center / 20px no-repeat;
 }
 #view-attendance #corr-card .corr-title { font-size: 1.02rem; font-weight: 800; }
+#view-attendance #corr-card .corr-titles { display: grid; }
+#view-attendance #corr-card .corr-sub { font-size: .82rem; color: var(--hm-ink-3); font-weight: 400; line-height: 1.4; }
 #view-attendance #corr-card .corr-refresh { width: 38px; height: 38px; border-color: var(--hm-line); background: var(--hm-neu-bg); color: var(--hm-ink-2); opacity: 1; }
 #view-attendance #corr-card .corr-new { border-color: var(--hm-line); background: var(--hm-neu-bg); color: var(--hm-ink); opacity: 1; padding: 7px 14px; font-size: .88rem; border-radius: var(--hm-r-chip); }
-#view-attendance #corr-card .corr-empty { color: var(--hm-ink-3); opacity: 1; padding: 22px 0 14px; font-size: .9rem; }
+#view-attendance #corr-card .corr-empty { color: var(--hm-ink-3); opacity: 1; padding: 14px 0 10px; font-size: .9rem; }
+#view-attendance #corr-card .corr-empty::before {
+  content: ""; display: block; width: 52px; height: 52px; margin: 0 auto 8px; border-radius: 50%;
+  border: 1px dashed #CBD5E1;
+  background: var(--hm-neu-bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/%3E%3C/svg%3E") center / 22px no-repeat;
+}
 
 /* ── ٥. إشعار إسنادات العام السابق (المنطق في JS لم يُمسّ) ─────────────────── */
 #view-attendance .prev-year-notice {
