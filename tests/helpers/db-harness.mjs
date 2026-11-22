@@ -168,6 +168,7 @@ export function fakeFrom(respond = () => ({ data: null, error: null })) {
       eq:  (c, v) => { call.filters.push(['eq', c, v]); return builder; },
       in:  (c, v) => { call.filters.push(['in', c, v]); return builder; },
       is:  (c, v) => { call.filters.push(['is', c, v]); return builder; },
+      neq: (c, v) => { call.filters.push(['neq', c, v]); return builder; },
       order: () => builder, limit: () => builder,
       single: () => builder, maybeSingle: () => builder,
       then: (res, rej) => { calls.push(call); return Promise.resolve(respond(call)).then(res, rej); },

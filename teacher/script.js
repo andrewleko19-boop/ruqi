@@ -639,6 +639,15 @@ async function loadClasses() {
 
   if (S.classes.length === 0) {
     show(classesEmpty);
+    /* معلّمٌ إسنادُه كلُّه من عامٍ سابق يرى «لا صفوف» ولا يعرف السبب. التلميحُ
+       يقول إنّ له إسنادات قديمة لم تُجدَّد — بلا تسمية صفوف (القرارُ للمدير). */
+    void window.RUQI_DB.countMyPreviousYearAssignments(S.user.user.id).then((n) => {
+      const hint = document.getElementById('classes-prev-hint');
+      if (hint && n > 0) {
+        hint.textContent = `لك ${n} إسناداً من عامٍ دراسيٍّ سابق لم يُجدَّد للعام الحاليّ — اطلب من مدير المدرسة تجديده.`;
+        hint.hidden = false;
+      }
+    });
     return;
   }
 

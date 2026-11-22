@@ -2713,3 +2713,25 @@ select.csel-native {
   background: var(--clr-danger-bg);
   color: var(--clr-danger-hov);
 }
+
+/* إسنادات العام السابق التي لم تُجدَّد — تنبيهٌ لا خطأ. */
+.prev-year-notice {
+  margin: 10px 0;
+  padding: 10px 12px;
+  background: var(--clr-warning-bg);
+  border: 1px solid var(--clr-warning-brd);
+  border-radius: 8px;
+  color: var(--clr-text-2);
+  font-size: .82rem;
+  line-height: 1.7;
+}
+.prev-year-notice[hidden] { display: none; }
+.prev-year-notice .banner-link {
+  background: none; border: none; padding: 0; font: inherit;
+  color: var(--clr-primary); text-decoration: underline; cursor: pointer;
+}
+.csub-tag {
+  display: inline-block; margin-inline-start: 6px; padding: 0 6px;
+  border-radius: 999px; background: var(--clr-warning-bg);
+  border: 1px solid var(--clr-warning-brd); font-size: .7rem; color: var(--clr-text-2);
+}

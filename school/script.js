@@ -1539,6 +1539,42 @@ function renderKpis(summaries) {
   }
 }
 
+/* إسناداتٌ من عامٍ سابق لم تُجدَّد. شاشتا الإسناد وتبويبُ المعلّم تقرآن العامَ الحاليّ
+   وحده، فمعلّمٌ إسنادُه كلُّه من العام الماضي يرى بوّابةً فارغة — وكان ذلك صامتاً.
+   قراءةٌ فقط؛ لا يُعدَّل شيء من هنا. */
+let _prevYear = { year: null, items: [] };
+async function loadPrevYearNotice() {
+  const box = el('prev-year-notice');
+  if (!S.school?.id) return;
+  _prevYear = await window.RUQI_DB.getPreviousYearAssignments(S.school.id);
+  if (box) {
+    const n = _prevYear.items.length;
+    if (n === 0) { box.hidden = true; }
+    else {
+      const years = [...new Set(_prevYear.items.map(i => i.academicYear))].join('، ');
+      const teachers = new Set(_prevYear.items.map(i => i.teacherId)).size;
+      box.innerHTML = `${n} إسناداً (${teachers} معلّماً) من العام الدراسي ${escapeHtml(years)} غير مُجدَّد للعام `
+        + `${escapeHtml(_prevYear.year)} — هؤلاء المعلّمون لا يرون صفوفَهم في بوّابتهم. `
+        + `جدِّد إسنادهم من <button type="button" class="banner-link" id="prev-year-goto">إدارة الصفوف والموجهين</button>.`;
+      box.hidden = false;
+      el('prev-year-goto')?.addEventListener('click', () => switchTab('manage'));
+    }
+  }
+  renderPrevYearForClass(mngClassSelect?.value);
+}
+
+// تلميحٌ في «إدارة الصفوف»: مَن كان على هذا الصفّ العامَ الماضي (لتجديده بيدك).
+function renderPrevYearForClass(classId) {
+  const p = el('mng-prev-year');
+  if (!p) return;
+  const mine = classId ? _prevYear.items.filter(i => i.classId === classId) : [];
+  if (!mine.length) { p.hidden = true; return; }
+  const list = mine.map(i => `${escapeHtml(i.teacherName)} (${escapeHtml(ROLE_LABELS[i.role] || i.role)})`).join('، ');
+  p.innerHTML = `في العام ${escapeHtml(mine[0].academicYear)}: ${list}. لم يُجدَّد إسنادُهم للعام ${escapeHtml(_prevYear.year)} — `
+    + `أسندهم من النموذج أدناه إن كانوا ما زالوا على هذا الصفّ.`;
+  p.hidden = false;
+}
+
 // ── Load class summaries ──────────────────────────────────────────────────────
 async function loadClassSummaries() {
   if (!S.school?.id) return;
@@ -1582,6 +1618,7 @@ async function loadClassSummaries() {
     if (el('cls-total'))     el('cls-total').textContent     = clsTotal;
 
     renderKpis(summaries);
+    void loadPrevYearNotice();
 
     // Wire the class filter toggle to .csub-row elements (idempotent)
     const filterToggle = el('class-filter-toggle');
@@ -1669,7 +1706,7 @@ function buildClassRow(s) {
       <div class="csub-grade">${s.grade}</div>
       <div class="csub-info">
         <div class="csub-name">${escapeHtml(s.displayName)}</div>
-        <div class="csub-teacher">${escapeHtml(s.teacherName)}</div>
+        <div class="csub-teacher">${escapeHtml(s.teacherName)}${s.teacherUnassigned ? '<span class="csub-tag" title="صاحبُ الكشف، وإسنادُه من عامٍ سابق">غير مُسنَد لهذا العام</span>' : ''}</div>
       </div>
       <div class="csub-stats">${statsHtml}</div>
     </div>
@@ -2621,6 +2658,7 @@ async function loadAssignedTeachers(classId) {
   try {
     const teachers = await NDB.getClassTeachers(classId);
     mngAssignedLoading.hidden = true;
+    renderPrevYearForClass(teachers.length === 0 ? classId : null);   // التلميحُ حيث لا أحد حاليّ
     if (teachers.length === 0) {
       mngAssignedEmpty.hidden = false;
       return;

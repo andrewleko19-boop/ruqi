@@ -2387,6 +2387,59 @@ async function removeTeacherFromClass(classId, teacherId) {
   return true;
 }
 
+/* إسناداتٌ من عامٍ سابق لا مقابلَ لها في العام الحاليّ (لزوجٍ صفّ+معلّم).
+   قراءةٌ فقط، وتكفيها سياساتُ RLS القائمة (class_teacher_read: مدير المدرسة يرى
+   كلَّ أعوام صفوف مدرسته). الغرضُ إظهارُ ما كان صامتاً: شاشتا الإسناد وتبويبُ
+   المعلّم تقرؤها للعام الحاليّ وحده، فمعلّمٌ إسنادُه كلُّه من العام الماضي يرى
+   بوّابةً فارغة ولا يعلم أحدٌ لماذا. أفضلُ جهد: الفشلُ ← قائمةٌ فارغة. */
+async function getPreviousYearAssignments(schoolId) {
+  const year = getAcademicYear();
+  if (!schoolId || !isOnline()) return { year, items: [] };
+  try {
+    const { data, error } = await withTimeout(
+      db.from('class_teacher')
+        .select(`id, class_id, teacher_id, role, academic_year,
+                 classes!inner ( school_id, grade, section ),
+                 teacher:users!class_teacher_teacher_id_fkey ( full_name )`)
+        .eq('classes.school_id', schoolId),
+      OFFLINE_READ_TIMEOUT_MS,
+    );
+    if (error) throw error;
+    const rows    = data ?? [];
+    const current = new Set(rows.filter(r => r.academic_year === year)
+                                .map(r => `${r.class_id}|${r.teacher_id}`));
+    const items = rows
+      .filter(r => r.academic_year !== year && !current.has(`${r.class_id}|${r.teacher_id}`))
+      .map(r => ({
+        assignmentId: r.id, classId: r.class_id, teacherId: r.teacher_id,
+        teacherName:  r.teacher?.full_name ?? '—', role: r.role ?? 'homeroom',
+        academicYear: r.academic_year,
+        grade: r.classes?.grade ?? null, section: r.classes?.section ?? null,
+      }));
+    return { year, items };
+  } catch (err) {
+    console.warn('[Ruqi] getPreviousYearAssignments', err);
+    return { year, items: [], failed: true };
+  }
+}
+
+/* عددُ إسنادات المعلّم نفسه من أعوامٍ سابقة (يقرأها بسياسة teacher_id = uid).
+   لتلميحٍ واحد في شاشة «لا صفوف مسندة إليك». لا يُسمّي صفوفاً. */
+async function countMyPreviousYearAssignments(teacherId) {
+  if (!teacherId || !isOnline()) return 0;
+  try {
+    const { count, error } = await withTimeout(
+      db.from('class_teacher')
+        .select('id', { count: 'exact', head: true })
+        .eq('teacher_id', teacherId)
+        .neq('academic_year', getAcademicYear()),
+      OFFLINE_READ_TIMEOUT_MS,
+    );
+    if (error) throw error;
+    return count ?? 0;
+  } catch { return 0; }
+}
+
 // Is there any student-attendance row for this class dated TODAY (local date)?
 // Used to block removing a teacher from a class that already has today's records.
 async function hasTodayAttendance(classId) {
@@ -2902,7 +2955,13 @@ async function getSchoolDailySummary(schoolId, date) {
             users:teacher_id ( full_name )
           )
         `)
-        .eq('school_id', schoolId),
+        .eq('school_id', schoolId)
+        /* ⚠️ الإسنادُ يُقرأ للعام الحاليّ وحده — كما تفعل «إدارة الصفوف»
+           (getClassTeachers) وتبويبُ المعلّم (getTeacherClasses). كان التضمينُ بلا
+           قيد عام، فتعرض الرئيسية اسمَ معلّمٍ من عامٍ سابق (وأوّلَ من يُعيده
+           الخادم إن تعدّدوا) بينما شاشتا الإسناد تقولان «لا أحد». القيدُ على
+           التضمين لا على الصفوف: الصفُّ بلا إسنادٍ حاليٍّ يبقى في القائمة. */
+        .eq('class_teacher.academic_year', getAcademicYear()),
       OFFLINE_READ_TIMEOUT_MS,
     );
     if (clsRes.error) throw clsRes.error;
@@ -2924,7 +2983,7 @@ async function getSchoolDailySummary(schoolId, date) {
     // مهلة واحدة تحكم الرحلات الثلاث المتوازية مجتمعةً.
     const [subRes, attRes, stuRes] = await withTimeout(Promise.all([
       db.from('attendance_submissions')
-        .select('id, class_id, status, submitted_at, confirmed_at')
+        .select('id, class_id, status, submitted_at, confirmed_at, submitted_by')
         .eq('school_id', schoolId)
         .eq('date',      isoDate)
         .in('class_id',  classIds),
@@ -2962,17 +3021,40 @@ async function getSchoolDailySummary(schoolId, date) {
       stuCount[s.class_id] = (stuCount[s.class_id] ?? 0) + 1;
     }
 
+    /* صفٌّ وصله كشفٌ اليوم ولا إسنادَ حاليّاً له (معلّمُه من عامٍ سابق — تسمح RLS
+       له بالكتابة لأنّها لا تنظر إلى العام): لا يُترك بلا اسم. نُسمّي صاحبَ الكشف
+       ونُعلّمه «غير مُسنَد»، فلا يبدو الكشفُ مجهولاً ولا يُخفى الخلل. */
+    const nameById = {};
+    const needName = classRows
+      .filter(c => !(c.class_teacher ?? []).some(t => t.role === 'homeroom' || t.role === 'supervisor'))
+      .map(c => subMap[c.id]?.submitted_by).filter(Boolean);
+    if (needName.length) {
+      try {
+        const { data: us } = await withTimeout(
+          db.from('users').select('id, full_name').in('id', [...new Set(needName)]),
+          OFFLINE_READ_TIMEOUT_MS);
+        for (const u of us ?? []) nameById[u.id] = u.full_name;
+      } catch { /* الاسمُ إضافة — «—» يبقى */ }
+    }
+
     summary = classRows.map(c => {
       // Only the homeroom teacher / supervisor is the attendance source — never a
       // subject teacher (أستاذ مادة), who has no attendance responsibility.
-      const ct = (c.class_teacher ?? []).find(t => t.role === 'homeroom' || t.role === 'supervisor');
+      // ترتيبٌ ثابت: معلّم الصفّ قبل الموجّه، ثمّ بالاسم — لا «أوّلُ ما أعاده الخادم».
+      const ct = (c.class_teacher ?? [])
+        .filter(t => t.role === 'homeroom' || t.role === 'supervisor')
+        .sort((a, b) => (a.role === b.role ? 0 : a.role === 'homeroom' ? -1 : 1)
+          || String(a.users?.full_name ?? '').localeCompare(String(b.users?.full_name ?? ''), 'ar'))[0];
+      const sub  = subMap[c.id] ?? null;
+      const subName = !ct && sub?.submitted_by ? nameById[sub.submitted_by] : null;
       return {
         classId:       c.id,
         displayName:   `الصف ${gradeNameAr(c.grade)} / شعبة ${c.section}`,
         grade:         c.grade,
         section:       c.section,
-        teacherName:   ct?.users?.full_name ?? '—',
-        teacherId:     ct?.teacher_id ?? null,
+        teacherName:   ct?.users?.full_name ?? subName ?? '—',
+        teacherId:     ct?.teacher_id ?? (subName ? sub.submitted_by : null),
+        teacherUnassigned: !ct && !!subName,
         submission:    subMap[c.id] ?? null,
         stats:         attMap[c.id] ?? { present: 0, absent: 0, late: 0, excused: 0 },
         totalStudents: stuCount[c.id] ?? 0,
@@ -5165,6 +5247,8 @@ window.RUQI_DB = {
   getClassTeachers,
   assignTeacherToClass,
   removeTeacherFromClass,
+  getPreviousYearAssignments,
+  countMyPreviousYearAssignments,
   hasTodayAttendance,
   saveStudentAttendance,
   getPendingStudentAttendance,

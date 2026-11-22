@@ -1126,3 +1126,11 @@ select.csel-native {
   border-bottom-color: var(--clr-danger-brd);
   color: var(--clr-danger-hov);
 }
+
+/* تلميحٌ في شاشة «لا صفوف مسندة إليك» حين تكون إسناداتُه من عامٍ سابق. */
+.classes-prev-hint {
+  margin-top: 10px; padding: 8px 12px; border-radius: 8px;
+  background: var(--clr-warning-bg); border: 1px solid var(--clr-warning-brd);
+  color: var(--clr-text-2); font-size: .82rem; line-height: 1.7;
+}
+.classes-prev-hint[hidden] { display: none; }
