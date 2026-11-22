@@ -107,3 +107,25 @@ describe('الرئيسية — الحلقة وتقدّم الكشوف (عرضٌ 
     assert.match(js, /subtitle: 'مع مديرية التربية'/);
   });
 });
+
+describe('الرئيسية — المصفّي يبقى بعد إعادة تحميل القائمة', () => {
+  const fn = js.slice(js.indexOf('async function loadClassSummaries'), js.indexOf("el('btn-retry-subs')"));
+  test('applyClassFilter معرَّفة وتقرأ الزرّ النشط بمنطقها الحاليّ', () => {
+    const d = js.slice(js.indexOf('function applyClassFilter'), js.indexOf('async function loadClassSummaries'));
+    assert.match(d, /\.toggle-btn\.active/);
+    assert.match(d, /\?\? 'all'/);
+    assert.match(d, /filter === 'confirmed' \? st !== 'confirmed'/);
+    assert.match(d, /st === 'confirmed'/);
+  });
+  test('تُستدعى بعد حلقة بناء الصفوف وقبل show(clasSubList)', () => {
+    const a = fn.indexOf('clasSubList.appendChild(buildClassRow(s))');
+    const b = fn.indexOf('applyClassFilter()');
+    const c = fn.indexOf('show(clasSubList)');
+    assert.ok(a > 0 && b > a && c > b, 'الترتيب المطلوب: بناء ← تطبيق المصفّي ← إظهار');
+  });
+  test('معالج النقر يستدعيها بدل تكرار المنطق', () => {
+    const h = fn.slice(fn.indexOf("filterToggle.addEventListener('click'"));
+    assert.match(h, /classList\.add\('active'\);\s*applyClassFilter\(\);/);
+    assert.ok(!/row\.hidden/.test(h), 'منطق الإخفاء لا يتكرّر في المعالج');
+  });
+});

@@ -1608,6 +1608,20 @@ function renderPrevYearForClass(classId) {
   p.hidden = false;
 }
 
+/* مصفّي الكشوف (الكل / مكتمل / معلّق): يقرأ الزرَّ النشط ويُخفي الصفوف به. يُستدعى
+   من نقر الزرّ ومن loadClassSummaries بعد بناء الصفوف — وإلّا أعاد كلُّ تحديثٍ
+   (زرّ التحديث، تأكيد، رفض، عودة الشبكة) الصفوفَ كلَّها ظاهرةً والزرُّ يبقى مضيئاً. */
+function applyClassFilter() {
+  const active = el('class-filter-toggle')?.querySelector('.toggle-btn.active');
+  const filter = active?.dataset.filter ?? 'all';
+  el('class-sub-list')?.querySelectorAll('.csub-row').forEach(row => {
+    const st = row.dataset.status ?? 'none';
+    row.hidden = filter === 'all'       ? false
+               : filter === 'confirmed' ? st !== 'confirmed'
+               : /* pending */           st === 'confirmed';
+  });
+}
+
 // ── Load class summaries ──────────────────────────────────────────────────────
 async function loadClassSummaries() {
   if (!S.school?.id) return;
@@ -1637,6 +1651,7 @@ async function loadClassSummaries() {
       _summaryByClass[s.classId] = s;
       clasSubList.appendChild(buildClassRow(s));
     }
+    applyClassFilter();   // المصفّي النشط يبقى مطبَّقاً بعد إعادة البناء (قبل الإظهار: بلا وميض)
     show(clasSubList);
 
     // Update the overview card counters and date
@@ -1663,13 +1678,7 @@ async function loadClassSummaries() {
         if (!btn) return;
         filterToggle.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        const filter = btn.dataset.filter;
-        el('class-sub-list')?.querySelectorAll('.csub-row').forEach(row => {
-          const st = row.dataset.status ?? 'none';
-          row.hidden = filter === 'all'       ? false
-                     : filter === 'confirmed' ? st !== 'confirmed'
-                     : /* pending */           st === 'confirmed';
-        });
+        applyClassFilter();
       });
     }
 
