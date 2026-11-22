@@ -2778,7 +2778,8 @@ select.csel-native {
   --hm-shadow: 0 1px 2px rgba(15,23,42,.05), 0 8px 24px -12px rgba(15,23,42,.18);
 }
 
-#view-attendance { gap: var(--hm-gap); padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+/* line-height:normal لخطّ Cairo ≈1.85 فتتضخّم الصفوف والحقول عن المعاينة (1.55) */
+#view-attendance { gap: var(--hm-gap); line-height: 1.55; padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 
 /* أدوار اللون كمتغيّرات على العنصر نفسه: القاعدةُ الواحدة تقرؤها */
 #view-attendance .kpi-blue,  #view-attendance .counter-blue  { --t-bg: var(--hm-info-bg); --t-bd: var(--hm-info-bd); --t-num: var(--hm-info-num); --t-lbl: var(--hm-info-lbl); }
@@ -2823,7 +2824,7 @@ select.csel-native {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   padding: 9px 6px; border-radius: var(--hm-r-chip); white-space: nowrap;
 }
-#view-attendance .counters--legend .counter-num { display: inline; font-size: 1.15rem; font-weight: 800; }
+#view-attendance .counters--legend .counter-num { display: inline; font-size: 1.15rem; font-weight: 800; line-height: inherit; }
 #view-attendance .counters--legend .counter-lbl { display: inline; margin: 0; }
 
 /* ── ٢. البطاقة الرئيسة (الحضور اليومي) ───────────────────────────────────── */
@@ -2848,7 +2849,7 @@ select.csel-native {
 #view-attendance .status-date-sm  { font-size: .85rem; color: var(--hm-ink-3); margin-top: 0; }
 
 #view-attendance .status-toggle {
-  gap: 4px; padding: 4px; margin: 14px var(--hm-pad) 4px;
+  gap: 4px; padding: 4px; margin: 14px var(--hm-pad) 4px;   /* flex: لا تتداخل الهوامش، فالإشعار 10 لا 14 */
   border-radius: var(--r-pill);
   background: var(--hm-neu-bg);
   border: 1px solid var(--hm-line);
@@ -2937,7 +2938,7 @@ select.csel-native {
 /* ── ٥. إشعار إسنادات العام السابق (المنطق في JS لم يُمسّ) ─────────────────── */
 #view-attendance .prev-year-notice {
   position: relative;
-  margin: 14px var(--hm-pad) 0;
+  margin: 10px var(--hm-pad) 0;
   padding: 12px 14px; padding-inline-start: 42px;
   border-radius: var(--hm-r-tile);
   background: var(--hm-warn-bg); border: 1px solid var(--hm-warn-bd);
@@ -2953,7 +2954,7 @@ select.csel-native {
 #view-attendance .prev-year-notice[hidden] { display: none; }
 
 /* حالات التحميل/الفراغ/الفشل في بطاقة الكشوف (كانت أنماطاً داخل الوسم) */
-.card-body--flush { padding: 0; }
+.card-body--flush { padding: 0; gap: 0; }
 .section-card-text { flex: 1; min-width: 0; }
 .state-loading { padding: 16px 14px; }
 .skel-line {
@@ -3045,7 +3046,15 @@ select.csel-native {
 #view-attendance .csub-btn-reject:hover { background: #FEE2E2; }
 
 /* ── ٧. نموذج السجلّ اليوميّ ───────────────────────────────────────────────── */
-#view-attendance #att-card .card-body { padding: var(--hm-pad); gap: 14px; }
+/* إيقاعُ المعاينة: 12 داخل المجموعة و20 بين المجموعات (12 + هامش 8) */
+#view-attendance #att-card .card-body { padding: var(--hm-pad); gap: 12px; }
+#view-attendance #att-card .subsection { gap: 12px; }
+#view-attendance #att-card .subsection:has(> #absent-list) { gap: 6px; }
+#view-attendance #att-card .absent-list:empty { display: none; }
+#view-attendance #att-card .subsection + .subsection { margin-top: 8px; }
+#view-attendance #att-card .twin-fields + .sub-label { margin-top: 4px; }
+#view-attendance #att-card .divider { margin: 8px 0; }
+#view-attendance #att-card #btn-submit-att { margin-top: 8px; }
 #view-attendance #att-card .block-label {
   gap: 8px; font-size: .92rem; font-weight: 800; letter-spacing: 0; text-transform: none; color: var(--hm-ink);
 }
@@ -3055,6 +3064,7 @@ select.csel-native {
 #view-attendance #att-card .field-group label { font-size: .86rem; font-weight: 700; color: var(--hm-ink-2); }
 #view-attendance #att-card .optional { color: var(--hm-ink-3); font-weight: 600; font-size: inherit; }
 #view-attendance #att-card .twin-fields { gap: 12px; }
+#view-attendance #att-card .field-group { gap: 6px; margin-bottom: 0; }
 #view-attendance #att-card .field-input {
   min-height: 46px; border-radius: var(--hm-r-chip);
   border: 1px solid #CBD5E1; background-color: #fff;

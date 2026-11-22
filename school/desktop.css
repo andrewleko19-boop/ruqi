@@ -135,12 +135,12 @@
     box-shadow: var(--hm-shadow);
   }
   #view-attendance > .status-card-mockup { display: contents; }
-  #view-attendance .status-header-row { grid-column: 1; grid-row: 1; margin: 24px 24px 0; }
+  #view-attendance .status-header-row { grid-column: 1; grid-row: 1; margin: 22px 22px -4px; }   /* حشوة المعاينة 22 وفجوتُها 16 */
   #view-attendance .wave-sep { display: none; }
 
   #view-attendance #kpi-grid {
     grid-column: 1; grid-row: 2;
-    margin: 0 24px 24px;
+    margin: 0 22px 22px;
     grid-template-columns: minmax(190px, auto) minmax(0, 1fr);
     grid-auto-rows: auto;
     gap: 8px 28px; align-items: center;
@@ -175,7 +175,7 @@
 
   #view-attendance > .status-card-mockup > .prog {
     grid-column: 2; grid-row: 2; align-self: stretch; align-content: center;
-    margin: 0 24px 24px; padding-inline-start: 40px;
+    margin: 0 22px 22px; padding-inline-start: 40px;
     border-inline-start: 1px solid var(--hm-line-2);
   }
 
