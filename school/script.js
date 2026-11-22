@@ -1367,6 +1367,7 @@ async function initApp() {
     el('corr-mount').dataset.ready = '1';
     mountCorrespondence({
       mount: el('corr-mount'), side: 'school', db: NDB, peerLabel: 'المديرية', subtitle: 'مع مديرية التربية',
+      offlineText: 'لا يوجد اتصال. المراسلات تتوفر عند الاتصال.',
       peers: async () => [{ id: _corrDir, name: 'مديريتي' }],
     });
   }

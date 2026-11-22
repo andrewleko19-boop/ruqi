@@ -2921,6 +2921,8 @@ select.csel-native {
 #view-attendance #corr-card .corr-refresh { width: 38px; height: 38px; border-color: var(--hm-line); background: var(--hm-neu-bg); color: var(--hm-ink-2); opacity: 1; }
 #view-attendance #corr-card .corr-new { border-color: var(--hm-line); background: var(--hm-neu-bg); color: var(--hm-ink); opacity: 1; padding: 7px 14px; font-size: .88rem; border-radius: var(--hm-r-chip); }
 #view-attendance #corr-card .corr-empty { color: var(--hm-ink-3); opacity: 1; padding: 14px 0 10px; font-size: .9rem; }
+/* دون اتصال: رسالةٌ هادئة بلون الفراغ نفسه (4.76:1) — لا أحمر ولا أيقونة */
+#view-attendance #corr-card .corr-offline { color: var(--hm-ink-3); opacity: 1; padding: 14px 0 10px; font-size: .9rem; }
 #view-attendance #corr-card .corr-empty::before {
   content: ""; display: block; width: 52px; height: 52px; margin: 0 auto 8px; border-radius: 50%;
   border: 1px dashed #CBD5E1;

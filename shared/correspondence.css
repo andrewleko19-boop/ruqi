@@ -46,7 +46,7 @@
 }
 .corr-shut { font-size: .68rem; opacity: .6; }
 
-.corr-empty, .corr-error, .corr-closed {
+.corr-empty, .corr-error, .corr-closed, .corr-offline {
   font-size: .8rem; opacity: .75; margin: 8px 0 0; text-align: center;
 }
 .corr-error { color: #dc2626; opacity: 1; }

@@ -43,9 +43,11 @@ function fmtWhen(iso) {
  *                               الجهاتُ التي يجوز فتحُ خيطٍ معها. فارغةٌ ⇒ لا زرَّ فتح.
  * @param {string}   o.peerLabel نصُّ حقل الجهة («المدرسة» أو «المديرية»).
  * @param {string}   [o.subtitle] سطرٌ ثانٍ اختياريّ تحت العنوان («مع مديرية التربية»)؛ بدونه يبقى الوسمُ كما كان.
+ * @param {string}   [o.offlineText] نصٌّ اختياريّ يُعرض (بلا تنسيق خطأ) حين يفشل التحميل والجهازُ دون اتصال
+ *                               (db.isOnline() === false)؛ بدونه، أو متّصلاً، يبقى «تعذّر تحميل المراسلات.».
  * @returns {{ refresh: Function, unreadCount: Function }}
  */
-export function mountCorrespondence({ mount, side, db, peers = null, peerLabel = 'الجهة', subtitle = '' }) {
+export function mountCorrespondence({ mount, side, db, peers = null, peerLabel = 'الجهة', subtitle = '', offlineText = '' }) {
   if (!mount) return { refresh: () => {}, unreadCount: () => 0 };
 
   // ── قائمة الخيوط (تبقى داخل mount) ─────────────────────────────────────
@@ -59,6 +61,7 @@ export function mountCorrespondence({ mount, side, db, peers = null, peerLabel =
     </div>
     <div class="corr-loading" data-el="loading" hidden><span class="spinner"></span></div>
     <p class="corr-error" data-el="error" hidden>تعذّر تحميل المراسلات.</p>
+    ${offlineText ? `<p class="corr-offline" data-el="offline" role="status" hidden>${esc(offlineText)}</p>` : ''}
     <ul class="corr-list" data-el="list"></ul>
     <p class="corr-empty" data-el="empty" hidden>لا مراسلات بعد.</p>`;
 
@@ -130,13 +133,16 @@ export function mountCorrespondence({ mount, side, db, peers = null, peerLabel =
   const unreadCount = () => threads.reduce((n, t) => n + (t.unread | 0), 0);
 
   async function refresh() {
-    show('loading'); hide('error'); hide('empty');
+    show('loading'); hide('error'); hide('offline'); hide('empty');
     try {
       threads = await db.getCorrespondenceThreads();
       render();
     } catch (err) {
       console.warn('[corr] refresh', err);
-      show('error');
+      /* دون اتصال ليس عطلاً: رسالةٌ هادئة لا خطأ. يُحسَم بعد الفشل لا قبله، ولا يُفعَّل
+         إلّا لمن مرّر offlineText؛ وغيرُه (المديرية، الوزارة) يبقى «تعذّر…» كما كان. */
+      if (offlineText && typeof db.isOnline === 'function' && !db.isOnline()) show('offline');
+      else show('error');
     } finally { hide('loading'); }
     mount.dispatchEvent(new CustomEvent('corr:unread',
       { bubbles: true, detail: { count: unreadCount() } }));
