@@ -129,3 +129,28 @@ describe('الرئيسية — المصفّي يبقى بعد إعادة تحم�
     assert.ok(!/row\.hidden/.test(h), 'منطق الإخفاء لا يتكرّر في المعالج');
   });
 });
+
+describe('الرئيسية — هيرو الجوّال (<1024px) بـCSS فقط', () => {
+  const i = css.indexOf('@media (max-width: 1023.98px)');
+  const blk = css.slice(i);
+  test('كتلةُ الجوّال في آخر style.css وتُذيب الغلاف وتجعل الصفحة شبكةً بـ:not([hidden])', () => {
+    assert.ok(i > 0);
+    assert.match(blk, /#view-attendance:not\(\[hidden\]\)\s*\{\s*display:\s*grid/);
+    assert.match(blk, /#view-attendance > \.status-card-mockup\s*\{\s*display:\s*contents/);
+    assert.match(blk, /grid-row:\s*1 \/ 5/);
+  });
+  test('الحلقة 150px تقرأ --pct وتُعكس بـscaleX(-1)', () => {
+    assert.match(blk, /width:\s*150px;\s*height:\s*150px/);
+    assert.match(blk, /conic-gradient\([^)]*var\(--pct, 0\)/);
+    assert.match(blk, /scaleX\(-1\)/);
+  });
+  test('لا وسمَ ولا JS جديداً: kpi-grid يبقى أوّل ابنٍ في الصفحة قبل غلاف البطاقة', () => {
+    const v = html.indexOf('id="view-attendance"');
+    const k = html.indexOf('id="kpi-grid"', v), m = html.indexOf('class="status-card-mockup"', v);
+    assert.ok(v > 0 && k > v && m > k);
+  });
+  test('قواعد صندوق الغلاف الميّتة حُذفت (يذوب على كلّ العروض)', () => {
+    assert.ok(!/#view-attendance > \.status-card-mockup\s*\{\s*margin-top: 0;/.test(css));
+    assert.match(dcss, /#view-attendance > \.status-card-mockup \{ display: contents; \}/);
+  });
+});

@@ -2828,16 +2828,8 @@ select.csel-native {
 #view-attendance .counters--legend .counter-lbl { display: inline; margin: 0; }
 
 /* ── ٢. البطاقة الرئيسة (الحضور اليومي) ───────────────────────────────────── */
-#view-attendance > .status-card-mockup {
-  margin-top: 0;               /* السحبُ السالب كان يُلصقها بالمؤشّرات (فجوة صفر) */
-  z-index: auto;
-  border-radius: var(--hm-r-hero);
-  border: 1px solid var(--hm-line-2);
-  box-shadow: var(--hm-shadow);
-  padding: calc(var(--hm-pad) + 4px);
-  display: grid;
-  gap: 18px;
-}
+/* غلاف «الحضور اليومي» يذوب (display:contents) على كلّ العروض: الجوّال أدناه (§١٠)
+   والكمبيوتر في desktop.css §٧؛ فسطحُ البطاقة ::before لا صندوق الغلاف. */
 #view-attendance .status-header-row { margin-bottom: 0; gap: 12px; }
 #view-attendance .status-icon-grad {
   width: 46px; height: 46px; border-radius: 16px;
@@ -3113,4 +3105,58 @@ select.csel-native {
   #view-attendance .csub-badge { grid-column: 3; grid-row: 1; justify-self: end; }
   #view-attendance .csub-stats { grid-column: 2; grid-row: 2; }
   #view-attendance .csub-actions { grid-column: 3; grid-row: 2; justify-self: end; }
+}
+
+/* ── ١٠. هيرو الجوّال (<1024px): المؤشّرات داخل بطاقة «الحضور اليومي» ────────────
+   الأسلوب نفسه المُثبَت على الكمبيوتر (desktop.css §٧): الغلاف يذوب فيشارك أبناؤه
+   الشبكة، وسطحُ الهيرو هو ::before يمتدّ على صفوفه الأربعة. CSS فقط — لا نقلَ وسم،
+   فكلّ المعرّفات ومواضعها في الـDOM كما هي (وترتيبُ البطاقات الأخرى بترتيب الوسم).
+   صفوف الهيرو: ١ العنوان · ٢ المؤشّرات (الحلقة + ٣ بلاطات) · ٣ الفاصل · ٤ التقدّم.
+   الهوامش 4 فوق فجوة الصفحة (16) تعطي إيقاع المعاينة 20، وحشوة السطح 22. */
+@media (max-width: 1023.98px) {
+  #view-attendance:not([hidden]) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+  }
+  #view-attendance:not([hidden])::before {
+    content: "";
+    grid-column: 1; grid-row: 1 / 5;
+    background: #fff;
+    border: 1px solid var(--hm-line-2);
+    border-radius: var(--hm-r-hero);
+    box-shadow: var(--hm-shadow);
+  }
+  #view-attendance > .status-card-mockup { display: contents; }
+
+  #view-attendance .status-header-row { grid-column: 1; grid-row: 1; margin: 22px 22px 0; }
+  #view-attendance #kpi-grid {
+    grid-column: 1; grid-row: 2; margin: 4px 22px 0;
+    grid-template-columns: repeat(3, 1fr); grid-auto-rows: auto; gap: 10px;
+  }
+  #view-attendance .wave-sep { grid-column: 1; grid-row: 3; margin: 4px 22px 0; }
+  #view-attendance .prog     { grid-column: 1; grid-row: 4; margin: 4px 22px 22px; }
+
+  /* نسبة الحضور = الحلقة 150px: مربّعٌ ثابت، والرقم والاسم مركَّزان داخله بـflex،
+     والقوسُ من --pct (يضعه syncRatePct من #kpi-rate) يبدأ من الأعلى عكس الساعة.
+     ملاحظة «من N طالباً رُصدوا» خارج الدائرة تحتها (مطلقة، ولها هامشٌ محجوز). */
+  #view-attendance #kpi-grid .kpi-amber {
+    grid-column: 1 / -1; grid-row: 1; justify-self: center;
+    position: relative; width: 150px; height: 150px; margin-bottom: 30px;
+    padding: 0; background: none; border: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  #view-attendance #kpi-grid .kpi-amber::before {
+    content: ""; position: absolute; inset: 0; border-radius: 50%;
+    background: conic-gradient(from 0deg, #2563EB 0, #1E3A8A calc(var(--pct, 0) * 1%), #E3ECFB 0);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 11px), #000 calc(100% - 10px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 11px), #000 calc(100% - 10px));
+    transform: scaleX(-1);
+  }
+  #view-attendance #kpi-grid .kpi-amber .kpi-num { position: relative; font-size: 2.35rem; color: var(--hm-ink); }
+  #view-attendance #kpi-grid .kpi-amber .kpi-lbl { position: relative; color: var(--hm-ink-2); }
+  #view-attendance #kpi-grid .kpi-amber .kpi-note {
+    position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+    width: max-content; max-width: 240px; text-align: center; font-size: .8rem;
+  }
 }
