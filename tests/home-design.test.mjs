@@ -39,3 +39,22 @@ describe('الرئيسية — قواعد التصميم لا تكسر السل�
     assert.match(js, /btn-open-report/);
   });
 });
+
+describe('الرئيسية — لا أنماط داخل الوسم ولا !important', () => {
+  const a = html.indexOf('<main class="page" id="view-attendance"');
+  const b = html.indexOf('</main><!-- /page (attendance) -->');
+  const home = html.slice(a, b);
+  test('وسم الرئيسية بلا style="…"', () => {
+    assert.ok(a > 0 && b > a);
+    assert.ok(!/\sstyle="/.test(home), 'بقي style داخل وسم الرئيسية');
+  });
+  test('قالب الصفّ لا يحمل أنماطاً داخلية', () => {
+    const fn = js.slice(js.indexOf('function buildClassRow'), js.indexOf('async function loadAbsenceView'));
+    assert.ok(!/style="/.test(fn));
+  });
+  test('قسم الرئيسية في style.css بلا !important', () => {
+    const i = css.indexOf('الرئيسية (#view-attendance) — التصميم المعتمَد');
+    assert.ok(i > 0);
+    assert.ok(!/!important/.test(css.slice(i)));
+  });
+});

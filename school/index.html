@@ -595,7 +595,7 @@
     <section class="section-card" id="class-sub-card">
       <div class="section-card-header">
         <div class="section-card-icon"><svg class="icon icon-sm"><use href="#ic-users"/></svg></div>
-        <div style="flex:1">
+        <div class="section-card-text">
           <div class="section-card-title" id="subs-card-title">كشوف الفصول</div>
           <div class="section-card-desc">مراجعة وتأكيد ما أرسله المعلمون</div>
         </div>
@@ -603,23 +603,23 @@
           <svg class="icon icon-sm" id="classes-refresh-icon"><use href="#ic-refresh"/></svg>
         </button>
       </div>
-      <div class="card-body" style="padding:0">
-        <div id="class-sub-loading" style="padding:16px 14px">
-          <div style="height:13px;border-radius:6px;background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);background-size:200% 100%;animation:shimmer 1.4s ease-in-out infinite;margin-bottom:10px"></div>
-          <div style="height:13px;width:65%;border-radius:6px;background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);background-size:200% 100%;animation:shimmer 1.4s ease-in-out infinite"></div>
+      <div class="card-body card-body--flush">
+        <div id="class-sub-loading" class="state-loading">
+          <div class="skel-line"></div>
+          <div class="skel-line skel-line--short"></div>
         </div>
-        <div id="class-sub-empty" hidden style="padding:28px 16px;text-align:center;color:#94A3B8;font-size:.85rem">
+        <div id="class-sub-empty" class="state-msg" hidden>
           لا توجد صفوف دراسية مسجلة لهذا العام
         </div>
         <!-- حالة مستقلّة عن «لا صفوف»: تعذّر الجلب ولا نسخة محفوظة لليوم. كان
              الفشل يُخفي البطاقة كلَّها ويكتفي بـtoast عابر، فتبدو مكسورة. -->
-        <div id="class-sub-failed" hidden style="padding:28px 16px;text-align:center;color:#94A3B8;font-size:.85rem">
-          <svg class="icon icon-2xl" style="color:#CBD5E1"><use href="#ic-wifi-off"/></svg>
-          <p style="margin-top:10px">تعذّر تحميل الكشوف — لا يوجد اتصال ولا نسخة محفوظة لليوم.</p>
-          <p style="margin-top:6px;font-size:.8rem">
+        <div id="class-sub-failed" class="state-msg" hidden>
+          <svg class="icon icon-2xl state-msg-icon"><use href="#ic-wifi-off"/></svg>
+          <p class="state-msg-main">تعذّر تحميل الكشوف — لا يوجد اتصال ولا نسخة محفوظة لليوم.</p>
+          <p class="state-msg-sub">
             افتح البوابة مرّة واحدة وأنت متّصل بالإنترنت، وبعدها ستعمل دون اتصال.
           </p>
-          <button type="button" class="btn btn-ghost" id="btn-retry-subs" style="margin-top:12px">
+          <button type="button" class="btn btn-ghost state-msg-retry" id="btn-retry-subs">
             إعادة المحاولة
           </button>
         </div>
@@ -643,7 +643,7 @@
           </button>
         </div>
         <div class="sheet-body">
-          <p style="font-size:.85rem;color:#475569;margin-bottom:12px">الصف: <strong id="reject-class-name">—</strong></p>
+          <p class="reject-class-line">الصف: <strong id="reject-class-name">—</strong></p>
           <div class="field-group">
             <label for="reject-notes">سبب الإعادة <span class="req">*</span></label>
             <textarea id="reject-notes" class="field-input" rows="3"
@@ -774,7 +774,7 @@
                      min="0" max="999" value="0" inputmode="numeric" />
             </div>
           </div>
-          <p style="font-size:.75rem;color:#94A3B8;margin:-2px 0 6px">
+          <p class="form-hint form-hint--tight">
             تُحتسب تلقائياً من «دوام الموظفين» — يمكنك تعديلها قبل الإرسال.
           </p>
         </div>
@@ -799,7 +799,7 @@
                    min="0" max="9999" value="0" inputmode="numeric" readonly />
           </div>
         </div>
-        <p id="auto-count-note" style="font-size:.75rem;color:#94A3B8;margin:-4px 0 10px">
+        <p id="auto-count-note" class="form-hint form-hint--tight">
           تُحتسب أعداد الطلاب تلقائياً من كشوف المعلمين المؤكدة.
         </p>
 

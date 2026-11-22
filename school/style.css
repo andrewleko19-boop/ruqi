@@ -2923,9 +2923,23 @@ select.csel-native {
 #view-attendance .prev-year-notice .banner-link { color: var(--hm-info-num); font-weight: 700; text-underline-offset: 3px; }
 #view-attendance .prev-year-notice[hidden] { display: none; }
 
-/* حالات التحميل/الفراغ/الفشل: ألوانها في الوسم (#94A3B8 = 2.6:1) فلا يكفي CSS عاديّ */
-#view-attendance #class-sub-empty,
-#view-attendance #class-sub-failed { color: var(--hm-ink-3) !important; }
+/* حالات التحميل/الفراغ/الفشل في بطاقة الكشوف (كانت أنماطاً داخل الوسم) */
+.card-body--flush { padding: 0; }
+.section-card-text { flex: 1; min-width: 0; }
+.state-loading { padding: 16px 14px; }
+.skel-line {
+  height: 13px; border-radius: 6px; margin-bottom: 10px;
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%; animation: shimmer 1.4s ease-in-out infinite;
+}
+.skel-line--short { width: 65%; margin-bottom: 0; }
+.state-msg { padding: 28px 16px; text-align: center; color: var(--hm-ink-3); font-size: .85rem; }
+.state-msg-icon { color: #CBD5E1; }
+.state-msg-main { margin-top: 10px; }
+.state-msg-sub  { margin-top: 6px; font-size: .8rem; }
+.state-msg-retry { margin-top: 12px; }
+.state-msg[hidden] { display: none; }
+.reject-class-line { font-size: .85rem; color: var(--hm-ink-2); margin-bottom: 12px; }
 
 /* ── ٦. صفوف كشوف الفصول (تُبنى بـ buildClassRow — الوسم ثابت) ────────────────
    الصفُّ شبكة 3 أعمدة؛ غلافا .csub-main/.csub-foot يذوبان فتشارك أبناؤهما الشبكة:
@@ -2986,9 +3000,9 @@ select.csel-native {
 #view-attendance .cstat-a { --t-bg: var(--hm-bad-bg);  --t-bd: var(--hm-bad-bd);  --t-num: var(--hm-bad-num); }
 #view-attendance .cstat-l { --t-bg: var(--hm-warn-bg); --t-bd: var(--hm-warn-bd); --t-num: var(--hm-warn-num); }
 #view-attendance .cstat-e { --t-bg: var(--hm-info-bg); --t-bd: var(--hm-info-bd); --t-num: var(--hm-info-num); }
-/* «—» حين لا بيانات: بلا شارة، ولونُه في الوسم (#CBD5E1 = 1.5:1) */
-#view-attendance .csub-stats > span:not([class]) {
-  background: none; border: 0; padding: 0; color: var(--hm-ink-3) !important; font-weight: 600;
+/* «—» حين لا بيانات: بلا شارة (كان لونُه #CBD5E1 = 1.5:1 داخل الوسم) */
+#view-attendance .csub-stats > .csub-nodata {
+  background: none; border: 0; padding: 0; color: var(--hm-ink-3); font-weight: 600;
 }
 
 #view-attendance .csub-actions { grid-column: 2 / -1; grid-row: 4; justify-self: start; margin-inline-start: 0; gap: 8px; }
@@ -3029,10 +3043,8 @@ select.csel-native {
 #view-attendance #att-card .csel-menu { border-radius: var(--hm-r-chip); }
 #view-attendance #att-card .csel-option { border-radius: 8px; }
 #view-attendance #att-card .divider { background: var(--hm-line-2); }
-#view-attendance #att-card .form-hint,
-#view-attendance #att-card p[style] {
-  font-size: .8rem !important; color: var(--hm-ink-3) !important; line-height: 1.6; margin: 0 !important;
-}
+/* تلميحات النموذج: #64748B على الأبيض = 4.76:1 (كانت #94A3B8 = 2.6:1) */
+#view-attendance .form-hint { font-size: .8rem; color: var(--hm-ink-3); line-height: 1.6; margin: 0; }
 #view-attendance #att-card .absent-item {
   background: var(--hm-bad-bg); border-color: var(--hm-bad-bd); border-radius: var(--hm-r-chip);
 }

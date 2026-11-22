@@ -1686,7 +1686,7 @@ function buildClassRow(s) {
        <span class="cstat-l">ت${s.stats.late}</span>
        <span class="cstat-a">غ${s.stats.absent}</span>
        <span class="cstat-e">ع${s.stats.excused}</span>`
-    : `<span style="color:#CBD5E1">—</span>`;
+    : `<span class="csub-nodata">—</span>`;
 
   const actionsHtml = status === 'pending'
     ? `<div class="csub-actions">
