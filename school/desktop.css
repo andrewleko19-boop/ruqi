@@ -136,10 +136,6 @@
   }
   #view-attendance > .status-card-mockup { display: contents; }
   #view-attendance .status-header-row { grid-column: 1; grid-row: 1; margin: 24px 24px 0; }
-  #view-attendance #class-filter-toggle {
-    grid-column: 2; grid-row: 1; justify-self: end; align-self: center;
-    width: 340px; max-width: calc(100% - 48px); margin: 24px 24px 0;
-  }
   #view-attendance .wave-sep { display: none; }
 
   #view-attendance #kpi-grid {

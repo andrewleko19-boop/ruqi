@@ -551,12 +551,6 @@
         </div>
       </div>
 
-      <div class="status-toggle" id="class-filter-toggle">
-        <button class="toggle-btn active" data-filter="all">الكل</button>
-        <button class="toggle-btn" data-filter="confirmed">مكتمل ✓</button>
-        <button class="toggle-btn" data-filter="pending">معلّق ◌</button>
-      </div>
-
       <div class="wave-sep" aria-hidden="true">
         <svg viewBox="0 0 400 20" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M0,10 C50,18 100,2 150,10 C200,18 250,2 300,10 C350,18 380,4 400,10"
@@ -604,6 +598,12 @@
         </button>
       </div>
       <div class="card-body card-body--flush">
+        <!-- مصفّي الكشوف (الكل / مكتمل / معلّق): يعمل على صفوف #class-sub-list أدناه -->
+        <div class="status-toggle" id="class-filter-toggle" role="group" aria-label="تصفية الكشوف">
+          <button type="button" class="toggle-btn active" data-filter="all">الكل</button>
+          <button type="button" class="toggle-btn" data-filter="confirmed">مكتمل ✓</button>
+          <button type="button" class="toggle-btn" data-filter="pending">معلّق ◌</button>
+        </div>
         <div id="class-sub-loading" class="state-loading">
           <div class="skel-line"></div>
           <div class="skel-line skel-line--short"></div>

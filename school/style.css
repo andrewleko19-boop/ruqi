@@ -2827,11 +2827,12 @@ select.csel-native {
 #view-attendance .status-date-sm  { font-size: .85rem; color: var(--hm-ink-3); margin-top: 0; }
 
 #view-attendance .status-toggle {
-  gap: 4px; padding: 4px; margin-bottom: 0;
+  gap: 4px; padding: 4px; margin: 14px var(--hm-pad) 4px;
   border-radius: var(--r-pill);
   background: var(--hm-neu-bg);
   border: 1px solid var(--hm-line);
 }
+.card-body:has(> #class-sub-list[hidden]) > .status-toggle { display: none; }
 #view-attendance .toggle-btn {
   padding: 8px 10px; border-radius: var(--r-pill);
   font-size: .86rem; font-weight: 700; color: var(--hm-ink-2);

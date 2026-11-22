@@ -58,3 +58,20 @@ describe('الرئيسية — لا أنماط داخل الوسم ولا !impor
     assert.ok(!/!important/.test(css.slice(i)));
   });
 });
+
+describe('الرئيسية — المصفّي داخل بطاقة الكشوف', () => {
+  test('#class-filter-toggle داخل #class-sub-card قبل #class-sub-list', () => {
+    const a = html.indexOf('id="class-sub-card"');
+    const t = html.indexOf('id="class-filter-toggle"');
+    const l = html.indexOf('id="class-sub-list"');
+    assert.ok(a > 0 && t > a && l > t, 'المصفّي يجب أن يقع بين بداية بطاقة الكشوف وقائمتها');
+    assert.equal((html.match(/id="class-filter-toggle"/g) || []).length, 1);
+  });
+  test('JS يقرؤه بالمعرّف نفسه وبأزراره', () => {
+    assert.match(js, /el\('class-filter-toggle'\)/);
+    assert.match(js, /closest\('\.toggle-btn'\)/);
+  });
+  test('لا قاعدةَ تخطيط تشير إلى موضعه القديم في الهيرو', () => {
+    assert.ok(!/#view-attendance #class-filter-toggle/.test(dcss));
+  });
+});
