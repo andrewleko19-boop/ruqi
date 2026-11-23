@@ -1,0 +1,7 @@
+-- عكس 20261123000100: لا عكسَ تلقائيّاً — الهجرة تُعيد تسجيل المهام الحيّة بنصّها نفسه فلا فرقَ يُعكَس.
+-- لاستعادة نصٍّ سابق: خذه من ruqi_backup.ddl_snapshot_20261123 (kind='cron': object_name=jobname،
+-- identity=schedule، definition=command) ونفِّذ cron.schedule(jobname, schedule, command).
+-- للطوارئ فقط (يوقف المهمّة تماماً — لا تفعله إلا بقرار):
+-- select cron.unschedule('dropout-daily-check');
+-- select cron.unschedule('monthly-report-generator');
+-- select cron.unschedule('attendance-daily-reminder');
