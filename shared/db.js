@@ -3116,7 +3116,7 @@ async function rejectClassSubmission(submissionId, confirmedBy, notes) {
 async function getSchoolSubjects(schoolId, grade = null) {
   let q = db
     .from('subjects')
-    .select('id, school_id, grade, name, max_total, pass_mark, is_core_arabic, is_core_math, is_foreign_language, allow_full_marks, sort_order, is_active')
+    .select('id, school_id, grade, name, max_total, pass_mark, is_core_arabic, is_core_math, is_foreign_language, allow_full_marks, sort_order, is_active, catalog_id')
     .eq('school_id', schoolId);
   if (grade != null) q = q.eq('grade', grade);
   const { data, error } = await q
@@ -3464,7 +3464,8 @@ function resolvePassMark(rules, grade, isCoreArabic, isCoreMath) {
 }
 
 // School admin: create the chosen catalog subjects in ALL the chosen grades at
-// once. Per grade, skips names already present; copies the catalog components
+// once. Per grade, skips subjects already present (by catalog_id; old rows without
+// one by normalized name); copies the catalog components
 // and derives the pass mark by rule. Returns how many subject rows were created.
 async function applyCatalogSubjectsToGrades(schoolId, grades, catalogIds) {
   const gradeList = [...new Set((grades ?? []).map(g => Number(g)).filter(g => g >= 1 && g <= 12))];
@@ -3477,12 +3478,22 @@ async function applyCatalogSubjectsToGrades(schoolId, grades, catalogIds) {
   for (const c of chosen) compsByCatalog[c.id] = await getCatalogComponents(c.id);
   const passRules = await getGradePassRules().catch(() => []);
 
+  // مرادفُ public.ar_norm: «أإآٱ»←ا، «ى»←ي، «ة»←ه وتوحيدُ المسافات. للنسخ القديمة وحدها.
+  const arNorm = (t) => String(t ?? '')
+    .replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه')
+    .replace(/\s+/g, ' ').trim();
+
   let created = 0;
   for (const grade of gradeList) {
     const existing = await getSchoolSubjects(schoolId, grade);
-    const have     = new Set(existing.map(s => (s.name || '').trim()));
+    /* حارسُ التكرار بالمعرّف لا بالاسم. بعد إعادة تسمية المادّة في الفهرس يبقى اسمُ
+       نسخة المدرسة القديم، فمقارنةُ الاسم تمرّ وتُنشأ نسخةٌ ثانية. فالنسخةُ المرتبطة
+       (catalog_id) تُقارَن بمعرّف الفهرس؛ والاسمُ المُطبَّع احتياطٌ للنسخ القديمة التي
+       لا catalog_id لها فقط. */
+    const haveIds   = new Set(existing.filter(s => s.catalog_id).map(s => s.catalog_id));
+    const haveNames = new Set(existing.filter(s => !s.catalog_id).map(s => arNorm(s.name)));
     for (const c of chosen) {
-      if (have.has((c.name || '').trim())) continue;
+      if (haveIds.has(c.id) || haveNames.has(arNorm(c.name))) continue;
       const comps    = compsByCatalog[c.id] || [];
       const maxTotal = comps.reduce((a, x) => a + (Number(x.max_mark) || 0), 0) || 100;
       const passMark = resolvePassMark(passRules, grade, c.is_core_arabic, c.is_core_math);
