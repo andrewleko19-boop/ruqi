@@ -250,7 +250,11 @@ Deno.serve(async (req) => {
       const r = results[i];
       if (r.status === "rejected") {
         errors.push(String(r.reason?.message ?? r.reason));
-        if ((r.reason as any)?.statusCode === 410) gone.push(subs[i].endpoint);
+        // 410 Gone و404 Not Found فقط = الاشتراك مات نهائياً. لا يُحذف شيءٌ عند
+        // 400/401/403 (مفتاح VAPID خاطئ عندنا) ولا 413/429/5xx ولا أخطاء الشبكة
+        // (بلا statusCode): تلك عابرة أو خطؤنا، وحذفها يُسكت مستخدماً سليماً.
+        const sc = (r.reason as any)?.statusCode;
+        if (sc === 410 || sc === 404) gone.push(subs[i].endpoint);
       }
     }
     if (errors.length) console.error("[send-push] failures:", errors);
@@ -259,7 +263,8 @@ Deno.serve(async (req) => {
       const { error: delErr } = await admin
         .from("push_subscriptions")
         .delete()
-        .in("endpoint", gone);
+        .in("endpoint", gone)
+        .eq("user_id", recipientId);
       if (delErr) console.error("[send-push] cleanup failed:", delErr.message);
       else console.log(`[send-push] cleaned ${gone.length} expired subscription(s)`);
     }
